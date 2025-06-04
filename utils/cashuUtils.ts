@@ -19,7 +19,7 @@ export const fetchBalances = async (mintUrl: string): Promise<{apiBalance:number
       throw new Error('No tokens available for balance check');
     }
 
-    const response = await fetch('https://api.routstr.com/v1/wallet/', {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_ROUTSTR_PROXY_URL || 'https://api.routstr.com'}/v1/wallet/`, {
       headers: {
         'Authorization': `Bearer ${token}`
       }

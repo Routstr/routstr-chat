@@ -61,7 +61,7 @@ export let nodeInfo: Partial<RoutstrNodeInfo> = {
 // Fetch models from the API
 export async function fetchModels(): Promise<void> {
   try {
-    const response = await fetch('https://api.routstr.com/');
+    const response = await fetch(process.env.NEXT_PUBLIC_ROUTSTR_PROXY_URL || 'https://api.routstr.com');
     
     if (!response.ok) {
       throw new Error(`Failed to fetch models: ${response.status}`);

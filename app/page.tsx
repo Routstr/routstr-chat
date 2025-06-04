@@ -38,7 +38,9 @@ function ChatPageContent() {
   const [editingContent, setEditingContent] = useState('');
   const [authChecked, setAuthChecked] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [mintUrl, setMintUrl] = useState('https://mint.minibits.cash/Bitcoin');
+  const [mintUrl, setMintUrl] = useState(process.env.NEXT_PUBLIC_MINT_URL || 'https://mint.minibits.cash/Bitcoin');
+  const routstrURL = process.env.NEXT_PUBLIC_ROUTSTR_PROXY_URL || 'https://api.routstr.com';
+
   const [textareaHeight, setTextareaHeight] = useState(48);
 
   // Image upload state
@@ -167,7 +169,7 @@ function ChatPageContent() {
   const fetchModels = useCallback(async () => {
     try {
       setIsLoadingModels(true);
-      const response = await fetch('https://api.routstr.com/');
+      const response = await fetch(routstrURL);  
 
       if (!response.ok) {
         throw new Error(`Failed to fetch models: ${response.status}`);
@@ -374,7 +376,7 @@ function ChatPageContent() {
       // Convert messages to API format
       const apiMessages = messageHistory.map(convertMessageForAPI);
 
-      const response = await fetch('https://api.routstr.com/v1/chat/completions', {
+      const response = await fetch(`${routstrURL}/v1/chat/completions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

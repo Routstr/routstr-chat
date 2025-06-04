@@ -552,7 +552,7 @@ const SettingsModal = ({
                 <input
                   type="text"
                   className="w-full bg-white/5 border border-white/10 rounded-md px-3 py-2 text-sm text-white focus:border-white/30 focus:outline-none"
-                  placeholder="https://mint.minibits.cash/Bitcoin"
+                  placeholder={process.env.NEXT_PUBLIC_MINT_URL || 'https://mint.minibits.cash/Bitcoin'}
                   value={tempMintUrl}
                   onChange={(e) => setTempMintUrl(e.target.value)}
                 />
