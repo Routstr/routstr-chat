@@ -26,7 +26,7 @@ export const fetchBalances = async (mintUrl: string, baseUrl: string, tokenAmoun
     // Ensure baseUrl ends with a slash
     const normalizedBaseUrl = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
 
-    const response = await fetch(`${normalizedBaseUrl}v1/wallet/`, {
+    const response = await fetch(`${normalizedBaseUrl}v1/wallet/info`, {
       headers: {
         'Authorization': `Bearer ${token}`
       }
