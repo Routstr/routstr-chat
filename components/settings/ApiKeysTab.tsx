@@ -62,7 +62,7 @@ const ApiKeysTab = ({ balance, mintUrl, baseUrl }: ApiKeysTabProps) => {
       const token = await generateApiToken(mintUrl, parseInt(apiKeyAmount));
 
       if (token) {
-        const response = await fetch(`${baseUrl}v1/wallet/`, {
+        const response = await fetch(`${baseUrl}v1/wallet/info`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -97,7 +97,7 @@ const ApiKeysTab = ({ balance, mintUrl, baseUrl }: ApiKeysTabProps) => {
     const updatedKeys: StoredApiKey[] = [];
     for (const keyData of storedApiKeys) {
       try {
-        const response = await fetch(`${baseUrl}v1/wallet/`, {
+        const response = await fetch(`${baseUrl}v1/wallet/info`, {
           headers: {
             'Authorization': `Bearer ${keyData.key}`
           }
