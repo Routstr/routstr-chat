@@ -20,6 +20,7 @@ import ChatInput from '@/components/chat/ChatInput';
 import ModelSelector from '@/components/chat/ModelSelector';
 import { Conversation, Message, MessageContent, TransactionHistory } from '@/types/chat';
 import { toast } from 'sonner';
+import { useCashuWallet } from '@/hooks/useCashuWallet';
 
 // Default token amount for models without max_cost defined
 const DEFAULT_TOKEN_AMOUNT = 50;
@@ -105,6 +106,15 @@ function ChatPageContent() {
       content
     };
   };
+
+  const { wallet, isLoading: isWalletLoading } = useCashuWallet();
+
+  // Log wallet data when it loads
+  useEffect(() => {
+    if (wallet) {
+      console.log("Wallet loaded in Groups page:", wallet);
+    }
+  }, [wallet]);
 
 
   // Close model drawer when clicking outside
@@ -242,7 +252,6 @@ function ChatPageContent() {
 
     const loadData = async () => {
       // Use selected model's max_cost if available, otherwise use default
-      const tokenAmount = selectedModel?.sats_pricing?.max_cost ?? DEFAULT_TOKEN_AMOUNT;
       const { apiBalance, proofsBalance } = await fetchBalances(currentMintUrl, currentBaseUrl);
 
       setBalance((apiBalance / 1000) + (proofsBalance / 1000));
