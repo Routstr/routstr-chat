@@ -412,13 +412,6 @@ function ChatPageContent() {
       if (!response.ok) {
         if (response.status === 401 || response.status === 403) {
           invalidateApiToken();
-          throw new Error('Token expired. Please try again.');
-        }
-
-        // Handle insufficient balance (402)
-        if (response.status === 402 && retryOnInsufficientBalance) {
-          // Invalidate current token since it's out of balance
-          invalidateApiToken();
 
           // Try to create a new token and retry once
           const newToken = await getOrCreateApiToken(mintUrl, tokenAmount);
@@ -426,6 +419,15 @@ function ChatPageContent() {
           if (!newToken || (typeof newToken === 'object' && 'hasTokens' in newToken && !newToken.hasTokens)) {
             throw new Error(`Insufficient balance. Please add more funds to continue. You need at least ${Number(tokenAmount).toFixed(0)} sats to use ${selectedModel?.id}`);
           }
+
+          // Recursive call with retry flag set to false to prevent infinite loops
+          return makeRequest(false);
+        }
+
+        // Handle insufficient balance (402)
+        if (response.status === 402 && retryOnInsufficientBalance) {
+          // Invalidate current token since it's out of balance
+          invalidateApiToken();
 
           // Recursive call with retry flag set to false to prevent infinite loops
           return makeRequest(false);

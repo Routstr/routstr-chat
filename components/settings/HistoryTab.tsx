@@ -49,7 +49,7 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
                 <div key={index} className="flex items-center justify-between p-4 border-b border-white/5 last:border-b-0">
                   <div className="flex items-center gap-3">
                     <div className={`w-2 h-2 rounded-full ${
-                      tx.status === 'success' ? 'bg-green-500' : 'bg-red-500'
+                      tx.type === 'send' || tx.type === 'spent' ? 'bg-red-500' : 'bg-green-500'
                     }`} />
                     <div>
                       <div className="text-sm font-medium text-white capitalize">{tx.type}</div>
@@ -59,7 +59,7 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-sm font-mono text-white">{tx.amount} sats</div>
+                    <div className="text-sm font-mono text-white">{ tx.type === 'send' || tx.type === 'spent' ? '-': '+'}{tx.amount} sats</div>
                     <div className="text-xs text-white/50">Balance: {tx.balance}</div>
                   </div>
                 </div>
