@@ -12,10 +12,10 @@ const DynamicNostrLoginProvider = dynamic(
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 const defaultRelays = [
+    'wss://relay.chorus.community',
     'wss://relay.damus.io',
-    'wss://relay.nostr.band',
-    'wss://nos.lol',
-    'wss://nostr.mutinywallet.com'
+   'wss://relay.nostr.band',
+    'wss://nos.lol'
   ];
 const queryClient = new QueryClient({
   defaultOptions: {

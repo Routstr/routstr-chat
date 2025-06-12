@@ -1,23 +1,24 @@
 'use client';
 
-import { useState } from 'react';
-import { validateNsec } from '@/lib/nostr';
-import { useNostr } from '@/context/NostrContext';
+import { useRef, useState } from 'react';
 import { generateSecretKey, getPublicKey, nip19 } from 'nostr-tools';
-import { useRouter } from 'next/navigation';
+import { useLoginActions } from '@/hooks/useLoginActions';
+import { useProfileSync } from '@/hooks/useProfileSync';
+import { Shield, Upload } from 'lucide-react';
 
 interface LoginModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onLogin: () => void; // Added for consistency with LoginDialog
 }
 
-export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
-  const [activeTab, setActiveTab] = useState<'extension' | 'nsec' | 'signup'>('extension');
-  const [nsecKey, setNsecKey] = useState('');
+export default function LoginModal({ isOpen, onClose, onLogin }: LoginModalProps) {
+  const [activeTab, setActiveTab] = useState<'extension' | 'key' | 'bunker' | 'signup'>('extension');
+  const [nsec, setNsec] = useState('');
+  const [bunkerUri, setBunkerUri] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [rememberKey, setRememberKey] = useState(false);
-  const [showWarning, setShowWarning] = useState(true);
 
   // For signup
   const [generatedNsec, setGeneratedNsec] = useState<string | null>(null);
@@ -27,65 +28,80 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
   const [showSaveConfirmation, setShowSaveConfirmation] = useState(false);
   const [showNsec, setShowNsec] = useState(false);
 
-  const { loginWithNsec, login, isNostrAvailable } = useNostr();
-  const router = useRouter();
+  const loginActions = useLoginActions();
+  const { syncProfile } = useProfileSync();
 
   const handleExtensionLogin = async () => {
-    setError(null);
     setIsLoading(true);
-
     try {
-      await login();
+      if (!('nostr' in window)) {
+        throw new Error('Nostr extension not found. Please install a NIP-07 extension.');
+      }
+      const loginInfo = await loginActions.extension();
+      
+      // Sync profile after successful login
+      await syncProfile(loginInfo.pubkey);
+      
+      onLogin();
       onClose();
     } catch (error) {
-      setError('Failed to connect with extension. Please make sure it\'s installed and try again.');
-      console.error('Error logging in with Nostr:', error);
+      console.error('Extension login failed:', error);
+      setError('Extension login failed: ' + (error as Error).message);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleNsecLogin = () => {
-    // Reset errors
-    setError(null);
+  const handleKeyLogin = async () => {
+    if (!nsec.trim()) return;
+    setIsLoading(true);
 
-    // Validate input is not empty
-    if (!nsecKey.trim()) {
-      setError('Please enter your nsec key');
-      return;
-    }
-
-    // Ensure it's a valid nsec key
-    if (!nsecKey.startsWith('nsec1')) {
-      setError('Invalid nsec key format. Keys should start with "nsec1"');
-      return;
-    }
-
-    // Validate the nsec key
-    if (!validateNsec(nsecKey)) {
-      setError('Invalid nsec key');
-      return;
-    }
-
-    // Attempt to login
-    const success = loginWithNsec(nsecKey);
-
-    if (success) {
-      // Clear form
-      setNsecKey('');
-      setError(null);
+    try {
+      const loginInfo = loginActions.nsec(nsec);
+      
+      // Sync profile after successful login
+      await syncProfile(loginInfo.pubkey);
+      
+      onLogin();
       onClose();
-    } else {
-      setError('Failed to login with the provided nsec key');
+    } catch (error) {
+      console.error('Nsec login failed:', error);
+      setError('Nsec login failed: ' + (error as Error).message);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const getExtension = () => {
-    window.open(
-      'https://getalby.com/',
-      '_blank',
-      'noopener,noreferrer'
-    );
+  const handleBunkerLogin = async () => {
+    if (!bunkerUri.trim() || !bunkerUri.startsWith('bunker://')) return;
+    setIsLoading(true);
+
+    try {
+      const loginInfo = await loginActions.bunker(bunkerUri);
+      
+      // Sync profile after successful login
+      await syncProfile(loginInfo.pubkey);
+      
+      onLogin();
+      onClose();
+    } catch (error) {
+      console.error('Bunker login failed:', error);
+      setError('Bunker login failed: ' + (error as Error).message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      setNsec(content.trim());
+    };
+    reader.readAsText(file);
   };
 
   const generateNewKeypair = () => {
@@ -134,14 +150,17 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
     setShowSaveConfirmation(true);
   };
 
-  const completeSignup = () => {
+  const completeSignup = async () => { // Made async
     // Login with the generated nsec key
     if (generatedNsec) {
-      const success = loginWithNsec(generatedNsec);
-      if (success) {
+      try {
+        const loginInfo = loginActions.nsec(generatedNsec);
+        await syncProfile(loginInfo.pubkey);
+        onLogin();
         onClose();
-      } else {
-        setError('Failed to login with the generated key');
+      } catch (error) {
+        console.error('Failed to login with generated key:', error);
+        setError('Failed to login with the generated key: ' + (error as Error).message);
       }
     }
   };
@@ -173,7 +192,10 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
           </svg>
         </button>
 
-        <h2 className="text-lg font-bold text-white mb-4">Connect to Routstr</h2>
+        <h2 className='text-xl font-semibold text-center text-white'>Log in</h2>
+        <p className='text-center text-muted-foreground mt-2 text-xs text-gray-400'>
+          Access your account securely with your preferred method
+        </p>
 
         {/* Tabs */}
         <div className="flex mb-4 bg-white/5 p-0.5 rounded-lg gap-1">
@@ -187,13 +209,22 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
             Extension
           </button>
           <button
-            className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-colors ${activeTab === 'nsec'
+            className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-colors ${activeTab === 'key'
               ? 'bg-white text-black'
               : 'text-white hover:bg-white/10'
               }`}
-            onClick={() => setActiveTab('nsec')}
+            onClick={() => setActiveTab('key')}
           >
-            Private Key
+            Nsec
+          </button>
+          <button
+            className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-colors ${activeTab === 'bunker'
+              ? 'bg-white text-black'
+              : 'text-white hover:bg-white/10'
+              }`}
+            onClick={() => setActiveTab('bunker')}
+          >
+            Bunker
           </button>
           <button
             className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-colors ${activeTab === 'signup'
@@ -212,35 +243,23 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
             <div className="bg-white/5 border border-white/10 rounded-lg p-3 mb-4">
               <h3 className="text-sm font-medium text-white mb-2">Connect with Extension</h3>
               <p className="text-xs text-gray-400 mb-3">
-                Use a NIP-07 compatible browser extension like Alby or nos2x to securely connect without sharing your keys.
+                Login with one click using the browser extension
               </p>
 
-              {isNostrAvailable ? (
-                <button
-                  onClick={handleExtensionLogin}
-                  disabled={isLoading}
-                  className="w-full py-2 bg-white text-black rounded-md text-xs font-medium flex items-center justify-center hover:bg-gray-200 transition-colors"
-                >
-                  {isLoading ? (
-                    <div className="w-3 h-3 border-2 border-black/20 border-t-black rounded-full animate-spin"></div>
-                  ) : (
-                    <>
-                      <svg viewBox="0 0 24 24" fill="none" className="w-3 h-3 mr-1.5" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M12 4L3 10L12 16L21 10L12 4Z" fill="currentColor" />
-                        <path d="M3 14L12 20L21 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                      Connect with Extension
-                    </>
-                  )}
-                </button>
-              ) : (
-                <button
-                  onClick={getExtension}
-                  className="w-full py-2 bg-white text-black rounded-md text-xs font-medium hover:bg-gray-200 transition-colors"
-                >
-                  Get Nostr Extension
-                </button>
-              )}
+              <button
+                onClick={handleExtensionLogin}
+                disabled={isLoading}
+                className="w-full py-2 bg-white text-black rounded-md text-xs font-medium flex items-center justify-center hover:bg-gray-200 transition-colors"
+              >
+                {isLoading ? (
+                  <div className="w-3 h-3 border-2 border-black/20 border-t-black rounded-full animate-spin"></div>
+                ) : (
+                  <>
+                    <Shield className='w-3 h-3 mr-1.5' />
+                    Login with Extension
+                  </>
+                )}
+              </button>
 
               {error && (
                 <p className="mt-2 text-xs text-red-400">{error}</p>
@@ -250,38 +269,18 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
         )}
 
         {/* Nsec Key Tab */}
-        {activeTab === 'nsec' && (
+        {activeTab === 'key' && (
           <div>
-            {showWarning && (
-              <div className="mb-4 bg-red-500/10 border border-red-500/20 rounded-lg p-3">
-                <h3 className="text-red-400 font-semibold mb-1 flex items-center text-sm">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 mr-1.5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-                  </svg>
-                  Security Warning
-                </h3>
-                <p className="text-xs text-gray-300">
-                  Entering your nsec private key is like sharing your password. Only use this on trusted devices.
-                </p>
-                <button
-                  className="text-xs text-red-400 hover:text-red-300 mt-1"
-                  onClick={() => setShowWarning(false)}
-                >
-                  I understand
-                </button>
-              </div>
-            )}
-
             <div className="bg-white/5 border border-white/10 rounded-lg p-3 mb-4">
               <div className="mb-3">
                 <label htmlFor="nsec" className="block text-xs font-medium text-gray-400 mb-1">
-                  Private Key (nsec)
+                  Enter your nsec
                 </label>
                 <input
                   id="nsec"
                   type="password"
-                  value={nsecKey}
-                  onChange={(e) => setNsecKey(e.target.value)}
+                  value={nsec}
+                  onChange={(e) => setNsec(e.target.value)}
                   placeholder="nsec1..."
                   className="w-full px-2.5 py-1.5 bg-black/50 border border-white/10 rounded-md text-sm text-white focus:outline-none focus:ring-1 focus:ring-white/30"
                 />
@@ -290,25 +289,64 @@ export default function LoginModal({ isOpen, onClose }: LoginModalProps) {
                 )}
               </div>
 
-              <div className="flex items-center mb-3">
+              <div className='text-center'>
+                <div className='text-sm mb-2 text-muted-foreground text-gray-400'>Or upload a key file</div>
                 <input
-                  id="remember"
-                  type="checkbox"
-                  checked={rememberKey}
-                  onChange={(e) => setRememberKey(e.target.checked)}
-                  className="h-3 w-3 bg-black border border-white/30 rounded"
+                  type='file'
+                  accept='.txt'
+                  className='hidden'
+                  ref={fileInputRef}
+                  onChange={handleFileUpload}
                 />
-                <label htmlFor="remember" className="ml-2 text-xs text-gray-300">
-                  Remember this key
-                </label>
+                <button
+                  className='w-full py-2 bg-white text-black rounded-md text-xs font-medium hover:bg-gray-200 transition-colors'
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Upload className='w-3 h-3 mr-1.5' />
+                  Upload Nsec File
+                </button>
               </div>
 
               <button
                 type="button"
-                onClick={handleNsecLogin}
+                onClick={handleKeyLogin}
+                disabled={isLoading || !nsec.trim()}
+                className="w-full py-2 bg-white text-black rounded-md text-xs font-medium hover:bg-gray-200 transition-colors mt-4"
+              >
+                {isLoading ? 'Verifying...' : 'Login with Nsec'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Bunker Tab */}
+        {activeTab === 'bunker' && (
+          <div>
+            <div className="bg-white/5 border border-white/10 rounded-lg p-3 mb-4">
+              <div className="mb-3">
+                <label htmlFor="bunkerUri" className="block text-xs font-medium text-gray-400 mb-1">
+                  Bunker URI
+                </label>
+                <input
+                  id="bunkerUri"
+                  type="text"
+                  value={bunkerUri}
+                  onChange={(e) => setBunkerUri(e.target.value)}
+                  placeholder="bunker://..."
+                  className="w-full px-2.5 py-1.5 bg-black/50 border border-white/10 rounded-md text-sm text-white focus:outline-none focus:ring-1 focus:ring-white/30"
+                />
+                {bunkerUri && !bunkerUri.startsWith('bunker://') && (
+                  <div className='text-destructive text-xs text-red-400'>URI must start with bunker://</div>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={handleBunkerLogin}
+                disabled={isLoading || !bunkerUri.trim() || !bunkerUri.startsWith('bunker://')}
                 className="w-full py-2 bg-white text-black rounded-md text-xs font-medium hover:bg-gray-200 transition-colors"
               >
-                Sign In with Private Key
+                {isLoading ? 'Connecting...' : 'Login with Bunker'}
               </button>
             </div>
           </div>

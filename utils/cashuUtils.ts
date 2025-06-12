@@ -1,6 +1,11 @@
 import { Event } from "nostr-tools";
 import { GiftWrap, wrapCashuToken, unwrapCashuToken } from "./nip60Utils";
-import { CashuMint, CashuWallet } from "@cashu/cashu-ts";
+import { CashuMint, CashuWallet, getEncodedTokenV4 } from "@cashu/cashu-ts";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useCashuWallet } from "@/hooks/useCashuWallet";
+import { useCreateCashuWallet } from "@/hooks/useCreateCashuWallet";
+import { useCashuStore } from "@/stores/cashuStore";
+import { useCashuToken } from "@/hooks/useCashuToken";
 
 
 /**
@@ -134,9 +139,7 @@ export const generateApiToken = async (
     if (amount % 1 !== 0) {
       amount = Math.ceil(amount);
     }
-    if (amount === 50) {
-      return null;
-    }
+
     // Get stored proofs
     const storedProofs = localStorage.getItem("cashu_proofs");
     if (!storedProofs) {
@@ -202,6 +205,7 @@ export const getOrCreateApiToken = async (
 
     // Generate new token if none exists
     const newToken = await generateApiToken(mintUrl, amount);
+    // const newToken = await create60CashuToken(amount); 
     if (newToken) {
       localStorage.setItem("current_cashu_token", newToken);
       return newToken;
@@ -277,3 +281,39 @@ export const refundRemainingBalance = async (mintUrl: string, baseUrl: string, t
 export const invalidateApiToken = () => {
   localStorage.removeItem("current_cashu_token");
 };
+
+
+// const create60CashuToken = async (amount: number) => {
+
+//   if (!cashuStore.activeMintUrl) {
+//     console.error(
+//       "No active mint selected. Please select a mint in your wallet settings."
+//     );
+//     return;
+//   }
+
+//   if (!amount || isNaN((amount))) {
+//     console.error("Please enter a valid amount");
+//     return;
+//   }
+
+//   try {
+
+//     const proofs = await sendToken(cashuStore.activeMintUrl, amount);
+//     console.log(proofs);
+//     const token = getEncodedTokenV4({
+//       mint: cashuStore.activeMintUrl,
+//       proofs: proofs.map((p) => ({
+//        id: p.id || "",
+//         amount: p.amount,
+//         secret: p.secret || "",
+//         C: p.C || "",
+//       })),
+//     });
+//     return token;
+
+//   } catch (error) {
+//     console.error("Error generating token:", error);
+//     console.error(error instanceof Error ? error.message : String(error));
+//   }
+// };

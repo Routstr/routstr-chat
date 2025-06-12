@@ -16,6 +16,7 @@ import WalletTab from './settings/WalletTab';
 import HistoryTab from './settings/HistoryTab';
 import InvoiceModal from './settings/InvoiceModal';
 import ApiKeysTab from './settings/ApiKeysTab';
+import SixtyWallet from './settings/SixtyWallet';
 
 // Types for Cashu
 interface CashuProof {
@@ -71,7 +72,7 @@ const SettingsModal = ({
   setTransactionHistory
 }: SettingsModalProps) => {
   const { publicKey } = useNostr();
-  const [activeTab, setActiveTab] = useState<'settings' | 'wallet' | 'history' | 'api-keys'>('settings');
+  const [activeTab, setActiveTab] = useState<'settings' | 'wallet' | 'history' | 'api-keys' | 'wallet-60'>('settings');
   const [mintAmount, setMintAmount] = useState('64');
   const [mintInvoice, setMintInvoice] = useState('');
   const [mintQuote, setMintQuote] = useState<MintQuoteResponse | null>(null);
@@ -446,6 +447,13 @@ const SettingsModal = ({
           >
             API Keys
           </button>
+          <button
+            className={`px-4 py-2 text-sm font-medium ${activeTab === 'wallet-60' ? 'text-white border-b-2 border-white' : 'text-white/50 hover:text-white'} cursor-pointer`}
+            onClick={() => setActiveTab('wallet-60')}
+            type="button"
+          >
+            Wallet60
+          </button>
         </div>
 
         <div className="p-4">
@@ -493,12 +501,16 @@ const SettingsModal = ({
                 clearConversations={clearConversations}
                 onClose={onClose}
             />
-          ) : (
+          ) : activeTab === 'api-keys' ? (
             <ApiKeysTab
                 balance={balance}
-                setBalance={setBalance}
+                setBalance={setBalance} 
                 mintUrl={mintUrl}
                 baseUrl={baseUrl}
+            />
+          ) : (
+            <SixtyWallet
+              mintUrl={mintUrl}
             />
           )}
         </div>

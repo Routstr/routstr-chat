@@ -22,84 +22,101 @@ export function useCashuWallet() {
   const { createNutzapInfo } = useNutzaps();
 
   // Fetch wallet information (kind 17375)
-  const walletQuery = useQuery({
-    queryKey: ['cashu', 'wallet', user?.pubkey],
+  const walletQuery = useQuery<{ id: string; wallet: CashuWalletStruct; createdAt: number; } | null, Error, { id: string; wallet: CashuWalletStruct; createdAt: number; } | null, any[]>(
+    {
+      queryKey: ['cashu', 'wallet', user?.pubkey],
     queryFn: async ({ signal }) => {
-      if (!user) throw new Error('User not logged in');
-
-      const events = await nostr.query([
-        { kinds: [CASHU_EVENT_KINDS.WALLET], authors: [user.pubkey], limit: 1 }
-      ], { signal });
-
-      if (events.length === 0) {
+      if (!user) {
         return null;
       }
+      try {
+        
+        // Add timeout to prevent hanging queries
+        const queryPromise = nostr.query([
+          { kinds: [CASHU_EVENT_KINDS.WALLET], authors: [user.pubkey], limit: 1 }
+        ], { signal });
+        
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error('Query timeout')), 10000);
+        });
+        
+        const events = await Promise.race([queryPromise, timeoutPromise]);
 
-      const event = events[0];
-
-      // Decrypt wallet content
-      if (!user.signer.nip44) {
-        throw new Error('NIP-44 encryption not supported by your signer');
-      }
-
-      const decrypted = await user.signer.nip44.decrypt(user.pubkey, event.content);
-      const data = n.json().pipe(z.string().array().array()).parse(decrypted);
-
-      const privkey = data.find(([key]) => key === 'privkey')?.[1];
-
-      if (!privkey) {
-        throw new Error('Private key not found in wallet data');
-      }
-
-      const walletData: CashuWalletStruct = {
-        privkey,
-        mints: data
-          .filter(([key]) => key === 'mint')
-          .map(([, mint]) => mint)
-      };
-
-      // if the default mint is not in the wallet, add it
-      for (const mint of defaultMints) {
-        if (!walletData.mints.includes(mint)) {
-          walletData.mints.push(mint);
+        if (events.length === 0) {
+          return null;
         }
+
+        const event = events[0];
+
+        // Decrypt wallet content
+        if (!user.signer.nip44) {
+          throw new Error('NIP-44 encryption not supported by your signer');
+        }
+
+        const decrypted = await user.signer.nip44.decrypt(user.pubkey, event.content);
+        const data = n.json().pipe(z.string().array().array()).parse(decrypted);
+
+        const privkey = data.find(([key]) => key === 'privkey')?.[1];
+
+        if (!privkey) {
+          throw new Error('Private key not found in wallet data');
+        }
+
+        const walletData: CashuWalletStruct = {
+          privkey,
+          mints: data
+            .filter(([key]) => key === 'mint')
+            .map(([, mint]) => mint)
+        };
+
+        // if the default mint is not in the wallet, add it
+        for (const mint of defaultMints) {
+          if (!walletData.mints.includes(mint)) {
+            walletData.mints.push(mint);
+          }
+        }
+
+        // remove trailing slashes from mints
+        walletData.mints = walletData.mints.map(mint => mint.replace(/\/$/, ''));
+        // reduce mints to unique values
+        walletData.mints = [...new Set(walletData.mints)];
+
+
+        // fetch the mint info and keysets for each mint
+        await Promise.all(walletData.mints.map(async (mint) => {
+          const { mintInfo, keysets } = await activateMint(mint);
+          cashuStore.addMint(mint);
+          cashuStore.setMintInfo(mint, mintInfo);
+          cashuStore.setKeysets(mint, keysets);
+          const { keys } = await updateMintKeys(mint, keysets);
+          cashuStore.setKeys(mint, keys);
+        }));
+
+        cashuStore.setPrivkey(walletData.privkey);
+
+        // if no active mint is set, set the first mint as active
+        if (!cashuStore.getActiveMintUrl()) {
+          cashuStore.setActiveMintUrl(walletData.mints[0]);
+        }
+
+        // log wallet data
+        console.log('walletData', walletData);
+
+        // trigger getNip60TokensQuery refetch without awaiting to avoid circular dependency
+        getNip60TokensQuery.refetch();
+        return {
+          id: event.id,
+          wallet: walletData,
+          createdAt: event.created_at
+        };
+      } catch (error) {
+        console.error('walletQuery: Error in queryFn', error);
+        return null;
       }
-
-      // remove trailing slashes from mints
-      walletData.mints = walletData.mints.map(mint => mint.replace(/\/$/, ''));
-      // reduce mints to unique values
-      walletData.mints = [...new Set(walletData.mints)];
-
-
-      // fetch the mint info and keysets for each mint
-      await Promise.all(walletData.mints.map(async (mint) => {
-        const { mintInfo, keysets } = await activateMint(mint);
-        cashuStore.addMint(mint);
-        cashuStore.setMintInfo(mint, mintInfo);
-        cashuStore.setKeysets(mint, keysets);
-        const { keys } = await updateMintKeys(mint, keysets);
-        cashuStore.setKeys(mint, keys);
-      }));
-
-      cashuStore.setPrivkey(walletData.privkey);
-
-      // if no active mint is set, set the first mint as active
-      if (!cashuStore.getActiveMintUrl()) {
-        cashuStore.setActiveMintUrl(walletData.mints[0]);
-      }
-
-      // log wallet data
-      console.log('walletData', walletData);
-
-      // call getNip60TokensQuery
-      await getNip60TokensQuery.refetch();
-      return {
-        id: event.id,
-        wallet: walletData,
-        createdAt: event.created_at
-      };
     },
-    enabled: !!user
+    enabled: !!user,
+    staleTime: Infinity, // Prevent refetching on window focus or component re-mount
+    retry: false, // Do not retry on failure, as the connection issue is persistent
   });
 
   // Create or update wallet
@@ -162,10 +179,14 @@ export function useCashuWallet() {
   });
 
   // Fetch token events (kind 7375)
-  const getNip60TokensQuery = useQuery({
-    queryKey: ['cashu', 'tokens', user?.pubkey],
+  const getNip60TokensQuery = useQuery<Nip60TokenEvent[], Error, Nip60TokenEvent[], any[]>(
+    {
+      queryKey: ['cashu', 'tokens', user?.pubkey],
     queryFn: async ({ signal }) => {
-      if (!user) throw new Error('User not logged in');
+      if (!user) {
+        return [];
+      }
+      try {
 
       // Get the last stored timestamp for the TOKEN event kind
       const lastTimestamp = getLastEventTimestamp(user.pubkey, CASHU_EVENT_KINDS.TOKEN);
@@ -182,7 +203,15 @@ export function useCashuWallet() {
         Object.assign(filter, { since: lastTimestamp + 1 });
       }
 
-      const events = await nostr.query([filter], { signal });
+      
+      // Add timeout to prevent hanging queries
+      const queryPromise = nostr.query([filter], { signal });
+      
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Query timeout')), 10000);
+      });
+      
+      const events = await Promise.race([queryPromise, timeoutPromise]);
 
       if (events.length === 0) {
         return [];
@@ -213,8 +242,14 @@ export function useCashuWallet() {
       }
 
       return nip60TokenEvents;
+      } catch (error) {
+        console.error('getNip60TokensQuery: Error in queryFn', error);
+        return [];
+      }
     },
-    enabled: !!user
+    enabled: !!user,
+    staleTime: Infinity, // Prevent refetching on window focus or component re-mount
+    retry: false, // Do not retry on failure, as the connection issue is persistent
   });
 
   const updateProofsMutation = useMutation({
@@ -227,6 +262,8 @@ export function useCashuWallet() {
       // get all event IDs of proofsToRemove 
       const eventIdsToRemoveUnfiltered = proofsToRemove.map(proof => cashuStore.getProofEventId(proof));
       const eventIdsToRemove = [...new Set(eventIdsToRemoveUnfiltered.filter(id => id !== undefined) as string[])];
+      console.log('rdlogs: ', eventIdsToRemoveUnfiltered);
+      console.log('rdlogs: ', eventIdsToRemove);
 
       // get all proofs with eventIdsToRemove
       const allProofsWithEventIds = eventIdsToRemove.map(id => cashuStore.getProofsByEventId(id)).flat();
@@ -246,6 +283,7 @@ export function useCashuWallet() {
           proofs: newProofs,
           del: eventIdsToRemove
         }
+        console.log('rdlogs: ', newToken);
 
         // encrypt token event
         const newTokenEventContent = await user.signer.nip44.encrypt(
@@ -307,12 +345,11 @@ export function useCashuWallet() {
       queryClient.invalidateQueries({ queryKey: ['cashu', 'tokens', user?.pubkey] });
     }
   });
-
   return {
     wallet: walletQuery.data?.wallet,
     walletId: walletQuery.data?.id,
     tokens: getNip60TokensQuery.data || [],
-    isLoading: walletQuery.isFetching || getNip60TokensQuery.isFetching,
+    isLoading: walletQuery.isLoading || getNip60TokensQuery.isLoading,
     createWallet: createWalletMutation.mutate,
     updateProofs: updateProofsMutation.mutateAsync,
   };

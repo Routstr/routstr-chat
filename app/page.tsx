@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useNostr } from '@/context/NostrContext';
+import { useNostrLogin } from '@nostrify/react/login';
 import { DEFAULT_BASE_URL, DEFAULT_MINT_URL } from '@/lib/utils';
 import { fetchBalances, getBalanceFromStoredProofs, getOrCreateApiToken, invalidateApiToken, refundRemainingBalance } from '@/utils/cashuUtils';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
@@ -21,12 +21,22 @@ import ModelSelector from '@/components/chat/ModelSelector';
 import { Conversation, Message, MessageContent, TransactionHistory } from '@/types/chat';
 import { toast } from 'sonner';
 import { useCashuWallet } from '@/hooks/useCashuWallet';
+import { useCashuStore } from '@/stores/cashuStore';
+import { useCashuToken } from '@/hooks/useCashuToken';
+import { getEncodedTokenV4 } from '@cashu/cashu-ts';
 
 // Default token amount for models without max_cost defined
 const DEFAULT_TOKEN_AMOUNT = 50;
 
 function ChatPageContent() {
-  const { isAuthenticated, logout } = useNostr();
+  const { logins, removeLogin } = useNostrLogin();
+  const isAuthenticated = logins.length > 0;
+  const logout = useCallback(async () => {
+    const login = logins[0];
+    if (login) {
+      removeLogin(login.id);
+    }
+  }, [logins, removeLogin]);
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
@@ -67,6 +77,115 @@ function ChatPageContent() {
 
   // Responsive design
   const isMobile = useMediaQuery('(max-width: 768px)');
+  const { wallet, isLoading: isWalletLoading } = useCashuWallet();
+  const cashuStore = useCashuStore();
+  const { sendToken, receiveToken, cleanSpentProofs, isLoading: isTokenLoading, error: hookError } = useCashuToken();
+
+  // Log wallet data when it loads
+ useEffect(() => {
+    if (wallet) {
+      console.log("Wallet loaded in Groups page:", wallet);
+    }
+  }, [wallet]);
+
+  // Close model drawer when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (isModelDrawerOpen && modelDrawerRef.current &&
+        !modelDrawerRef.current.contains(event.target as Node)) {
+        setIsModelDrawerOpen(false);
+      }
+    };
+
+    if (isModelDrawerOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isModelDrawerOpen]);
+
+
+  const create60CashuToken = async (amount: number) => {
+
+    // Check if amount is a decimal and round up if necessary
+    if (amount % 1 !== 0) {
+      amount = Math.ceil(amount);
+    }
+
+    if (!cashuStore.activeMintUrl) {
+      console.error(
+        "No active mint selected. Please select a mint in your wallet settings."
+      );
+      return;
+    }
+
+    if (!amount || isNaN((amount))) {
+      console.error("Please enter a valid amount");
+      return;
+    }
+
+    try {
+
+      console.log(cashuStore.activeMintUrl, amount);
+      const proofs = await sendToken(cashuStore.activeMintUrl, amount);
+      console.log(proofs);
+      const token = getEncodedTokenV4({
+        mint: cashuStore.activeMintUrl,
+        proofs: proofs.map((p) => ({
+        id: p.id || "",
+          amount: p.amount,
+          secret: p.secret || "",
+          C: p.C || "",
+        })),
+      });
+      return token;
+
+    } catch (error) {
+      console.error("Error generating token:", error);
+      console.error(error instanceof Error ? error.message : String(error));
+    }
+  };
+
+  /**
+   * Manages token lifecycle - reuses existing token or generates new one
+   * @param mintUrl The Cashu mint URL
+   * @param amount Amount in sats for new token if needed
+   * @returns Token string, null if failed, or object with hasTokens: false if no tokens available
+   */
+  const getOrCreate60ApiToken = async (
+    mintUrl: string,
+    amount: number
+  ): Promise<string | null | { hasTokens: false }> => {
+    try {
+      // Try to get existing token
+      const storedToken = localStorage.getItem("current_cashu_token");
+      if (storedToken) {
+        return storedToken;
+      }
+
+      // Check if any tokens are available
+      const storedProofs = localStorage.getItem("cashu_proofs");
+      if (!storedProofs) {
+        return { hasTokens: false };
+      }
+
+      // Generate new token if none exists
+      // const newToken = await generateApiToken(mintUrl, amount);
+      const newToken = await create60CashuToken(amount); 
+      if (newToken) {
+        localStorage.setItem("current_cashu_token", newToken);
+        return newToken;
+      }
+
+      return null;
+    } catch (error) {
+      console.error("Error in token management:", error);
+      return null;
+    }
+  };
+
 
   // Helper functions for multimodal content
   const getTextFromContent = useCallback((content: string | MessageContent[]): string => {
@@ -106,34 +225,6 @@ function ChatPageContent() {
       content
     };
   };
-
-  const { wallet, isLoading: isWalletLoading } = useCashuWallet();
-
-  // Log wallet data when it loads
-  useEffect(() => {
-    if (wallet) {
-      console.log("Wallet loaded in Groups page:", wallet);
-    }
-  }, [wallet]);
-
-
-  // Close model drawer when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (isModelDrawerOpen && modelDrawerRef.current &&
-        !modelDrawerRef.current.contains(event.target as Node)) {
-        setIsModelDrawerOpen(false);
-      }
-    };
-
-    if (isModelDrawerOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [isModelDrawerOpen]);
 
   // Define saveCurrentConversation before it's used in useEffect
   const saveCurrentConversation = useCallback(() => {
@@ -393,6 +484,8 @@ function ChatPageContent() {
       const tokenAmount = selectedModel?.sats_pricing?.max_cost ?? DEFAULT_TOKEN_AMOUNT;
 
       const token = await getOrCreateApiToken(mintUrl, tokenAmount);
+      // const token = await getOrCreate60ApiToken(mintUrl, tokenAmount);
+      console.log(token);
 
       if (!token) {
         throw new Error(`Insufficient balance. Please add more funds to continue. You need at least ${Number(tokenAmount).toFixed(0)} sats to use ${selectedModel?.id}`);
@@ -785,6 +878,7 @@ function ChatPageContent() {
       <LoginModal
         isOpen={isLoginModalOpen}
         onClose={() => setIsLoginModalOpen(false)}
+        onLogin={() => setIsLoginModalOpen(false)}
       />
 
       <TutorialOverlay
