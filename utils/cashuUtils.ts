@@ -10,65 +10,49 @@ import { CashuMint, CashuWallet } from "@cashu/cashu-ts";
  * @param tokenAmount Amount in sats for token creation if needed (defaults to 12)
  * @returns The total balance in mSats
  */
-export const fetchBalances = async (mintUrl: string, baseUrl: string, tokenAmount: number = 12): Promise<{apiBalance:number, proofsBalance:number}> => {
-  const makeBalanceRequest = async (retryOnInsufficientBalance: boolean = true): Promise<{apiBalance:number, proofsBalance:number}> => {
-    console.log(tokenAmount);
-    const token = await getOrCreateApiToken(mintUrl, tokenAmount);
+export const MSATS_PER_SAT = 1000;
 
-    if (!token) {
-      throw new Error('No token available');
-    }
-
-    if (typeof token === 'object' && 'hasTokens' in token && !token.hasTokens) {
-      throw new Error('No tokens available for balance check');
-    }
-
-    // Ensure baseUrl ends with a slash
-    const normalizedBaseUrl = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
-
-    const response = await fetch(`${normalizedBaseUrl}v1/wallet/info`, {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    });
-
-    if (!response.ok) {
-      // Handle insufficient balance (402)
-      if (response.status === 402 && retryOnInsufficientBalance) {
-        // Invalidate current token since it's out of balance
-        invalidateApiToken();
-
-        // Try to create a new token and retry once
-        const newToken = await getOrCreateApiToken(mintUrl, tokenAmount);
-
-        if (!newToken || (typeof newToken === 'object' && 'hasTokens' in newToken && !newToken.hasTokens)) {
-          throw new Error('No tokens available for balance check');
-        }
-
-        // Recursive call with retry flag set to false to prevent infinite loops
-        return makeBalanceRequest(false);
-      }
-
-      throw new Error('Failed to fetch wallet balance');
-    }
-
-    const data = await response.json();
-    const apiBalance = data.balance;
-    const apiKey = data.api_key;
-    const proofsBalance = getBalanceFromStoredProofs() * 1000; // to convert it into mSats
-    localStorage.setItem("current_api_key", apiKey);
-
-    return {apiBalance, proofsBalance};
-  };
+export const fetchBalances = async (mintUrl: string, baseUrl: string): Promise<{apiBalance:number, proofsBalance:number}> => {
+  let apiBalance = 0;
+  let proofsBalance = 0;
 
   try {
-    const {apiBalance, proofsBalance} = await makeBalanceRequest();
-    return {apiBalance, proofsBalance};
+    const token = localStorage.getItem("current_cashu_token");
+
+    if (token) {
+      const response = await fetch(`${baseUrl}v1/wallet/info`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        if (response.status === 402) {
+          // Invalidate current token since it's out of balance
+          invalidateApiToken();
+          console.warn('API token invalidated due to insufficient balance.');
+        } else {
+          console.error(`Failed to fetch wallet balance: ${response.status} ${response.statusText}`);
+        }
+      } else {
+        const data = await response.json();
+        apiBalance = data.balance;
+        if (apiBalance > 0) {
+          // Refund remaining balance, but still report the balance that was found
+          await refundRemainingBalance(mintUrl, baseUrl);
+          apiBalance = 0;
+        }
+      }
+    }
   } catch (error) {
-    // Fall back to just proofs balance if API fails
-    const proofsBalance = getBalanceFromStoredProofs() * 1000; // to convert it into mSats
-    return {apiBalance: 0, proofsBalance};
+    console.error("Error fetching API balance:", error);
+    // apiBalance remains 0 on error, which is desired fallback behavior
   }
+
+  // Always get proofs balance, regardless of API call success
+  proofsBalance = getBalanceFromStoredProofs() * MSATS_PER_SAT;
+
+  return {apiBalance, proofsBalance};
 };
 
 /**
@@ -146,11 +130,9 @@ export const generateApiToken = async (
   amount: number
 ): Promise<string | null> => {
   try {
-    console.log('generating outputs:', amount)
     // Check if amount is a decimal and round up if necessary
     if (amount % 1 !== 0) {
       amount = Math.ceil(amount);
-      console.log('rounded amount:', amount);
     }
     if (amount === 50) {
       return null;
@@ -232,10 +214,10 @@ export const getOrCreateApiToken = async (
   }
 };
 
-export const refundRemainingBalance = async (mintUrl: string, baseUrl: string): Promise<{ success: boolean; message?: string }> => {
+export const refundRemainingBalance = async (mintUrl: string, baseUrl: string, token?: string): Promise<{ success: boolean; message?: string }> => {
   try {
-    // Try to get existing token
-    const storedToken = localStorage.getItem("current_cashu_token");
+    // Use provided token or try to get existing token from localStorage
+    const storedToken = token || localStorage.getItem("current_cashu_token");
     if (!storedToken) {
       return { success: true, message: 'No token to refund' };
     }
@@ -260,7 +242,6 @@ export const refundRemainingBalance = async (mintUrl: string, baseUrl: string): 
     }
 
     const data = await response.json();
-    console.log(data)
     
     if (data.token) {
       const mint = new CashuMint(mintUrl);

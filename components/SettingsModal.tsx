@@ -11,14 +11,11 @@ import { TransactionHistory } from '@/types/chat';
 import { fetchBalances, getBalanceFromStoredProofs } from '@/utils/cashuUtils';
 
 // Import new components
-import SettingsTab from './settings/SettingsTab';
+import GeneralTab from './settings/GeneralTab';
 import WalletTab from './settings/WalletTab';
 import HistoryTab from './settings/HistoryTab';
 import InvoiceModal from './settings/InvoiceModal';
 import ApiKeysTab from './settings/ApiKeysTab';
-
-// Default token amount for models without max_cost defined
-const DEFAULT_TOKEN_AMOUNT = 50;
 
 // Types for Cashu
 interface CashuProof {
@@ -74,8 +71,6 @@ const SettingsModal = ({
   setTransactionHistory
 }: SettingsModalProps) => {
   const { publicKey } = useNostr();
-  const [tempMintUrl, setTempMintUrl] = useState(mintUrl);
-  const [tempBaseUrl, setTempBaseUrl] = useState(baseUrl);
   const [activeTab, setActiveTab] = useState<'settings' | 'wallet' | 'history' | 'api-keys'>('settings');
   const [mintAmount, setMintAmount] = useState('64');
   const [mintInvoice, setMintInvoice] = useState('');
@@ -98,13 +93,17 @@ const SettingsModal = ({
   const checkIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Reset tempMintUrl when modal opens or mintUrl changes
-  useEffect(() => {
-    if (isOpen) {
-      setTempMintUrl(mintUrl);
-      setTempBaseUrl(baseUrl);
-    }
-  }, [isOpen, mintUrl, baseUrl]);
+  // Handle auto-saving mint URL changes
+  const handleMintUrlChange = useCallback((url: string) => {
+    setMintUrl(url);
+    localStorage.setItem('mint_url', url);
+  }, [setMintUrl]);
+
+  // Handle auto-saving base URL changes
+  const handleBaseUrlChange = useCallback((url: string) => {
+    setBaseUrl(url);
+    localStorage.setItem('base_url', url);
+  }, [setBaseUrl]);
 
   // Initialize wallet when modal opens or mintUrl changes
   useEffect(() => {
@@ -117,7 +116,7 @@ const SettingsModal = ({
         await wallet.loadMint();
         if (isMounted) setCashuWallet(wallet);
 
-        const {apiBalance, proofsBalance} = await fetchBalances(mintUrl, baseUrl, selectedModel?.sats_pricing?.max_cost ?? DEFAULT_TOKEN_AMOUNT);
+        const {apiBalance, proofsBalance} = await fetchBalances(mintUrl, baseUrl);
         setBalance((apiBalance / 1000) + (proofsBalance / 1000)); //balances returned in mSats
       } catch {
         if (isMounted) setError('Failed to initialize wallet. Please try again.');
@@ -174,7 +173,7 @@ const SettingsModal = ({
             proofs.reduce((total, proof) => total + proof.amount, 0);
 
 
-          const {apiBalance, proofsBalance} = await fetchBalances(mintUrl, baseUrl, selectedModel?.sats_pricing?.max_cost ?? DEFAULT_TOKEN_AMOUNT);
+          const {apiBalance, proofsBalance} = await fetchBalances(mintUrl, baseUrl);
           setBalance((apiBalance / 1000) + newBalance)
 
           setSuccessMessage('Payment received! Tokens minted successfully.');
@@ -193,14 +192,14 @@ const SettingsModal = ({
           setMintQuote(null);
           setMintInvoice('');
         } catch (mintError) {
-          const err = mintError as Error;
+         const err = mintError as Error;
           if (err?.message?.includes('already spent') ||
             err?.message?.includes('Token already spent')) {
             setError('This token has already been spent.');
           } else if (err?.message?.includes('already issued') ||
             err?.message?.includes('already minted')) {
               
-            const {apiBalance, proofsBalance} = await fetchBalances(mintUrl, baseUrl, selectedModel?.sats_pricing?.max_cost ?? DEFAULT_TOKEN_AMOUNT);
+            const {apiBalance, proofsBalance} = await fetchBalances(mintUrl, baseUrl);
             setBalance((apiBalance / 1000) + (proofsBalance / 1000)); //balances returned in mSats
             setSuccessMessage('Payment already processed! Your balance has been updated.');
             setShowInvoiceModal(false);
@@ -273,7 +272,7 @@ const SettingsModal = ({
 
       setSuccessMessage(`Successfully imported ${importedAmount} sats!`);
 
-      const {apiBalance, proofsBalance} = await fetchBalances(mintUrl, baseUrl, selectedModel?.sats_pricing?.max_cost ?? DEFAULT_TOKEN_AMOUNT);
+      const {apiBalance, proofsBalance} = await fetchBalances(mintUrl, baseUrl);
       const newTransaction: TransactionHistory = {
         type: 'import',
         amount: importedAmount,
@@ -342,7 +341,7 @@ const SettingsModal = ({
       setGeneratedToken(token);
       setSuccessMessage(`Generated token for ${amount} sats. Share it with the recipient.`);
       
-      const {apiBalance, proofsBalance} = await fetchBalances(mintUrl, baseUrl, selectedModel?.sats_pricing?.max_cost ?? DEFAULT_TOKEN_AMOUNT);
+      const {apiBalance, proofsBalance} = await fetchBalances(mintUrl, baseUrl);
       const newTransaction: TransactionHistory = {
         type: 'send',
         amount: amount,
@@ -424,7 +423,7 @@ const SettingsModal = ({
             onClick={() => setActiveTab('settings')}
             type="button"
           >
-            Settings
+            General
           </button>
           <button
             className={`px-4 py-2 text-sm font-medium ${activeTab === 'wallet' ? 'text-white border-b-2 border-white' : 'text-white/50 hover:text-white'} cursor-pointer`}
@@ -451,19 +450,18 @@ const SettingsModal = ({
 
         <div className="p-4">
           {activeTab === 'settings' ? (
-            <SettingsTab
+            <GeneralTab
                 publicKey={publicKey}
                 logout={logout}
                 router={router}
                 onClose={onClose}
-                tempMintUrl={tempMintUrl}
-                setTempMintUrl={setTempMintUrl}
-                tempBaseUrl={tempBaseUrl}
-                setTempBaseUrl={setTempBaseUrl}
+                mintUrl={mintUrl}
+                setMintUrl={handleMintUrlChange}
+                baseUrl={baseUrl}
+                setBaseUrl={handleBaseUrlChange}
                 selectedModel={selectedModel}
                 handleModelChange={handleModelChange}
                 models={models}
-                clearConversations={clearConversations}
             />
           ) : activeTab === 'wallet' ? (
             <WalletTab
@@ -492,43 +490,17 @@ const SettingsModal = ({
             <HistoryTab
                 transactionHistory={transactionHistory}
                 setTransactionHistory={setTransactionHistory}
+                clearConversations={clearConversations}
                 onClose={onClose}
             />
           ) : (
             <ApiKeysTab
                 balance={balance}
+                setBalance={setBalance}
                 mintUrl={mintUrl}
                 baseUrl={baseUrl}
             />
           )}
-
-          {/* Action Buttons */}
-          <div className="mt-8 flex justify-end space-x-2">
-            <button
-              className="px-4 py-2 bg-transparent text-white/70 hover:text-white rounded-md text-sm transition-colors cursor-pointer"
-              onClick={onClose}
-              type="button"
-            >
-              Cancel
-            </button>
-            <button
-              className="px-4 py-2 bg-black border border-white/10 text-white rounded-md text-sm hover:bg-white/10 transition-colors cursor-pointer"
-              onClick={() => {
-                if (baseUrl != tempBaseUrl) {
-                  setBaseUrl(tempBaseUrl);
-                  localStorage.setItem('base_url', tempBaseUrl);
-                }
-                if (mintUrl != tempMintUrl) {
-                  setMintUrl(tempMintUrl);
-                  localStorage.setItem('mint_url', tempMintUrl);
-                }
-                onClose();
-              }}
-              type="button"
-            >
-              Save Changes
-            </button>
-          </div>
         </div>
       </div>
 

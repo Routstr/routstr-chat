@@ -18,8 +18,8 @@ import Sidebar from '@/components/chat/Sidebar';
 import ChatMessages from '@/components/chat/ChatMessages';
 import ChatInput from '@/components/chat/ChatInput';
 import ModelSelector from '@/components/chat/ModelSelector';
-import LowBalanceModal from '@/components/chat/LowBalanceModal';
 import { Conversation, Message, MessageContent, TransactionHistory } from '@/types/chat';
+import { toast } from 'sonner';
 
 // Default token amount for models without max_cost defined
 const DEFAULT_TOKEN_AMOUNT = 50;
@@ -60,7 +60,6 @@ function ChatPageContent() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [transactionHistory, setTransactionHistory] = useState<TransactionHistory[]>([]);
   const [hotTokenBalance, setHotTokenBalance] = useState<number>(0);
-  const [showLowBalanceModal, setShowLowBalanceModal] = useState<boolean>(false);
 
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -218,6 +217,8 @@ function ChatPageContent() {
     } catch (error) {
       console.error('Error while fetching models', error);
       setModels([]);
+      setSelectedModel(null);
+      toast.error('The provider might not be available');
     } finally {
       setIsLoadingModels(false);
     }
@@ -242,17 +243,10 @@ function ChatPageContent() {
     const loadData = async () => {
       // Use selected model's max_cost if available, otherwise use default
       const tokenAmount = selectedModel?.sats_pricing?.max_cost ?? DEFAULT_TOKEN_AMOUNT;
-      console.log('before', tokenAmount);
-      const { apiBalance, proofsBalance } = await fetchBalances(currentMintUrl, currentBaseUrl, tokenAmount);
+      const { apiBalance, proofsBalance } = await fetchBalances(currentMintUrl, currentBaseUrl);
 
       setBalance((apiBalance / 1000) + (proofsBalance / 1000));
       setHotTokenBalance(apiBalance);
-
-      // Use selected model's max_cost if available for threshold check
-      const minBalanceThreshold = selectedModel?.sats_pricing?.max_cost ?? DEFAULT_TOKEN_AMOUNT;
-      if (apiBalance === 0 && proofsBalance !== 0 && (proofsBalance / 1000) < minBalanceThreshold) {
-        setShowLowBalanceModal(true);
-      }
 
       const savedTransactionHistory = localStorage.getItem('transaction_history');
       if (savedTransactionHistory) {
@@ -383,7 +377,7 @@ function ChatPageContent() {
     setIsLoading(true);
     setStreamingContent('');
 
-    const initialBalance = hotTokenBalance;
+    const initialBalance = getBalanceFromStoredProofs();
 
     const makeRequest = async (retryOnInsufficientBalance: boolean = true): Promise<Response> => {
       // Use selected model's max_cost if available, otherwise use default
@@ -392,11 +386,11 @@ function ChatPageContent() {
       const token = await getOrCreateApiToken(mintUrl, tokenAmount);
 
       if (!token) {
-        throw new Error('Insufficient balance. Please add more funds to continue.');
+        throw new Error(`Insufficient balance. Please add more funds to continue. You need at least ${Number(tokenAmount).toFixed(0)} sats to use ${selectedModel?.id}`);
       }
 
       if (typeof token === 'object' && 'hasTokens' in token && !token.hasTokens) {
-        throw new Error('Insufficient balance. Please add more funds to continue.');
+        throw new Error(`Insufficient balance. Please add more funds to continue. You need at least ${Number(tokenAmount).toFixed(0)} sats to use ${selectedModel?.id}`);
       }
 
       // Convert messages to API format
@@ -430,15 +424,14 @@ function ChatPageContent() {
           const newToken = await getOrCreateApiToken(mintUrl, tokenAmount);
 
           if (!newToken || (typeof newToken === 'object' && 'hasTokens' in newToken && !newToken.hasTokens)) {
-            throw new Error('Insufficient balance. Please add more funds to continue.');
+            throw new Error(`Insufficient balance. Please add more funds to continue. You need at least ${Number(tokenAmount).toFixed(0)} sats to use ${selectedModel?.id}`);
           }
 
           // Recursive call with retry flag set to false to prevent infinite loops
           return makeRequest(false);
         }
-
+ 
         if (response.status === 413) {
-          console.log('HERE"S QWH', response);
           await refundRemainingBalance(mintUrl, baseUrl)
           return makeRequest(false);
           // refund exsisting balance
@@ -459,7 +452,7 @@ function ChatPageContent() {
 
     try {
       const response = await makeRequest();
-
+ 
       if (!response.body) {
         throw new Error('Response body is not available');
       }
@@ -467,7 +460,7 @@ function ChatPageContent() {
       const reader = response.body.getReader();
       const decoder = new TextDecoder('utf-8');
       let accumulatedContent = '';
-
+ 
       while (true) {
         const { done, value } = await reader.read();
 
@@ -511,22 +504,22 @@ function ChatPageContent() {
           // Swallow chunk processing errors
         }
       }
-
+ 
       if (accumulatedContent) {
         setMessages(prev => [...prev, createTextMessage('assistant', accumulatedContent)]);
       }
 
       setStreamingContent('');
-
-      const { apiBalance, proofsBalance } = await fetchBalances(mintUrl, baseUrl, selectedModel?.sats_pricing?.max_cost ?? DEFAULT_TOKEN_AMOUNT);
+ 
+      const { apiBalance, proofsBalance } = await fetchBalances(mintUrl, baseUrl);
       setBalance(Math.floor(apiBalance / 1000) + Math.floor(proofsBalance / 1000)); // balances returned in mSats
-      const satsSpent = initialBalance - apiBalance;
       
       await refundRemainingBalance(mintUrl, baseUrl);
 
+      const satsSpent = initialBalance - getBalanceFromStoredProofs();
       const newTransaction: TransactionHistory = {
         type: 'spent',
-        amount: satsSpent / 1000,
+        amount: satsSpent,
         timestamp: Date.now(),
         status: 'success',
         model: selectedModel?.id,
@@ -781,11 +774,6 @@ function ChatPageContent() {
       <LoginModal
         isOpen={isLoginModalOpen}
         onClose={() => setIsLoginModalOpen(false)}
-      />
-
-      <LowBalanceModal
-        isOpen={showLowBalanceModal}
-        onClose={() => setShowLowBalanceModal(false)}
       />
 
       <TutorialOverlay
