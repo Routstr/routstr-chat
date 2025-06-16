@@ -8,7 +8,7 @@ interface WalletTabProps {
   successMessage: string;
   mintAmount: string;
   setMintAmount: (amount: string) => void;
-  createMintQuote: () => Promise<void>;
+  createMintQuote: (amount?: number) => Promise<void>;
   isMinting: boolean;
   mintInvoice: string;
   setShowInvoiceModal: (show: boolean) => void;
@@ -54,12 +54,9 @@ const WalletTab: React.FC<WalletTabProps> = ({
   const [activeTab, setActiveTab] = useState<'deposit' | 'send'>('deposit');
 
   // Handle quick mint button click
-  const handleQuickMint = async (amount: number) => {
+  const handleQuickMint = (amount: number) => {
     setMintAmount(amount.toString());
-    // Small delay to ensure state is updated before creating quote
-    setTimeout(() => {
-      void createMintQuote();
-    }, 0);
+    void createMintQuote(amount);
   };
 
   return (

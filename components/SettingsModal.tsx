@@ -221,7 +221,7 @@ const SettingsModal = ({
     }
   }, [cashuWallet, mintQuote, isAutoChecking, mintAmount, setBalance]);
 
-  const createMintQuote = useCallback(async () => {
+  const createMintQuote = useCallback(async (amountOverride?: number) => {
     if (!cashuWallet) return;
 
     setIsMinting(true);
@@ -229,7 +229,7 @@ const SettingsModal = ({
     setSuccessMessage('');
 
     try {
-      const amount = parseInt(mintAmount, 10);
+      const amount = amountOverride ?? parseInt(mintAmount, 10);
       if (isNaN(amount) || amount <= 0) {
         throw new Error('Please enter a valid amount');
       }
