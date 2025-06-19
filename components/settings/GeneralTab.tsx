@@ -4,7 +4,7 @@ import { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.share
 import { Model } from '@/data/models';
 
 interface GeneralTabProps {
-  publicKey: string | null;
+  publicKey: string | undefined;
   logout?: () => void;
   router?: AppRouterInstance;
   onClose: () => void;

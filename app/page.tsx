@@ -24,6 +24,8 @@ import { useCashuWallet } from '@/hooks/useCashuWallet';
 import { useCashuStore } from '@/stores/cashuStore';
 import { useCashuToken } from '@/hooks/useCashuToken';
 import { getEncodedTokenV4 } from '@cashu/cashu-ts';
+import React from 'react';
+import { calculateBalance } from '@/lib/cashu';
 
 // Default token amount for models without max_cost defined
 const DEFAULT_TOKEN_AMOUNT = 50;
@@ -57,6 +59,7 @@ function ChatPageContent() {
   const [mintUrl, setMintUrl] = useState('');
   const [baseUrl, setBaseUrl] = useState('');
   const [textareaHeight, setTextareaHeight] = useState(48);
+  const [usingNip60, setUsingNip60] = useState(true);
 
   // Image upload state
   const [uploadedImages, setUploadedImages] = useState<string[]>([]);
@@ -70,7 +73,6 @@ function ChatPageContent() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [transactionHistory, setTransactionHistory] = useState<TransactionHistory[]>([]);
-  const [hotTokenBalance, setHotTokenBalance] = useState<number>(0);
 
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -83,11 +85,32 @@ function ChatPageContent() {
 
   // Log wallet data when it loads
  useEffect(() => {
+    console.log('rdlogs', wallet, isWalletLoading); 
     if (wallet) {
-      console.log("Wallet loaded in Groups page:", wallet);
-    }
-  }, [wallet]);
+      console.log("rdlogs: Wallet loaded in chat page:", wallet);
 
+      if (mintUrl && wallet.mints?.includes(mintUrl)) {
+        cashuStore.setActiveMintUrl(mintUrl);
+      } else if (wallet.mints?.includes(DEFAULT_MINT_URL)) {
+        cashuStore.setActiveMintUrl(DEFAULT_MINT_URL);
+      }
+    }
+  }, [wallet, mintUrl, cashuStore, DEFAULT_MINT_URL]);
+
+
+  const mintBalances = React.useMemo(() => {
+    if (!cashuStore.proofs) return {};
+    return calculateBalance(cashuStore.proofs);
+  }, [cashuStore.proofs]);
+
+  useEffect(() => {
+    const totalBalance = Object.values(mintBalances).reduce(
+      (sum, balance) => sum + balance,
+      0
+    );
+    setBalance(totalBalance);
+  }, [mintBalances]);
+  
   // Close model drawer when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -128,9 +151,7 @@ function ChatPageContent() {
 
     try {
 
-      console.log(cashuStore.activeMintUrl, amount);
       const proofs = await sendToken(cashuStore.activeMintUrl, amount);
-      console.log(proofs);
       const token = getEncodedTokenV4({
         mint: cashuStore.activeMintUrl,
         proofs: proofs.map((p) => ({
@@ -163,12 +184,6 @@ function ChatPageContent() {
       const storedToken = localStorage.getItem("current_cashu_token");
       if (storedToken) {
         return storedToken;
-      }
-
-      // Check if any tokens are available
-      const storedProofs = localStorage.getItem("cashu_proofs");
-      if (!storedProofs) {
-        return { hasTokens: false };
       }
 
       // Generate new token if none exists
@@ -346,7 +361,6 @@ function ChatPageContent() {
       const { apiBalance, proofsBalance } = await fetchBalances(currentMintUrl, currentBaseUrl);
 
       setBalance((apiBalance / 1000) + (proofsBalance / 1000));
-      setHotTokenBalance(apiBalance);
 
       const savedTransactionHistory = localStorage.getItem('transaction_history');
       if (savedTransactionHistory) {
@@ -483,8 +497,8 @@ function ChatPageContent() {
       // Use selected model's max_cost if available, otherwise use default
       const tokenAmount = selectedModel?.sats_pricing?.max_cost ?? DEFAULT_TOKEN_AMOUNT;
 
-      const token = await getOrCreateApiToken(mintUrl, tokenAmount);
-      // const token = await getOrCreate60ApiToken(mintUrl, tokenAmount);
+      // const token = await getOrCreateApiToken(mintUrl, tokenAmount);
+      const token = await getOrCreate60ApiToken(mintUrl, tokenAmount);
       console.log(token);
 
       if (!token) {
@@ -632,7 +646,6 @@ function ChatPageContent() {
       }
       localStorage.setItem('transaction_history', JSON.stringify([...transactionHistory, newTransaction]))
       setTransactionHistory(prev => [...prev, newTransaction]);
-      setHotTokenBalance(apiBalance);
     } catch (error) {
       // Only add error to chat, don't use unused error state
       const errorMessage = error instanceof Error ? error.message : 'Failed to process your request';

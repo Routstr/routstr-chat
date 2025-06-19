@@ -17,6 +17,7 @@ import HistoryTab from './settings/HistoryTab';
 import InvoiceModal from './settings/InvoiceModal';
 import ApiKeysTab from './settings/ApiKeysTab';
 import SixtyWallet from './settings/SixtyWallet';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
 
 // Types for Cashu
 interface CashuProof {
@@ -71,7 +72,7 @@ const SettingsModal = ({
   transactionHistory, 
   setTransactionHistory
 }: SettingsModalProps) => {
-  const { publicKey } = useNostr();
+  const { user } = useCurrentUser();
   const [activeTab, setActiveTab] = useState<'settings' | 'wallet' | 'history' | 'api-keys' | 'wallet-60'>('settings');
   const [mintAmount, setMintAmount] = useState('64');
   const [mintInvoice, setMintInvoice] = useState('');
@@ -459,7 +460,7 @@ const SettingsModal = ({
         <div className="p-4">
           {activeTab === 'settings' ? (
             <GeneralTab
-                publicKey={publicKey}
+                publicKey={user?.pubkey}
                 logout={logout}
                 router={router}
                 onClose={onClose}

@@ -25,7 +25,7 @@ export const fetchBalances = async (mintUrl: string, baseUrl: string): Promise<{
     const token = localStorage.getItem("current_cashu_token");
 
     if (token) {
-      const response = await fetch(`${baseUrl}v1/wallet/`, {
+      const response = await fetch(`${baseUrl}v1/wallet/info`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -242,7 +242,13 @@ export const refundRemainingBalance = async (mintUrl: string, baseUrl: string, t
     });
 
     if (!response.ok) {
-      throw new Error(`Refund request failed with status ${response.status}`);
+      const errorData = await response.json();
+      if (response.status === 400 && errorData?.detail === "No balance to refund") {
+        invalidateApiToken();
+        console.log('asdfasdf;;;;;;llllll'); 
+        return { success: true, message: 'No balance to refund' };
+      }
+      throw new Error(`Refund request failed with status ${response.status}: ${errorData?.detail || response.statusText}`);
     }
 
     const data = await response.json();

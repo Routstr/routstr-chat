@@ -1,6 +1,4 @@
 import React, { useState } from 'react';
-import { CashuWallet, MintQuoteResponse } from '@cashu/cashu-ts';
-import { getBalanceFromStoredProofs } from '@/utils/cashuUtils';
 
 interface WalletTabProps {
   balance: number;

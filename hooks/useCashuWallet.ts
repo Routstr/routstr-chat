@@ -45,6 +45,7 @@ export function useCashuWallet() {
         if (events.length === 0) {
           return null;
         }
+        console.log('rdlogs: ', events);
 
         const event = events[0];
 
@@ -52,7 +53,6 @@ export function useCashuWallet() {
         if (!user.signer.nip44) {
           throw new Error('NIP-44 encryption not supported by your signer');
         }
-
         const decrypted = await user.signer.nip44.decrypt(user.pubkey, event.content);
         const data = n.json().pipe(z.string().array().array()).parse(decrypted);
 
