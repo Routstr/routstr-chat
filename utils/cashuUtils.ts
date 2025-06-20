@@ -218,65 +218,74 @@ export const getOrCreateApiToken = async (
   }
 };
 
-export const refundRemainingBalance = async (mintUrl: string, baseUrl: string, token?: string): Promise<{ success: boolean; message?: string }> => {
+export const fetchRefundToken = async (baseUrl: string, storedToken: string): Promise<any> => {
+  if (!baseUrl) {
+    throw new Error('No base URL configured');
+  }
+
+  const normalizedBaseUrl = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+
+  const response = await fetch(`${normalizedBaseUrl}v1/wallet/refund`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${storedToken}`,
+      'Content-Type': 'application/json'
+    }
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    if (response.status === 400 && errorData?.detail === "No balance to refund") {
+      invalidateApiToken();
+      throw new Error('No balance to refund'); // Indicate this specific case
+    }
+    throw new Error(`Refund request failed with status ${response.status}: ${errorData?.detail || response.statusText}`);
+  }
+  const data = await response.json();
+
+  return data.token;
+};
+
+export const storeCashuToken = async (mintUrl: string, token: string): Promise<void> => {
+  const mint = new CashuMint(mintUrl);
+  const wallet = new CashuWallet(mint);
+  await wallet.loadMint();
+
+  const result = await wallet.receive(token);
+  const proofs = Array.isArray(result) ? result : [];
+
+  if (proofs && proofs.length > 0) {
+    const storedProofs = localStorage.getItem('cashu_proofs');
+    const existingProofs = storedProofs ? JSON.parse(storedProofs) : [];
+    localStorage.setItem('cashu_proofs', JSON.stringify([...existingProofs, ...proofs]));
+  }
+};
+
+export const refundRemainingBalance = async (mintUrl: string, baseUrl: string, apiKey?: string): Promise<{ success: boolean; message?: string }> => {
   try {
-    // Use provided token or try to get existing token from localStorage
-    const storedToken = token || localStorage.getItem("current_cashu_token");
+    const storedToken = apiKey || localStorage.getItem("current_cashu_token");
     if (!storedToken) {
-      return { success: true, message: 'No token to refund' };
+      return { success: true, message: 'No apiKey to refund' };
     }
 
-    if (!baseUrl) {
-      return { success: false, message: 'No base URL configured' };
-    }
-
-    // Ensure baseUrl ends with a slash
-    const normalizedBaseUrl = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
-
-    const response = await fetch(`${normalizedBaseUrl}v1/wallet/refund`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${storedToken}`,
-        'Content-Type': 'application/json'
+    try {
+      const token = await fetchRefundToken(baseUrl, storedToken);
+      if (token) {
+        await storeCashuToken(mintUrl, token);
       }
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      if (response.status === 400 && errorData?.detail === "No balance to refund") {
-        invalidateApiToken();
-        console.log('asdfasdf;;;;;;llllll'); 
+      invalidateApiToken();
+      return { success: true, message: 'Refund completed successfully' };
+    } catch (error) {
+      if (error instanceof Error && error.message === 'No balance to refund') {
         return { success: true, message: 'No balance to refund' };
       }
-      throw new Error(`Refund request failed with status ${response.status}: ${errorData?.detail || response.statusText}`);
+      throw error; // Re-throw other errors
     }
-
-    const data = await response.json();
-    
-    if (data.token) {
-      const mint = new CashuMint(mintUrl);
-      const wallet = new CashuWallet(mint);
-      await wallet.loadMint();
-
-      const result = await wallet.receive(data.token);
-      const proofs = Array.isArray(result) ? result : [];
-
-      if (proofs && proofs.length > 0) {
-        const storedProofs = localStorage.getItem('cashu_proofs');
-        const existingProofs = storedProofs ? JSON.parse(storedProofs) : [];
-        localStorage.setItem('cashu_proofs', JSON.stringify([...existingProofs, ...proofs]));
-      }
-    }
-
-    // Clear the current token since it's been refunded
-    invalidateApiToken();
-
-    return { success: true, message: 'Refund completed successfully' };
   } catch (error) {
     console.error("Error refunding balance:", error);
-    return { 
-      success: false, 
-      message: error instanceof Error ? error.message : 'Unknown error occurred during refund' 
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : 'Unknown error occurred during refund'
     };
   }
 };
@@ -289,37 +298,82 @@ export const invalidateApiToken = () => {
 };
 
 
-// const create60CashuToken = async (amount: number) => {
+export const create60CashuToken = async (
+  activeMintUrl: string,
+  sendToken: (mintUrl: string, amount: number) => Promise<any[]>,
+  amount: number
+): Promise<string | undefined> => {
+  // Check if amount is a decimal and round up if necessary
+  if (amount % 1 !== 0) {
+    amount = Math.ceil(amount);
+  }
 
-//   if (!cashuStore.activeMintUrl) {
-//     console.error(
-//       "No active mint selected. Please select a mint in your wallet settings."
-//     );
-//     return;
-//   }
+  if (!activeMintUrl) {
+    console.error(
+      "No active mint selected. Please select a mint in your wallet settings."
+    );
+    return;
+  }
 
-//   if (!amount || isNaN((amount))) {
-//     console.error("Please enter a valid amount");
-//     return;
-//   }
+  if (!amount || isNaN((amount))) {
+    console.error("Please enter a valid amount");
+    return;
+  }
 
-//   try {
+  try {
+    const proofs = await sendToken(activeMintUrl, amount);
+    const token = getEncodedTokenV4({
+      mint: activeMintUrl,
+      proofs: proofs.map((p) => ({
+        id: p.id || "",
+        amount: p.amount,
+        secret: p.secret || "",
+        C: p.C || "",
+      })),
+    });
+    return token;
+  } catch (error) {
+    console.error("Error generating token:", error);
+    console.error(error instanceof Error ? error.message : String(error));
+  }
+};
 
-//     const proofs = await sendToken(cashuStore.activeMintUrl, amount);
-//     console.log(proofs);
-//     const token = getEncodedTokenV4({
-//       mint: cashuStore.activeMintUrl,
-//       proofs: proofs.map((p) => ({
-//        id: p.id || "",
-//         amount: p.amount,
-//         secret: p.secret || "",
-//         C: p.C || "",
-//       })),
-//     });
-//     return token;
+export type UnifiedRefundResult = {
+  success: boolean;
+  refundedAmount?: number;
+  message?: string;
+};
 
-//   } catch (error) {
-//     console.error("Error generating token:", error);
-//     console.error(error instanceof Error ? error.message : String(error));
-//   }
-// };
+export const unifiedRefund = async (
+  mintUrl: string,
+  baseUrl: string,
+  usingNip60: boolean,
+  receiveTokenFn: (token: string) => Promise<any[]>,
+  apiKey?: string
+): Promise<UnifiedRefundResult> => {
+  if (usingNip60) {
+    const storedToken = apiKey || localStorage.getItem("current_cashu_token");
+    if (!storedToken) {
+      return { success: true, message: 'No API key to refund' };
+    }
+    
+    try {
+      const refundedToken = await fetchRefundToken(baseUrl, storedToken);
+      const proofs = await receiveTokenFn(refundedToken);
+      const totalAmount = proofs.reduce((sum: number, p: any) => sum + p.amount, 0);
+      invalidateApiToken();
+      
+      return {
+        success: true,
+        refundedAmount: totalAmount
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Refund failed'
+      };
+    }
+  } else {
+    return await refundRemainingBalance(mintUrl, baseUrl, apiKey);
+  }
+};

@@ -10,7 +10,7 @@ import { useCashuStore } from "@/stores/cashuStore";
 import { formatBalance, calculateBalance } from "@/lib/cashu";
 import { cn } from "@/lib/utils"; // Import cn for conditional class names
 
-const SixtyWallet: React.FC<{mintUrl:string}> = (mintUrl) => {
+const SixtyWallet: React.FC<{mintUrl:string, usingNip60: boolean, setUsingNip60: (usingNip60: boolean) => void}> = ({mintUrl, usingNip60, setUsingNip60}) => {
   // Popular amounts for quick minting
   const popularAmounts = [100, 500, 1000];
   
@@ -256,7 +256,7 @@ const SixtyWallet: React.FC<{mintUrl:string}> = (mintUrl) => {
           </div>
         )}
       </div>
-
+      
       {/* Error/Success Messages */}
       {error && (
         <div className="bg-red-500/10 border border-red-500/30 text-red-200 p-3 rounded-md text-sm">

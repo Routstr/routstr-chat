@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useNostrLogin } from '@nostrify/react/login';
 import { DEFAULT_BASE_URL, DEFAULT_MINT_URL } from '@/lib/utils';
-import { fetchBalances, getBalanceFromStoredProofs, getOrCreateApiToken, invalidateApiToken, refundRemainingBalance } from '@/utils/cashuUtils';
+import { fetchBalances, getBalanceFromStoredProofs, getOrCreateApiToken, invalidateApiToken, refundRemainingBalance, fetchRefundToken, create60CashuToken, unifiedRefund } from '@/utils/cashuUtils';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import {
   Loader2,
@@ -95,7 +95,7 @@ function ChatPageContent() {
         cashuStore.setActiveMintUrl(DEFAULT_MINT_URL);
       }
     }
-  }, [wallet, mintUrl, cashuStore, DEFAULT_MINT_URL]);
+  }, [wallet, mintUrl, DEFAULT_MINT_URL]);
 
 
   const mintBalances = React.useMemo(() => {
@@ -108,7 +108,9 @@ function ChatPageContent() {
       (sum, balance) => sum + balance,
       0
     );
-    setBalance(totalBalance);
+    if (usingNip60) {
+      setBalance(totalBalance);
+    }
   }, [mintBalances]);
   
   // Close model drawer when clicking outside
@@ -129,46 +131,6 @@ function ChatPageContent() {
     };
   }, [isModelDrawerOpen]);
 
-
-  const create60CashuToken = async (amount: number) => {
-
-    // Check if amount is a decimal and round up if necessary
-    if (amount % 1 !== 0) {
-      amount = Math.ceil(amount);
-    }
-
-    if (!cashuStore.activeMintUrl) {
-      console.error(
-        "No active mint selected. Please select a mint in your wallet settings."
-      );
-      return;
-    }
-
-    if (!amount || isNaN((amount))) {
-      console.error("Please enter a valid amount");
-      return;
-    }
-
-    try {
-
-      const proofs = await sendToken(cashuStore.activeMintUrl, amount);
-      const token = getEncodedTokenV4({
-        mint: cashuStore.activeMintUrl,
-        proofs: proofs.map((p) => ({
-        id: p.id || "",
-          amount: p.amount,
-          secret: p.secret || "",
-          C: p.C || "",
-        })),
-      });
-      return token;
-
-    } catch (error) {
-      console.error("Error generating token:", error);
-      console.error(error instanceof Error ? error.message : String(error));
-    }
-  };
-
   /**
    * Manages token lifecycle - reuses existing token or generates new one
    * @param mintUrl The Cashu mint URL
@@ -188,7 +150,11 @@ function ChatPageContent() {
 
       // Generate new token if none exists
       // const newToken = await generateApiToken(mintUrl, amount);
-      const newToken = await create60CashuToken(amount); 
+      if (!cashuStore.activeMintUrl) {
+        console.error("No active mint selected");
+        return null;
+      }
+      const newToken = await create60CashuToken(cashuStore.activeMintUrl, sendToken, amount);
       if (newToken) {
         localStorage.setItem("current_cashu_token", newToken);
         return newToken;
@@ -357,10 +323,6 @@ function ChatPageContent() {
     setBaseUrl(currentBaseUrl.endsWith('/') ? currentBaseUrl : `${currentBaseUrl}/`);
 
     const loadData = async () => {
-      // Use selected model's max_cost if available, otherwise use default
-      const { apiBalance, proofsBalance } = await fetchBalances(currentMintUrl, currentBaseUrl);
-
-      setBalance((apiBalance / 1000) + (proofsBalance / 1000));
 
       const savedTransactionHistory = localStorage.getItem('transaction_history');
       if (savedTransactionHistory) {
@@ -397,7 +359,18 @@ function ChatPageContent() {
 
     loadData();
 
-  }, [isAuthenticated, selectedModel]); // Added selectedModel to dependency array
+  }, [isAuthenticated, selectedModel]);
+
+  // Fetch balances when usingNip60, mintUrl, or baseUrl changes
+  useEffect(() => {
+    const fetchAndSetBalances = async () => {
+      if (!usingNip60 && mintUrl && baseUrl) {
+        const { apiBalance, proofsBalance } = await fetchBalances(mintUrl, baseUrl);
+        setBalance((apiBalance / 1000) + (proofsBalance / 1000));
+      }
+    };
+    fetchAndSetBalances();
+  }, [usingNip60, mintUrl, baseUrl]);
 
   // This useEffect will run when baseUrl changes to fetch models
   useEffect(() => {
@@ -491,14 +464,15 @@ function ChatPageContent() {
     setIsLoading(true);
     setStreamingContent('');
 
-    const initialBalance = getBalanceFromStoredProofs();
+    const initialBalance = usingNip60 ? balance : getBalanceFromStoredProofs();
 
+    // Use selected model's max_cost if available, otherwise use default
+    const tokenAmount = selectedModel?.sats_pricing?.max_cost ?? DEFAULT_TOKEN_AMOUNT;
     const makeRequest = async (retryOnInsufficientBalance: boolean = true): Promise<Response> => {
-      // Use selected model's max_cost if available, otherwise use default
-      const tokenAmount = selectedModel?.sats_pricing?.max_cost ?? DEFAULT_TOKEN_AMOUNT;
 
-      // const token = await getOrCreateApiToken(mintUrl, tokenAmount);
-      const token = await getOrCreate60ApiToken(mintUrl, tokenAmount);
+      const token = usingNip60
+        ? await getOrCreate60ApiToken(mintUrl, tokenAmount)
+        : await getOrCreateApiToken(mintUrl, tokenAmount);
       console.log(token);
 
       if (!token) {
@@ -530,7 +504,9 @@ function ChatPageContent() {
           invalidateApiToken();
 
           // Try to create a new token and retry once
-          const newToken = await getOrCreateApiToken(mintUrl, tokenAmount);
+          const newToken = usingNip60
+            ? await getOrCreate60ApiToken(mintUrl, tokenAmount)
+            : await getOrCreateApiToken(mintUrl, tokenAmount);
 
           if (!newToken || (typeof newToken === 'object' && 'hasTokens' in newToken && !newToken.hasTokens)) {
             throw new Error(`Insufficient balance. Please add more funds to continue. You need at least ${Number(tokenAmount).toFixed(0)} sats to use ${selectedModel?.id}`);
@@ -550,16 +526,8 @@ function ChatPageContent() {
         }
  
         if (response.status === 413) {
-          await refundRemainingBalance(mintUrl, baseUrl)
+          await unifiedRefund(mintUrl, baseUrl, usingNip60, receiveToken);
           return makeRequest(false);
-          // refund exsisting balance
-          // fetch min balance needed for reques
-          // check if balance is enough
-          // if not find model with max_cost less than balance
-          // show modal with options to add more funds or change model
-          // if balance is enough, create new token with that balance threshold
-          // retry request
-          // if still not enough, throw error
         }
 
         throw new Error(`API error: ${response.status}`);
@@ -628,13 +596,24 @@ function ChatPageContent() {
       }
 
       setStreamingContent('');
- 
-      const { apiBalance, proofsBalance } = await fetchBalances(mintUrl, baseUrl);
-      setBalance(Math.floor(apiBalance / 1000) + Math.floor(proofsBalance / 1000)); // balances returned in mSats
-      
-      await refundRemainingBalance(mintUrl, baseUrl);
 
-      const satsSpent = initialBalance - getBalanceFromStoredProofs();
+      let satsSpent;
+
+      const result = await unifiedRefund(mintUrl, baseUrl, usingNip60, receiveToken);
+      if (result.success) {
+        if (usingNip60 && result.refundedAmount !== undefined) {
+          setBalance(initialBalance + result.refundedAmount);
+          satsSpent = tokenAmount - result.refundedAmount;
+        } else {
+          const { apiBalance, proofsBalance } = await fetchBalances(mintUrl, baseUrl);
+          setBalance(Math.floor(apiBalance / 1000) + Math.floor(proofsBalance / 1000));
+          satsSpent = initialBalance - getBalanceFromStoredProofs();
+        }
+      } else {
+        console.error("Refund failed:", result.message);
+        satsSpent = tokenAmount;
+      }
+
       const newTransaction: TransactionHistory = {
         type: 'spent',
         amount: satsSpent,
@@ -642,7 +621,7 @@ function ChatPageContent() {
         status: 'success',
         model: selectedModel?.id,
         message: 'Tokens spent',
-        balance: (apiBalance + proofsBalance) / 1000
+        balance: initialBalance - satsSpent
       }
       localStorage.setItem('transaction_history', JSON.stringify([...transactionHistory, newTransaction]))
       setTransactionHistory(prev => [...prev, newTransaction]);
@@ -885,6 +864,8 @@ function ChatPageContent() {
           router={router}
           transactionHistory={transactionHistory}
           setTransactionHistory={setTransactionHistory}
+          usingNip60={usingNip60}
+          setUsingNip60={setUsingNip60}
         />
       )}
 

@@ -16,7 +16,7 @@ import WalletTab from './settings/WalletTab';
 import HistoryTab from './settings/HistoryTab';
 import InvoiceModal from './settings/InvoiceModal';
 import ApiKeysTab from './settings/ApiKeysTab';
-import SixtyWallet from './settings/SixtyWallet';
+import UnifiedWallet from './settings/UnifiedWallet';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 
 // Types for Cashu
@@ -51,7 +51,9 @@ interface SettingsModalProps {
   logout?: () => void;
   router?: AppRouterInstance;
   transactionHistory: TransactionHistory[];
-  setTransactionHistory: (transactionHistory: TransactionHistory[] | ((prevTransactionHistory: TransactionHistory[]) => TransactionHistory[])) => void
+  setTransactionHistory: (transactionHistory: TransactionHistory[] | ((prevTransactionHistory: TransactionHistory[]) => TransactionHistory[])) => void;
+  usingNip60: boolean;
+  setUsingNip60: (usingNip60: boolean) => void;
 }
 
 const SettingsModal = ({
@@ -69,11 +71,13 @@ const SettingsModal = ({
   clearConversations,
   logout,
   router,
-  transactionHistory, 
-  setTransactionHistory
+  transactionHistory,
+  setTransactionHistory,
+  usingNip60,
+  setUsingNip60
 }: SettingsModalProps) => {
   const { user } = useCurrentUser();
-  const [activeTab, setActiveTab] = useState<'settings' | 'wallet' | 'history' | 'api-keys' | 'wallet-60'>('settings');
+  const [activeTab, setActiveTab] = useState<'settings' | 'wallet' | 'history' | 'api-keys'>('settings');
   const [mintAmount, setMintAmount] = useState('64');
   const [mintInvoice, setMintInvoice] = useState('');
   const [mintQuote, setMintQuote] = useState<MintQuoteResponse | null>(null);
@@ -118,8 +122,10 @@ const SettingsModal = ({
         await wallet.loadMint();
         if (isMounted) setCashuWallet(wallet);
 
-        const {apiBalance, proofsBalance} = await fetchBalances(mintUrl, baseUrl);
-        setBalance((apiBalance / 1000) + (proofsBalance / 1000)); //balances returned in mSats
+        if (!usingNip60) {
+          const {apiBalance, proofsBalance} = await fetchBalances(mintUrl, baseUrl);
+          setBalance((apiBalance / 1000) + (proofsBalance / 1000)); //balances returned in mSats
+        }
       } catch {
         if (isMounted) setError('Failed to initialize wallet. Please try again.');
       }
@@ -448,13 +454,6 @@ const SettingsModal = ({
           >
             API Keys
           </button>
-          <button
-            className={`px-4 py-2 text-sm font-medium ${activeTab === 'wallet-60' ? 'text-white border-b-2 border-white' : 'text-white/50 hover:text-white'} cursor-pointer`}
-            onClick={() => setActiveTab('wallet-60')}
-            type="button"
-          >
-            Wallet60
-          </button>
         </div>
 
         <div className="p-4">
@@ -472,29 +471,6 @@ const SettingsModal = ({
                 handleModelChange={handleModelChange}
                 models={models}
             />
-          ) : activeTab === 'wallet' ? (
-            <WalletTab
-                balance={balance}
-                error={error}
-                successMessage={successMessage}
-                mintAmount={mintAmount}
-                setMintAmount={setMintAmount}
-                createMintQuote={createMintQuote}
-                isMinting={isMinting}
-                mintInvoice={mintInvoice}
-                setShowInvoiceModal={setShowInvoiceModal}
-                isAutoChecking={isAutoChecking}
-                countdown={countdown}
-                sendAmount={sendAmount}
-                setSendAmount={setSendAmount}
-                generateSendToken={generateSendToken}
-                isGeneratingSendToken={isGeneratingSendToken}
-                generatedToken={generatedToken}
-                tokenToImport={tokenToImport}
-                setTokenToImport={setTokenToImport}
-                importToken={importToken}
-                isImporting={isImporting}
-            />
           ) : activeTab === 'history' ? (
             <HistoryTab
                 transactionHistory={transactionHistory}
@@ -505,15 +481,38 @@ const SettingsModal = ({
           ) : activeTab === 'api-keys' ? (
             <ApiKeysTab
                 balance={balance}
-                setBalance={setBalance} 
+                setBalance={setBalance}
                 mintUrl={mintUrl}
                 baseUrl={baseUrl}
+                usingNip60={usingNip60}
             />
-          ) : (
-            <SixtyWallet
+          ) : activeTab === 'wallet' ? (
+            <UnifiedWallet
+              balance={balance}
+              error={error}
+              successMessage={successMessage}
+              mintAmount={mintAmount}
+              setMintAmount={setMintAmount}
+              createMintQuote={createMintQuote}
+              isMinting={isMinting}
+              mintInvoice={mintInvoice}
+              setShowInvoiceModal={setShowInvoiceModal}
+              isAutoChecking={isAutoChecking}
+              countdown={countdown}
+              sendAmount={sendAmount}
+              setSendAmount={setSendAmount}
+              generateSendToken={generateSendToken}
+              isGeneratingSendToken={isGeneratingSendToken}
+              generatedToken={generatedToken}
+              tokenToImport={tokenToImport}
+              setTokenToImport={setTokenToImport}
+              importToken={importToken}
+              isImporting={isImporting}
               mintUrl={mintUrl}
+              usingNip60={usingNip60}
+              setUsingNip60={setUsingNip60}
             />
-          )}
+          ) : null}
         </div>
       </div>
 

@@ -2,10 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { Copy, Eye, EyeOff, Info } from 'lucide-react';
-import { getBalanceFromStoredProofs, generateApiToken, refundRemainingBalance } from '@/utils/cashuUtils';
+import { getBalanceFromStoredProofs, refundRemainingBalance, create60CashuToken, generateApiToken, unifiedRefund } from '@/utils/cashuUtils';
 import { toast } from 'sonner';
 import { useApiKeysSync } from '@/hooks/useApiKeysSync'; // Import the new hook
 import { useCurrentUser } from '@/hooks/useCurrentUser'; // For checking user login
+import { useCashuStore } from '@/stores/cashuStore';
+import { useCashuToken } from '@/hooks/useCashuToken';
 
 export interface StoredApiKey {
   key: string;
@@ -20,9 +22,10 @@ interface ApiKeysTabProps {
   setBalance: (balance: number | ((prevBalance: number) => number)) => void;
   mintUrl: string;
   baseUrl: string;
+  usingNip60: boolean;
 }
 
-const ApiKeysTab = ({ balance, setBalance, mintUrl, baseUrl }: ApiKeysTabProps) => {
+const ApiKeysTab = ({ balance, setBalance, mintUrl, baseUrl, usingNip60 }: ApiKeysTabProps) => {
   const { user } = useCurrentUser();
   const {
     syncedApiKeys,
@@ -33,6 +36,8 @@ const ApiKeysTab = ({ balance, setBalance, mintUrl, baseUrl }: ApiKeysTabProps) 
     cloudSyncEnabled,
     setCloudSyncEnabled
   } = useApiKeysSync();
+  const cashuStore = useCashuStore();
+  const { sendToken, receiveToken } = useCashuToken();
 
   const [showTooltip, setShowTooltip] = useState(false); // New state for tooltip visibility
   const [apiKeyAmount, setApiKeyAmount] = useState('');
@@ -131,10 +136,24 @@ const ApiKeysTab = ({ balance, setBalance, mintUrl, baseUrl }: ApiKeysTabProps) 
   const confirmCreateApiKey = async () => {
     setIsLoading(true); // Set loading to true
     try {
-      const token = await generateApiToken(mintUrl, parseInt(apiKeyAmount));
+      let token: string | null | { hasTokens: false } | undefined;
+      
+      if (usingNip60) {
+        if (!cashuStore.activeMintUrl) {
+          toast.error('No active mint selected');
+          return;
+        }
+        token = await create60CashuToken(
+          cashuStore.activeMintUrl,
+          sendToken,
+          parseInt(apiKeyAmount)
+        );
+      } else {
+        token = await generateApiToken(mintUrl, parseInt(apiKeyAmount));
+      }
 
       if (!token) {
-        toast.error('Failed to generate Cashu token for API key creation.'); // Use toast
+        toast.error('Failed to generate Cashu token for API key creation.');
         return;
       }
 
@@ -166,7 +185,7 @@ const ApiKeysTab = ({ balance, setBalance, mintUrl, baseUrl }: ApiKeysTabProps) 
       setStoredApiKeys(updatedKeys);
       setApiKeyAmount('');
       setNewApiKeyLabel(''); // Clear label input
-      setBalance(getBalanceFromStoredProofs());
+      setBalance(balance - parseInt(apiKeyAmount));
     } catch (error) {
       console.error('Error creating API key:', error);
       toast.error(`Error creating API key: ${error instanceof Error ? error.message : String(error)}`); // Use toast
@@ -209,7 +228,6 @@ const ApiKeysTab = ({ balance, setBalance, mintUrl, baseUrl }: ApiKeysTabProps) 
       localStorage.setItem('api_keys', JSON.stringify(updatedKeys));
     }
     setStoredApiKeys(updatedKeys);
-    setBalance(getBalanceFromStoredProofs());
     toast.success('API Key balances refreshed!');
   };
 
@@ -230,10 +248,11 @@ const ApiKeysTab = ({ balance, setBalance, mintUrl, baseUrl }: ApiKeysTabProps) 
       if (keyDataToDelete) {
         // Attempt to refund the balance
         const urlToUse = keyDataToDelete.baseUrl || baseUrl; // Use key-specific baseUrl or fallback to global
-        const refundResult = await refundRemainingBalance(mintUrl, urlToUse, keyDataToDelete.key);
+        const refundResult = await unifiedRefund(mintUrl, urlToUse, usingNip60, receiveToken, keyDataToDelete.key);
 
         if (refundResult.success) {
           toast.success(refundResult.message || 'API Key balance refunded successfully!');
+          setBalance(balance-(refundResult.refundedAmount??0))
         } else {
           toast.error(refundResult.message || 'Failed to refund API Key balance. Deleting key anyway.');
         }
@@ -250,7 +269,6 @@ const ApiKeysTab = ({ balance, setBalance, mintUrl, baseUrl }: ApiKeysTabProps) 
       }
 
       setStoredApiKeys(updatedKeys);
-      setBalance(getBalanceFromStoredProofs());
     } catch (error) {
       console.error('Error deleting API key:', error);
       toast.error(`Error deleting API key: ${error instanceof Error ? error.message : String(error)}`);
@@ -408,7 +426,7 @@ const ApiKeysTab = ({ balance, setBalance, mintUrl, baseUrl }: ApiKeysTabProps) 
                     setIsRefundingKey(keyData.key); // Set loading for this specific key
                     try {
                       const urlToUse = keyData.baseUrl || baseUrl; // Use key-specific baseUrl or fallback to global
-                      const refundResult = await refundRemainingBalance(mintUrl, urlToUse, keyData.key);
+                      const refundResult = await unifiedRefund(mintUrl, urlToUse, usingNip60, receiveToken, keyData.key);
                       if (refundResult.success) {
                         toast.success(refundResult.message || 'Refund completed successfully!');
                         refreshApiKeysBalances(); // Refresh balances after successful refund
