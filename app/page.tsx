@@ -85,9 +85,7 @@ function ChatPageContent() {
 
   // Log wallet data when it loads
  useEffect(() => {
-    console.log('rdlogs', wallet, isWalletLoading); 
     if (wallet) {
-      console.log("rdlogs: Wallet loaded in chat page:", wallet);
 
       if (mintUrl && wallet.mints?.includes(mintUrl)) {
         cashuStore.setActiveMintUrl(mintUrl);
@@ -111,7 +109,7 @@ function ChatPageContent() {
     if (usingNip60) {
       setBalance(totalBalance);
     }
-  }, [mintBalances]);
+  }, [mintBalances, usingNip60]);
   
   // Close model drawer when clicking outside
   useEffect(() => {
@@ -600,10 +598,12 @@ function ChatPageContent() {
       let satsSpent;
 
       const result = await unifiedRefund(mintUrl, baseUrl, usingNip60, receiveToken);
+      console.log('rdlogs: ', result);
+      console.log('rdlogs: ', initialBalance);
       if (result.success) {
         if (usingNip60 && result.refundedAmount !== undefined) {
-          setBalance(initialBalance + result.refundedAmount);
-          satsSpent = tokenAmount - result.refundedAmount;
+          satsSpent = Math.ceil(tokenAmount) - result.refundedAmount;
+          setBalance(initialBalance - satsSpent);
         } else {
           const { apiBalance, proofsBalance } = await fetchBalances(mintUrl, baseUrl);
           setBalance(Math.floor(apiBalance / 1000) + Math.floor(proofsBalance / 1000));
