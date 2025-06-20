@@ -59,7 +59,11 @@ function ChatPageContent() {
   const [mintUrl, setMintUrl] = useState('');
   const [baseUrl, setBaseUrl] = useState('');
   const [textareaHeight, setTextareaHeight] = useState(48);
-  const [usingNip60, setUsingNip60] = useState(true);
+  const [usingNip60, setUsingNip60] = useState(() => {
+    // Get the stored value from localStorage, default to true if not found
+    const storedValue = localStorage.getItem('usingNip60');
+    return storedValue === null ? true : storedValue === 'true';
+  });
 
   // Image upload state
   const [uploadedImages, setUploadedImages] = useState<string[]>([]);
@@ -865,7 +869,10 @@ function ChatPageContent() {
           transactionHistory={transactionHistory}
           setTransactionHistory={setTransactionHistory}
           usingNip60={usingNip60}
-          setUsingNip60={setUsingNip60}
+          setUsingNip60={(value) => {
+            setUsingNip60(value);
+            localStorage.setItem('usingNip60', value.toString());
+          }}
         />
       )}
 
