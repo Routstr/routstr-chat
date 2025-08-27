@@ -94,11 +94,14 @@ export const useCashuStore = create<CashuStore>()(
       },
 
       addProofs(proofs, eventId) {
-        const existingProofs = get().proofs.map((p) => p.secret)
-        for (const proof of proofs) {
-          if (!existingProofs.includes(proof.secret)) {
-            set({ proofs: [...get().proofs, { ...proof, eventId }] })
-          }
+        const currentProofs = get().proofs;
+        const existingSecrets = new Set(currentProofs.map((p) => p.secret));
+        const newProofs = proofs
+          .filter(proof => !existingSecrets.has(proof.secret))
+          .map(proof => ({ ...proof, eventId }));
+        
+        if (newProofs.length > 0) {
+          set({ proofs: [...currentProofs, ...newProofs] });
         }
       },
 
