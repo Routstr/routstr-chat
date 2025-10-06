@@ -94,14 +94,35 @@ See `test/LIGHTNING_TESTING_SETUP.md` for a full end-to-end walkthrough and trou
 
 ## Production
 
-Build and run a production server:
+### Static Export (Recommended)
+
+Build as static files for hosting anywhere:
+
+```bash
+npm run build  # Generates static files in out/
+npm run static # Build and serve locally for testing
+```
+
+Deploy the `out/` folder to any static hosting:
+
+- Netlify, Vercel, GitHub Pages, AWS S3, Firebase Hosting, etc.
+- No server required - pure client-side app
+
+### Docker
+
+```bash
+npm run docker:build  # Build container with nginx
+npm run docker:run    # Run on port 3000
+```
+
+### Traditional Server
 
 ```bash
 npm run build
 npm run start
 ```
 
-You can deploy using any platform that supports Next.js 15 (Node.js 18+). Ensure required environment variables are set in your hosting provider.
+Deploy to any platform supporting Next.js 15 (Node.js 18+).
 
 ## Troubleshooting
 
