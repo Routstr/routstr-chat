@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "static": "next build && npx serve out",
-    "docker:build": "docker build -f docker/Dockerfile --dockerignore docker/.dockerignore -t routstr-chat .",
+    "docker:build": "docker build -f docker/Dockerfile -t routstr-chat .",
     "docker:run": "docker run -d -p 3000:80 --name routstr-chat routstr-chat",
     "docker:stop": "docker stop routstr-chat && docker rm routstr-chat",
     "test:invoices": "node test/invoice-persistence.test.js",

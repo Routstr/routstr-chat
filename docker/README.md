@@ -19,7 +19,7 @@ npm run docker:stop
 
 ```bash
 # Build
-docker build -f docker/Dockerfile --dockerignore docker/.dockerignore -t routstr-chat .
+docker build -f docker/Dockerfile -t routstr-chat .
 
 # Run
 docker run -d -p 3000:80 --name routstr-chat routstr-chat
