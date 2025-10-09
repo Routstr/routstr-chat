@@ -9,6 +9,7 @@ import GeneralTab from './settings/GeneralTab';
 import ModelsTab from '@/components/settings/ModelsTab';
 import HistoryTab from './settings/HistoryTab';
 import ApiKeysTab from './settings/ApiKeysTab';
+import ConversationSyncTab from './settings/ConversationSyncTab';
 import UnifiedWallet from './settings/UnifiedWallet';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useNostrLogin } from '@nostrify/react/login';
@@ -18,7 +19,7 @@ import { Drawer } from 'vaul';
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  initialActiveTab?: 'settings' | 'wallet' | 'history' | 'api-keys' | 'models';
+  initialActiveTab?: 'settings' | 'wallet' | 'history' | 'api-keys' | 'models' | 'conversations';
   mintUrl: string;
   setMintUrl: (url: string) => void;
   baseUrl: string;
@@ -72,7 +73,7 @@ const SettingsModal = ({
 }: SettingsModalProps) => {
   const { user } = useCurrentUser();
   const {logins} = useNostrLogin();
-  const [activeTab, setActiveTab] = useState<'settings' | 'wallet' | 'history' | 'api-keys' | 'models'>(initialActiveTab || 'settings');
+  const [activeTab, setActiveTab] = useState<'settings' | 'wallet' | 'history' | 'api-keys' | 'models' | 'conversations'>(initialActiveTab || 'settings');
   const [baseUrls, setBaseUrls] = useState<string[]>([]); // State to hold base URLs
   const mediaQueryIsMobile = useMediaQuery('(max-width: 640px)');
   const isMobile = propIsMobile ?? mediaQueryIsMobile;
@@ -139,6 +140,13 @@ const SettingsModal = ({
         >
           API Keys
         </button>
+        <button
+          className={`px-4 py-2 text-sm font-medium flex-shrink-0 whitespace-nowrap ${activeTab === 'conversations' ? 'text-white border-b-2 border-white' : 'text-white/50 hover:text-white'} cursor-pointer`}
+          onClick={() => setActiveTab('conversations')}
+          type="button"
+        >
+          Conversations
+        </button>
       </div>
 
       <div className="p-4 flex-1 overflow-y-auto">
@@ -178,6 +186,8 @@ const SettingsModal = ({
               setActiveTab={setActiveTab}
               isMobile={isMobile}
           />
+        ) : activeTab === 'conversations' ? (
+          <ConversationSyncTab />
         ) : activeTab === 'wallet' ? (
           <UnifiedWallet
             balance={balance}

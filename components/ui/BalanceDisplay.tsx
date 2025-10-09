@@ -184,7 +184,7 @@ const BalanceDisplay: React.FC<BalanceDisplayProps> = ({ setIsSettingsOpen, setI
     if (isAuthenticated) {
       void initializeWallet();
     }
-  }, [mintUrl, initWallet]);
+  }, [mintUrl, isAuthenticated]);
 
   // Clean up intervals on unmount
   useEffect(() => {

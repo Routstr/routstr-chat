@@ -31,6 +31,12 @@ const ChatContainer: React.FC = () => {
     createNewConversationHandler,
     loadConversation,
     deleteConversation,
+    isLoadingConversations,
+    isSyncingConversations,
+    cloudSyncEnabled,
+    syncConflicts,
+    refetchConversations,
+    lastSyncTime,
     
     // Balance
     balance
@@ -65,6 +71,12 @@ const ChatContainer: React.FC = () => {
           setIsSettingsOpen={setIsSettingsOpen}
           setInitialSettingsTab={setInitialSettingsTab}
           balance={balance}
+          isLoadingConversations={isLoadingConversations}
+          isSyncingConversations={isSyncingConversations}
+          cloudSyncEnabled={cloudSyncEnabled}
+          syncConflicts={syncConflicts}
+          refetchConversations={refetchConversations}
+          lastSyncTime={lastSyncTime}
         />
       )}
 

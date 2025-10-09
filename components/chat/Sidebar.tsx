@@ -1,4 +1,4 @@
-import { ChevronDown, MessageSquare, PlusCircle, Settings, Trash2, X, Key, SquarePen } from 'lucide-react';
+import { ChevronDown, MessageSquare, PlusCircle, Settings, Trash2, X, Key, SquarePen, RefreshCw, Cloud, CloudOff, AlertTriangle } from 'lucide-react';
 import { Conversation } from '@/types/chat';
 
 interface SidebarProps {
@@ -14,8 +14,14 @@ interface SidebarProps {
   loadConversation: (id: string) => void;
   deleteConversation: (id: string, e: React.MouseEvent) => void;
   setIsSettingsOpen: (isOpen: boolean) => void;
-  setInitialSettingsTab: (tab: 'settings' | 'wallet' | 'history' | 'api-keys') => void;
+  setInitialSettingsTab: (tab: 'settings' | 'wallet' | 'history' | 'api-keys' | 'conversations') => void;
   balance: number;
+  isLoadingConversations?: boolean;
+  isSyncingConversations?: boolean;
+  cloudSyncEnabled?: boolean;
+  syncConflicts?: any[];
+  refetchConversations?: () => void;
+  lastSyncTime?: number | null;
 }
 
 export default function Sidebar({
@@ -32,7 +38,13 @@ export default function Sidebar({
   deleteConversation,
   setIsSettingsOpen,
   setInitialSettingsTab,
-  balance
+  balance,
+  isLoadingConversations,
+  isSyncingConversations,
+  cloudSyncEnabled,
+  syncConflicts,
+  refetchConversations,
+  lastSyncTime
 }: SidebarProps) {
   return (
     <div className="relative h-full flex-shrink-0 z-50">
@@ -84,7 +96,35 @@ export default function Sidebar({
 
         {/* Conversations List */}
         <div className="flex-1 overflow-y-auto px-4 py-2 space-y-2">
-          <div className="text-xs uppercase text-white/50 font-medium px-2 pb-2">RECENT CHATS</div>
+          <div className="flex items-center justify-between px-2 pb-2">
+            <div className="text-xs uppercase text-white/50 font-medium">RECENT CHATS</div>
+            <div className="flex items-center gap-2">
+              {cloudSyncEnabled && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (refetchConversations) refetchConversations();
+                  }}
+                  disabled={isSyncingConversations}
+                  className="p-1 text-white/40 hover:text-white/70 transition-colors disabled:opacity-50"
+                  title="Sync conversations"
+                  aria-label="Sync conversations"
+                >
+                  <RefreshCw className={`h-3 w-3 ${isSyncingConversations ? 'animate-spin' : ''}`} />
+                </button>
+              )}
+              {cloudSyncEnabled ? (
+                <div title={lastSyncTime ? `Cloud sync enabled - Last synced: ${new Date(lastSyncTime).toLocaleString()}` : 'Cloud sync enabled'}>
+                  <Cloud className="h-3 w-3 text-green-400/60" />
+                </div>
+              ) : (
+                <CloudOff className="h-3 w-3 text-white/30" title="Cloud sync disabled" />
+              )}
+              {syncConflicts && syncConflicts.length > 0 && (
+                <AlertTriangle className="h-3 w-3 text-orange-400" title={`${syncConflicts.length} sync conflicts`} />
+              )}
+            </div>
+          </div>
           {conversations.length === 0 ? (
             <p className="text-xs text-white/50 text-center py-2">No saved conversations</p>
           ) : (
@@ -104,12 +144,29 @@ export default function Sidebar({
                   <MessageSquare className="h-4 w-4 flex-shrink-0 opacity-70" />
                   <span className="truncate">{conversation.title}</span>
                 </div>
-                <button
-                  onClick={(e) => deleteConversation(conversation.id, e)}
-                  className="text-white/40 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                <div className="flex items-center gap-1">
+                  {cloudSyncEnabled && (
+                    <div className="flex items-center">
+                      {syncConflicts && syncConflicts.some(c => c.conversationId === conversation.id) ? (
+                        <AlertTriangle 
+                          className="h-3 w-3 text-orange-400" 
+                          title="Sync conflict detected"
+                        />
+                      ) : (
+                        <div 
+                          className="h-2 w-2 rounded-full bg-green-400/60" 
+                          title={lastSyncTime ? `Synced to cloud - Last sync: ${new Date(lastSyncTime).toLocaleString()}` : 'Synced to cloud'}
+                        />
+                      )}
+                    </div>
+                  )}
+                  <button
+                    onClick={(e) => deleteConversation(conversation.id, e)}
+                    className="text-white/40 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity ml-1"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             ))
           )}
@@ -131,16 +188,19 @@ export default function Sidebar({
               <span>Settings</span>
             </button>
 
-            {/* API Keys Button - Right */}
+            {/* Conversations Button - Right */}
             <button
               onClick={() => {
                 setIsSettingsOpen(true);
-                setInitialSettingsTab('api-keys');
+                setInitialSettingsTab('conversations');
               }}
-              className="flex items-center gap-2 text-white/90 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 rounded-md py-2 px-3 h-[36px] text-sm transition-colors cursor-pointer"
+              className="flex items-center gap-2 text-white/90 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 rounded-md py-2 px-3 h-[36px] text-sm transition-colors cursor-pointer relative"
             >
-              <Key className="h-4 w-4" />
-              <span>API Keys</span>
+              <MessageSquare className="h-4 w-4" />
+              <span>Sync</span>
+              {syncConflicts && syncConflicts.length > 0 && (
+                <div className="absolute -top-1 -right-1 h-2 w-2 bg-orange-400 rounded-full" />
+              )}
             </button>
           </div>
         </div>

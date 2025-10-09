@@ -1,5 +1,6 @@
 import { Conversation, Message } from '@/types/chat';
 import { getTextFromContent, stripImageDataFromMessages } from './messageUtils';
+import { StoredConversation } from '@/hooks/useConversationSync';
 
 const CONVERSATIONS_STORAGE_KEY = 'saved_conversations';
 const CONVERSATIONS_UPDATED_AT_KEY = 'saved_conversations_updated_at';
@@ -64,31 +65,39 @@ export const generateConversationTitle = (messages: Message[], fallbackTitle: st
  * @param conversations Current conversations array
  * @param activeConversationId ID of the conversation to save
  * @param messages Current messages in the conversation
+ * @param syncToNostr Optional flag to trigger cloud sync
+ * @param onSyncTrigger Optional callback when sync should be triggered
  * @returns Updated conversations array
  */
 export const saveConversationToStorage = (
   conversations: Conversation[],
   activeConversationId: string,
-  messages: Message[]
+  messages: Message[],
+  syncToNostr?: boolean,
+  onSyncTrigger?: (conversation: Conversation) => void
 ): Conversation[] => {
   if (!activeConversationId) return conversations;
 
   const updatedConversations = conversations.map(conversation => {
     if (conversation.id === activeConversationId) {
-      // Generate title if needed
       let title = conversation.title;
       if (!title || title.startsWith('Conversation ')) {
         title = generateConversationTitle(messages, conversation.title);
       }
 
-      // Strip image data from messages before saving
       const messagesToSave = stripImageDataFromMessages(messages);
 
-      return {
+      const updatedConversation = {
         ...conversation,
         title: title || conversation.title,
         messages: messagesToSave
       };
+
+      if (syncToNostr && onSyncTrigger) {
+        onSyncTrigger(updatedConversation);
+      }
+
+      return updatedConversation;
     }
     return conversation;
   });
@@ -122,11 +131,15 @@ export const loadConversationsFromStorage = (): Conversation[] => {
  * Creates a new conversation
  * @param existingConversations Current conversations array
  * @param initialMessages Optional initial messages for the conversation
+ * @param syncToNostr Optional flag to trigger cloud sync
+ * @param onSyncTrigger Optional callback when sync should be triggered
  * @returns Object with new conversation and updated conversations array
  */
 export const createNewConversation = (
   existingConversations: Conversation[],
-  initialMessages: Message[] = []
+  initialMessages: Message[] = [],
+  syncToNostr?: boolean,
+  onSyncTrigger?: (conversation: Conversation) => void
 ): {
   newConversation: Conversation;
   updatedConversations: Conversation[];
@@ -141,6 +154,10 @@ export const createNewConversation = (
 
   const updatedConversations = [...existingConversations, newConversation];
   persistConversationsSnapshot(updatedConversations);
+
+  if (syncToNostr && onSyncTrigger) {
+    onSyncTrigger(newConversation);
+  }
 
   return {
     newConversation,
@@ -190,20 +207,126 @@ export const clearAllConversations = (): void => {
  * @param conversations Current conversations array
  * @param conversationId ID of conversation to update
  * @param updates Partial conversation object with updates
+ * @param syncToNostr Optional flag to trigger cloud sync
+ * @param onSyncTrigger Optional callback when sync should be triggered
  * @returns Updated conversations array
  */
 export const updateConversation = (
   conversations: Conversation[],
   conversationId: string,
-  updates: Partial<Conversation>
+  updates: Partial<Conversation>,
+  syncToNostr?: boolean,
+  onSyncTrigger?: (conversation: Conversation) => void
 ): Conversation[] => {
   const updatedConversations = conversations.map(conversation => {
     if (conversation.id === conversationId) {
-      return { ...conversation, ...updates };
+      const updatedConversation = { ...conversation, ...updates };
+      
+      if (syncToNostr && onSyncTrigger) {
+        onSyncTrigger(updatedConversation);
+      }
+      
+      return updatedConversation;
     }
     return conversation;
   });
 
   persistConversationsSnapshot(updatedConversations);
   return updatedConversations;
+};
+
+/**
+ * Syncs a conversation to Nostr using the provided sync function
+ * @param conversation The conversation to sync
+ * @param syncFn Function that handles the actual Nostr sync operation
+ * @throws Error if sync fails
+ */
+export const syncConversationToNostr = async (
+  conversation: Conversation,
+  syncFn: (conv: Conversation) => Promise<void>
+): Promise<void> => {
+  try {
+    await syncFn(conversation);
+  } catch (error) {
+    console.error('Failed to sync conversation to Nostr:', error);
+    throw error;
+  }
+};
+
+/**
+ * Loads conversations from Nostr with fallback to localStorage
+ * @param loadFn Function that handles loading from Nostr
+ * @returns Array of stored conversations, falls back to local storage on error
+ */
+export const loadConversationsFromNostr = async (
+  loadFn: () => Promise<StoredConversation[]>
+): Promise<StoredConversation[]> => {
+  try {
+    return await loadFn();
+  } catch (error) {
+    console.error('Failed to load conversations from Nostr:', error);
+    return loadConversationsFromStorage().map(conv => ({
+      ...conv,
+      createdAt: conv.createdAt || Date.now(),
+      updatedAt: conv.updatedAt || Date.now(),
+      messageCount: conv.messages.length,
+      lastMessageAt: conv.messages.length > 0 ? Date.now() : undefined
+    }));
+  }
+};
+
+/**
+ * Merges local and cloud conversations using timestamp-based conflict resolution
+ * Local conversations take precedence when they have newer updatedAt timestamps
+ * @param localConversations Conversations from localStorage
+ * @param cloudConversations Conversations from Nostr
+ * @returns Merged array with most recent versions of each conversation
+ */
+export const mergeConversations = (
+  localConversations: Conversation[],
+  cloudConversations: StoredConversation[]
+): StoredConversation[] => {
+  const mergedMap = new Map<string, StoredConversation>();
+  
+  cloudConversations.forEach(conv => mergedMap.set(conv.id, conv));
+  
+  localConversations.forEach(conv => {
+    const existing = mergedMap.get(conv.id);
+    const storedConv: StoredConversation = {
+      ...conv,
+      createdAt: conv.createdAt || Date.now(),
+      updatedAt: conv.updatedAt || Date.now(),
+      messageCount: conv.messages.length,
+      lastMessageAt: conv.messages.length > 0 ? Date.now() : undefined
+    };
+    
+    if (!existing || storedConv.updatedAt > existing.updatedAt) {
+      mergedMap.set(conv.id, storedConv);
+    }
+  });
+
+  return Array.from(mergedMap.values());
+};
+
+/**
+ * Removes duplicate conversations keeping the most recently updated version
+ * @param conversations Array of conversations that may contain duplicates
+ * @returns Deduplicated array sorted by most recent updatedAt timestamp
+ */
+export const deduplicateConversations = (
+  conversations: StoredConversation[]
+): StoredConversation[] => {
+  const seen = new Set<string>();
+  const deduplicated: StoredConversation[] = [];
+  
+  conversations
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .forEach(conv => {
+      if (!seen.has(conv.id)) {
+        seen.add(conv.id);
+        deduplicated.push(conv);
+      }
+    });
+  
+  return deduplicated;
 };
