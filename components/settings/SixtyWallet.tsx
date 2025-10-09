@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { AlertCircle, Copy, Loader2, QrCode, Zap, ArrowRight, Info } from "lucide-react";
+import { AlertCircle, Copy, Loader2, QrCode, Zap, ArrowRight, Info, Plus, Trash2, Eraser } from "lucide-react";
 import { getEncodedTokenV4, Proof, MeltQuoteResponse, MintQuoteResponse, getDecodedToken } from "@cashu/cashu-ts";
 import { useCashuWallet } from "@/hooks/useCashuWallet";
 import { useCreateCashuWallet } from "@/hooks/useCreateCashuWallet";
@@ -669,22 +669,28 @@ const SixtyWallet: React.FC<{mintUrl:string, usingNip60: boolean, setUsingNip60:
         </div>
         {wallet.mints && wallet.mints.length > 0 && (
           <div className="mt-4 pt-4 border-t border-white/10">
-            <div className="flex items-center mb-2">
-              <h3 className="text-sm font-medium text-white/80 mr-2">Select Mint</h3>
-              <button
-                onClick={() => setShowAddMintInput(!showAddMintInput)}
-                className="text-xs text-white/70 hover:text-white cursor-pointer mr-2"
-                type="button"
-              >
-                {showAddMintInput ? 'Cancel Add' : '(Add New Mint)'}
-              </button>
-              <button
-                onClick={() => setShowRemoveMintMode(!showRemoveMintMode)}
-                className="text-xs text-white/70 hover:text-white cursor-pointer"
-                type="button"
-              >
-                {showRemoveMintMode ? 'Cancel Remove' : '(Remove Mint)'}
-              </button>
+            <div className="flex flex-wrap items-center gap-2 mb-2">
+              <h3 className="text-sm font-medium text-white/80 mr-1">Mints</h3>
+              <div className="ml-auto flex items-center gap-1.5">
+                <button
+                  onClick={() => setShowAddMintInput(!showAddMintInput)}
+                  className={`p-1.5 rounded-md border border-white/20 ${showAddMintInput ? 'bg-white/15 text-white' : 'bg-white/5 text-white/80 hover:bg-white/10'} cursor-pointer`}
+                  aria-label="Add new mint"
+                  title={showAddMintInput ? 'Close add mint' : 'Add new mint'}
+                  type="button"
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => setShowRemoveMintMode(!showRemoveMintMode)}
+                  className={`p-1.5 rounded-md border ${showRemoveMintMode ? 'border-red-500/40 bg-red-500/20 text-red-200' : 'border-white/20 bg-white/5 text-white/80 hover:bg-white/10' } cursor-pointer`}
+                  aria-label="Toggle remove mint mode"
+                  title={showRemoveMintMode ? 'Exit remove mode' : 'Remove mint'}
+                  type="button"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
             </div>
             <div className="space-y-2">
               {wallet.mints.map((mint) => {
@@ -692,8 +698,8 @@ const SixtyWallet: React.FC<{mintUrl:string, usingNip60: boolean, setUsingNip60:
                 const isActive = cashuStore.activeMintUrl === mint;
                 const unit = mintUnits[mint] || 'sat';
                 return (
-                  <div key={mint} className="flex items-center justify-between">
-                    <div className="flex items-center">
+                  <div key={mint} className="flex flex-col sm:flex-row sm:items-center gap-2">
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
                       <input
                         type="radio"
                         id={`mint-${mint}`}
@@ -701,33 +707,40 @@ const SixtyWallet: React.FC<{mintUrl:string, usingNip60: boolean, setUsingNip60:
                         value={mint}
                         checked={isActive}
                         onChange={() => cashuStore.setActiveMintUrl(mint)}
-                        className="form-radio h-4 w-4 text-white bg-white/10 border-white/30 focus:ring-white/50"
+                        className="form-radio h-4 w-4 text-white bg-white/10 border-white/30 focus:ring-white/50 shrink-0"
                       />
-                      <label htmlFor={`mint-${mint}`} className={cn("ml-2 text-sm cursor-pointer", isActive ? "text-white" : "text-white/70")}>
+                      <label htmlFor={`mint-${mint}`} className={cn("text-sm cursor-pointer truncate max-w-[70vw] sm:max-w-[28rem]", isActive ? "text-white" : "text-white/70")}> 
                         {cleanMintUrl(mint)}
                       </label>
-                      <button
-                        onClick={() => cleanSpentProofs(mint)}
-                        className="ml-2 px-2 py-1 text-xs bg-white/10 border border-white/20 rounded-md text-white hover:bg-white/20 transition-colors"
-                        type="button"
-                      >
-                        Clean Proofs
-                      </button>
-                      {showRemoveMintMode && (
-                        <button
-                          onClick={() => handleRemoveMint(mint)}
-                          disabled={isRemovingMint || wallet.mints.length <= 1}
-                          className="ml-2 px-2 py-1 text-xs bg-red-500/20 border border-red-500/30 rounded-md text-red-200 hover:bg-red-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                          type="button"
-                          title={wallet.mints.length <= 1 ? "Cannot remove the last mint" : "Remove this mint"}
-                        >
-                          {isRemovingMint ? 'Removing...' : 'Delete'}
-                        </button>
-                      )}
                     </div>
-                    <span className={cn("text-sm font-medium", isActive ? "text-white" : "text-white/70")}>
-                      {formatBalance(mintBalance, unit+'s')}
-                    </span>
+                    <div className="flex items-center gap-2 sm:justify-end">
+                      <span className={cn("text-sm font-medium", isActive ? "text-white" : "text-white/70")}> 
+                        {formatBalance(mintBalance, unit+'s')}
+                      </span>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          onClick={() => cleanSpentProofs(mint)}
+                          className="p-1.5 rounded-md border border-white/20 bg-white/5 hover:bg-white/10 text-white/80 cursor-pointer"
+                          aria-label="Clean spent proofs"
+                          title="Clean spent proofs"
+                          type="button"
+                        >
+                          <Eraser className="h-4 w-4" />
+                        </button>
+                        {showRemoveMintMode && (
+                          <button
+                            onClick={() => handleRemoveMint(mint)}
+                            disabled={isRemovingMint || wallet.mints.length <= 1}
+                            className="p-1.5 rounded-md border border-red-500/30 bg-red-500/20 text-red-200 hover:bg-red-500/30 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                            aria-label="Delete mint"
+                            title={wallet.mints.length <= 1 ? 'Cannot remove the last mint' : 'Remove this mint'}
+                            type="button"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 );
               })}
@@ -735,7 +748,7 @@ const SixtyWallet: React.FC<{mintUrl:string, usingNip60: boolean, setUsingNip60:
             {showAddMintInput && (
               <div className="mt-4 pt-4 border-t border-white/10">
                 <h3 className="text-sm font-medium text-white/80 mb-2">Add Custom Mint</h3>
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
                   <input
                     type="text"
                     value={customMintUrl}
@@ -924,7 +937,7 @@ const SixtyWallet: React.FC<{mintUrl:string, usingNip60: boolean, setUsingNip60:
                       className="w-full bg-white/5 border border-white/10 rounded-md px-3 py-2 pr-10 text-sm text-white focus:border-white/30 focus:outline-none"
                     />
                     <button
-                      className="absolute right-2 top-2 text-white/70 hover:text-white"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-white/70 hover:text-white"
                       type="button"
                     >
                       <QrCode className="h-4 w-4" />

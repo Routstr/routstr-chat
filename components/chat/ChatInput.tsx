@@ -119,22 +119,27 @@ export default function ChatInput({
 
       {/* Chat Input Container */}
       <div 
-        className={`fixed z-30 ${
+        className={`${
           isCentered && !isMobile
-            ? `flex items-center justify-center transition-all duration-500 ease-out ${
+            ? `fixed z-30 flex items-center justify-center transition-all duration-500 ease-out ${
                 !isAuthenticated ? 'inset-0' : isSidebarCollapsed ? 'inset-0' : 'left-72 right-0 top-0 bottom-0'
               }`
-            : `bottom-0 bg-black/95 backdrop-blur-sm transition-all duration-300 ease-in-out ${
-                isMobile ? 'left-0 right-0 p-3' : !isAuthenticated ? 'left-0 right-0 p-4' : isSidebarCollapsed ? 'left-0 right-0 p-4' : 'left-72 right-0 p-4'
+            : `${
+                /* On mobile, do NOT stick to bottom; make it part of the flow */ ''
+              } ${
+                isMobile
+                  ? 'relative z-30 bg-transparent px-3'
+                  : 'fixed z-30 bottom-0 bg-black/95 backdrop-blur-sm transition-all duration-300 ease-in-out ' + (!isAuthenticated ? 'left-0 right-0 p-4' : isSidebarCollapsed ? 'left-0 right-0 p-4' : 'left-72 right-0 p-4')
               }`
         }`}
         style={{
           transform: isCentered && !isMobile
-            ? 'translateY(30px)' 
-            : 'translateY(0)'
+            ? 'translateY(30px)'
+            : 'translateY(0)',
+          paddingBottom: isMobile ? undefined : 'env(safe-area-inset-bottom)'
         }}
       >
-        <div className={`mx-auto w-full ${isCentered && !isMobile ? 'max-w-xl' : 'max-w-2xl'}`}>
+        <div className={`mx-auto w-full ${isCentered && !isMobile ? 'max-w-xl' : 'max-w-2xl'} ${isMobile ? 'pb-3' : ''}`}>
           {/* Image Preview */}
           {uploadedImages.length > 0 && (
             <div className="mb-3 flex flex-wrap gap-2">
@@ -177,13 +182,14 @@ export default function ChatInput({
                 }
               }}
               placeholder={isAuthenticated ? (isCentered ? `Type your message...` : `Ask anything...`) : `Sign in to start chatting...`}
-              className="flex-1 bg-white/10 rounded-3xl px-4 py-3 text-sm text-white focus:outline-none pl-14 pr-12 resize-none min-h-[48px] max-h-32 overflow-y-auto"
+              className="flex-1 bg-white/10 rounded-3xl px-4 py-3 text-sm sm:text-sm text-white focus:outline-none pl-14 pr-12 resize-none min-h-[48px] max-h-32 overflow-y-auto"
               autoComplete="off"
               data-tutorial="chat-input"
               rows={1}
               style={{
                 height: 'auto',
-                minHeight: '48px'
+                minHeight: '48px',
+                fontSize: '16px' // prevent iOS zoom
               }}
               onInput={(e) => {
                 const target = e.target as HTMLTextAreaElement;

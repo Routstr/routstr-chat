@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Menu } from 'lucide-react';
+import { Menu, SquarePen } from 'lucide-react';
 import { useChat } from '@/context/ChatProvider';
 import { useAuth } from '@/context/AuthProvider';
 import ModelSelector from './ModelSelector';
@@ -22,8 +22,8 @@ const ChatHeader: React.FC = () => {
     isLoadingModels,
     models: filteredModels,
     handleModelChange,
-    favoriteModels,
-    toggleFavoriteModel,
+    configuredModels,
+    toggleConfiguredModel,
     
     // UI State
     isMobile,
@@ -54,7 +54,7 @@ const ChatHeader: React.FC = () => {
             onClick={() => setIsLoginModalOpen(true)}
             className="absolute left-2 bg-black rounded-full p-1.5 shadow-md border border-white/10 hover:bg-white/5 cursor-pointer"
           >
-            <Menu className="h-4 w-4 text-white/70" />
+            <Menu className="h-4 w-4 text-white" />
           </button>
         )}
         {isMobile && isAuthenticated && (
@@ -64,27 +64,14 @@ const ChatHeader: React.FC = () => {
               className="bg-black rounded-full p-1.5 shadow-md border border-white/10 hover:bg-white/5 cursor-pointer"
               aria-label="Open sidebar"
             >
-              <Menu className="h-4 w-4 text-white/70" />
+              <Menu className="h-4 w-4 text-white" />
             </button>
             <button
               onClick={() => createNewConversationHandler()}
               className="bg-black rounded-full p-1.5 shadow-md border border-white/10 hover:bg-white/5 cursor-pointer"
               aria-label="New chat"
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="white"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="h-4 w-4"
-              >
-                <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
-                <line x1="12" y1="8" x2="12" y2="16" />
-                <line x1="8" y1="12" x2="16" y2="12" />
-              </svg>
+              <SquarePen className="h-4 w-4 text-white" />
             </button>
           </div>
         )}
@@ -100,8 +87,12 @@ const ChatHeader: React.FC = () => {
           filteredModels={filteredModels}
           handleModelChange={handleModelChange}
           balance={balance}
-          favoriteModels={favoriteModels}
-          toggleFavoriteModel={toggleFavoriteModel}
+          configuredModels={configuredModels}
+          toggleConfiguredModel={toggleConfiguredModel}
+          openModelsConfig={() => {
+            setIsSettingsOpen(true);
+            setInitialSettingsTab('models');
+          }}
         />
 
         {/* Balance Display */}

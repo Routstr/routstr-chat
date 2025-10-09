@@ -132,3 +132,14 @@ body {
   margin-left: auto;
   margin-right: auto;
 }
+
+/* Hide all scrollbars globally while preserving scroll behavior */
+* {
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+}
+*::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  background: transparent;
+}

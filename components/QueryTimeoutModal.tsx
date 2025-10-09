@@ -8,6 +8,7 @@ interface QueryTimeoutModalProps {
 
 export const QueryTimeoutModal: React.FC<QueryTimeoutModalProps> = ({ isOpen, onClose }) => {
   const handleRefresh = () => {
+    try { localStorage.setItem('cashu_relays_timeout', 'false'); } catch {}
     window.location.reload();
   };
 

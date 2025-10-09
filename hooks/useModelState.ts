@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
-import { loadFavoriteModels, saveFavoriteModels } from '@/utils/storageUtils';
+import { loadConfiguredModels, saveConfiguredModels, loadModelProviderMap, saveModelProviderMap } from '@/utils/storageUtils';
 
 export interface UseModelStateReturn {
-  favoriteModels: string[];
-  setFavoriteModels: (models: string[]) => void;
-  toggleFavoriteModel: (modelId: string) => void;
+  configuredModels: string[];
+  setConfiguredModels: (models: string[]) => void;
+  toggleConfiguredModel: (modelId: string) => void;
+  modelProviderMap: Record<string, string>;
+  setModelProviderFor: (modelId: string, baseUrl: string) => void;
 }
 
 /**
@@ -13,33 +15,46 @@ export interface UseModelStateReturn {
  * model availability checking, and model change handling
  */
 export const useModelState = (): UseModelStateReturn => {
-  const [favoriteModels, setFavoriteModelsState] = useState<string[]>([]);
+  const [configuredModels, setConfiguredModelsState] = useState<string[]>([]);
+  const [modelProviderMap, setModelProviderMapState] = useState<Record<string, string>>({});
 
-  // Load favorite models from storage on mount
+  // Load configured models from storage on mount (migrates from favorites)
   useEffect(() => {
-    const savedFavoriteModels = loadFavoriteModels();
-    setFavoriteModelsState(savedFavoriteModels);
+    const savedConfiguredModels = loadConfiguredModels();
+    setConfiguredModelsState(savedConfiguredModels);
+    const savedProviderMap = loadModelProviderMap();
+    setModelProviderMapState(savedProviderMap);
   }, []);
 
-  // Toggle favorite model
-  const toggleFavoriteModel = useCallback((modelId: string) => {
-    setFavoriteModelsState(prev => {
+  // Toggle configured model
+  const toggleConfiguredModel = useCallback((modelId: string) => {
+    setConfiguredModelsState(prev => {
       const updated = prev.includes(modelId)
         ? prev.filter(id => id !== modelId)
         : [...prev, modelId];
-      saveFavoriteModels(updated);
+      saveConfiguredModels(updated);
       return updated;
     });
   }, []);
 
-  const setFavoriteModels = useCallback((models: string[]) => {
-    setFavoriteModelsState(models);
-    saveFavoriteModels(models);
+  const setConfiguredModels = useCallback((models: string[]) => {
+    setConfiguredModelsState(models);
+    saveConfiguredModels(models);
+  }, []);
+
+  const setModelProviderFor = useCallback((modelId: string, baseUrl: string) => {
+    setModelProviderMapState(prev => {
+      const updated = { ...prev, [modelId]: baseUrl };
+      saveModelProviderMap(updated);
+      return updated;
+    });
   }, []);
 
   return {
-    favoriteModels,
-    setFavoriteModels,
-    toggleFavoriteModel
+    configuredModels,
+    setConfiguredModels,
+    toggleConfiguredModel,
+    modelProviderMap,
+    setModelProviderFor
   };
 };

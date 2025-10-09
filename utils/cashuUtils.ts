@@ -454,6 +454,12 @@ export const unifiedRefund = async (
             message: "Failed to connect to the mint: " + ((error as any).mintUrl || mintUrl)
           }
         }
+        else if (error instanceof Error && error.message.includes("Wallet not found")) {
+          return {
+            success: false,
+            message: "Wallet couldn't be loaded. Pls save this refunded cashu token: " + ((error as any).token)
+          }
+        }
       }
       return {
         success: false,

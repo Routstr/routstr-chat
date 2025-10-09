@@ -16,8 +16,11 @@ import { useCreateCashuWallet } from '@/hooks/useCreateCashuWallet';
 export interface UseChatActionsReturn {
   inputMessage: string;
   isLoading: boolean;
-  streamingContent: string;
-  thinkingContent: string;
+  streamingContent: string; // legacy, not used by UI after per-conv streaming
+  thinkingContent: string;  // legacy, not used by UI after per-conv streaming
+  streamingConversationId: string | null;
+  getStreamingContentFor: (conversationId: string | null) => string;
+  getThinkingContentFor: (conversationId: string | null) => string;
   balance: number;
   currentMintUnit: string;
   mintBalances: Record<string, number>;
@@ -39,12 +42,14 @@ export interface UseChatActionsReturn {
     messages: Message[],
     setMessages: (messages: Message[]) => void,
     activeConversationId: string | null,
-    createNewConversation: (initialMessages?: Message[]) => void,
+    createNewConversation: (initialMessages?: Message[]) => string,
     selectedModel: any,
     baseUrl: string,
     mintUrl: string,
     isAuthenticated: boolean,
-    setIsLoginModalOpen: (open: boolean) => void
+    setIsLoginModalOpen: (open: boolean) => void,
+    saveConversationById: (conversationId: string, newMessages: Message[]) => void,
+    getActiveConversationId: () => string | null
   ) => Promise<void>;
   saveInlineEdit: (
     editingMessageIndex: number | null,
@@ -55,7 +60,10 @@ export interface UseChatActionsReturn {
     setEditingContent: (content: string) => void,
     selectedModel: any,
     baseUrl: string,
-    mintUrl: string
+    mintUrl: string,
+    originConversationId: string | null,
+    saveConversationById: (conversationId: string, newMessages: Message[]) => void,
+    getActiveConversationId: () => string | null
   ) => Promise<void>;
   retryMessage: (
     index: number,
@@ -63,7 +71,10 @@ export interface UseChatActionsReturn {
     setMessages: (messages: Message[]) => void,
     selectedModel: any,
     baseUrl: string,
-    mintUrl: string
+    mintUrl: string,
+    originConversationId: string | null,
+    saveConversationById: (conversationId: string, newMessages: Message[]) => void,
+    getActiveConversationId: () => string | null
   ) => void;
 }
 
@@ -77,6 +88,18 @@ export const useChatActions = (): UseChatActionsReturn => {
   const [isLoading, setIsLoading] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
   const [thinkingContent, setThinkingContent] = useState('');
+  const [streamingConversationId, setStreamingConversationId] = useState<string | null>(null);
+  const streamingConversationIdRef = useRef<string | null>(null);
+  const [streamingContentByConversation, setStreamingContentByConversation] = useState<Record<string, string>>({});
+  const [thinkingContentByConversation, setThinkingContentByConversation] = useState<Record<string, string>>({});
+  const getStreamingContentFor = useCallback((conversationId: string | null) => {
+    if (!conversationId) return '';
+    return streamingContentByConversation[conversationId] ?? '';
+  }, [streamingContentByConversation]);
+  const getThinkingContentFor = useCallback((conversationId: string | null) => {
+    if (!conversationId) return '';
+    return thinkingContentByConversation[conversationId] ?? '';
+  }, [thinkingContentByConversation]);
   const [balance, setBalance] = useState(0);
   const [currentMintUnit, setCurrentMintUnit] = useState('sat');
   const [isBalanceLoading, setIsBalanceLoading] = useState(true);
@@ -199,12 +222,7 @@ export const useChatActions = (): UseChatActionsReturn => {
     }
   }, [wallet, isWalletLoading, logins, handleCreateWallet, didRelaysTimeout]);
 
-  // Scroll to bottom when messages or streaming content changes
-  useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [streamingContent, thinkingContent]);
+  // Autoscroll moved to ChatMessages to honor user scroll position
 
   const setTransactionHistory = useCallback((value: React.SetStateAction<TransactionHistory[]>) => {
     setTransactionHistoryState(prev => {
@@ -223,12 +241,14 @@ export const useChatActions = (): UseChatActionsReturn => {
     messages: Message[],
     setMessages: (messages: Message[]) => void,
     activeConversationId: string | null,
-    createNewConversation: (initialMessages?: Message[]) => void,
+    createNewConversation: (initialMessages?: Message[]) => string,
     selectedModel: any,
     baseUrl: string,
     mintUrl: string,
     isAuthenticated: boolean,
-    setIsLoginModalOpen: (open: boolean) => void
+    setIsLoginModalOpen: (open: boolean) => void,
+    saveConversationById: (conversationId: string, newMessages: Message[]) => void,
+    getActiveConversationId: () => string | null
   ) => {
     if (!isAuthenticated) {
       setIsLoginModalOpen(true);
@@ -244,19 +264,25 @@ export const useChatActions = (): UseChatActionsReturn => {
 
     const updatedMessages = [...messages, userMessage];
     
-    // Create new conversation if needed with the updated messages
-    // This ensures the conversation starts with the user message
-    if (!activeConversationId) {
-      createNewConversation(updatedMessages);
-    } else {
-      // Update messages to show the user message right away for existing conversations
+    // Determine origin conversation id and update UI optimistically
+    const originConversationId = activeConversationId ?? createNewConversation(updatedMessages);
+    if (activeConversationId) {
       setMessages(updatedMessages);
     }
 
     setInputMessage('');
     setUploadedImages([]);
 
-    await performAIRequest(updatedMessages, setMessages, selectedModel, baseUrl, mintUrl);
+    await performAIRequest(
+      updatedMessages,
+      setMessages,
+      selectedModel,
+      baseUrl,
+      mintUrl,
+      originConversationId,
+      saveConversationById,
+      getActiveConversationId
+    );
   }, [inputMessage, uploadedImages]);
 
   const saveInlineEdit = useCallback(async (
@@ -268,7 +294,10 @@ export const useChatActions = (): UseChatActionsReturn => {
     setEditingContent: (content: string) => void,
     selectedModel: any,
     baseUrl: string,
-    mintUrl: string
+    mintUrl: string,
+    originConversationId: string | null,
+    saveConversationById: (conversationId: string, newMessages: Message[]) => void,
+    getActiveConversationId: () => string | null
   ) => {
     if (editingMessageIndex !== null && editingContent.trim()) {
       const updatedMessages = [...messages];
@@ -283,7 +312,17 @@ export const useChatActions = (): UseChatActionsReturn => {
       setEditingMessageIndex(null);
       setEditingContent('');
 
-      await performAIRequest(truncatedMessages, setMessages, selectedModel, baseUrl, mintUrl);
+      const originId = originConversationId;
+      await performAIRequest(
+        truncatedMessages,
+        setMessages,
+        selectedModel,
+        baseUrl,
+        mintUrl,
+        originId,
+        saveConversationById,
+        getActiveConversationId
+      );
     }
   }, []);
 
@@ -293,11 +332,23 @@ export const useChatActions = (): UseChatActionsReturn => {
     setMessages: (messages: Message[]) => void,
     selectedModel: any,
     baseUrl: string,
-    mintUrl: string
+    mintUrl: string,
+    originConversationId: string | null,
+    saveConversationById: (conversationId: string, newMessages: Message[]) => void,
+    getActiveConversationId: () => string | null
   ) => {
     const newMessages = messages.slice(0, index);
     setMessages(newMessages);
-    performAIRequest(newMessages, setMessages, selectedModel, baseUrl, mintUrl);
+    performAIRequest(
+      newMessages,
+      setMessages,
+      selectedModel,
+      baseUrl,
+      mintUrl,
+      originConversationId,
+      saveConversationById,
+      getActiveConversationId
+    );
   }, []);
 
   const performAIRequest = useCallback(async (
@@ -305,17 +356,32 @@ export const useChatActions = (): UseChatActionsReturn => {
     setMessages: (messages: Message[]) => void,
     selectedModel: any,
     baseUrl: string,
-    mintUrl: string
+    mintUrl: string,
+    originConversationId: string | null,
+    saveConversationById: (conversationId: string, newMessages: Message[]) => void,
+    getActiveConversationId: () => string | null
   ) => {
     setIsLoading(true);
     setStreamingContent('');
     setThinkingContent('');
+    setStreamingConversationId(originConversationId ?? null);
+    streamingConversationIdRef.current = originConversationId ?? null;
+    if (originConversationId) {
+      setStreamingContentByConversation(prev => ({ ...prev, [originConversationId]: '' }));
+      setThinkingContentByConversation(prev => ({ ...prev, [originConversationId]: '' }));
+    }
 
     // Create a ref to track current messages during the API call
     let currentMessages = messageHistory;
     const updateMessages = (newMessages: Message[]) => {
       currentMessages = newMessages;
-      setMessages(newMessages);
+      const currentlyActive = getActiveConversationId();
+      if (originConversationId && currentlyActive !== originConversationId) {
+        // Persist to the origin conversation without disrupting the UI of the current one
+        saveConversationById(originConversationId, newMessages);
+      } else {
+        setMessages(newMessages);
+      }
     };
 
     try {
@@ -330,8 +396,19 @@ export const useChatActions = (): UseChatActionsReturn => {
         sendToken: usingNip60 ? sendToken : undefined,
         receiveToken,
         activeMintUrl: cashuStore.activeMintUrl,
-        onStreamingUpdate: setStreamingContent,
-        onThinkingUpdate: setThinkingContent,
+        onStreamingUpdate: (content) => {
+          // Ignore stale updates from previous streams
+          if (streamingConversationIdRef.current !== (originConversationId ?? null)) return;
+          if (originConversationId) {
+            setStreamingContentByConversation(prev => ({ ...prev, [originConversationId]: content }));
+          }
+        },
+        onThinkingUpdate: (content) => {
+          if (streamingConversationIdRef.current !== (originConversationId ?? null)) return;
+          if (originConversationId) {
+            setThinkingContentByConversation(prev => ({ ...prev, [originConversationId]: content }));
+          }
+        },
         onMessagesUpdate: updateMessages,
         onMessageAppend: (message) => {
           // Append to current messages state
@@ -354,6 +431,12 @@ export const useChatActions = (): UseChatActionsReturn => {
       setIsLoading(false);
       setStreamingContent('');
       setThinkingContent('');
+      setStreamingConversationId(null);
+      streamingConversationIdRef.current = null;
+      if (originConversationId) {
+        setStreamingContentByConversation(prev => ({ ...prev, [originConversationId]: '' }));
+        setThinkingContentByConversation(prev => ({ ...prev, [originConversationId]: '' }));
+      }
     }
   }, [usingNip60, balance, sendToken, receiveToken, cashuStore.activeMintUrl, transactionHistory, setPendingCashuAmountState]);
 
@@ -362,6 +445,9 @@ export const useChatActions = (): UseChatActionsReturn => {
     isLoading,
     streamingContent,
     thinkingContent,
+    streamingConversationId,
+    getStreamingContentFor,
+    getThinkingContentFor,
     balance,
     currentMintUnit,
     mintBalances,

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Copy, Eye, EyeOff, Info, Check, Plus, RefreshCw, Key } from 'lucide-react';
+import { Copy, Eye, EyeOff, Info, Check, Plus, RefreshCw, Key, ChevronDown, ChevronRight, ChevronUp } from 'lucide-react';
 import { getBalanceFromStoredProofs, refundRemainingBalance, create60CashuToken, generateApiToken, unifiedRefund } from '@/utils/cashuUtils';
 import { toast } from 'sonner';
 import { useApiKeysSync } from '@/hooks/useApiKeysSync'; // Import the new hook
@@ -86,6 +86,7 @@ const ApiKeysTab = ({ mintUrl, baseUrl, usingNip60, baseUrls, setActiveTab }: Ap
   const [manualApiKeyLabel, setManualApiKeyLabel] = useState(''); // New state for manual API key label
   const [selectedManualApiKeyBaseUrl, setSelectedManualApiKeyBaseUrl] = useState<string>(baseUrl); // New state for manual API key base URL
   const [isAddingApiKey, setIsAddingApiKey] = useState(false); // New state for adding API key loading
+  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set()); // New state for tracking expanded API keys
 
   // Ref to track previous syncedApiKeys for deep comparison
   const prevSyncedApiKeysRef = useRef<StoredApiKey[]>([]);
@@ -101,6 +102,19 @@ const ApiKeysTab = ({ mintUrl, baseUrl, usingNip60, baseUrls, setActiveTab }: Ap
              key1.label === key2.label &&
              key1.baseUrl === key2.baseUrl &&
              key1.isInvalid === key2.isInvalid;
+    });
+  };
+
+  // Helper function to toggle expanded state for API keys
+  const toggleExpanded = (key: string) => {
+    setExpandedKeys(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(key)) {
+        newSet.delete(key);
+      } else {
+        newSet.add(key);
+      }
+      return newSet;
     });
   };
 
@@ -521,7 +535,7 @@ const ApiKeysTab = ({ mintUrl, baseUrl, usingNip60, baseUrls, setActiveTab }: Ap
             >
               <Info className="h-4 w-4 text-white/60 hover:text-white transition-colors cursor-pointer" />
               <div
-                className={`absolute top-full left-1/2 -translate-x-1/2 mt-2 p-3 bg-gray-800 text-white text-xs rounded-md shadow-lg transition-opacity duration-300 w-64 border border-gray-700 whitespace-normal z-50 ${
+                className={`absolute top-full left-1/2 -translate-x-1/2 mt-2 p-3 bg-black text-white text-xs rounded-md shadow-lg transition-opacity duration-300 w-64 border border-white/30 whitespace-normal z-50 ${
                   showTooltip ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
                 }`}
               >
@@ -628,88 +642,116 @@ const ApiKeysTab = ({ mintUrl, baseUrl, usingNip60, baseUrls, setActiveTab }: Ap
       </div>
 
       {storedApiKeys.length > 0 && (
-        <div className="space-y-3">          
+        <div className="space-y-3">
           <h4 className="text-sm font-medium text-white/70 mt-6">{cloudSyncEnabled ? 'Cloud Synced API Keys' : 'Locally Stored API Keys'}</h4>
-          {storedApiKeys.map((keyData, index) => (
-            <div key={index} className="bg-white/5 rounded-lg p-4 border border-white/10 space-y-3">
-              <div className="flex justify-between items-start">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-white">{keyData.label || 'Unnamed API Key'}</span>
+          {storedApiKeys.map((keyData, index) => {
+            const isExpanded = expandedKeys.has(keyData.key);
+            const displayUrl = keyData.baseUrl ? keyData.baseUrl.replace(/^https?:\/\//, '').replace(/\/$/, '') : 'No URL';
+            return (
+              <div key={index} className="bg-white/5 rounded-lg border border-white/10 overflow-hidden">
+                {/* Single Line Compact Header */}
+                <div
+                  className="flex items-center justify-between p-3 hover:bg-white/5 transition-colors cursor-pointer"
+                  onClick={() => toggleExpanded(keyData.key)}
+                >
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <span className="text-sm font-medium text-white truncate">
+                      {keyData.label || 'Unnamed API Key'}
+                    </span>
+                    <span className="text-xs text-white/50 font-medium text-white truncate">
+                      ({displayUrl})
+                    </span>
                     {keyData.isInvalid && (
-                      <span className="px-2 py-0.5 bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-medium rounded-full">Invalid</span>
+                      <span className="px-2 py-0.5 bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-medium rounded-full flex-shrink-0">Invalid</span>
                     )}
                   </div>
-                  <p className="text-xs text-white/50">{keyData.baseUrl || 'No base URL set'}</p>
+                  <div className="flex items-center gap-3 flex-shrink-0">
+                    <span className="text-sm font-medium text-white">
+                      {keyData.isInvalid ? 'Invalid' : (keyData.balance !== null ? `${(keyData.balance / 1000).toFixed(2)} sats` : 'N/A')}
+                    </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleExpanded(keyData.key);
+                      }}
+                      className="p-1 hover:bg-white/10 rounded transition-colors"
+                    >
+                      {isExpanded ? (
+                        <ChevronUp className="h-4 w-4 text-white/70" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4 text-white/70" />
+                      )}
+                    </button>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-sm font-medium text-white">
-                    {keyData.isInvalid ? 'Invalid' : (keyData.balance !== null ? `${(keyData.balance / 1000).toFixed(2)} sats` : 'N/A')}
-                  </p>
-                  <p className="text-xs text-white/50">Balance</p>
-                </div>
+
+                {/* Expanded Content - Only Visible When Expanded */}
+                {isExpanded && (
+                  <div className="px-4 pb-4 space-y-3 border-t border-white/10">
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="password"
+                        value={keyData.key}
+                        readOnly
+                        className="flex-grow bg-black/20 border border-white/10 rounded-md px-3 py-2 text-xs text-white/80 font-mono focus:outline-none focus:ring-1 focus:ring-white/20"
+                      />
+                      <button
+                        onClick={() => handleCopyClick(keyData.key)}
+                        className="p-2 rounded-md bg-white/5 hover:bg-white/10 transition-colors cursor-pointer"
+                        title={copiedKey === keyData.key ? "Copied!" : "Copy API Key"}
+                      >
+                        {copiedKey === keyData.key ? (
+                          <Check className="h-4 w-4 text-green-400" />
+                        ) : (
+                          <Copy className="h-4 w-4 text-white/70" />
+                        )}
+                      </button>
+                    </div>
+                    <div className="flex justify-end space-x-2">
+                      <button
+                        className="px-3 py-1 bg-green-500/10 border border-green-500/30 text-green-400 rounded-md text-xs hover:bg-green-500/20 transition-colors disabled:opacity-50 cursor-pointer"
+                        onClick={() => handleTopUp(keyData)}
+                        disabled={isTopUpLoading === keyData.key || keyData.isInvalid}
+                      >
+                        {isTopUpLoading === keyData.key ? 'Topping Up...' : 'Top Up'}
+                      </button>
+                      <button
+                        className="px-3 py-1 bg-blue-500/10 border border-blue-500/30 text-blue-400 rounded-md text-xs hover:bg-blue-500/20 transition-colors disabled:opacity-50 cursor-pointer"
+                        onClick={async () => {
+                          setIsRefundingKey(keyData.key); // Set loading for this specific key
+                          try {
+                            const urlToUse = keyData.baseUrl || baseUrl; // Use key-specific baseUrl or fallback to global
+                            const refundResult = await unifiedRefund(mintUrl, urlToUse, usingNip60, receiveToken, keyData.key);
+                            if (refundResult.success) {
+                              toast.success(refundResult.message || 'Refund completed successfully!');
+                              refreshApiKeysBalances(); // Refresh balances after successful refund
+                            } else {
+                              toast.error(refundResult.message || 'Failed to complete refund.');
+                            }
+                          } catch (error) {
+                            console.error('Error during refund:', error);
+                            toast.error(`Error during refund: ${error instanceof Error ? error.message : String(error)}`);
+                          } finally {
+                            setIsRefundingKey(null); // Reset loading
+                          }
+                        }}
+                        disabled={isRefundingKey === keyData.key} // Disable if this key is refunding
+                      >
+                        {isRefundingKey === keyData.key ? 'Refunding...' : 'Refund'}
+                      </button>
+                      <button
+                        className="px-3 py-1 bg-red-500/10 border border-red-500/30 text-red-400 rounded-md text-xs hover:bg-red-500/20 transition-colors disabled:opacity-50 cursor-pointer"
+                        onClick={() => handleDeleteApiKey(keyData.key)}
+                        disabled={isDeletingKey === keyData.key || isSyncingApiKeys} // Disable if this key is deleting or syncing
+                      >
+                        {isDeletingKey === keyData.key || isSyncingApiKeys ? 'Deleting...' : 'Delete'}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
-              <div className="flex items-center space-x-2">
-                <input
-                  type="password"
-                  value={keyData.key}
-                  readOnly
-                  className="flex-grow bg-black/20 border border-white/10 rounded-md px-3 py-2 text-xs text-white/80 font-mono focus:outline-none focus:ring-1 focus:ring-white/20"
-                />
-                <button
-                  onClick={() => handleCopyClick(keyData.key)}
-                  className="p-2 rounded-md bg-white/5 hover:bg-white/10 transition-colors cursor-pointer"
-                  title={copiedKey === keyData.key ? "Copied!" : "Copy API Key"}
-                >
-                  {copiedKey === keyData.key ? (
-                    <Check className="h-4 w-4 text-green-400" />
-                  ) : (
-                    <Copy className="h-4 w-4 text-white/70" />
-                  )}
-                </button>
-              </div>
-              <div className="flex justify-end space-x-2">
-                <button
-                  className="px-3 py-1 bg-green-500/10 border border-green-500/30 text-green-400 rounded-md text-xs hover:bg-green-500/20 transition-colors disabled:opacity-50 cursor-pointer"
-                  onClick={() => handleTopUp(keyData)}
-                  disabled={isTopUpLoading === keyData.key || keyData.isInvalid}
-                >
-                  {isTopUpLoading === keyData.key ? 'Topping Up...' : 'Top Up'}
-                </button>
-                <button
-                  className="px-3 py-1 bg-blue-500/10 border border-blue-500/30 text-blue-400 rounded-md text-xs hover:bg-blue-500/20 transition-colors disabled:opacity-50 cursor-pointer"
-                  onClick={async () => {
-                    setIsRefundingKey(keyData.key); // Set loading for this specific key
-                    try {
-                      const urlToUse = keyData.baseUrl || baseUrl; // Use key-specific baseUrl or fallback to global
-                      const refundResult = await unifiedRefund(mintUrl, urlToUse, usingNip60, receiveToken, keyData.key);
-                      if (refundResult.success) {
-                        toast.success(refundResult.message || 'Refund completed successfully!');
-                        refreshApiKeysBalances(); // Refresh balances after successful refund
-                      } else {
-                        toast.error(refundResult.message || 'Failed to complete refund.');
-                      }
-                    } catch (error) {
-                      console.error('Error during refund:', error);
-                      toast.error(`Error during refund: ${error instanceof Error ? error.message : String(error)}`);
-                    } finally {
-                      setIsRefundingKey(null); // Reset loading
-                    }
-                  }}
-                  disabled={isRefundingKey === keyData.key} // Disable if this key is refunding
-                >
-                  {isRefundingKey === keyData.key ? 'Refunding...' : 'Refund'}
-                </button>
-                <button
-                  className="px-3 py-1 bg-red-500/10 border border-red-500/30 text-red-400 rounded-md text-xs hover:bg-red-500/20 transition-colors disabled:opacity-50 cursor-pointer"
-                  onClick={() => handleDeleteApiKey(keyData.key)}
-                  disabled={isDeletingKey === keyData.key || isSyncingApiKeys} // Disable if this key is deleting or syncing
-                >
-                  {isDeletingKey === keyData.key || isSyncingApiKeys ? 'Deleting...' : 'Delete'}
-                </button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

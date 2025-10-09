@@ -46,8 +46,11 @@ function ChatPageContent() {
     setTransactionHistory,
     
     // Model State
-    favoriteModels,
-    toggleFavoriteModel,
+    configuredModels,
+    toggleConfiguredModel,
+    setConfiguredModels,
+    modelProviderMap,
+    setModelProviderFor,
     
     // Chat State
     clearConversations,
@@ -99,8 +102,11 @@ function ChatPageContent() {
           router={router}
           transactionHistory={transactionHistory}
           setTransactionHistory={setTransactionHistory}
-          favoriteModels={favoriteModels}
-          toggleFavoriteModel={toggleFavoriteModel}
+          configuredModels={configuredModels}
+          toggleConfiguredModel={toggleConfiguredModel}
+          setConfiguredModels={setConfiguredModels}
+          modelProviderMap={modelProviderMap}
+          setModelProviderFor={setModelProviderFor}
           usingNip60={usingNip60}
           setUsingNip60={(value) => {
             setUsingNip60(value);

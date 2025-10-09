@@ -21,13 +21,15 @@ export interface UseConversationStateReturn {
   setMessages: (messages: Message[]) => void;
   setEditingMessageIndex: (index: number | null) => void;
   setEditingContent: (content: string) => void;
-  createNewConversationHandler: (initialMessages?: Message[]) => void;
+  createNewConversationHandler: (initialMessages?: Message[]) => string;
   loadConversation: (conversationId: string) => void;
   deleteConversation: (conversationId: string, e: React.MouseEvent) => void;
   clearConversations: () => void;
   startEditingMessage: (index: number) => void;
   cancelEditing: () => void;
   saveCurrentConversation: () => void;
+  saveConversationById: (conversationId: string, newMessages: Message[]) => void;
+  getActiveConversationId: () => string | null;
 }
 
 /**
@@ -77,13 +79,16 @@ export const useConversationState = (): UseConversationStateReturn => {
   }, [editingMessageIndex, messages]);
 
   const createNewConversationHandler = useCallback((initialMessages: Message[] = []) => {
+    let createdId: string = '';
     setConversations(prevConversations => {
       const { newConversation, updatedConversations } = createNewConversation(prevConversations, initialMessages);
+      createdId = newConversation.id;
       setActiveConversationId(newConversation.id);
       // Set messages to the initial messages (empty array if none provided)
       setMessages(initialMessages);
       return updatedConversations;
     });
+    return createdId;
   }, []);
 
   const loadConversation = useCallback((conversationId: string) => {
@@ -147,6 +152,12 @@ export const useConversationState = (): UseConversationStateReturn => {
     clearConversations,
     startEditingMessage,
     cancelEditing,
-    saveCurrentConversation
+    saveCurrentConversation,
+    saveConversationById: (conversationId: string, newMessages: Message[]) => {
+      setConversations(prevConversations => {
+        return saveConversationToStorage(prevConversations, conversationId, newMessages);
+      });
+    },
+    getActiveConversationId: () => activeConversationId
   };
 };

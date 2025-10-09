@@ -10,7 +10,7 @@ export interface UseUiStateReturn {
   isSidebarCollapsed: boolean;
   isSidebarOpen: boolean;
   textareaHeight: number;
-  initialSettingsTab: 'settings' | 'wallet' | 'history' | 'api-keys';
+  initialSettingsTab: 'settings' | 'wallet' | 'history' | 'api-keys' | 'models';
   isMobile: boolean;
   modelDrawerRef: React.RefObject<HTMLDivElement | null>;
   setIsSettingsOpen: (open: boolean) => void;
@@ -20,7 +20,7 @@ export interface UseUiStateReturn {
   setIsSidebarCollapsed: (collapsed: boolean) => void;
   setIsSidebarOpen: (open: boolean) => void;
   setTextareaHeight: (height: number) => void;
-  setInitialSettingsTab: (tab: 'settings' | 'wallet' | 'history' | 'api-keys') => void;
+  setInitialSettingsTab: (tab: 'settings' | 'wallet' | 'history' | 'api-keys' | 'models') => void;
   handleTutorialComplete: () => void;
   handleTutorialClose: () => void;
 }
@@ -38,7 +38,7 @@ export const useUiState = (isAuthenticated: boolean): UseUiStateReturn => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => loadSidebarCollapsed());
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => loadSidebarOpen());
   const [textareaHeight, setTextareaHeight] = useState(48);
-  const [initialSettingsTab, setInitialSettingsTab] = useState<'settings' | 'wallet' | 'history' | 'api-keys'>('settings');
+  const [initialSettingsTab, setInitialSettingsTab] = useState<'settings' | 'wallet' | 'history' | 'api-keys' | 'models'>('settings');
 
   const modelDrawerRef = useRef<HTMLDivElement>(null);
   const isMobile = useMediaQuery('(max-width: 768px)');
@@ -118,7 +118,7 @@ export const useUiState = (isAuthenticated: boolean): UseUiStateReturn => {
     isSidebarCollapsed,
     isSidebarOpen,
     textareaHeight,
-    initialSettingsTab,
+    initialSettingsTab, 
     isMobile,
     modelDrawerRef,
     setIsSettingsOpen,

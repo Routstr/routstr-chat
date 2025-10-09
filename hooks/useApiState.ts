@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Model } from '@/data/models';
 import { DEFAULT_BASE_URLS, DEFAULT_MINT_URL } from '@/lib/utils';
-import { loadMintUrl, saveMintUrl, loadBaseUrl, saveBaseUrl, loadLastUsedModel, saveLastUsedModel, loadBaseUrlsList, saveBaseUrlsList, migrateCurrentCashuToken } from '@/utils/storageUtils';
+import { loadMintUrl, saveMintUrl, loadBaseUrl, saveBaseUrl, loadLastUsedModel, saveLastUsedModel, loadBaseUrlsList, saveBaseUrlsList, migrateCurrentCashuToken, loadModelProviderMap, saveModelProviderMap } from '@/utils/storageUtils';
 import { toast } from 'sonner';
 
 export interface UseApiStateReturn {
@@ -61,82 +61,103 @@ export const useApiState = (isAuthenticated: boolean, balance: number): UseApiSt
   }, [baseUrl]);
 
   // Fetch available models from API and handle URL model selection
-  const fetchModels = useCallback(async (currentBalance: number, attempt: number = 0) => {
-    const MAX_ATTEMPTS = baseUrlsList.length; // Try each URL once
-
+  const fetchModels = useCallback(async (currentBalance: number) => {
     try {
       setIsLoadingModels(true);
-      const currentUrlToTry = baseUrlsList[currentBaseUrlIndex];
-      if (!currentUrlToTry) {
-        throw new Error('No base URL available to fetch models.');
+      if (!baseUrlsList || baseUrlsList.length === 0) {
+        setModels([]);
+        return;
       }
 
-      // Ensure the current baseUrl state matches the URL being tried
-      if (baseUrl !== currentUrlToTry) {
-        setBaseUrlState(currentUrlToTry);
-        console.log('agaion ', currentUrlToTry)
-        saveBaseUrl(currentUrlToTry);
-      }
-      
-      const response = await fetch(`${currentUrlToTry}`);
+      const results = await Promise.allSettled(
+        baseUrlsList.map(async (url) => {
+          const base = url.endsWith('/') ? url : `${url}/`;
+          const res = await fetch(`${base}v1/models`);
+          if (!res.ok) throw new Error(`Failed ${res.status}`);
+          const json = await res.json();
+          const list: Model[] = Array.isArray(json?.data) ? json.data : [];
+          return { base, list };
+        })
+      );
 
-      if (!response.ok) {
-        throw new Error(`Failed to fetch models from ${currentUrlToTry}: ${response.status}`);
-      }
+      // Build best-priced model per id across providers and remember provider
+      const bestById = new Map<string, { model: Model; base: string }>();
 
-      const data = await response.json();
-
-      if (data && data.models && Array.isArray(data.models)) {
-        setModels(data.models);
-        let modelToSelect: Model | null = null;
-
-        // Get model ID from URL if present
-        const urlModelId = searchParams.get('model');
-        if (urlModelId) {
-          modelToSelect = data.models.find((m: Model) => m.id === urlModelId) || null;
+      function estimateMinCost(m: Model): number {
+        try {
+          const sp: any = m?.sats_pricing || {};
+          const maxCompletion = typeof sp?.max_completion_cost === 'number' ? sp.max_completion_cost : undefined;
+          const maxCost = typeof sp?.max_cost === 'number' ? sp.max_cost : undefined;
+          if (typeof maxCompletion === 'number') {
+            const promptRate = typeof sp?.prompt === 'number' ? sp.prompt : 0;
+            const approxTokens = 2000;
+            const promptCosts = promptRate * approxTokens;
+            return promptCosts + maxCompletion;
+          }
+          if (typeof maxCost === 'number') return maxCost;
+          return 0;
+        } catch {
+          return 0;
         }
+      }
 
-        // If no URL model or model not found, try last used
-        if (!modelToSelect) {
-          const lastUsedModelId = loadLastUsedModel();
-          if (lastUsedModelId) {
-            modelToSelect = data.models.find((m: Model) => m.id === lastUsedModelId) || null;
+      for (const r of results) {
+        if (r.status !== 'fulfilled') continue;
+        const { base, list } = r.value;
+        for (const m of list) {
+          const existing = bestById.get(m.id);
+          if (!existing) {
+            bestById.set(m.id, { model: m, base });
+            continue;
+          }
+          const currentCost = estimateMinCost(m);
+          const existingCost = estimateMinCost(existing.model);
+          if (currentCost < existingCost) {
+            bestById.set(m.id, { model: m, base });
           }
         }
+      }
 
-        // If no URL model or last used model, select the first compatible model
-        if (!modelToSelect) {
-          const compatibleModels = data.models.filter((m: Model) =>
-            m.sats_pricing && currentBalance >= m.sats_pricing.max_cost
-          );
-          if (compatibleModels.length > 0) {
-            modelToSelect = compatibleModels[0];
-          }
-        }
-        
-        setSelectedModel(modelToSelect);
-        if (modelToSelect) {
-          saveLastUsedModel(modelToSelect.id);
+      const combinedModels = Array.from(bestById.values()).map(v => v.model);
+      setModels(combinedModels);
+
+      // Persist provider mapping for best-priced winners
+      const newMap = loadModelProviderMap();
+      let changed = false;
+      for (const [id, entry] of bestById.entries()) {
+        if (newMap[id] !== entry.base) {
+          newMap[id] = entry.base;
+          changed = true;
         }
       }
+      if (changed) saveModelProviderMap(newMap);
+
+      // Select model based on URL param or last used
+      let modelToSelect: Model | null = null;
+      const urlModelId = searchParams.get('model');
+      if (urlModelId) {
+        modelToSelect = combinedModels.find((m: Model) => m.id === urlModelId) || null;
+      }
+      if (!modelToSelect) {
+        const lastUsedModelId = loadLastUsedModel();
+        if (lastUsedModelId) {
+          modelToSelect = combinedModels.find((m: Model) => m.id === lastUsedModelId) || null;
+        }
+      }
+      if (!modelToSelect) {
+        const compatible = combinedModels.filter((m: Model) => m.sats_pricing && currentBalance >= (m.sats_pricing as any).max_cost);
+        if (compatible.length > 0) modelToSelect = compatible[0];
+      }
+      setSelectedModel(modelToSelect);
+      if (modelToSelect) saveLastUsedModel(modelToSelect.id);
     } catch (error) {
       console.error('Error while fetching models', error);
       setModels([]);
       setSelectedModel(null);
-      toast.error(`Failed to connect to ${baseUrlsList[currentBaseUrlIndex]}. Trying next provider...`);
-
-      if (attempt < MAX_ATTEMPTS - 1) {
-        const nextIndex = (currentBaseUrlIndex + 1) % baseUrlsList.length;
-        setCurrentBaseUrlIndex(nextIndex);
-        // Recursively call fetchModels with the next URL
-        fetchModels(currentBalance, attempt + 1);
-      } else {
-        // toast.error('All providers failed. Please check your network connection or settings.');
-      }
     } finally {
       setIsLoadingModels(false);
     }
-  }, [searchParams, baseUrlsList, currentBaseUrlIndex, baseUrl]); // Added baseUrlsList and currentBaseUrlIndex to dependencies
+  }, [searchParams, baseUrlsList]);
 
   // Fetch models when baseUrl or balance changes and user is authenticated
   useEffect(() => {
@@ -150,6 +171,15 @@ export const useApiState = (isAuthenticated: boolean, balance: number): UseApiSt
     if (model) {
       setSelectedModel(model);
       saveLastUsedModel(modelId);
+      // Switch provider base URL if a provider is configured for this model
+      try {
+        const map = loadModelProviderMap();
+        const mappedBase = map[modelId];
+        if (mappedBase && typeof mappedBase === 'string' && mappedBase.length > 0) {
+          const normalized = mappedBase.endsWith('/') ? mappedBase : `${mappedBase}/`;
+          setBaseUrl(normalized);
+        }
+      } catch {}
     }
   }, [models]);
 

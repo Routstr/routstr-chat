@@ -186,6 +186,45 @@ export const saveFavoriteModels = (favoriteModels: string[]): void => {
 };
 
 /**
+ * Load configured ("My Models") from localStorage with migration from favorites
+ * @returns Array of configured model IDs
+ */
+export const loadConfiguredModels = (): string[] => {
+  // New key for configured models
+  const configured = getStorageItem<string[]>('configured_models', []);
+  if (configured.length > 0) return configured;
+  // Migrate from legacy favorites if present
+  const legacyFavorites = loadFavoriteModels();
+  if (legacyFavorites.length > 0) {
+    setStorageItem('configured_models', legacyFavorites);
+    return legacyFavorites;
+  }
+  return [];
+};
+
+/**
+ * Save configured ("My Models") to localStorage
+ * @param configuredModels Array of model IDs
+ */
+export const saveConfiguredModels = (configuredModels: string[]): void => {
+  setStorageItem('configured_models', configuredModels);
+};
+
+/**
+ * Load mapping of modelId -> provider base URL
+ */
+export const loadModelProviderMap = (): Record<string, string> => {
+  return getStorageItem<Record<string, string>>('model_provider_map', {});
+};
+
+/**
+ * Save mapping of modelId -> provider base URL
+ */
+export const saveModelProviderMap = (map: Record<string, string>): void => {
+  setStorageItem('model_provider_map', map);
+};
+
+/**
  * Load last used model ID from localStorage
  * @returns Last used model ID or null
  */
@@ -392,6 +431,8 @@ export const STORAGE_KEYS = {
   CONVERSATIONS: 'saved_conversations',
   TRANSACTION_HISTORY: 'transaction_history',
   FAVORITE_MODELS: 'favorite_models',
+  CONFIGURED_MODELS: 'configured_models',
+  MODEL_PROVIDER_MAP: 'model_provider_map',
   LAST_USED_MODEL: 'lastUsedModel',
   MINT_URL: 'mint_url',
   BASE_URL: 'base_url',

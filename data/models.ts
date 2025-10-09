@@ -35,6 +35,8 @@ export interface Model {
     image: number;
     web_search: number;
     internal_reasoning: number;
+    max_completion_cost: number;
+    max_prompt_cost: number;
     max_cost: number;
   };
   per_request_limits: PerRequestLimits;

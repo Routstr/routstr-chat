@@ -1,7 +1,6 @@
 'use client';
 
 import { ReactNode, useEffect } from 'react';
-// import { NostrProvider } from '@/context/NostrContext';
 import NostrProvider from '@/components/NostrProvider'
 import dynamic from 'next/dynamic';
 import { migrateStorageItems } from '@/utils/storageUtils';
@@ -20,7 +19,7 @@ import { AppConfig } from '@/context/AppContext';
 const presetRelays = [
   { url: 'wss://relay.chorus.community', name: 'Chorus' },
   { url: 'wss://relay.damus.io', name: 'Damus' },
-  { url: 'wss://ditto.pub/relay', name: 'Ditto' },
+  { url: 'wss://nos.lol', name: 'nos.lol' },
   { url: 'wss://relay.nostr.band', name: 'Nostr.Band' },
   { url: 'wss://relay.primal.net', name: 'Primal' },
 ];

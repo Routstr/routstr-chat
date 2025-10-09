@@ -86,6 +86,12 @@ export const clearCurrentApiToken = (baseUrl: string): void => {
  * @param selectedModel The currently selected model
  * @returns The token amount in sats
  */
-export const getTokenAmountForModel = (selectedModel: any): number => {
-  return selectedModel?.sats_pricing?.max_cost ?? DEFAULT_TOKEN_AMOUNT;
+export const getTokenAmountForModel = (selectedModel: any, approximateTokens: number): number => {
+  if (!selectedModel?.sats_pricing?.max_completion_cost) {
+    return selectedModel?.sats_pricing?.max_cost ?? DEFAULT_TOKEN_AMOUNT;
+  }
+  const promptCosts = selectedModel?.sats_pricing?.prompt * approximateTokens;
+  const totalEstimatedCosts = promptCosts + selectedModel?.sats_pricing?.max_completion_cost;
+  console.log("rdlogs: totalEstimatedCosts", totalEstimatedCosts)
+  return totalEstimatedCosts ?? DEFAULT_TOKEN_AMOUNT;
 };

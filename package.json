@@ -36,7 +36,7 @@
     "katex": "^0.16.22",
     "lucide-react": "^0.503.0",
     "motion": "^12.7.5",
-    "next": "^15.4.0-canary.38",
+    "next": "^15.5.1-canary.26",
     "nostr-tools": "^2.13.0",
     "qrcode.react": "^4.2.0",
     "react": "^19.0.0",

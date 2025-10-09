@@ -483,6 +483,11 @@ export function useCashuToken() {
           (error as any).mintUrl = decodedToken.mint;
         }
       }
+      else if (message.includes("Wallet not found")) {
+        if (error instanceof Error) {
+          (error as any).token = token;
+        } 
+      }
       
       throw error;
     } finally {

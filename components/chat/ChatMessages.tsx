@@ -3,7 +3,7 @@ import { Edit, MessageSquare, Copy, Check, Eye, EyeOff } from 'lucide-react';
 import MessageContentRenderer from '@/components/MessageContent';
 import MarkdownRenderer from '@/components/MarkdownRenderer';
 import ThinkingSection from '@/components/ui/ThinkingSection';
-import { RefObject, useState } from 'react';
+import { RefObject, useState, useEffect, useRef, useCallback } from 'react';
 
 interface ChatMessagesProps {
   messages: Message[];
@@ -18,6 +18,7 @@ interface ChatMessagesProps {
   retryMessage: (index: number) => void;
   getTextFromContent: (content: string | MessageContent[]) => string;
   messagesEndRef: RefObject<HTMLDivElement | null>;
+  isMobile: boolean;
 }
 
 export default function ChatMessages({
@@ -32,10 +33,39 @@ export default function ChatMessages({
   saveInlineEdit,
   retryMessage,
   getTextFromContent,
-  messagesEndRef
+  messagesEndRef,
+  isMobile
 }: ChatMessagesProps) {
   const [copiedMessageIndex, setCopiedMessageIndex] = useState<number | null>(null);
   const [expandedSystemGroups, setExpandedSystemGroups] = useState<Set<number>>(new Set());
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const [isUserAtBottom, setIsUserAtBottom] = useState(true);
+
+  const isScrolledToBottom = useCallback(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return true;
+    const thresholdPx = 24;
+    return el.scrollTop + el.clientHeight >= el.scrollHeight - thresholdPx;
+  }, []);
+
+  const handleScroll = useCallback(() => {
+    setIsUserAtBottom(isScrolledToBottom());
+  }, [isScrolledToBottom]);
+
+  const scrollToBottomIfNeeded = useCallback(() => {
+    if (isUserAtBottom && messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'auto' });
+    }
+  }, [isUserAtBottom, messagesEndRef]);
+
+  useEffect(() => {
+    // Initial check on mount
+    setIsUserAtBottom(isScrolledToBottom());
+  }, [isScrolledToBottom]);
+
+  useEffect(() => {
+    scrollToBottomIfNeeded();
+  }, [messages.length, streamingContent, thinkingContent, scrollToBottomIfNeeded]);
 
   // Helper function to check if a system message should always be shown
   const shouldAlwaysShowSystemMessage = (content: string | MessageContent[]): boolean => {
@@ -101,15 +131,15 @@ export default function ChatMessages({
   const shouldShowGroupRetryButton = (groupStartIndex: number): boolean => {
     const group = systemGroups.find(g => g.startIndex === groupStartIndex);
     if (!group) return false;
-    
+
     const lastMessageIndex = group.startIndex + group.count - 1;
     const lastMessage = messages[lastMessageIndex];
-    
+
     if (lastMessage && lastMessage.role === 'system') {
       const textContent = getTextFromContent(lastMessage.content);
       return textContent.includes('Pls retry');
     }
-    
+
     return false;
   };
 
@@ -124,7 +154,17 @@ export default function ChatMessages({
     }
   };
   return (
-    <div className="flex-1 overflow-y-auto pt-[60px] pb-[80px]">
+    <div
+      ref={scrollContainerRef}
+      onScroll={handleScroll}
+      className={`flex-1 overflow-y-auto pt-[60px] ${isMobile ? 'pb-4' : 'pb-[80px]'}`}
+      style={{
+        paddingTop: 'calc(60px + env(safe-area-inset-top))',
+        paddingBottom: isMobile
+          ? 'calc(16px + env(safe-area-inset-bottom))'
+          : 'calc(80px + env(safe-area-inset-bottom))'
+      }}
+    >
       <div className="mx-auto w-full max-w-4xl px-4 md:px-6 py-4 md:py-10">
         {messages.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center text-center text-gray-400 min-h-[calc(100vh-200px)]">
@@ -160,7 +200,7 @@ export default function ChatMessages({
                         Hide Errors
                       </button>
                     )}
-                    
+
                     {/* Show retry button if last message contains "Pls retry" */}
                     {shouldShowGroupRetryButton(index) && (
                       <button
@@ -197,75 +237,127 @@ export default function ChatMessages({
 
                 <div className="mb-8 last:mb-0">
                   {message.role === 'user' ? (
-                <div className="flex justify-end mb-6">
-                  <div className="max-w-[85%]">
-                    {editingMessageIndex === index ? (
-                      <div className="flex flex-col w-full">
-                        <textarea
-                          value={editingContent}
-                          onChange={(e) => setEditingContent(e.target.value)}
-                          className="w-full bg-white/5 border border-white/10 rounded p-3 text-sm text-white focus:outline-none focus:border-white/40"
-                          rows={3}
-                          autoFocus
-                        />
-                        <div className="flex justify-end space-x-2 mt-2">
-                          <button
-                            onClick={cancelEditing}
-                            className="text-xs text-gray-300 hover:text-white bg-white/10 px-3 py-1.5 rounded"
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            onClick={saveInlineEdit}
-                            className="text-xs text-white bg-black px-3 py-1.5 rounded hover:bg-black/80"
-                          >
-                            Save & Send
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div>
-                        <div className="group relative">
-                          <div className="bg-gray-700/70 rounded-2xl py-3 px-4 text-white">
-                            <div className="text-sm">
-                              <MessageContentRenderer content={message.content} />
+                    <div className="flex justify-end mb-6">
+                      <div className="max-w-[85%] break-words break-all">
+                        {editingMessageIndex === index ? (
+                          <div className="flex flex-col w-full">
+                            <textarea
+                              value={editingContent}
+                              onChange={(e) => setEditingContent(e.target.value)}
+                              className="w-full bg-white/5 border border-white/10 rounded p-3 text-sm text-white focus:outline-none focus:border-white/40"
+                              rows={3}
+                              autoFocus
+                            />
+                            <div className="flex justify-end space-x-2 mt-2">
+                              <button
+                                onClick={cancelEditing}
+                                className="text-xs text-gray-300 hover:text-white bg-white/10 px-3 py-1.5 rounded"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                onClick={saveInlineEdit}
+                                className="text-xs text-white bg-black px-3 py-1.5 rounded hover:bg-black/80"
+                              >
+                                Save & Send
+                              </button>
                             </div>
                           </div>
-                          <div className="flex justify-end mt-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-200">
+                        ) : (
+                          <div>
+                            <div className="group relative">
+                              <div className="bg-gray-700/70 rounded-2xl py-3 px-4 text-white">
+                                <div className="text-sm">
+                                  <MessageContentRenderer content={message.content} />
+                                </div>
+                              </div>
+                              <div className="flex justify-end mt-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-200">
+                                <button
+                                  onClick={() => startEditingMessage(index)}
+                                  className="p-1 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+                                  aria-label="Edit message"
+                                >
+                                  <Edit className="w-3 h-3 text-white/70" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : message.role === 'system' ? (
+                    // Check if this system message should always be shown or if it's in an expanded group
+                    (shouldAlwaysShowSystemMessage(message.content) || isInExpandedGroup(index)) ? (
+                      <div className="flex justify-center mb-6 group">
+                        <div className="flex flex-col">
+                          <div className="bg-red-500/20 border border-red-500/30 rounded-lg py-3 px-4 text-red-200 max-w-full overflow-x-hidden">
+                            <div className="flex items-start gap-2 min-w-0">
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-red-300 mt-0.5 flex-shrink-0">
+                                <path d="M12 9v4M12 21h.01M4.93 4.93l14.14 14.14M19.07 4.93L4.93 19.07" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                              </svg>
+                              <div className="text-sm font-medium min-w-0">
+                                {getTextFromContent(message.content).split('\n').map((line, idx) => (
+                                  <div key={idx} className="break-words break-all">{line}</div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="mt-1.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-200">
                             <button
-                              onClick={() => startEditingMessage(index)}
-                              className="p-1 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
-                              aria-label="Edit message"
+                              onClick={() => retryMessage(index)}
+                              className="flex items-center gap-1.5 text-xs text-red-400 hover:text-red-300 bg-black/50 hover:bg-black/70 rounded-md px-3 py-1.5 transition-colors cursor-pointer"
                             >
-                              <Edit className="w-3 h-3 text-white/70" />
+                              <svg
+                                width="12"
+                                height="12"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                xmlns="http://www.w3.org/2000/svg"
+                                className="rotate-45"
+                              >
+                                <path
+                                  d="M21.168 8A10.003 10.003 0 0 0 12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                />
+                                <path
+                                  d="M17 8h4.4a.6.6 0 0 0 .6-.6V3"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                />
+                              </svg>
+                              Retry
                             </button>
                           </div>
                         </div>
                       </div>
-                    )}
-                  </div>
-                </div>
-              ) : message.role === 'system' ? (
-                // Check if this system message should always be shown or if it's in an expanded group
-                (shouldAlwaysShowSystemMessage(message.content) || isInExpandedGroup(index)) ? (
-                  <div className="flex justify-center mb-6 group">
-                    <div className="flex flex-col">
-                      <div className="bg-red-500/20 border border-red-500/30 rounded-lg py-3 px-4 text-red-200">
-                        <div className="flex items-start gap-2">
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-red-300 mt-0.5 flex-shrink-0">
-                            <path d="M12 9v4M12 21h.01M4.93 4.93l14.14 14.14M19.07 4.93L4.93 19.07" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                          </svg>
-                          <div className="text-sm font-medium">
-                            {getTextFromContent(message.content).split('\n').map((line, idx) => (
-                              <div key={idx}>{line}</div>
-                            ))}
-                          </div>
-                        </div>
+                    ) : null // Don't render if system message is hidden
+                  ) : (
+                    <div className="flex flex-col items-start mb-6 group">
+                      {(message.thinking) && (
+                        <ThinkingSection thinking={message.thinking} thinkingContent={thinkingContent} />
+                      )}
+                      <div className="max-w-[95%] text-gray-100 py-2 px-0.5">
+                        <MessageContentRenderer content={message.content} />
                       </div>
-                      <div className="mt-1.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-200">
+                      <div className="mt-1.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-200 flex items-center gap-2">
+                        <button
+                          onClick={() => copyMessageContent(index, message.content)}
+                          className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white bg-black/50 hover:bg-black/70 rounded-md px-3 py-1.5 transition-colors cursor-pointer"
+                        >
+                          {copiedMessageIndex === index ? (
+                            <Check className="w-3 h-3" />
+                          ) : (
+                            <Copy className="w-3 h-3" />
+                          )}
+                          {copiedMessageIndex === index ? 'Copied!' : 'Copy'}
+                        </button>
                         <button
                           onClick={() => retryMessage(index)}
-                          className="flex items-center gap-1.5 text-xs text-red-400 hover:text-red-300 bg-black/50 hover:bg-black/70 rounded-md px-3 py-1.5 transition-colors cursor-pointer"
+                          className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white bg-black/50 hover:bg-black/70 rounded-md px-3 py-1.5 transition-colors cursor-pointer"
                         >
                           <svg
                             width="12"
@@ -289,72 +381,20 @@ export default function ChatMessages({
                               strokeLinejoin="round"
                             />
                           </svg>
-                          Retry
+                          Try Again
                         </button>
                       </div>
                     </div>
-                  </div>
-                ) : null // Don't render if system message is hidden
-              ) : (
-                <div className="flex flex-col items-start mb-6 group">
-                  {(message.thinking) && (
-                    <ThinkingSection thinking={message.thinking}  thinkingContent={thinkingContent}/>
                   )}
-                  <div className="max-w-[95%] text-gray-100 py-2 px-0.5">
-                    <MessageContentRenderer content={message.content} />
-                  </div>
-                  <div className="mt-1.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-200 flex items-center gap-2">
-                    <button
-                      onClick={() => copyMessageContent(index, message.content)}
-                      className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white bg-black/50 hover:bg-black/70 rounded-md px-3 py-1.5 transition-colors cursor-pointer"
-                    >
-                      {copiedMessageIndex === index ? (
-                        <Check className="w-3 h-3" />
-                      ) : (
-                        <Copy className="w-3 h-3" />
-                      )}
-                      {copiedMessageIndex === index ? 'Copied!' : 'Copy'}
-                    </button>
-                    <button
-                      onClick={() => retryMessage(index)}
-                      className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white bg-black/50 hover:bg-black/70 rounded-md px-3 py-1.5 transition-colors cursor-pointer"
-                    >
-                      <svg
-                        width="12"
-                        height="12"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="rotate-45"
-                      >
-                        <path
-                          d="M21.168 8A10.003 10.003 0 0 0 12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                        />
-                        <path
-                          d="M17 8h4.4a.6.6 0 0 0 .6-.6V3"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                      Try Again
-                    </button>
-                  </div>
-                  </div>
-                )}
+                </div>
               </div>
-            </div>
-          );
-        })
+            );
+          })
         )}
 
 
         {thinkingContent && (
-          <ThinkingSection thinkingContent={thinkingContent} isStreaming={streamingContent==''}/>
+          <ThinkingSection thinkingContent={thinkingContent} isStreaming={streamingContent == ''} />
         )}
 
         {streamingContent && (
@@ -369,4 +409,4 @@ export default function ChatMessages({
       </div>
     </div>
   );
-} 
+}

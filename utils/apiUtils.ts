@@ -56,8 +56,15 @@ export const fetchAIResponse = async (params: FetchAIResponseParams): Promise<vo
   } = params;
 
   const initialBalance = usingNip60 ? balance : getBalanceFromStoredProofs();
-  let tokenAmount = getTokenAmountForModel(selectedModel);
-  console.log("rdlogs: tokenAmount", tokenAmount, unit, 'asdfasdf')
+
+  // Convert messages to API format
+  // Filter out system messages (error messages) before sending to API
+  const apiMessages = messageHistory
+    .filter(message => message.role !== 'system')
+    .map(convertMessageForAPI);
+
+  const approximateTokens = Math.ceil(JSON.stringify(apiMessages, null, 2).length / 3)
+  let tokenAmount = getTokenAmountForModel(selectedModel, approximateTokens);
 
   const makeRequest = async (retryOnInsufficientBalance: boolean = true): Promise<Response> => {
     const token = await getTokenForRequest(
@@ -74,7 +81,7 @@ export const fetchAIResponse = async (params: FetchAIResponseParams): Promise<vo
     }
 
     if (typeof token === 'object' && 'hasTokens' in token && !token.hasTokens) {
-      throw new Error(`Insufficient balance. Please add more funds to continue. You need at least ${Number(tokenAmount).toFixed(0)} sats to use ${selectedModel?.id}`);
+      throw new Error(`Insufficient balance. Please add more funds to continue. You need at least ${Number(tokenAmount).toFixed(0)} sats to use ${selectedModel?.id} ${typeof token} ${token}`);
     }
 
     if (token && typeof token === 'string') {
@@ -91,12 +98,6 @@ export const fetchAIResponse = async (params: FetchAIResponseParams): Promise<vo
       }
     }
 
-
-    // Convert messages to API format
-    // Filter out system messages (error messages) before sending to API
-    const apiMessages = messageHistory
-      .filter(message => message.role !== 'system')
-      .map(convertMessageForAPI);
 
     const response = await fetch(`${baseUrl}v1/chat/completions`, {
       method: 'POST',
@@ -276,7 +277,7 @@ async function handleApiError(
       );
 
       if (!newToken || (typeof newToken === 'object' && 'hasTokens' in newToken && !newToken.hasTokens)) {
-        throw new Error(`Insufficient balance. Please add more funds to continue. You need at least ${Number(tokenAmount).toFixed(0)} sats to use ${selectedModel?.id}`);
+        throw new Error(`Insufficient balance (retryOnInsurrifientBal). Please add more funds to continue. You need at least ${Number(tokenAmount).toFixed(0)} sats to use ${selectedModel?.id}`);
       }
     }
   } 

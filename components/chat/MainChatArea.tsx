@@ -20,6 +20,9 @@ const MainChatArea: React.FC = () => {
     setMessages,
     streamingContent,
     thinkingContent,
+    streamingConversationId,
+    getStreamingContentFor,
+    getThinkingContentFor,
     editingMessageIndex,
     editingContent,
     setEditingContent,
@@ -45,6 +48,8 @@ const MainChatArea: React.FC = () => {
     // Conversation State
     activeConversationId,
     createNewConversationHandler,
+    saveConversationById,
+    getActiveConversationId,
     
     // API State
     selectedModel,
@@ -67,7 +72,9 @@ const MainChatArea: React.FC = () => {
       baseUrl,
       mintUrl,
       isAuthenticated,
-      setIsLoginModalOpen
+      setIsLoginModalOpen,
+      saveConversationById,
+      getActiveConversationId
     );
   };
 
@@ -81,7 +88,10 @@ const MainChatArea: React.FC = () => {
       setEditingContent,
       selectedModel,
       baseUrl,
-      mintUrl
+      mintUrl,
+      activeConversationId,
+      saveConversationById,
+      getActiveConversationId
     );
   };
 
@@ -92,7 +102,10 @@ const MainChatArea: React.FC = () => {
       setMessages,
       selectedModel,
       baseUrl,
-      mintUrl
+      mintUrl,
+      activeConversationId,
+      saveConversationById,
+      getActiveConversationId
     );
   };
 
@@ -101,8 +114,8 @@ const MainChatArea: React.FC = () => {
       {/* Chat Messages */}
       <ChatMessages
         messages={messages}
-        streamingContent={streamingContent}
-        thinkingContent={thinkingContent}
+        streamingContent={getStreamingContentFor(activeConversationId)}
+        thinkingContent={getThinkingContentFor(activeConversationId)}
         editingMessageIndex={editingMessageIndex}
         editingContent={editingContent}
         setEditingContent={setEditingContent}
@@ -112,6 +125,7 @@ const MainChatArea: React.FC = () => {
         retryMessage={handleRetryMessage}
         getTextFromContent={getTextFromContent}
         messagesEndRef={messagesEndRef}
+        isMobile={isMobile}
       />
 
       {/* Chat Input */}
