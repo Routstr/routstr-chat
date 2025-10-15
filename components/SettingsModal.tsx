@@ -9,7 +9,7 @@ import GeneralTab from './settings/GeneralTab';
 import ModelsTab from '@/components/settings/ModelsTab';
 import HistoryTab from './settings/HistoryTab';
 import ApiKeysTab from './settings/ApiKeysTab';
-import UnifiedWallet from './settings/UnifiedWallet';
+import UnifiedWallet from '@/features/wallet/components/UnifiedWallet';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useNostrLogin } from '@nostrify/react/login';
 import { useMediaQuery } from '@/hooks/useMediaQuery';

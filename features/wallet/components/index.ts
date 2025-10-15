@@ -2,6 +2,7 @@
  * Wallet UI Components
  */
 
+export { default as BalanceDisplay } from './BalanceDisplay';
 export { default as DepositModal } from './DepositModal';
 export { default as SixtyWallet } from './SixtyWallet';
 export { default as WalletTab } from './WalletTab';

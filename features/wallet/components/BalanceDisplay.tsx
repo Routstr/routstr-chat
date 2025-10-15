@@ -9,12 +9,17 @@ import { useChat } from '@/context/ChatProvider';
 import { useAuth } from '@/context/AuthProvider';
 import { useNostr } from '@/context/NostrContext';
 import { formatPublicKey } from '@/lib/nostr';
-import { Popover, PopoverContent, PopoverTrigger } from './Popover';
-import { useWalletOperations } from '@/hooks/useWalletOperations';
-import { useCashuWallet } from "@/hooks/useCashuWallet";
-import { useCashuToken } from "@/hooks/useCashuToken";
-import { useCashuStore } from "@/stores/cashuStore";
-import { formatBalance, calculateBalance } from "@/lib/cashu";
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/Popover';
+import { 
+  useWalletOperations,
+  useCashuWallet,
+  useCashuToken,
+  useCashuStore,
+  formatBalance,
+  calculateBalanceByMint,
+  useTransactionHistoryStore,
+} from '@/features/wallet';
+import { PendingTransaction } from '../state/transactionHistoryStore';
 import { truncateMintUrl as utilTruncateMintUrl, getAvailableMints, isMintValid, getCurrentMintBalance as utilGetCurrentMintBalance } from '@/utils/walletUtils';
 import {
   createLightningInvoice,
@@ -22,10 +27,6 @@ import {
   payMeltQuote,
   createMeltQuote,
 } from "@/lib/cashuLightning";
-import {
-  useTransactionHistoryStore,
-  PendingTransaction,
-} from "@/stores/transactionHistoryStore";
 import type { TransactionHistory } from '@/types/chat';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 

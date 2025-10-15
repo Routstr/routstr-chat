@@ -5,7 +5,7 @@ import { Menu, SquarePen } from 'lucide-react';
 import { useChat } from '@/context/ChatProvider';
 import { useAuth } from '@/context/AuthProvider';
 import ModelSelector from './ModelSelector';
-import BalanceDisplay from '../ui/BalanceDisplay';
+import { BalanceDisplay } from '@/features/wallet';
 
 /**
  * Top header with model selector and controls
