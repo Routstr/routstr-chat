@@ -30,7 +30,7 @@ export class LightningService {
       amount,
       paymentRequest: mintQuote.request,
       quoteId: mintQuote.quote,
-      state: MintQuoteState.UNPAID,
+      state: mintQuote.state,
       expiresAt: mintQuote.expiry ? mintQuote.expiry * 1000 : undefined,
     };
   }

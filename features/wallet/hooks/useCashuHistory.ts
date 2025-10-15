@@ -2,7 +2,7 @@ import { useNostr } from '@/hooks/useNostr';
 import { toast } from 'sonner';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { CASHU_EVENT_KINDS } from '@/lib/nostr-kinds';
+import { CASHU_EVENT_KINDS } from '@/lib/cashu';
 import { SpendingHistoryEntry } from '../core/domain/Transaction';
 import { getLastEventTimestamp } from '@/lib/nostrTimestamps';
 import { useTransactionHistoryStore } from '../state/transactionHistoryStore';

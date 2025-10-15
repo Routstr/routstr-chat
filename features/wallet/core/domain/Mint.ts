@@ -1,4 +1,4 @@
-import { GetInfoResponse, MintKeyset, MintKeys } from '@cashu/cashu-ts';
+import { GetInfoResponse, MintKeyset, MintKeys, MintQuoteState as CashuMintQuoteState, MeltQuoteState as CashuMeltQuoteState } from '@cashu/cashu-ts';
 
 /**
  * Mint Domain Model
@@ -35,7 +35,7 @@ export interface MintQuote {
   amount: number;
   paymentRequest: string;
   quoteId: string;
-  state: MintQuoteState;
+  state: CashuMintQuoteState;
   expiresAt?: number;
 }
 
@@ -47,20 +47,11 @@ export interface MeltQuote {
   amount: number;
   paymentRequest: string;
   quoteId: string;
-  state: MeltQuoteState;
+  state: CashuMeltQuoteState;
   fee: number;
   expiresAt?: number;
 }
 
-export enum MintQuoteState {
-  UNPAID = 'UNPAID',
-  PAID = 'PAID',
-  ISSUED = 'ISSUED',
-}
-
-export enum MeltQuoteState {
-  UNPAID = 'UNPAID',
-  PAID = 'PAID',
-  PENDING = 'PENDING',
-}
+// Re-export the enums from cashu-ts for convenience
+export { CashuMintQuoteState as MintQuoteState, CashuMeltQuoteState as MeltQuoteState };
 

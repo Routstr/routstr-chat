@@ -4,7 +4,7 @@ import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { DEFAULT_MINT_URL } from '@/lib/utils';
-import { CASHU_EVENT_KINDS } from '@/lib/nostr-kinds';
+import { CASHU_EVENT_KINDS } from '@/lib/cashu';
 import { Wallet as CashuWalletStruct } from '../core/domain/Wallet';
 import { CashuToken } from '../core/domain/Token';
 import { MintService, defaultMints } from '../core/services/MintService';
