@@ -4,14 +4,11 @@ import React, { useEffect, useRef, useState } from 'react';
 import { QrCode } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import { Drawer } from 'vaul';
-import { useCashuWallet } from '@/hooks/useCashuWallet';
-import { useCashuToken } from '@/hooks/useCashuToken';
-import { useCashuStore } from '@/stores/cashuStore';
+import { useCashuWallet, useCashuToken, useCashuStore, useTransactionHistoryStore, formatBalance } from '@/features/wallet';
 import { useInvoiceSync } from '@/hooks/useInvoiceSync';
-import { useTransactionHistoryStore, PendingTransaction } from '@/stores/transactionHistoryStore';
+import { PendingTransaction } from '@/features/wallet/state/transactionHistoryStore';
 import { createLightningInvoice, mintTokensFromPaidInvoice } from '@/lib/cashuLightning';
 import { MintQuoteState } from '@cashu/cashu-ts';
-import { formatBalance } from '@/lib/cashu';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 interface TopUpPromptModalProps {

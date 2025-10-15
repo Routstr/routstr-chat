@@ -1,6 +1,6 @@
 // Shared wallet utilities for balance display and settings wallet views
 
-import { formatBalance } from '@/lib/cashu';
+import { formatBalance } from '@/features/wallet';
 
 export type MintBalances = Record<string, number> | undefined;
 export type MintUnits = Record<string, string> | undefined;

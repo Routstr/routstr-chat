@@ -13,7 +13,7 @@ import { QueryTimeoutModal } from '@/components/QueryTimeoutModal';
 import { useAuth } from '@/context/AuthProvider';
 import { useChat } from '@/context/ChatProvider';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useCashuWallet } from '@/hooks/useCashuWallet';
+import { useCashuWallet } from '@/features/wallet';
 import { hasSeenTopUpPrompt } from '@/utils/storageUtils';
 
 function ChatPageContent() {

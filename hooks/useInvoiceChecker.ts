@@ -1,11 +1,11 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { useInvoiceSync, StoredInvoice } from './useInvoiceSync';
 import { CashuMint, CashuWallet, MintQuoteState, MeltQuoteState } from '@cashu/cashu-ts';
-import { useCashuStore } from '@/stores/cashuStore';
-import { useCashuToken } from '@/hooks/useCashuToken';
+import { useCashuStore } from '@/features/wallet';
+import { useCashuToken } from '@/features/wallet';
 import { toast } from 'sonner';
-import { formatBalance } from '@/lib/cashu';
-import { useTransactionHistoryStore } from '@/stores/transactionHistoryStore';
+import { formatBalance } from '@/features/wallet';
+import { useTransactionHistoryStore } from '@/features/wallet';
 
 export function useInvoiceChecker() {
   const { invoices, getPendingInvoices, updateInvoice, cleanupOldInvoices } = useInvoiceSync();

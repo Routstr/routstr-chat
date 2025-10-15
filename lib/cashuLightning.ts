@@ -1,6 +1,7 @@
-import { useCashuStore } from '@/stores/cashuStore';
+import { useCashuStore } from '@/features/wallet';
 import { CashuMint, CashuWallet, MeltQuoteResponse, MeltQuoteState, MintQuoteResponse, MintQuoteState, Proof } from '@cashu/cashu-ts';
-import { calculateFees, canMakeExactChange, CashuToken } from '@/lib/cashu';
+import { calculateFees, canMakeExactChange } from '@/features/wallet';
+import { CashuToken } from '@/features/wallet/core/domain/Token';
 
 export interface MintQuote {
   mintUrl: string;

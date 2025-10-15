@@ -6,9 +6,7 @@ import { getBalanceFromStoredProofs, refundRemainingBalance, create60CashuToken,
 import { toast } from 'sonner';
 import { useApiKeysSync } from '@/hooks/useApiKeysSync'; // Import the new hook
 import { useCurrentUser } from '@/hooks/useCurrentUser'; // For checking user login
-import { useCashuStore } from '@/stores/cashuStore';
-import { useCashuToken } from '@/hooks/useCashuToken';
-import { calculateBalance } from '@/lib/cashu';
+import { useCashuStore, useCashuToken, calculateBalanceByMint } from '@/features/wallet';
 import SettingsDialog from '@/components/ui/SettingsDialog';
 
 export interface StoredApiKey {
@@ -102,8 +100,8 @@ const ApiKeysTab = ({ mintUrl, baseUrl, usingNip60, baseUrls: _ignoredBaseUrlsPr
 
   const { balances: mintBalances, units: mintUnits } = useMemo(() => {
     if (!cashuStore.proofs) return { balances: {}, units: {} };
-    return calculateBalance(cashuStore.proofs);
-  }, [cashuStore.proofs]);
+    return calculateBalanceByMint(cashuStore.proofs, cashuStore.mints);
+  }, [cashuStore.proofs, cashuStore.mints]);
 
   useEffect(() => {
     if (!usingNip60) {

@@ -5,7 +5,7 @@ import { useInvoiceChecker } from '@/hooks/useInvoiceChecker';
 import { useInvoiceSync, StoredInvoice } from '@/hooks/useInvoiceSync';
 import { toast } from 'sonner';
 import { MintQuoteState, MeltQuoteState } from '@cashu/cashu-ts';
-import { formatBalance } from '@/lib/cashu';
+import { formatBalance } from '@/features/wallet';
 
 interface InvoiceRecoveryProviderProps {
   children: React.ReactNode;
