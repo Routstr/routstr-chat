@@ -3,15 +3,12 @@ import { Message, TransactionHistory } from '@/types/chat';
 import { createTextMessage, createMultimodalMessage } from '@/utils/messageUtils';
 import { fetchAIResponse } from '@/utils/apiUtils';
 import { loadTransactionHistory, saveTransactionHistory, loadUsingNip60, saveUsingNip60 } from '@/utils/storageUtils';
-import { calculateBalance } from '@/lib/cashu';
+import { calculateBalanceByMint } from '@/features/wallet';
 import { getBalanceFromStoredProofs, getPendingCashuTokenAmount } from '@/utils/cashuUtils'; // Removed getPendingCashuTokenAmount import
-import { useCashuStore } from '@/stores/cashuStore';
-import { useCashuWallet } from '@/hooks/useCashuWallet';
-import { useCashuToken } from '@/hooks/useCashuToken';
+import { useCashuStore, useCashuWallet, useCashuToken, useCreateCashuWallet } from '@/features/wallet';
 import { DEFAULT_MINT_URL } from '@/lib/utils';
 import React from 'react';
 import { useAuth } from '@/context/AuthProvider';
-import { useCreateCashuWallet } from '@/hooks/useCreateCashuWallet';
 
 export interface UseChatActionsReturn {
   inputMessage: string;
@@ -127,7 +124,7 @@ export const useChatActions = (): UseChatActionsReturn => {
   // Calculate mint balances
   const { balances: mintBalances, units: mintUnits } = React.useMemo(() => {
     if (!cashuStore.proofs) return { balances: {}, units: {} };
-    return calculateBalance(cashuStore.proofs);
+    return calculateBalanceByMint(cashuStore.proofs, cashuStore.mints);
   }, [cashuStore.proofs, cashuStore.mints]);
 
   useEffect(() => {
