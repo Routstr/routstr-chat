@@ -1,18 +1,19 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AlertCircle, Copy, Loader2, QrCode, Zap, ArrowRight, Info } from "lucide-react";
 import QRCode from "react-qr-code";
-import { useCashuWallet } from "@/hooks/useCashuWallet";
-import { useCashuToken } from "@/hooks/useCashuToken";
-import { useCashuStore } from "@/stores/cashuStore";
-import { formatBalance, calculateBalance } from "@/lib/cashu";
+import { 
+  useCashuWallet, 
+  useCashuToken, 
+  useCashuStore, 
+  formatBalance, 
+  calculateBalanceByMint,
+  useTransactionHistoryStore 
+} from "@/features/wallet";
+import { PendingTransaction } from "../state/transactionHistoryStore";
 import {
   createLightningInvoice,
   mintTokensFromPaidInvoice,
 } from "@/lib/cashuLightning";
-import {
-  useTransactionHistoryStore,
-  PendingTransaction,
-} from "@/stores/transactionHistoryStore";
 import { useInvoiceSync } from "@/hooks/useInvoiceSync";
 import { useInvoiceChecker } from "@/hooks/useInvoiceChecker";
 import { MintQuoteState } from "@cashu/cashu-ts";
@@ -95,8 +96,8 @@ const DepositModal: React.FC<DepositModalProps> = ({ isOpen, onClose, mintUrl, b
 
   const { balances: mintBalances, units: mintUnits } = React.useMemo(() => {
     if (!cashuStore.proofs) return { balances: {}, units: {} };
-    return calculateBalance(cashuStore.proofs);
-  }, [cashuStore.proofs]);
+    return calculateBalanceByMint(cashuStore.proofs, cashuStore.mints);
+  }, [cashuStore.proofs, cashuStore.mints]);
 
   useEffect(() => {
     let totalBalance = 0;

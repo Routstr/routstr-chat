@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useWalletOperations } from '@/hooks/useWalletOperations';
+import { useWalletOperations } from '@/features/wallet';
 import { TransactionHistory } from '@/types/chat';
 import { MintQuoteState } from '@cashu/cashu-ts';
 import InvoiceModal from './InvoiceModal';

@@ -1,12 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AlertCircle, Copy, Loader2, QrCode, Zap, ArrowRight, Info, Plus, Trash2, Eraser } from "lucide-react";
 import { getEncodedTokenV4, Proof, MeltQuoteResponse, MintQuoteResponse, getDecodedToken } from "@cashu/cashu-ts";
-import { useCashuWallet } from "@/hooks/useCashuWallet";
-import { useCreateCashuWallet } from "@/hooks/useCreateCashuWallet";
+import { 
+  useCashuWallet, 
+  useCreateCashuWallet, 
+  useCashuToken, 
+  useCashuStore, 
+  formatBalance, 
+  calculateBalanceByMint 
+} from "@/features/wallet";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { useCashuToken } from "@/hooks/useCashuToken";
-import { useCashuStore } from "@/stores/cashuStore";
-import { formatBalance, calculateBalance } from "@/lib/cashu";
 import { cn } from "@/lib/utils";
 import { computeTotalBalanceSats } from '@/utils/walletUtils';
 import InvoiceModal from './InvoiceModal';
@@ -17,10 +20,8 @@ import {
   parseInvoiceAmount,
   createMeltQuote,
 } from "@/lib/cashuLightning";
-import {
-  useTransactionHistoryStore,
-  PendingTransaction,
-} from "@/stores/transactionHistoryStore";
+import { useTransactionHistoryStore } from "@/features/wallet";
+import { PendingTransaction } from "../state/transactionHistoryStore";
 import { getBalanceFromStoredProofs } from "@/utils/cashuUtils";
 import { useInvoiceSync } from "@/hooks/useInvoiceSync";
 import { useInvoiceChecker } from "@/hooks/useInvoiceChecker";
@@ -180,8 +181,8 @@ const SixtyWallet: React.FC<{mintUrl:string, usingNip60: boolean, setUsingNip60:
 
   const { balances: mintBalances, units: mintUnits } = React.useMemo(() => {
     if (!cashuStore.proofs) return { balances: {}, units: {} };
-    return calculateBalance(cashuStore.proofs);
-  }, [cashuStore.proofs]);
+    return calculateBalanceByMint(cashuStore.proofs, cashuStore.mints);
+  }, [cashuStore.proofs, cashuStore.mints]);
 
   useEffect(() => {
     setCurrentMintUnit(mintUnits[cashuStore.activeMintUrl??'']);

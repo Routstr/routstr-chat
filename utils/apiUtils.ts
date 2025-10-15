@@ -191,7 +191,7 @@ export const fetchAIResponse = async (params: FetchAIResponseParams): Promise<vo
       estimatedCosts, // Pass estimatedCosts here
       unit // Pass unit here
     });
-    console.log("rdlogs:rdlogs: respon 23242342", response)
+    console.log("rdlogs:rdlogs: respon 42069", response)
 
   } catch (error) {
     console.log('API Error: ', error);
