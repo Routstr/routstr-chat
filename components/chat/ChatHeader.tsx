@@ -37,7 +37,6 @@ const ChatHeader: React.FC = () => {
     
     // Balance
     balance,
-    usingNip60,
 
     // Settings
     setIsSettingsOpen,
@@ -124,7 +123,6 @@ const ChatHeader: React.FC = () => {
           <BalanceDisplay
             setIsSettingsOpen={setIsSettingsOpen}
             setInitialSettingsTab={setInitialSettingsTab}
-            usingNip60={usingNip60}
           />
         </div>
       </div>

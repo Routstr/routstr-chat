@@ -37,10 +37,9 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 interface BalanceDisplayProps {
   setIsSettingsOpen: (isOpen: boolean) => void;
   setInitialSettingsTab: (tab: 'settings' | 'wallet' | 'history' | 'api-keys') => void;
-  usingNip60: boolean;
 }
 
-const BalanceDisplay: React.FC<BalanceDisplayProps> = ({ setIsSettingsOpen, setInitialSettingsTab, usingNip60 }) => {
+const BalanceDisplay: React.FC<BalanceDisplayProps> = ({ setIsSettingsOpen, setInitialSettingsTab }) => {
   const { isAuthenticated } = useAuth();
   const { balance, currentMintUnit, mintBalances, mintUnits, isBalanceLoading, setIsLoginModalOpen, mintUrl, baseUrl, transactionHistory, setTransactionHistory, setBalance } = useChat();
   const { publicKey } = useNostr();
@@ -100,6 +99,7 @@ const BalanceDisplay: React.FC<BalanceDisplayProps> = ({ setIsSettingsOpen, setI
   const { wallet, isLoading: isNip60Loading, updateProofs } = useCashuWallet();
   const { sendToken: nip60SendToken, cleanSpentProofs, cleanupPendingProofs, receiveToken, isLoading: isTokenLoading, error: nip60Error } = useCashuToken();
   const cashuStore = useCashuStore();
+  const usingNip60 = cashuStore.getUsingNip60();
   const transactionHistoryStore = useTransactionHistoryStore();
 
   // NIP-60 specific state

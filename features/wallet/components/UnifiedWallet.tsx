@@ -3,6 +3,7 @@ import SixtyWallet from './SixtyWallet';
 import WalletTab from './WalletTab';
 
 import { TransactionHistory } from '@/types/chat';
+import { useCashuStore } from '../state/cashuStore';
 
 interface UnifiedWalletProps {
   // WalletTab props
@@ -13,9 +14,6 @@ interface UnifiedWalletProps {
   transactionHistory: TransactionHistory[];
   setTransactionHistory: (transactionHistory: TransactionHistory[] | ((prevTransactionHistory: TransactionHistory[]) => TransactionHistory[])) => void;
   
-  // SixtyWallet props
-  usingNip60: boolean;
-  setUsingNip60: (usingNip60: boolean) => void;
 }
 
 const UnifiedWallet: React.FC<UnifiedWalletProps> = ({
@@ -25,9 +23,11 @@ const UnifiedWallet: React.FC<UnifiedWalletProps> = ({
   baseUrl,
   transactionHistory,
   setTransactionHistory,
-  usingNip60,
-  setUsingNip60,
 }) => {
+  const cashuStore = useCashuStore();
+  const usingNip60 = cashuStore.getUsingNip60();
+  const setUsingNip60 = cashuStore.setUsingNip60;
+
   return (
     <div className="space-y-6">
       {/* NIP-60 Toggle */}

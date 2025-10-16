@@ -7,7 +7,6 @@ import { CashuToken } from '../core/domain/Token';
 import { canMakeExactChange, calculateFees } from '../core/utils';
 import { MintService } from '../core/services/MintService';
 import { hashToCurve } from "@cashu/crypto/modules/common";
-import { useNutzapStore } from '../state/nutzapStore';
 
 // Global flag to track if recovery has been initiated in this session
 let recoveryInitiated = false;
@@ -20,7 +19,6 @@ export function useCashuToken() {
   const { wallet, createWallet, updateProofs, tokens } = useCashuWallet();
 
   const { createHistory } = useCashuHistory();
-  const nutzapStore = useNutzapStore();
 
   /**
    * Recover any pending proofs that were interrupted during token creation

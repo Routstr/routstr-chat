@@ -38,8 +38,6 @@ interface SettingsModalProps {
   setConfiguredModels?: (models: string[]) => void;
   modelProviderMap?: Record<string, string>;
   setModelProviderFor?: (modelId: string, baseUrl: string) => void;
-  usingNip60: boolean;
-  setUsingNip60: (usingNip60: boolean) => void;
   isMobile?: boolean;
 }
 
@@ -66,8 +64,6 @@ const SettingsModal = ({
   setConfiguredModels,
   modelProviderMap,
   setModelProviderFor,
-  usingNip60,
-  setUsingNip60,
   isMobile: propIsMobile
 }: SettingsModalProps) => {
   const { user } = useCurrentUser();
@@ -173,7 +169,6 @@ const SettingsModal = ({
           <ApiKeysTab
               mintUrl={mintUrl}
               baseUrl={baseUrl}
-              usingNip60={usingNip60}
               baseUrls={baseUrls}
               setActiveTab={setActiveTab}
               isMobile={isMobile}
@@ -186,8 +181,6 @@ const SettingsModal = ({
             baseUrl={baseUrl}
             transactionHistory={transactionHistory}
             setTransactionHistory={setTransactionHistory}
-            usingNip60={usingNip60}
-            setUsingNip60={setUsingNip60}
           />
         ) : null}
       </div>

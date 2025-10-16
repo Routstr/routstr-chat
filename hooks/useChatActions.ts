@@ -34,7 +34,6 @@ export interface UseChatActionsReturn {
   setBalance: React.Dispatch<React.SetStateAction<number>>;
   setUploadedImages: React.Dispatch<React.SetStateAction<string[]>>;
   setTransactionHistory: React.Dispatch<React.SetStateAction<TransactionHistory[]>>;
-  setUsingNip60: (using: boolean) => void;
   sendMessage: (
     messages: Message[],
     setMessages: (messages: Message[]) => void,
@@ -104,13 +103,13 @@ export const useChatActions = (): UseChatActionsReturn => {
   const [pendingCashuAmountState, setPendingCashuAmountState] = useState(0);
   const [transactionHistory, setTransactionHistoryState] = useState<TransactionHistory[]>([]);
   const [hotTokenBalance, setHotTokenBalance] = useState<number>(0);
-  const [usingNip60, setUsingNip60State] = useState(() => loadUsingNip60());
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Cashu wallet hooks
   const { wallet, isLoading: isWalletLoading, didRelaysTimeout } = useCashuWallet();
   const cashuStore = useCashuStore();
+  const usingNip60 = cashuStore.getUsingNip60();
   const { sendToken, receiveToken, cleanSpentProofs } = useCashuToken();
   const { logins } = useAuth();
   const { mutate: handleCreateWallet, isPending: isCreatingWallet, error: createWalletError } = useCreateCashuWallet();
@@ -252,11 +251,6 @@ export const useChatActions = (): UseChatActionsReturn => {
       saveTransactionHistory(newHistory);
       return newHistory;
     });
-  }, []);
-
-  const setUsingNip60 = useCallback((using: boolean) => {
-    setUsingNip60State(using);
-    saveUsingNip60(using);
   }, []);
 
   const sendMessage = useCallback(async (
@@ -495,7 +489,6 @@ export const useChatActions = (): UseChatActionsReturn => {
     setBalance: setBalance,
     setUploadedImages,
     setTransactionHistory,
-    setUsingNip60,
     sendMessage,
     saveInlineEdit,
     retryMessage

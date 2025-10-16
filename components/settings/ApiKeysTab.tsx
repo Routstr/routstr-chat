@@ -20,13 +20,12 @@ export interface StoredApiKey {
 interface ApiKeysTabProps {
   mintUrl: string;
   baseUrl: string;
-  usingNip60: boolean;
   baseUrls: string[]; // kept for backwards compatibility but will be ignored
   setActiveTab: (tab: 'settings' | 'wallet' | 'history' | 'api-keys') => void;
   isMobile?: boolean;
 }
 
-const ApiKeysTab = ({ mintUrl, baseUrl, usingNip60, baseUrls: _ignoredBaseUrlsProp, setActiveTab, isMobile }: ApiKeysTabProps) => {
+const ApiKeysTab = ({ mintUrl, baseUrl, baseUrls: _ignoredBaseUrlsProp, setActiveTab, isMobile }: ApiKeysTabProps) => {
   // Available provider base URLs (aggregated from providers API + current baseUrl)
   const [availableBaseUrls, setAvailableBaseUrls] = useState<string[]>([]);
   const [isLoadingBaseUrls, setIsLoadingBaseUrls] = useState<boolean>(false);
@@ -94,6 +93,7 @@ const ApiKeysTab = ({ mintUrl, baseUrl, usingNip60, baseUrls: _ignoredBaseUrlsPr
     setCloudSyncEnabled
   } = useApiKeysSync();
   const cashuStore = useCashuStore();
+  const usingNip60 = cashuStore.getUsingNip60();
   const { sendToken, receiveToken } = useCashuToken();
 
   const [localMintBalance, setLocalMintBalance] = useState(0);

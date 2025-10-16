@@ -21,7 +21,10 @@ interface CashuStore {
   activeMintUrl?: string;
   userSelectedMintUrl?: string;
   pendingOnboardingToken?: string;
+  usingNip60: boolean;
 
+  setUsingNip60: (usingNip60: boolean) => void;
+  getUsingNip60: () => boolean;
   addMint: (url: string) => void;
   getMint: (url: string) => { url: string, mintInfo?: GetInfoResponse, keysets?: MintKeyset[], keys?: Record<string, MintKeys>[], events?: Nip60TokenEvent[], mintQuotes?: Record<string, MintQuoteResponse>, meltQuotes?: Record<string, MeltQuoteResponse> };
   setMintInfo: (url: string, mintInfo: GetInfoResponse) => void;
@@ -64,6 +67,15 @@ export const useCashuStore = create<CashuStore>()(
       isLoading: false,
       activeMintUrl: undefined,
       pendingOnboardingToken: undefined,
+      usingNip60: true,
+
+      setUsingNip60(usingNip60: boolean) {
+        set({ usingNip60 });
+      },
+
+      getUsingNip60() {
+        return get().usingNip60;
+      },
 
       addMint(url) {
         const existingMints = get().mints.map((mint) => mint.url)

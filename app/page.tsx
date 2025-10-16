@@ -56,8 +56,6 @@ function ChatPageContent() {
     
     // Chat State
     clearConversations,
-    usingNip60,
-    setUsingNip60,
     isBalanceLoading,
     conversations,
     loadConversation,
@@ -193,10 +191,6 @@ function ChatPageContent() {
           setConfiguredModels={setConfiguredModels}
           modelProviderMap={modelProviderMap}
           setModelProviderFor={setModelProviderFor}
-          usingNip60={usingNip60}
-          setUsingNip60={(value) => {
-            setUsingNip60(value);
-          }}
         />
       )}
 
