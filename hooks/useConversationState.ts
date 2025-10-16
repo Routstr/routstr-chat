@@ -92,6 +92,12 @@ export const useConversationState = (): UseConversationStateReturn => {
     }
   }, [editingMessageIndex, messages]);
 
+  // Reset inline editing state when switching conversations
+  useEffect(() => {
+    setEditingMessageIndex(null);
+    setEditingContent('');
+  }, [activeConversationId]);
+
   // Wrapper function to set active conversation ID and save to localStorage
   const setActiveConversationIdWithStorage = useCallback((conversationId: string | null) => {
     setActiveConversationId(conversationId);

@@ -146,7 +146,7 @@ export default function ChatInput({
               }`
               : `${
                 isMobile
-                  ? `fixed z-20 bottom-0 left-0 right-0 ${unifiedBgClass} backdrop-blur-sm transition-all duration-300 ease-in-out px-3 sm:px-4 pb-2 pt-0`
+                  ? `fixed z-20 bottom-0 left-0 right-0 w-screen ${unifiedBgClass} backdrop-blur-sm transition-all duration-300 ease-in-out px-0 pb-2 pt-0`
                   : 'fixed z-20 bottom-0 bg-[#181818] backdrop-blur-sm transition-all duration-300 ease-in-out ' + (!isAuthenticated ? 'left-0 right-0 pb-4 pt-0' : isSidebarCollapsed ? 'left-0 right-0 pb-4 pt-0' : 'left-72 right-0 pb-4 pt-0')
               }`
         }`}
@@ -158,7 +158,7 @@ export default function ChatInput({
           bottom: !isCentered ? (isMobile ? '0px' : '16px') : undefined
         }}
       >
-        <div className={`mx-auto w-full ${isCentered && !isMobile ? 'max-w-[38rem]' : 'max-w-[44rem]'} px-4 sm:px-6 lg:px-0 ${isMobile ? 'pb-3' : ''}`}>
+        <div className={`${isMobile ? 'w-full max-w-none px-4 pb-3' : 'mx-auto w-full ' + (isCentered ? 'max-w-[38rem]' : 'max-w-[44rem]') + ' px-4 sm:px-6 lg:px-0'}`}>
           {/* Image Preview */}
           {uploadedImages.length > 0 && (
             <div className="mb-3 flex flex-wrap gap-2">
@@ -180,7 +180,7 @@ export default function ChatInput({
             </div>
           )}
 
-          <div className="relative flex items-end">
+          <div className="relative flex items-end w-full">
             {/* Hidden file input */}
             <input
               ref={fileInputRef}
