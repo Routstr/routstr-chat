@@ -14,6 +14,7 @@ import { useAuth } from '@/context/AuthProvider';
 import { useChat } from '@/context/ChatProvider';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCashuWallet } from '@/hooks/useCashuWallet';
+import { useCashuToken } from '@/hooks/useCashuToken';
 import { hasSeenTopUpPrompt } from '@/utils/storageUtils';
 
 function ChatPageContent() {
@@ -67,10 +68,13 @@ function ChatPageContent() {
 
   const [isTopUpPromptOpen, setIsTopUpPromptOpen] = useState(false);
   const [topUpPromptDismissed, setTopUpPromptDismissed] = useState(false);
-  const { showQueryTimeoutModal, setShowQueryTimeoutModal, didRelaysTimeout, isLoading: isWalletLoading } = useCashuWallet();
+  const { showQueryTimeoutModal, setShowQueryTimeoutModal, didRelaysTimeout, isLoading: isWalletLoading, wallet } = useCashuWallet();
+  const { receiveToken } = useCashuToken();
   const pendingUrlSyncRef = useRef(false);
+  const processingTopupRef = useRef(false);
   const searchParamsString = useMemo(() => searchParams.toString(), [searchParams]);
   const chatIdFromUrl = useMemo(() => searchParams.get('chatId'), [searchParams]);
+  const topupFromUrl = useMemo(() => searchParams.get('topup'), [searchParams]);
 
   useEffect(() => {
     let topUpTimer: NodeJS.Timeout | null = null;
@@ -94,6 +98,43 @@ function ChatPageContent() {
   }, [balance, isBalanceLoading, isAuthenticated, isSettingsOpen, topUpPromptDismissed]);
 
   const handleTopUp = (_amount?: number) => {};
+
+  // Capture prefilled topup token from URL and remove it from the address bar
+  useEffect(() => {
+    if (!topupFromUrl) return;
+    try {
+      localStorage.setItem('prefilled_topup_token', topupFromUrl);
+    } catch {}
+    const params = new URLSearchParams(searchParamsString);
+    params.delete('topup');
+    const queryString = params.toString();
+    router.replace(`${pathname}${queryString ? `?${queryString}` : ''}`, { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topupFromUrl]);
+
+  // After auth + wallet load phase, credit any pending prefilled token
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    if (isWalletLoading) return;
+    if (processingTopupRef.current) return;
+    let token: string | null = null;
+    try {
+      token = localStorage.getItem('prefilled_topup_token');
+    } catch {}
+    if (!token) return;
+
+    processingTopupRef.current = true;
+    (async () => {
+      try {
+        await receiveToken(token as string);
+        try { localStorage.removeItem('prefilled_topup_token'); } catch {}
+      } catch (err) {
+        console.error('Failed to process prefilled topup token:', err);
+      } finally {
+        processingTopupRef.current = false;
+      }
+    })();
+  }, [isAuthenticated, isWalletLoading, wallet, receiveToken]);
 
   useEffect(() => {
     if (!activeConversationId) return;
