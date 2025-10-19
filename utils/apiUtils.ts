@@ -36,6 +36,87 @@ async function routstrRequest(params: {
   mintUrl: string;
   usingNip60: boolean;
   tokenAmount: number;
+  spendCashu: (mintUrl: string, amount: number) => Promise<{ proofs: any[], unit: string }>;
+  storeCashu: (token: string) => Promise<any[]>;
+  activeMintUrl?: string | null;
+  onMessageAppend: (message: Message) => void;
+  token: string;
+  retryOnInsufficientBalance?: boolean;
+}): Promise<Response> {
+  const {
+    apiMessages,
+    selectedModel,
+    baseUrl,
+    mintUrl,
+    usingNip60,
+    tokenAmount,
+    spendCashu,
+    storeCashu,
+    activeMintUrl,
+    onMessageAppend,
+    token,
+    retryOnInsufficientBalance = true
+  } = params;
+
+  if (!token) {
+    throw new Error(`Insufficient balance. Please add more funds to continue. You need at least ${Number(tokenAmount).toFixed(0)} sats to use ${selectedModel?.id}`);
+  }
+
+  // token is expected to be a string here
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${token}`
+  };
+
+  // Optional dev-only mock controls via localStorage
+  if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+    try {
+      const scenario = window.localStorage.getItem('msw:scenario');
+      const latency = window.localStorage.getItem('msw:latency');
+      if (scenario) headers['X-Mock-Scenario'] = scenario;
+      if (latency) headers['X-Mock-Latency'] = latency;
+    } catch {}
+  }
+
+  const response = await fetch(`${baseUrl}v1/chat/completions`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      model: selectedModel?.id,
+      messages: apiMessages,
+      stream: true
+    })
+  });
+
+  if (!response.ok) {
+    await handleApiError(response, {
+      mintUrl,
+      baseUrl,
+      usingNip60,
+      storeCashu,
+      tokenAmount,
+      selectedModel,
+      spendCashu,
+      activeMintUrl,
+      retryOnInsufficientBalance,
+      onMessageAppend
+    });
+  }
+
+  return response;
+}
+
+/**
+ * Makes an API request with token authentication
+ */
+async function routstrRequest(params: {
+  apiMessages: any[];
+  selectedModel: any;
+  baseUrl: string;
+  mintUrl: string;
+  usingNip60: boolean;
+  tokenAmount: number;
   spendCashu: (mintUrl: string, amount: number, baseUrl: string, p2pkPubkey?: string) => Promise<string | null | { hasTokens: false }>;
   storeCashu: (token: string) => Promise<any[]>;
   activeMintUrl?: string | null;
