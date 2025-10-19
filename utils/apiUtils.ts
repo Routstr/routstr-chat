@@ -14,8 +14,8 @@ export interface FetchAIResponseParams {
   usingNip60: boolean;
   balance: number;
   unit: string;
-  sendToken?: (mintUrl: string, amount: number) => Promise<{ proofs: any[], unit: string }>;
-  receiveToken: (token: string) => Promise<any[]>;
+  spendCashu: (mintUrl: string, amount: number) => Promise<{ proofs: any[], unit: string }>;
+  storeCashu: (token: string) => Promise<any[]>;
   activeMintUrl?: string | null;
   onStreamingUpdate: (content: string) => void;
   onThinkingUpdate: (content: string) => void;
@@ -25,6 +25,87 @@ export interface FetchAIResponseParams {
   onTransactionUpdate: (transaction: TransactionHistory) => void;
   transactionHistory: TransactionHistory[];
   onTokenCreated: (amount: number) => void;
+}
+
+/**
+ * Makes an API request with token authentication
+ */
+async function routstrRequest(params: {
+  apiMessages: any[];
+  selectedModel: any;
+  baseUrl: string;
+  mintUrl: string;
+  usingNip60: boolean;
+  tokenAmount: number;
+  spendCashu: (mintUrl: string, amount: number) => Promise<{ proofs: any[], unit: string }>;
+  storeCashu: (token: string) => Promise<any[]>;
+  activeMintUrl?: string | null;
+  onMessageAppend: (message: Message) => void;
+  token: string;
+  retryOnInsufficientBalance?: boolean;
+}): Promise<Response> {
+  const {
+    apiMessages,
+    selectedModel,
+    baseUrl,
+    mintUrl,
+    usingNip60,
+    tokenAmount,
+    spendCashu,
+    storeCashu,
+    activeMintUrl,
+    onMessageAppend,
+    token,
+    retryOnInsufficientBalance = true
+  } = params;
+
+  if (!token) {
+    throw new Error(`Insufficient balance. Please add more funds to continue. You need at least ${Number(tokenAmount).toFixed(0)} sats to use ${selectedModel?.id}`);
+  }
+
+  // token is expected to be a string here
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${token}`
+  };
+
+  // Optional dev-only mock controls via localStorage
+  if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+    try {
+      const scenario = window.localStorage.getItem('msw:scenario');
+      const latency = window.localStorage.getItem('msw:latency');
+      if (scenario) headers['X-Mock-Scenario'] = scenario;
+      if (latency) headers['X-Mock-Latency'] = latency;
+    } catch {}
+  }
+
+  const response = await fetch(`${baseUrl}v1/chat/completions`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      model: selectedModel?.id,
+      messages: apiMessages,
+      stream: true
+    })
+  });
+
+  if (!response.ok) {
+    await handleApiError(response, {
+      mintUrl,
+      baseUrl,
+      usingNip60,
+      storeCashu,
+      tokenAmount,
+      selectedModel,
+      spendCashu,
+      activeMintUrl,
+      retryOnInsufficientBalance,
+      onMessageAppend
+    });
+  }
+
+  return response;
 }
 
 /**
@@ -42,8 +123,8 @@ export const fetchAIResponse = async (params: FetchAIResponseParams): Promise<vo
     usingNip60,
     balance,
     unit,
-    sendToken,
-    receiveToken,
+    spendCashu,
+    storeCashu,
     activeMintUrl,
     onStreamingUpdate,
     onThinkingUpdate,
@@ -65,23 +146,15 @@ export const fetchAIResponse = async (params: FetchAIResponseParams): Promise<vo
 
   let tokenAmount = getTokenAmountForModel(selectedModel, apiMessages);
 
-  const makeRequest = async (retryOnInsufficientBalance: boolean = true): Promise<Response> => {
+  try {
     const token = await getTokenForRequest(
       usingNip60,
       mintUrl,
       usingNip60 && unit == 'msat'? tokenAmount*1000 : tokenAmount,
-      baseUrl, // Add baseUrl here
-      sendToken,
+      baseUrl,
+      spendCashu,
       activeMintUrl
     );
-    
-    if (!token) {
-      throw new Error(`Insufficient balance. Please add more funds to continue. You need at least ${Number(tokenAmount).toFixed(0)} sats to use ${selectedModel?.id}`);
-    }
-
-    if (typeof token === 'object' && 'hasTokens' in token && !token.hasTokens) {
-      throw new Error(`Insufficient balance. Please add more funds to continue. You need at least ${Number(tokenAmount).toFixed(0)} sats to use ${selectedModel?.id} ${typeof token} ${token}`);
-    }
 
     if (token && typeof token === 'string') {
       const decodedToken = getDecodedToken(token)
@@ -97,54 +170,20 @@ export const fetchAIResponse = async (params: FetchAIResponseParams): Promise<vo
       }
     }
 
-
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`
-    };
-
-    // Optional dev-only mock controls via localStorage
-    if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
-      try {
-        const scenario = window.localStorage.getItem('msw:scenario');
-        const latency = window.localStorage.getItem('msw:latency');
-        if (scenario) headers['X-Mock-Scenario'] = scenario;
-        if (latency) headers['X-Mock-Latency'] = latency;
-      } catch {}
-    }
-
-    const response = await fetch(`${baseUrl}v1/chat/completions`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        model: selectedModel?.id,
-        messages: apiMessages,
-        stream: true
-      })
+    const response = await routstrRequest({
+      apiMessages,
+      selectedModel,
+      baseUrl,
+      mintUrl,
+      usingNip60,
+      tokenAmount,
+      spendCashu,
+      storeCashu,
+      activeMintUrl,
+      onMessageAppend,
+      token: token as string,
+      retryOnInsufficientBalance: true
     });
-
-    if (!response.ok) {
-      await handleApiError(response, {
-        mintUrl,
-        baseUrl,
-        usingNip60,
-        receiveToken,
-        tokenAmount,
-        selectedModel,
-        sendToken,
-        activeMintUrl,
-        retryOnInsufficientBalance,
-        messageHistory,
-        onMessagesUpdate,
-        onMessageAppend
-      });
-    }
-
-    return response;
-  };
-
-  try {
-    const response = await makeRequest();
     // const response = new Response();
 
     if (!response.body) {
@@ -178,7 +217,7 @@ export const fetchAIResponse = async (params: FetchAIResponseParams): Promise<vo
       mintUrl,
       baseUrl,
       usingNip60,
-      receiveToken,
+      storeCashu,
       tokenAmount,
       initialBalance,
       selectedModel,
@@ -196,9 +235,9 @@ export const fetchAIResponse = async (params: FetchAIResponseParams): Promise<vo
   } catch (error) {
     console.log('API Error: ', error);
     if (error instanceof Error) {
-      handleApiResponseError(error.message, onMessageAppend);
+      logApiError(error.message, onMessageAppend);
     } else {
-      handleApiResponseError('An unknown error occurred', onMessageAppend);
+      logApiError('An unknown error occurred', onMessageAppend);
     }
   }
 };
@@ -212,14 +251,12 @@ async function handleApiError(
     mintUrl: string;
     baseUrl: string;
     usingNip60: boolean;
-    receiveToken: (token: string) => Promise<any[]>;
+    storeCashu: (token: string) => Promise<any[]>;
     tokenAmount: number;
     selectedModel: any;
-    sendToken?: (mintUrl: string, amount: number) => Promise<{ proofs: any[], unit: string }>;
+    spendCashu: (mintUrl: string, amount: number) => Promise<{ proofs: any[], unit: string }>;
     activeMintUrl?: string | null;
     retryOnInsufficientBalance: boolean;
-    messageHistory: Message[];
-    onMessagesUpdate: (messages: Message[]) => void;
     onMessageAppend: (message: Message) => void;
   }
 ): Promise<void> {
@@ -227,14 +264,12 @@ async function handleApiError(
     mintUrl,
     baseUrl,
     usingNip60,
-    receiveToken,
+    storeCashu,
     tokenAmount,
     selectedModel,
-    sendToken,
+    spendCashu,
     activeMintUrl,
     retryOnInsufficientBalance,
-    messageHistory,
-    onMessagesUpdate,
     onMessageAppend
   } = params;
 
@@ -247,13 +282,13 @@ async function handleApiError(
     const fullMessage = requestId
       ? `${mainMessage}\n${requestIdText}\n${providerText}`
       : `${mainMessage} | ${providerText}`;
-    handleApiResponseError(fullMessage, onMessageAppend);
+    logApiError(fullMessage, onMessageAppend);
     const storedToken = getLocalCashuToken(baseUrl);
     let shouldAttemptUnifiedRefund = true;
 
     if (storedToken) {
       try {
-        await receiveToken(storedToken);
+        await storeCashu(storedToken);
         shouldAttemptUnifiedRefund = false;
       } catch (receiveError) {
         if (receiveError instanceof Error && receiveError.message.includes('Token already spent')) {
@@ -266,7 +301,7 @@ async function handleApiError(
     }
 
     if (shouldAttemptUnifiedRefund) {
-      const refundStatus = await unifiedRefund(mintUrl, baseUrl, usingNip60, receiveToken);
+      const refundStatus = await unifiedRefund(mintUrl, baseUrl, usingNip60, storeCashu);
       if (!refundStatus.success){
         const mainMessage = `Refund failed: ${refundStatus.message}.`;
         const requestIdText = refundStatus.requestId ? `Request ID: ${refundStatus.requestId}` : '';
@@ -274,7 +309,7 @@ async function handleApiError(
         const fullMessage = refundStatus.requestId
           ? `${mainMessage}\n${requestIdText}\n${providerText}`
           : `${mainMessage} | ${providerText}`;
-        handleApiResponseError(fullMessage, onMessageAppend);
+        logApiError(fullMessage, onMessageAppend);
       }
     }
     
@@ -286,7 +321,7 @@ async function handleApiError(
         mintUrl,
         tokenAmount,
         baseUrl, // Add baseUrl here
-        sendToken,
+        spendCashu,
         activeMintUrl
       );
 
@@ -299,7 +334,7 @@ async function handleApiError(
     clearCurrentApiToken(baseUrl); // Pass baseUrl here
   } 
   else if (response.status === 413) {
-    const refundStatus = await unifiedRefund(mintUrl, baseUrl, usingNip60, receiveToken);
+    const refundStatus = await unifiedRefund(mintUrl, baseUrl, usingNip60, storeCashu);
     if (!refundStatus.success){
       const mainMessage = `Refund failed: ${refundStatus.message}.`;
       const requestIdText = refundStatus.requestId ? `Request ID: ${refundStatus.requestId}` : '';
@@ -307,7 +342,7 @@ async function handleApiError(
       const fullMessage = refundStatus.requestId
         ? `${mainMessage}\n${requestIdText}\n${providerText}`
         : `${mainMessage} | ${providerText}`;
-      handleApiResponseError(fullMessage, onMessageAppend);
+      logApiError(fullMessage, onMessageAppend);
     }
   }
   else if (response.status === 500) {
@@ -479,7 +514,7 @@ async function handlePostResponseRefund(params: {
   mintUrl: string;
   baseUrl: string;
   usingNip60: boolean;
-  receiveToken: (token: string) => Promise<any[]>;
+  storeCashu: (token: string) => Promise<any[]>;
   tokenAmount: number;
   initialBalance: number;
   selectedModel: any;
@@ -496,7 +531,7 @@ async function handlePostResponseRefund(params: {
     mintUrl,
     baseUrl,
     usingNip60,
-    receiveToken,
+    storeCashu,
     tokenAmount,
     initialBalance,
     selectedModel,
@@ -513,7 +548,7 @@ async function handlePostResponseRefund(params: {
   let satsSpent: number;
 
 
-  const refundStatus = await unifiedRefund(mintUrl, baseUrl, usingNip60, receiveToken);
+  const refundStatus = await unifiedRefund(mintUrl, baseUrl, usingNip60, storeCashu);
   if (refundStatus.success) {
     if (usingNip60 && refundStatus.refundedAmount !== undefined) {
       // For msats, keep decimal precision; for sats, use Math.ceil
@@ -536,7 +571,7 @@ async function handlePostResponseRefund(params: {
       const fullMessage = refundStatus.requestId
         ? `${mainMessage}\n${requestIdText}\n${providerText}`
         : `${mainMessage} | ${providerText}`;
-      handleApiResponseError(fullMessage, onMessageAppend);
+      logApiError(fullMessage, onMessageAppend);
       clearCurrentApiToken(baseUrl); // Pass baseUrl here
     }
     else {
@@ -546,7 +581,7 @@ async function handlePostResponseRefund(params: {
       const fullMessage = refundStatus.requestId
         ? `${mainMessage}\n${requestIdText}\n${providerText}`
         : `${mainMessage} | ${providerText}`;
-      handleApiResponseError(fullMessage, onMessageAppend);
+      logApiError(fullMessage, onMessageAppend);
     }
     // For msats, keep decimal precision; for sats, use Math.ceil
     satsSpent = unit === 'msat' ? tokenAmount : Math.ceil(tokenAmount);
@@ -559,7 +594,7 @@ async function handlePostResponseRefund(params: {
   if (netCosts > overchargeThreshold){
     const estimatedDisplay = unit === 'msat' ? estimatedCosts.toFixed(3) : Math.ceil(estimatedCosts).toString();
     const actualDisplay = unit === 'msat' ? satsSpent.toFixed(3) : satsSpent.toString();
-    handleApiResponseError("ATTENTION: Looks like this provider is overcharging you for your query. Estimated Costs: " + estimatedDisplay +". Actual Costs: " + actualDisplay, onMessageAppend);
+    logApiError("ATTENTION: Looks like this provider is overcharging you for your query. Estimated Costs: " + estimatedDisplay +". Actual Costs: " + actualDisplay, onMessageAppend);
   }
 
   const newTransaction: TransactionHistory = {
@@ -579,7 +614,7 @@ async function handlePostResponseRefund(params: {
 /**
  * Handles errors in API responses and adds error messages to chat
  */
-function handleApiResponseError(
+function logApiError(
   error: unknown,
   onMessageAppend: (message: Message) => void
 ): void {

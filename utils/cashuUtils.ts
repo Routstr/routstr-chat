@@ -346,53 +346,6 @@ export const invalidateApiToken = (baseUrl: string) => { // Add baseUrl paramete
 };
 
 
-export const create60CashuToken = async (
-  activeMintUrl: string,
-  sendToken: (mintUrl: string, amount: number) => Promise<{ proofs: any[], unit: string }>,
-  amount: number
-): Promise<string | undefined> => {
-  // Check if amount is a decimal and round up if necessary
-  if (amount % 1 !== 0) {
-    amount = Math.ceil(amount);
-  }
-
-  if (!activeMintUrl) {
-    console.error(
-      "No active mint selected. Please select a mint in your wallet settings."
-    );
-    return;
-  }
-
-  if (!amount || isNaN((amount))) {
-    console.error("Please enter a valid amount");
-    return;
-  }
-
-  try {
-    const result = await sendToken(activeMintUrl, amount);
-    const proofs = result.proofs;
-    const token = getEncodedTokenV4({
-      mint: activeMintUrl,
-      proofs: proofs.map((p) => ({
-        id: p.id || "",
-        amount: p.amount,
-        secret: p.secret || "",
-        C: p.C || "",
-      })),
-      unit: result.unit
-    });
-    
-    // Clean up pending proofs after successful token creation
-    if ((proofs as any).pendingProofsKey) {
-      localStorage.removeItem((proofs as any).pendingProofsKey);
-    }
-    
-    return token;
-  } catch (error) {
-    console.error("Error generating token:", error);
-    console.error(error instanceof Error ? error.message : String(error));
-  }
-};
 
 export type UnifiedRefundResult = {
   success: boolean;

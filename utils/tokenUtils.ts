@@ -1,4 +1,5 @@
-import { create60CashuToken, getOrCreateApiToken } from '@/utils/cashuUtils';
+import { getOrCreateApiToken } from '@/utils/cashuUtils';
+import { getEncodedTokenV4 } from '@cashu/cashu-ts';
 import { getLocalCashuToken, setLocalCashuToken, removeLocalCashuToken } from '@/utils/storageUtils';
 
 // Default token amount for models without max_cost defined
@@ -28,14 +29,47 @@ export const getOrCreate60ApiToken = async (
 
     // Generate new token if none exists
     if (!activeMintUrl) {
-      console.error("No active mint selected");
+      console.error("No active mint selected. Please select a mint in your wallet settings.");
       return null;
     }
-    
-    const newToken = await create60CashuToken(activeMintUrl, sendToken, amount);
-    if (newToken) {
-      setLocalCashuToken(baseUrl, newToken); // Use baseUrl here
-      return newToken;
+
+    // Check if amount is a decimal and round up if necessary
+    let adjustedAmount = amount;
+    if (amount % 1 !== 0) {
+      adjustedAmount = Math.ceil(amount);
+    }
+
+    if (!adjustedAmount || isNaN(adjustedAmount)) {
+      console.error("Please enter a valid amount");
+      return null;
+    }
+
+    try {
+      const result = await sendToken(activeMintUrl, adjustedAmount);
+      const proofs = result.proofs;
+      const token = getEncodedTokenV4({
+        mint: activeMintUrl,
+        proofs: proofs.map((p) => ({
+          id: p.id || "",
+          amount: p.amount,
+          secret: p.secret || "",
+          C: p.C || "",
+        })),
+        unit: result.unit
+      });
+      
+      // Clean up pending proofs after successful token creation
+      if ((proofs as any).pendingProofsKey) {
+        localStorage.removeItem((proofs as any).pendingProofsKey);
+      }
+      
+      if (token) {
+        setLocalCashuToken(baseUrl, token);
+        return token;
+      }
+    } catch (error) {
+      console.error("Error generating token:", error);
+      console.error(error instanceof Error ? error.message : String(error));
     }
 
     return null;

@@ -6,6 +6,7 @@ import { useApiState, UseApiStateReturn } from '@/hooks/useApiState';
 import { useUiState, UseUiStateReturn } from '@/hooks/useUiState';
 import { useModelState, UseModelStateReturn } from '@/hooks/useModelState';
 import { useChatActions, UseChatActionsReturn } from '@/hooks/useChatActions';
+import { useCashuWithXYZ } from '@/hooks/useCashuWithXYZ';
 import { useAuth } from './AuthProvider';
 
 interface ChatContextType extends 
@@ -13,7 +14,8 @@ interface ChatContextType extends
   UseApiStateReturn,
   UseUiStateReturn,
   UseModelStateReturn,
-  UseChatActionsReturn {
+  UseChatActionsReturn,
+  ReturnType<typeof useCashuWithXYZ> {
   // Additional computed properties or methods can be added here
 }
 
@@ -40,8 +42,9 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
   const { isAuthenticated } = useAuth();
   
   const conversationState = useConversationState();
+  const cashuWithXYZ = useCashuWithXYZ();
   const chatActions = useChatActions(); // Move chatActions declaration before apiState
-  const apiState = useApiState(isAuthenticated, chatActions.balance);
+  const apiState = useApiState(isAuthenticated, cashuWithXYZ.balance);
   const uiState = useUiState(isAuthenticated);
   const modelState = useModelState();
 
@@ -50,7 +53,8 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     ...apiState,
     ...uiState,
     ...modelState,
-    ...chatActions
+    ...chatActions,
+    ...cashuWithXYZ
   };
 
   return (

@@ -855,7 +855,7 @@ const BalanceDisplay: React.FC<BalanceDisplayProps> = ({ setIsSettingsOpen, setI
                       </button>
                       
                       {isMintSelectorOpen && (
-                        <div className="absolute top-full right-0 mt-1 bg-[#181818] border border-white/20 rounded-lg shadow-xl z-50 max-h-40 overflow-y-auto min-w-[200px]">
+                        <div className="absolute top-full left-0 mt-1 bg-[#181818] border border-white/20 rounded-lg shadow-xl z-50 max-h-96 overflow-y-auto min-w-[200px]">
                           {availableMints.map((mintUrl) => (
                             <button
                               key={mintUrl}
@@ -930,7 +930,7 @@ const BalanceDisplay: React.FC<BalanceDisplayProps> = ({ setIsSettingsOpen, setI
                       </button>
                       
                       {isMintSelectorOpen && (
-                        <div className="absolute top-full right-0 mt-1 bg-[#181818] border border-white/20 rounded-lg shadow-xl z-50 max-h-40 overflow-y-auto min-w-[200px]">
+                        <div className="absolute top-full left-0 mt-1 bg-[#181818] border border-white/20 rounded-lg shadow-xl z-50 max-h-96 overflow-y-auto min-w-[200px]">
                           {availableMints.map((mintUrl) => (
                             <button
                               key={mintUrl}

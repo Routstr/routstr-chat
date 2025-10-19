@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Copy, Eye, EyeOff, Info, Check, Plus, RefreshCw, Key, ChevronDown, ChevronRight, ChevronUp, Pencil, X } from 'lucide-react';
-import { getBalanceFromStoredProofs, refundRemainingBalance, create60CashuToken, generateApiToken, unifiedRefund } from '@/utils/cashuUtils';
+import { getBalanceFromStoredProofs, refundRemainingBalance, generateApiToken, unifiedRefund } from '@/utils/cashuUtils';
+import { getOrCreate60ApiToken } from '@/utils/tokenUtils';
 import { toast } from 'sonner';
 import { useApiKeysSync } from '@/hooks/useApiKeysSync'; // Import the new hook
 import { useCurrentUser } from '@/hooks/useCurrentUser'; // For checking user login
@@ -280,10 +281,12 @@ const ApiKeysTab = ({ mintUrl, baseUrl, baseUrls: _ignoredBaseUrlsProp, setActiv
           return;
         }
         console.log("tryuing my best");
-        token = await create60CashuToken(
+        token = await getOrCreate60ApiToken(
           cashuStore.activeMintUrl,
+          parseInt(apiKeyAmount),
           sendToken,
-          parseInt(apiKeyAmount)
+          cashuStore.activeMintUrl,
+          selectedNewApiKeyBaseUrl
         );
       } else {
         token = await generateApiToken(mintUrl, parseInt(apiKeyAmount));
@@ -569,23 +572,25 @@ const ApiKeysTab = ({ mintUrl, baseUrl, baseUrls: _ignoredBaseUrlsProp, setActiv
           toast.error('No active mint selected');
           return;
         }
-        cashuToken = await create60CashuToken(
+        cashuToken = await getOrCreate60ApiToken(
           cashuStore.activeMintUrl,
+          parseInt(topUpAmount),
           sendToken,
-          parseInt(topUpAmount)
+          cashuStore.activeMintUrl,
+          urlToUse
         );
       } else {
         cashuToken = await generateApiToken(mintUrl, parseInt(topUpAmount));
       }
 
-      if (!cashuToken) {
+      if (!cashuToken || typeof cashuToken !== 'string') {
         toast.error('Failed to generate Cashu token for top up.');
         return;
       }
 
       // Use the key-specific baseUrl or fallback to global baseUrl
       // Make the topup request to the backend
-      const response = await fetch(`${urlToUse}v1/wallet/topup?cashu_token=${encodeURIComponent(cashuToken)}`, {
+      const response = await fetch(`${urlToUse}v1/wallet/topup?cashu_token=${encodeURIComponent(cashuToken as string)}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${keyToTopUp.key}`,
