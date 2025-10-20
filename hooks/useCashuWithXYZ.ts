@@ -9,6 +9,7 @@ import { loadTransactionHistory, saveTransactionHistory } from '@/utils/storageU
 import { DEFAULT_MINT_URL } from '@/lib/utils';
 import { TransactionHistory } from '@/types/chat';
 import { Proof } from '@cashu/cashu-ts';
+import { getEncodedTokenV4 } from '@cashu/cashu-ts';
 import { useAuth } from '@/context/AuthProvider';
 import React from 'react';
 
