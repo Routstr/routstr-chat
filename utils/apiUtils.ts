@@ -60,7 +60,7 @@ async function routstrRequest(params: {
   mintUrl: string;
   usingNip60: boolean;
   tokenAmount: number;
-  spendCashu: (mintUrl: string, amount: number) => Promise<{ proofs: any[], unit: string }>;
+  spendCashu: (mintUrl: string, amount: number, baseUrl: string, p2pkPubkey?: string) => Promise<string | null | { hasTokens: false }>;
   storeCashu: (token: string) => Promise<any[]>;
   activeMintUrl?: string | null;
   onMessageAppend: (message: Message) => void;
