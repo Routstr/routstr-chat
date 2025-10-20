@@ -29,6 +29,8 @@ import {
 } from "@/lib/cashuLightning";
 import type { TransactionHistory } from '@/types/chat';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { useCashuWithXYZ } from '@/hooks/useCashuWithXYZ';
+import { DEFAULT_MINT_URL } from '@/lib/utils';
 
 /**
  * User balance and authentication status component with comprehensive wallet popover
@@ -97,10 +99,11 @@ const BalanceDisplay: React.FC<BalanceDisplayProps> = ({ setIsSettingsOpen, setI
 
   // NIP-60 wallet hooks
   const { wallet, isLoading: isNip60Loading, updateProofs } = useCashuWallet();
-  const { sendToken: nip60SendToken, cleanSpentProofs, cleanupPendingProofs, receiveToken, isLoading: isTokenLoading, error: nip60Error } = useCashuToken();
+  const { cleanSpentProofs, cleanupPendingProofs, receiveToken, isLoading: isTokenLoading, error: nip60Error } = useCashuToken();
   const cashuStore = useCashuStore();
   const usingNip60 = cashuStore.getUsingNip60();
   const transactionHistoryStore = useTransactionHistoryStore();
+  const { spendCashu } = useCashuWithXYZ();
 
   // NIP-60 specific state
   const [nip60Invoice, setNip60Invoice] = useState("");
@@ -533,63 +536,37 @@ const BalanceDisplay: React.FC<BalanceDisplayProps> = ({ setIsSettingsOpen, setI
 
   // Wallet operations
   const generateSendToken = useCallback(async () => {
-    if (usingNip60) {
-      if (!cashuStore.activeMintUrl) {
-        setError("No active mint selected. Please select a mint in your wallet settings.");
-        return;
-      }
-
-      if (!sendAmount || isNaN(parseInt(sendAmount))) {
-        setError("Please enter a valid amount");
-        return;
-      }
-
-      try {
-        setError('');
-        setSuccessMessage('');
-        setGeneratedToken("");
-        setIsGeneratingSendToken(true);
-
-        const amountValue = parseInt(sendAmount);
-        const { proofs, unit } = await nip60SendToken(cashuStore.activeMintUrl, amountValue);
-        const token = getEncodedTokenV4({
-          mint: cashuStore.activeMintUrl,
-          proofs: proofs.map((p) => ({
-            id: p.id || "",
-            amount: p.amount,
-            secret: p.secret || "",
-            C: p.C || "",
-          })),
-          unit: unit
-        });
-
-        setGeneratedToken(token as string);
-        setSuccessMessage(`Token generated for ${formatBalance(amountValue, unit)}`);
-
-        // Clean up pending proofs after successful token creation
-        if ((proofs as any).pendingProofsKey) {
-          cleanupPendingProofs((proofs as any).pendingProofsKey);
-        }
-
-      } catch (error) {
-        console.error("Error generating NIP-60 token:", error);
-        setError(error instanceof Error ? error.message : String(error));
-      } finally {
-        setIsGeneratingSendToken(false);
-      }
+    if (!sendAmount || isNaN(parseInt(sendAmount))) {
+      setError("Please enter a valid amount");
       return;
     }
-    
-    await hookGenerateSendToken(
-      setIsGeneratingSendToken,
-      setError,
-      setSuccessMessage,
-      sendAmount,
-      balance,
-      setSendAmount,
-      setGeneratedToken
-    );
-  }, [hookGenerateSendToken, sendAmount, balance, usingNip60, cashuStore.activeMintUrl, nip60SendToken]);
+
+    try {
+      setError('');
+      setSuccessMessage('');
+      setGeneratedToken("");
+      setIsGeneratingSendToken(true);
+
+      const amountValue = parseInt(sendAmount);
+      const mintUrl = cashuStore.activeMintUrl || DEFAULT_MINT_URL;
+      const result = await spendCashu(mintUrl, amountValue, '');
+
+      if (typeof result === 'string') {
+        setGeneratedToken(result);
+        setSuccessMessage(`Token generated for ${formatBalance(amountValue, currentMintUnit)}`);
+      } else if (result && 'hasTokens' in result && !result.hasTokens) {
+        setError("No tokens available in your wallet");
+      } else {
+        setError("Failed to generate token");
+      }
+
+    } catch (error) {
+      console.error("Error generating token:", error);
+      setError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsGeneratingSendToken(false);
+    }
+  }, [spendCashu, sendAmount, cashuStore.activeMintUrl, mintUrl, baseUrl, currentMintUnit]);
 
   const handleCreateMintQuote = useCallback(async () => {
     if (usingNip60) {

@@ -1,4 +1,6 @@
 import { Proof } from '../domain/Proof';
+import { MintKeyset } from '@cashu/cashu-ts';
+import { calculateFees } from './fees';
 
 /**
  * Check if we can make exact change using available denominations
@@ -188,5 +190,77 @@ function findExactCombination(
   }
 
   return { canMake: false };
+}
+
+/**
+ * Advanced proof selection with tolerance fallback
+ * This function implements the logic for selecting proofs when wallet.send() fails
+ * @param amount The target amount to send
+ * @param proofs Available proofs
+ * @param activeKeysets Active keysets for fee calculation
+ * @param mintUrl Mint URL for error messages
+ * @returns Object with proofs to send and keep
+ */
+export function selectProofsAdvanced(
+  amount: number,
+  proofs: Proof[],
+  activeKeysets: MintKeyset[],
+  mintUrl: string
+): { proofsToSend: Proof[]; proofsToKeep: Proof[]; actualAmount?: number; overpayment?: number; overpaymentPercent?: number } {
+  // Check if we have enough funds
+  const totalAmount = proofs.reduce((sum, p) => sum + p.amount, 0);
+  if (totalAmount < amount) {
+    throw new Error(`Not enough funds on mint ${mintUrl}: have ${totalAmount}, need ${amount}`);
+  }
+
+  // Get denomination counts
+  const denominationCounts = proofs.reduce((acc, p) => {
+    acc[p.amount] = (acc[p.amount] || 0) + 1;
+    return acc;
+  }, {} as Record<number, number>);
+  
+  // Try with 0% tolerance first
+  let toleranceResult = canMakeExactChange(amount, denominationCounts, proofs);
+  let proofsToKeep: Proof[], proofsToSend: Proof[];
+  
+  // If 0% fails, try with 5% tolerance
+  if (!toleranceResult.canMake || !toleranceResult.selectedProofs) {
+    console.log('rdlogs: Cannot make exact change with 0% tolerance, trying with 5% tolerance');
+    const fees = calculateFees(proofs, activeKeysets);
+    toleranceResult = canMakeExactChange(amount, denominationCounts, proofs, fees, 0.05);
+  }
+  
+  if (toleranceResult.canMake && toleranceResult.selectedProofs) {
+    const selectedDenominations = toleranceResult.selectedProofs.map(p => p.amount).sort((a, b) => b - a);
+    const denominationBreakdown = selectedDenominations.reduce((acc, denom) => {
+      acc[denom] = (acc[denom] || 0) + 1;
+      return acc;
+    }, {} as Record<number, number>);
+    
+    const actualAmount = toleranceResult.actualAmount || 0;
+    const overpayment = actualAmount - amount;
+    const overpaymentPercent = (overpayment / amount) * 100;
+    
+    console.log('rdlogs: Can make change within tolerance after wallet.send() failure');
+    console.log('rdlogs: Target amount:', amount);
+    console.log('rdlogs: Actual amount:', actualAmount);
+    console.log('rdlogs: Overpayment:', overpayment, `(${overpaymentPercent.toFixed(2)}%)`);
+    console.log('rdlogs: Selected denominations:', selectedDenominations);
+    console.log('rdlogs: Denomination breakdown:', denominationBreakdown);
+    
+    proofsToSend = toleranceResult.selectedProofs;
+    proofsToKeep = proofs.filter(p => !proofsToSend.includes(p));
+
+    return {
+      proofsToSend,
+      proofsToKeep,
+      actualAmount,
+      overpayment,
+      overpaymentPercent
+    };
+  } else {
+    console.log('rdlogs: Cannot make change within tolerance');
+    throw new Error(`Cannot make change for amount ${amount} within tolerance on mint ${mintUrl}`);
+  }
 }
 

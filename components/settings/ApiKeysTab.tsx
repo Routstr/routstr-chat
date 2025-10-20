@@ -2,12 +2,12 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Copy, Eye, EyeOff, Info, Check, Plus, RefreshCw, Key, ChevronDown, ChevronRight, ChevronUp, Pencil, X } from 'lucide-react';
-import { getBalanceFromStoredProofs, refundRemainingBalance, generateApiToken, unifiedRefund } from '@/utils/cashuUtils';
-import { getOrCreate60ApiToken } from '@/utils/tokenUtils';
+import { getBalanceFromStoredProofs, refundRemainingBalance, unifiedRefund } from '@/utils/cashuUtils';
 import { toast } from 'sonner';
 import { useApiKeysSync } from '@/hooks/useApiKeysSync'; // Import the new hook
 import { useCurrentUser } from '@/hooks/useCurrentUser'; // For checking user login
 import { useCashuStore, useCashuToken, calculateBalanceByMint } from '@/features/wallet';
+import { useCashuWithXYZ } from '@/hooks/useCashuWithXYZ';
 import SettingsDialog from '@/components/ui/SettingsDialog';
 
 export interface StoredApiKey {
@@ -95,7 +95,8 @@ const ApiKeysTab = ({ mintUrl, baseUrl, baseUrls: _ignoredBaseUrlsProp, setActiv
   } = useApiKeysSync();
   const cashuStore = useCashuStore();
   const usingNip60 = cashuStore.getUsingNip60();
-  const { sendToken, receiveToken } = useCashuToken();
+  const { receiveToken } = useCashuToken();
+  const { spendCashu } = useCashuWithXYZ();
 
   const [localMintBalance, setLocalMintBalance] = useState(0);
 
@@ -275,22 +276,15 @@ const ApiKeysTab = ({ mintUrl, baseUrl, baseUrls: _ignoredBaseUrlsProp, setActiv
         return;
       }
       
-      if (usingNip60) {
-        if (!cashuStore.activeMintUrl) {
-          toast.error('No active mint selected');
-          return;
-        }
-        console.log("tryuing my best");
-        token = await getOrCreate60ApiToken(
-          cashuStore.activeMintUrl,
-          parseInt(apiKeyAmount),
-          sendToken,
-          cashuStore.activeMintUrl,
-          selectedNewApiKeyBaseUrl
-        );
-      } else {
-        token = await generateApiToken(mintUrl, parseInt(apiKeyAmount));
+      if (!cashuStore.activeMintUrl) {
+        toast.error('No active mint selected');
+        return;
       }
+      token = await spendCashu(
+        cashuStore.activeMintUrl,
+        parseInt(apiKeyAmount),
+        selectedNewApiKeyBaseUrl
+      );
 
       if (!token) {
         toast.error('Failed to generate Cashu token for API key creation.');
@@ -565,24 +559,19 @@ const ApiKeysTab = ({ mintUrl, baseUrl, baseUrls: _ignoredBaseUrlsProp, setActiv
     const urlToUse = keyToTopUp.baseUrl || baseUrl; // Moved here
     try {
       let cashuToken: string | null | { hasTokens: false } | undefined;
-      
-      // Create cashu token based on the wallet type
-      if (usingNip60) {
-        if (!cashuStore.activeMintUrl) {
-          toast.error('No active mint selected');
-          return;
-        }
-        cashuToken = await getOrCreate60ApiToken(
-          cashuStore.activeMintUrl,
-          parseInt(topUpAmount),
-          sendToken,
-          cashuStore.activeMintUrl,
-          urlToUse
-        );
-      } else {
-        cashuToken = await generateApiToken(mintUrl, parseInt(topUpAmount));
+
+
+      if (!cashuStore.activeMintUrl) {
+        toast.error('No active mint selected');
+        return;
       }
 
+      cashuToken = await spendCashu(
+        cashuStore.activeMintUrl,
+        parseInt(topUpAmount),
+        urlToUse
+      );
+      
       if (!cashuToken || typeof cashuToken !== 'string') {
         toast.error('Failed to generate Cashu token for top up.');
         return;

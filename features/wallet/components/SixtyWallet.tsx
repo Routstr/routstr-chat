@@ -27,6 +27,8 @@ import { useInvoiceSync } from "@/hooks/useInvoiceSync";
 import { useInvoiceChecker } from "@/hooks/useInvoiceChecker";
 import { MintQuoteState, MeltQuoteState } from "@cashu/cashu-ts";
 import InvoiceHistory from './InvoiceHistory';
+import { useCashuWithXYZ } from '@/hooks/useCashuWithXYZ';
+import { DEFAULT_MINT_URL } from '@/lib/utils';
 
 // Helper function to generate unique IDs
 const generateId = () => crypto.randomUUID();
@@ -155,10 +157,11 @@ const SixtyWallet: React.FC<{mintUrl:string, usingNip60: boolean, setUsingNip60:
   const { wallet, isLoading, updateProofs } = useCashuWallet();
   const { mutate: handleCreateWallet, isPending: isCreatingWallet, error: createWalletError } = useCreateCashuWallet();
   const cashuStore = useCashuStore();
-  const { sendToken, receiveToken, cleanSpentProofs, cleanupPendingProofs, isLoading: isTokenLoading, error: hookError, addMintIfNotExists, removeMint } = useCashuToken();
+  const { receiveToken, cleanSpentProofs, cleanupPendingProofs, isLoading: isTokenLoading, error: hookError, addMintIfNotExists, removeMint } = useCashuToken();
   const transactionHistoryStore = useTransactionHistoryStore();
   const { addInvoice, updateInvoice } = useInvoiceSync();
   const { triggerCheck } = useInvoiceChecker();
+  const { spendCashu } = useCashuWithXYZ();
 
   const [error, setError] = useState<string | null>(null);
   const [currentMintUnit, setCurrentMintUnit] = useState<string | 'sat'>('sat');
@@ -291,13 +294,6 @@ const SixtyWallet: React.FC<{mintUrl:string, usingNip60: boolean, setUsingNip60:
   };
 
   const handlesendToken = async () => {
-    if (!cashuStore.activeMintUrl) {
-      setError(
-        "No active mint selected. Please select a mint in your wallet settings."
-      );
-      return;
-    }
-
     if (!sendAmount || isNaN(parseInt(sendAmount))) {
       setError("Please enter a valid amount");
       return;
@@ -309,25 +305,17 @@ const SixtyWallet: React.FC<{mintUrl:string, usingNip60: boolean, setUsingNip60:
       setGeneratedToken("");
 
       const amountValue = parseInt(sendAmount);
-      const { proofs, unit } = await sendToken(cashuStore.activeMintUrl, amountValue);
-      const token = getEncodedTokenV4({
-        mint: cashuStore.activeMintUrl,
-        proofs: proofs.map((p) => ({
-          id: p.id || "",
-          amount: p.amount,
-          secret: p.secret || "",
-          C: p.C || "",
-        })),
-        unit: unit
-      });
+      const mintUrl = cashuStore.activeMintUrl || DEFAULT_MINT_URL;
+      const result = await spendCashu(mintUrl, amountValue, '');
 
-      // Clean up pending proofs after successful token creation
-      if ((proofs as any).pendingProofsKey) {
-        cleanupPendingProofs((proofs as any).pendingProofsKey);
+      if (typeof result === 'string') {
+        setGeneratedToken(result);
+        setSuccessMessage(`Token generated for ${formatBalance(amountValue, currentMintUnit)}`);
+      } else if (result && 'hasTokens' in result && !result.hasTokens) {
+        setError("No tokens available in your wallet");
+      } else {
+        setError("Failed to generate token");
       }
-
-      setGeneratedToken(token as string);
-      setSuccessMessage(`Token generated for ${formatBalance(amountValue, unit)}`);
     } catch (error) {
       console.error("Error generating token:", error);
       setError(error instanceof Error ? error.message : String(error));

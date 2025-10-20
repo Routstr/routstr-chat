@@ -398,8 +398,6 @@ export function useCashuWallet() {
 
       let eventToReturn: NostrEvent | null = null;
 
-
-
       if (newProofs.length) {
         // generate a new token event
         const newToken: CashuToken = {

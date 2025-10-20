@@ -1,8 +1,7 @@
 import { Message, TransactionHistory } from '@/types/chat';
 import { convertMessageForAPI, createTextMessage, extractThinkingFromStream } from './messageUtils';
-import { getTokenForRequest, getTokenAmountForModel, clearCurrentApiToken } from './tokenUtils';
 import { fetchBalances, getBalanceFromStoredProofs, refundRemainingBalance, unifiedRefund } from '@/utils/cashuUtils';
-import { getLocalCashuToken } from './storageUtils';
+import { getLocalCashuToken, removeLocalCashuToken } from './storageUtils';
 import { getDecodedToken } from '@cashu/cashu-ts';
 import { isThinkingCapableModel } from './thinkingParser';
 
@@ -14,7 +13,7 @@ export interface FetchAIResponseParams {
   usingNip60: boolean;
   balance: number;
   unit: string;
-  spendCashu: (mintUrl: string, amount: number) => Promise<{ proofs: any[], unit: string }>;
+  spendCashu: (mintUrl: string, amount: number, baseUrl: string, p2pkPubkey?: string) => Promise<string | null | { hasTokens: false }>;
   storeCashu: (token: string) => Promise<any[]>;
   activeMintUrl?: string | null;
   onStreamingUpdate: (content: string) => void;
@@ -37,7 +36,7 @@ async function routstrRequest(params: {
   mintUrl: string;
   usingNip60: boolean;
   tokenAmount: number;
-  spendCashu: (mintUrl: string, amount: number) => Promise<{ proofs: any[], unit: string }>;
+  spendCashu: (mintUrl: string, amount: number, baseUrl: string, p2pkPubkey?: string) => Promise<string | null | { hasTokens: false }>;
   storeCashu: (token: string) => Promise<any[]>;
   activeMintUrl?: string | null;
   onMessageAppend: (message: Message) => void;
@@ -114,6 +113,21 @@ async function routstrRequest(params: {
  * @returns Promise that resolves when the response is complete
  */
 
+/**
+ * Gets the token amount to use for a model, with fallback to default
+ * @param selectedModel The currently selected model
+ * @returns The token amount in sats
+ */
+const getTokenAmountForModel = (selectedModel: any, apiMessages: any[]): number => {
+  const approximateTokens = Math.ceil(JSON.stringify(apiMessages, null, 2).length / 2.84);
+  if (!selectedModel?.sats_pricing?.max_completion_cost) {
+    return selectedModel?.sats_pricing?.max_cost ?? 50;
+  }
+  const promptCosts = selectedModel?.sats_pricing?.prompt * approximateTokens;
+  const totalEstimatedCosts = promptCosts + selectedModel?.sats_pricing?.max_completion_cost;
+  return (totalEstimatedCosts * 1.05); // Added a 5% margin
+};
+
 export const fetchAIResponse = async (params: FetchAIResponseParams): Promise<void> => {
   const {
     messageHistory,
@@ -147,13 +161,10 @@ export const fetchAIResponse = async (params: FetchAIResponseParams): Promise<vo
   let tokenAmount = getTokenAmountForModel(selectedModel, apiMessages);
 
   try {
-    const token = await getTokenForRequest(
-      usingNip60,
+    const token = await spendCashu(
       mintUrl,
       usingNip60 && unit == 'msat'? tokenAmount*1000 : tokenAmount,
-      baseUrl,
-      spendCashu,
-      activeMintUrl
+      baseUrl
     );
 
     if (token && typeof token === 'string') {
@@ -254,7 +265,7 @@ async function handleApiError(
     storeCashu: (token: string) => Promise<any[]>;
     tokenAmount: number;
     selectedModel: any;
-    spendCashu: (mintUrl: string, amount: number) => Promise<{ proofs: any[], unit: string }>;
+    spendCashu: (mintUrl: string, amount: number, baseUrl: string, p2pkPubkey?: string) => Promise<string | null | { hasTokens: false }>;
     activeMintUrl?: string | null;
     retryOnInsufficientBalance: boolean;
     onMessageAppend: (message: Message) => void;
@@ -313,16 +324,13 @@ async function handleApiError(
       }
     }
     
-    clearCurrentApiToken(baseUrl); // Pass baseUrl here
+    removeLocalCashuToken(baseUrl); // Pass baseUrl here
     
     if (retryOnInsufficientBalance) {
-      const newToken = await getTokenForRequest(
-        usingNip60,
+      const newToken = await spendCashu(
         mintUrl,
         tokenAmount,
-        baseUrl, // Add baseUrl here
-        spendCashu,
-        activeMintUrl
+        baseUrl
       );
 
       if (!newToken || (typeof newToken === 'object' && 'hasTokens' in newToken && !newToken.hasTokens)) {
@@ -331,7 +339,7 @@ async function handleApiError(
     }
   } 
   else if (response.status === 402) {
-    clearCurrentApiToken(baseUrl); // Pass baseUrl here
+    removeLocalCashuToken(baseUrl); // Pass baseUrl here
   } 
   else if (response.status === 413) {
     const refundStatus = await unifiedRefund(mintUrl, baseUrl, usingNip60, storeCashu);
@@ -562,7 +570,7 @@ async function handlePostResponseRefund(params: {
   } else {
     console.error("Refund failed:", refundStatus.message, refundStatus, refundStatus, refundStatus, refundStatus, refundStatus);
     if (refundStatus.message && refundStatus.message.includes("Balance too small to refund")) {
-      clearCurrentApiToken(baseUrl); // Pass baseUrl here
+      removeLocalCashuToken(baseUrl); // Pass baseUrl here
     }
     else if (refundStatus.message && refundStatus.message.includes("Refund request failed with status 401")) {
       const mainMessage = `Refund failed: ${refundStatus.message}. Clearing token. Pls retry.`;
@@ -572,7 +580,7 @@ async function handlePostResponseRefund(params: {
         ? `${mainMessage}\n${requestIdText}\n${providerText}`
         : `${mainMessage} | ${providerText}`;
       logApiError(fullMessage, onMessageAppend);
-      clearCurrentApiToken(baseUrl); // Pass baseUrl here
+      removeLocalCashuToken(baseUrl); // Pass baseUrl here
     }
     else {
       const mainMessage = `Refund failed: ${refundStatus.message}.`;

@@ -1,5 +1,5 @@
 import { TransactionHistory } from '@/types/chat';
-import { useCashuStore } from '../stores/cashuStore';
+import { useCashuStore } from '@/features/wallet/state/cashuStore';
 
 /**
  * SSR-safe check for localStorage availability

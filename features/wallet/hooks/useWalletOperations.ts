@@ -245,6 +245,43 @@ export function useWalletOperations({
     }
   }, [mintUrl, baseUrl, setBalance, transactionHistory, setTransactionHistory]);
 
+  // Core token generation function (pure function without UI dependencies)
+  const generateTokenCore = useCallback(async (amount: number, mintUrl: string): Promise<string | null> => {
+    if (!cashuWalletRef.current) return null;
+
+    try {
+      if (isNaN(amount) || amount <= 0) {
+        throw new Error('Please enter a valid amount');
+      }
+
+      const storedProofs = localStorage.getItem('cashu_proofs');
+      const existingProofs = storedProofs ? (JSON.parse(storedProofs) as CashuProof[]) : [];
+
+      if (!existingProofs || existingProofs.length === 0) {
+        throw new Error('No tokens available to send');
+      }
+
+      const sendResult = await cashuWalletRef.current.send(amount, existingProofs);
+      const { send, keep } = sendResult;
+
+      if (!send || send.length === 0) {
+        throw new Error('Failed to generate token');
+      }
+
+      localStorage.setItem('cashu_proofs', JSON.stringify(keep));
+
+      const tokenObj = {
+        token: [{ mint: mintUrl, proofs: send }]
+      };
+      const token = `cashuA${btoa(JSON.stringify(tokenObj))}`;
+
+      return token;
+    } catch (error) {
+      console.error('Error generating token:', error);
+      return null;
+    }
+  }, []);
+
   // Generate send token
   const generateSendToken = useCallback(async (setIsGeneratingSendToken: (generating: boolean) => void, setError: (error: string) => void, setSuccessMessage: (message: string) => void, sendAmount: string, balance: number, setSendAmount: (amount: string) => void, setGeneratedToken: (token: string) => void) => {
     if (!cashuWalletRef.current) return;
@@ -264,29 +301,13 @@ export function useWalletOperations({
         throw new Error('Amount exceeds available balance');
       }
 
-      const storedProofs = localStorage.getItem('cashu_proofs');
-      const existingProofs = storedProofs ? (JSON.parse(storedProofs) as CashuProof[]) : [];
-
-      if (!existingProofs || existingProofs.length === 0) {
-        throw new Error('No tokens available to send');
-      }
-
-      const sendResult = await cashuWalletRef.current.send(amount, existingProofs);
-      const { send, keep } = sendResult;
-
-      if (!send || send.length === 0) {
+      const token = await generateTokenCore(amount, mintUrl);
+      
+      if (!token) {
         throw new Error('Failed to generate token');
       }
 
-      localStorage.setItem('cashu_proofs', JSON.stringify(keep));
-
       setBalance((prevBalance) => prevBalance - amount);
-
-      const tokenObj = {
-        token: [{ mint: mintUrl, proofs: send }]
-      };
-      const token = `cashuA${btoa(JSON.stringify(tokenObj))}`;
-
       setGeneratedToken(token);
       setSuccessMessage(`Generated token for ${amount} sats. Share it with the recipient.`);
       
@@ -358,6 +379,7 @@ export function useWalletOperations({
     createMintQuote,
     importToken,
     generateSendToken,
+    generateTokenCore,
     setupAutoRefresh,
     cashuWalletRef,
     mintQuoteRef,

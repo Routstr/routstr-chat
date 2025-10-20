@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react';
 import { useCashuStore } from '../state/cashuStore';
 import { useCashuWallet } from './useCashuWallet';
 import { useCashuHistory } from './useCashuHistory';
-import { CashuMint, CashuWallet, Proof, getDecodedToken, CheckStateEnum } from '@cashu/cashu-ts';
-import { CashuToken } from '../core/domain/Token';
-import { canMakeExactChange, calculateFees } from '../core/utils';
+import { CashuMint, CashuWallet, Proof, getDecodedToken, CheckStateEnum, getEncodedTokenV4 } from '@cashu/cashu-ts';
+import { selectProofsAdvanced } from '../core/utils/change-making';
+import { calculateFees } from '../core/utils/fees';
 import { MintService } from '../core/services/MintService';
 import { hashToCurve } from "@cashu/crypto/modules/common";
 
@@ -101,9 +101,9 @@ export function useCashuToken() {
    * @param mintUrl The URL of the mint to use
    * @param amount Amount to send in satoshis
    * @param p2pkPubkey The P2PK pubkey to lock the proofs to
-   * @returns Object containing proofs and preferred unit
+   * @returns Encoded token string
    */
-  const sendToken = async (mintUrl: string, amount: number, p2pkPubkey?: string): Promise<{ proofs: Proof[], unit: string }> => {
+  const sendToken = async (mintUrl: string, amount: number, p2pkPubkey?: string): Promise<string> => {
     setIsLoading(true);
     setError(null);
 
@@ -124,9 +124,6 @@ export function useCashuToken() {
       // Get all proofs from store
       let proofs = await cashuStore.getMintProofs(mintUrl);
       
-      const fees = calculateFees(proofs, activeKeysets);
-      // console.log("rdlogs: fees", fees, "for proofs:", proofs.length);
-
       const proofsAmount = proofs.reduce((sum, p) => sum + p.amount, 0);
       const denominationCounts = proofs.reduce((acc, p) => {
         acc[p.amount] = (acc[p.amount] || 0) + 1;
@@ -137,60 +134,21 @@ export function useCashuToken() {
         throw new Error(`Not enough funds on mint ${mintUrl}`);
       }
 
+      let proofsToKeep: Proof[], proofsToSend: Proof[];
+
       try {
-        const { keep: proofsToKeep, send: proofsToSend } = await wallet.send(amount, proofs, { pubkey: p2pkPubkey, privkey: cashuStore.privkey});
-
-        // Store proofs temporarily before updating wallet state
-        const pendingProofsKey = `pending_send_proofs_${Date.now()}`;
-        localStorage.setItem(pendingProofsKey, JSON.stringify({
-          mintUrl,
-          proofsToSend: proofsToSend.map(p => ({
-            id: p.id || '',
-            amount: p.amount,
-            secret: p.secret || '',
-            C: p.C || ''
-          })),
-          timestamp: Date.now()
-        }));
-        const sendFees = calculateFees(proofsToSend, activeKeysets);
-        // console.log('rdlogs: fees to send ', amount, ' is ', sendFees)
-
-        // Create new token for the proofs we're keeping
-        if (proofsToKeep.length > 0) {
-          const keepTokenData: CashuToken = {
-            mint: mintUrl,
-            proofs: proofsToKeep.map(p => ({
-              id: p.id || '',
-              amount: p.amount,
-              secret: p.secret || '',
-              C: p.C || ''
-            }))
-          };
-
-          // update proofs
-          await updateProofs({ mintUrl, proofsToAdd: keepTokenData.proofs, proofsToRemove: [...proofsToSend, ...proofs] });
-
-          // Create history event
-          await createHistory({
-            direction: 'out',
-            amount: amount.toString(),
-          });
-        }
-        
-        // Store the pending proofs key with the returned proofs for cleanup
-        (proofsToSend as any).pendingProofsKey = pendingProofsKey;
-        
-        return { proofs: proofsToSend, unit: preferredUnit };
+        const result = await wallet.send(amount, proofs, { pubkey: p2pkPubkey, privkey: cashuStore.privkey});
+        proofsToKeep = result.keep;
+        proofsToSend = result.send;
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        
-        // Check if error is "Token already spent"
-        if (message.includes("Token already spent")) {
-          console.log("Detected spent tokens, cleaning up and retrying...");
+
+        if(message.includes("Not enough funds available") || message.includes("Token already spent")) {
+          console.log('rdlogs: wallet.send() failed with insufficient funds, trying exact change with tolerance');
           
           // Clean spent proofs
           await cleanSpentProofs(mintUrl);
-          
+
           // Get fresh proofs after cleanup
           proofs = await cashuStore.getMintProofs(mintUrl);
           
@@ -199,171 +157,60 @@ export function useCashuToken() {
           if (newProofsAmount < amount) {
             throw new Error(`Not enough funds on mint ${mintUrl} after cleaning spent proofs`);
           }
-          
-          // Check exact change again with fresh proofs
-          const freshDenominationCounts = proofs.reduce((acc, p) => {
-            acc[p.amount] = (acc[p.amount] || 0) + 1;
-            return acc;
-          }, {} as Record<number, number>);
-          
-          const exactChangeRetryResult = canMakeExactChange(amount, freshDenominationCounts, proofs);
-          
-          let proofsToKeep: Proof[], proofsToSend: Proof[];
-          
-          if (exactChangeRetryResult.canMake && exactChangeRetryResult.selectedProofs) {
-            const selectedDenominations = exactChangeRetryResult.selectedProofs.map(p => p.amount).sort((a, b) => b - a);
-            const denominationCounts = selectedDenominations.reduce((acc, denom) => {
-              acc[denom] = (acc[denom] || 0) + 1;
-              return acc;
-            }, {} as Record<number, number>);
-            
-            console.log('rdlogs: Can make exact change on retry, using selected proofs directly');
-            console.log('rdlogs: Selected denominations on retry:', selectedDenominations);
-            console.log('rdlogs: Denomination breakdown on retry:', denominationCounts);
-            
-            proofsToSend = exactChangeRetryResult.selectedProofs;
-            proofsToKeep = proofs.filter(p => !proofsToSend.includes(p));
-          } else {
-            console.log('rdlogs: Cannot make exact change on retry, using wallet.send()');
-            const result = await wallet.send(amount, proofs, { pubkey: p2pkPubkey, privkey: cashuStore.privkey });
-            proofsToKeep = result.keep;
-            proofsToSend = result.send;
-          }
 
-          // Store proofs temporarily before updating wallet state (retry case)
-          const pendingProofsKey = `pending_send_proofs_${Date.now()}`;
-          localStorage.setItem(pendingProofsKey, JSON.stringify({
-            mintUrl,
-            proofsToSend: proofsToSend.map(p => ({
-              id: p.id || '',
-              amount: p.amount,
-              secret: p.secret || '',
-              C: p.C || ''
-            })),
-            timestamp: Date.now()
-          }));
-
-          // Create new token for the proofs we're keeping
-          if (proofsToKeep.length > 0) {
-            const keepTokenData: CashuToken = {
-              mint: mintUrl,
-              proofs: proofsToKeep.map(p => ({
-                id: p.id || '',
-                amount: p.amount,
-                secret: p.secret || '',
-                C: p.C || ''
-              }))
-            };
-
-            // update proofs
-            await updateProofs({ mintUrl, proofsToAdd: keepTokenData.proofs, proofsToRemove: [...proofsToSend, ...proofs] });
-
-            // Create history event
-            await createHistory({
-              direction: 'out',
-              amount: amount.toString(),
-            });
-          }
-          
-          // Store the pending proofs key with the returned proofs for cleanup
-          (proofsToSend as any).pendingProofsKey = pendingProofsKey;
-          
-          return { proofs: proofsToSend, unit: preferredUnit };
-        }
-        else if(message.includes("Not enough funds available")) {
-          console.log('rdlogs: wallet.send() failed with insufficient funds, trying exact change with tolerance');
-          
-          // Clean spent proofs
-          await cleanSpentProofs(mintUrl);
-          
-          // Get fresh denomination counts
-          const freshDenominationCounts = proofs.reduce((acc, p) => {
-            acc[p.amount] = (acc[p.amount] || 0) + 1;
-            return acc;
-          }, {} as Record<number, number>);
-          
-          // Try with 0% tolerance first
-          let toleranceResult = canMakeExactChange(amount, freshDenominationCounts, proofs);
-          
-          // If 0% fails, try with 5% tolerance
-          if (!toleranceResult.canMake || !toleranceResult.selectedProofs) {
-            console.log('rdlogs: Cannot make exact change with 0% tolerance, trying with 5% tolerance');
-            const fees = calculateFees(proofs, activeKeysets);
-            toleranceResult = canMakeExactChange(amount, freshDenominationCounts, proofs, fees, 0.05);
-          }
-          
-          if (toleranceResult.canMake && toleranceResult.selectedProofs) {
-            const selectedDenominations = toleranceResult.selectedProofs.map(p => p.amount).sort((a, b) => b - a);
-            const denominationBreakdown = selectedDenominations.reduce((acc, denom) => {
-              acc[denom] = (acc[denom] || 0) + 1;
-              return acc;
-            }, {} as Record<number, number>);
-            
-            const actualAmount = toleranceResult.actualAmount || 0;
-            const overpayment = actualAmount - amount;
-            const overpaymentPercent = (overpayment / amount) * 100;
-            
-            console.log('rdlogs: Can make change within tolerance after wallet.send() failure');
-            console.log('rdlogs: Target amount:', amount);
-            console.log('rdlogs: Actual amount:', actualAmount);
-            console.log('rdlogs: Overpayment:', overpayment, `(${overpaymentPercent.toFixed(2)}%)`);
-            console.log('rdlogs: Selected denominations:', selectedDenominations);
-            console.log('rdlogs: Denomination breakdown:', denominationBreakdown);
-            
-            const proofsToSend = toleranceResult.selectedProofs;
-            const proofsToKeep = proofs.filter(p => !proofsToSend.includes(p));
-            
-            // Store proofs temporarily before updating wallet state
-            const pendingProofsKey = `pending_send_proofs_${Date.now()}`;
-            localStorage.setItem(pendingProofsKey, JSON.stringify({
-              mintUrl,
-              proofsToSend: proofsToSend.map(p => ({
-                id: p.id || '',
-                amount: p.amount,
-                secret: p.secret || '',
-                C: p.C || ''
-              })),
-              timestamp: Date.now()
-            }));
-            
-            // Create new token for the proofs we're keeping
-            if (proofsToKeep.length > 0) {
-              const keepTokenData: CashuToken = {
-                mint: mintUrl,
-                proofs: proofsToKeep.map(p => ({
-                  id: p.id || '',
-                  amount: p.amount,
-                  secret: p.secret || '',
-                  C: p.C || ''
-                }))
-              };
-              
-              // update proofs
-              await updateProofs({ mintUrl, proofsToAdd: keepTokenData.proofs, proofsToRemove: [...proofsToSend, ...proofs] });
-              
-              // Create history event
-              await createHistory({
-                direction: 'out',
-                amount: amount.toString(),
-              });
-            }
-            
-            // Store the pending proofs key with the returned proofs for cleanup
-            (proofsToSend as any).pendingProofsKey = pendingProofsKey;
-            
-            return { proofs: proofsToSend, unit: preferredUnit };
-          }
-          
-          // If all attempts fail, throw the original error
-          setError(`Failed to generate token: ${message}`);
-          throw error;
-        }
-        else {
+          // Use advanced proof selection with tolerance fallback
+          const result = selectProofsAdvanced(amount, proofs, activeKeysets, mintUrl);
+          proofsToKeep = result.proofsToKeep;
+          proofsToSend = result.proofsToSend;
+        } else {
           // Re-throw the error if it's not a "Token already spent" error
           throw error;
         }
-        
       }
+
+      // Store proofs temporarily before updating wallet state
+      const pendingProofsKey = `pending_send_proofs_${Date.now()}`;
+      localStorage.setItem(pendingProofsKey, JSON.stringify({
+        mintUrl,
+        proofsToSend: proofsToSend.map(p => ({
+          id: p.id || '',
+          amount: p.amount,
+          secret: p.secret || '',
+          C: p.C || ''
+        })),
+        timestamp: Date.now()
+      }));
+      const sendFees = calculateFees(proofsToSend, activeKeysets);
+      // console.log('rdlogs: fees to send ', amount, ' is ', sendFees)
+
+      // Create new token for the proofs we're keeping
+      if (proofsToKeep.length > 0) {
+        // update proofs
+        await updateProofs({ mintUrl, proofsToAdd: proofsToKeep, proofsToRemove: [...proofsToSend, ...proofs] });
+
+        // Create history event
+        await createHistory({
+          direction: 'out',
+          amount: amount.toString(),
+        });
+      }
+      
+      // Create encoded token from proofs
+      const token = getEncodedTokenV4({
+        mint: mintUrl,
+        proofs: proofsToSend.map((p) => ({
+          id: p.id || "",
+          amount: p.amount,
+          secret: p.secret || "",
+          C: p.C || "",
+        })),
+        unit: preferredUnit
+      });
+      
+      // Clean up pending proofs after successful token creation
+      localStorage.removeItem(pendingProofsKey);
+      
+      return token;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setError(`Failed to generate token: ${message}`);
@@ -485,19 +332,9 @@ export function useCashuToken() {
       // Receive proofs from token
       const receivedProofs = await wallet.receive(token);
       // Create token event in Nostr
-      const receivedTokenData: CashuToken = {
-        mint: normalizedMintUrl,
-        proofs: receivedProofs.map(p => ({
-          id: p.id || '',
-          amount: p.amount,
-          secret: p.secret || '',
-          C: p.C || ''
-        }))
-      };
-
       try {
         // Attempt to create token in Nostr, but don't rely on the return value
-        await updateProofs({ mintUrl: normalizedMintUrl, proofsToAdd: receivedTokenData.proofs, proofsToRemove: [] });
+        await updateProofs({ mintUrl: normalizedMintUrl, proofsToAdd: receivedProofs, proofsToRemove: [] });
       } catch (err) {
         console.error('Error storing token in Nostr:', err);
       }

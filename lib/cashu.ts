@@ -1,6 +1,6 @@
 // Types and utilities for Cashu wallet (NIP-60)
 
-import { useCashuStore } from "@/stores/cashuStore";
+import { useCashuStore } from "@/features/wallet/state/cashuStore";
 import { CashuMint, Proof, CashuWallet, GetInfoResponse, MintKeyset, MintKeys, getDecodedToken } from "@cashu/cashu-ts";
 
 export interface CashuProof {

@@ -4,7 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { QrCode } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import { Drawer } from 'vaul';
-import { useCashuWallet, useCashuToken, useCashuStore, useTransactionHistoryStore, formatBalance } from '@/features/wallet';
+import { useCashuWallet, useCashuStore, useTransactionHistoryStore, formatBalance } from '@/features/wallet';
 import { useInvoiceSync } from '@/hooks/useInvoiceSync';
 import { PendingTransaction } from '@/features/wallet/state/transactionHistoryStore';
 import { createLightningInvoice, mintTokensFromPaidInvoice } from '@/lib/cashuLightning';
@@ -30,7 +30,6 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({ isOpen, onClose }) 
   const [isHydrated, setIsHydrated] = useState(false);
 
   const { updateProofs } = useCashuWallet();
-  const { error: tokenError } = useCashuToken();
   const cashuStore = useCashuStore();
   const { addInvoice, updateInvoice } = useInvoiceSync();
   const transactionHistoryStore = useTransactionHistoryStore();
