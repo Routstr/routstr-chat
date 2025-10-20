@@ -2,14 +2,13 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useCashuToken } from '@/features/wallet/hooks/useCashuToken';
 import { useCashuStore, useCashuWallet, useCreateCashuWallet } from '@/features/wallet';
 import { calculateBalanceByMint } from '@/features/wallet';
-import { getBalanceFromStoredProofs, getPendingCashuTokenAmount, fetchBalances } from '@/utils/cashuUtils';
+import { getBalanceFromStoredProofs, getPendingCashuTokenAmount, fetchBalances, getPendingCashuTokenDistribution } from '@/utils/cashuUtils';
 import { useWalletOperations } from '@/features/wallet/hooks/useWalletOperations';
 import { getLocalCashuToken, setLocalCashuToken } from '@/utils/storageUtils';
 import { loadTransactionHistory, saveTransactionHistory } from '@/utils/storageUtils';
 import { DEFAULT_MINT_URL } from '@/lib/utils';
 import { TransactionHistory } from '@/types/chat';
 import { Proof } from '@cashu/cashu-ts';
-import { getEncodedTokenV4 } from '@cashu/cashu-ts';
 import { useAuth } from '@/context/AuthProvider';
 import React from 'react';
 
@@ -186,15 +185,6 @@ export function useCashuWithXYZ() {
     transactionHistory: transactionHistory
   });
 
-  // Types for Cashu
-  interface CashuProof {
-    amount: number;
-    secret: string;
-    C: string;
-    id: string;
-    [key: string]: unknown;
-  }
-
   // Initialize wallet when component mounts or mintUrl changes
   useEffect(() => {
     const initializeWallet = async () => {
@@ -227,8 +217,14 @@ export function useCashuWithXYZ() {
   ): Promise<string | null | { hasTokens: false }> => {
     // Try to get existing token for the given baseUrl
     const storedToken = getLocalCashuToken(baseUrl);
+    const pendingBalances = getPendingCashuTokenDistribution();
+
+    // TODO: Implement useProviderBalancesSync instead of local storage once the nodes are all stable with the refunds. Too early. 
     if (storedToken) {
-      return storedToken;
+      const balanceForBaseUrl = pendingBalances.find(b => b.baseUrl === baseUrl)?.amount || 0;
+      if (balanceForBaseUrl > amount) {
+        return storedToken;
+      }
     }
 
     // Check if amount is a decimal and round up if necessary
@@ -244,13 +240,7 @@ export function useCashuWithXYZ() {
 
     let token: string | null = null;
 
-    if (usingNip60) {
-      if (!sendToken || !cashuStore.activeMintUrl) {
-        console.error("Missing required parameters for NIP-60 token creation");
-        return null;
-      }
-
-      // Generate new token if none exists
+    if (usingNip60) {      // Generate new token if none exists
       if (!cashuStore.activeMintUrl) {
         console.error("No active mint selected. Please select a mint in your wallet settings.");
         return null;
@@ -263,20 +253,7 @@ export function useCashuWithXYZ() {
         console.error(error instanceof Error ? error.message : String(error));
       }
     } else {
-      // Legacy wallet logic
-      // Check if any tokens are available
-      const storedProofs = localStorage.getItem("cashu_proofs");
-      if (!storedProofs) {
-        return { hasTokens: false };
-      }
-
       try {
-        const existingProofs = JSON.parse(storedProofs) as CashuProof[];
-
-        if (!existingProofs || existingProofs.length === 0) {
-          return { hasTokens: false };
-        }
-
         // Use the generateTokenCore function from useWalletOperations
         token = await generateTokenCore(adjustedAmount, mintUrl);
         console.log('rdlogs: token', token);
@@ -287,8 +264,10 @@ export function useCashuWithXYZ() {
     }
 
     // Store token and return if successful
-    if (token && baseUrl !== '') {
-      setLocalCashuToken(baseUrl, token);
+    if (token) {
+      if (baseUrl !== '') {
+        setLocalCashuToken(baseUrl, token);
+      }
       return token;
     }
 

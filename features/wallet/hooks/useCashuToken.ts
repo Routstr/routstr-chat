@@ -143,7 +143,7 @@ export function useCashuToken() {
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
 
-        if(message.includes("Not enough funds available") || message.includes("Token already spent")) {
+        if(message.includes("Not enough funds available") || message.includes("Token already spent") || message.includes("Not enough balance to send")) {
           console.log('rdlogs: wallet.send() failed with insufficient funds, trying exact change with tolerance');
           
           // Clean spent proofs
@@ -162,6 +162,7 @@ export function useCashuToken() {
           const result = selectProofsAdvanced(amount, proofs, activeKeysets, mintUrl);
           proofsToKeep = result.proofsToKeep;
           proofsToSend = result.proofsToSend;
+          console.log('rdlogs: proofsToSend', proofsToSend);
         } else {
           // Re-throw the error if it's not a "Token already spent" error
           throw error;
@@ -206,7 +207,7 @@ export function useCashuToken() {
         })),
         unit: preferredUnit
       });
-      
+      console.log('rdlogs: token', token);
       // Clean up pending proofs after successful token creation
       localStorage.removeItem(pendingProofsKey);
       

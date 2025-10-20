@@ -323,22 +323,31 @@ export const unifiedRefund = async (
 };
 
 export const getPendingCashuTokenAmount = (): number => {
-  const allTokens = getLocalCashuTokens(); // Get all stored tokens
-  let totalPendingAmount = 0;
+  const distribution = getPendingCashuTokenDistribution();
+  return distribution.reduce((total, item) => total + item.amount, 0);
+};
 
-  allTokens.forEach((tokenEntry: CashuTokenEntry) => {
+export const getPendingCashuTokenDistribution = (): { baseUrl: string; amount: number }[] => {
+  const tokens = getLocalCashuTokens();
+  const distributionMap: Record<string, number> = {};
+  
+  tokens.forEach((entry) => {
     try {
-      const decodedToken = getDecodedToken(tokenEntry.token);
-      const msatOrSat = decodedToken.unit === 'msat' ? 1000 : 1;
-      decodedToken.proofs.forEach((proof: { amount: number; }) => {
-        totalPendingAmount += (proof.amount/msatOrSat);
+      const decoded = getDecodedToken(entry.token);
+      const unitDivisor = decoded.unit === 'msat' ? 1000 : 1;
+      let sum = 0;
+      decoded.proofs.forEach((p: { amount: number }) => {
+        sum += p.amount / unitDivisor;
       });
-      if (decodedToken) {
-        
+      if (sum > 0) {
+        distributionMap[entry.baseUrl] = (distributionMap[entry.baseUrl] || 0) + sum;
       }
-    } catch (error) {
-      console.error(`Error decoding cashu token for baseUrl ${tokenEntry.baseUrl}:`, error);
+    } catch (e) {
+      // ignore malformed tokens
     }
   });
-  return totalPendingAmount;
+  
+  return Object.entries(distributionMap)
+    .map(([baseUrl, amt]) => ({ baseUrl, amount: Math.round(amt) }))
+    .sort((a, b) => b.amount - a.amount);
 };

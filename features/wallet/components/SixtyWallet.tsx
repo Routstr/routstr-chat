@@ -517,7 +517,7 @@ const SixtyWallet: React.FC<{mintUrl:string, usingNip60: boolean, setUsingNip60:
 
       // Create token from local proofs
       const token = getEncodedTokenV4({
-        mint: cashuStore.activeMintUrl,
+        mint: DEFAULT_MINT_URL,
         proofs: proofs.map((p: any) => ({
           id: p.id || "",
           amount: p.amount,
