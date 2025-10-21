@@ -1,5 +1,5 @@
 import { Message, MessageContent } from '@/types/chat';
-import { Edit, MessageSquare, Copy, Check, Eye, EyeOff } from 'lucide-react';
+import { Edit, MessageSquare, Copy, Check, Eye, EyeOff, FileText } from 'lucide-react';
 import MessageContentRenderer from '@/components/MessageContent';
 import MarkdownRenderer from '@/components/MarkdownRenderer';
 import ThinkingSection from '@/components/ui/ThinkingSection';
@@ -20,6 +20,7 @@ interface ChatMessagesProps {
   messagesEndRef: RefObject<HTMLDivElement | null>;
   isMobile: boolean;
   textareaHeight?: number;
+  isLoading: boolean;
 }
 
 export default function ChatMessages({
@@ -36,7 +37,8 @@ export default function ChatMessages({
   getTextFromContent,
   messagesEndRef,
   isMobile,
-  textareaHeight
+  textareaHeight,
+  isLoading
 }: ChatMessagesProps) {
   const [copiedMessageIndex, setCopiedMessageIndex] = useState<number | null>(null);
   const [expandedSystemGroups, setExpandedSystemGroups] = useState<Set<number>>(new Set());
@@ -215,9 +217,60 @@ export default function ChatMessages({
                       <div className={`${editingMessageIndex === index ? 'w-full sm:max-w-[90%] md:max-w-[85%] lg:max-w-[75%] xl:max-w-[70%]' : 'max-w-[85%]'} break-words break-all`}>
                         {editingMessageIndex === index ? (
                           <div className="flex flex-col w-full">
+                            {/* Show existing attachments that will be preserved */}
+                            {typeof message.content !== 'string' && (
+                              <>
+                                {message.content.filter(item => item.type === 'image_url').length > 0 && (
+                                  <div className="flex flex-wrap gap-2 mb-2">
+                                    {message.content
+                                      .filter(item => item.type === 'image_url')
+                                      .map((item, imgIndex) => (
+                                        <img
+                                          key={`edit-img-${imgIndex}`}
+                                          src={item.image_url?.url}
+                                          alt="Attached"
+                                          className="w-16 h-16 object-cover rounded-lg border border-white/10"
+                                        />
+                                      ))
+                                    }
+                                  </div>
+                                )}
+                                {message.content.filter(item => item.type === 'file').length > 0 && (
+                                  <div className="flex flex-wrap gap-2 mb-2">
+                                    {message.content
+                                      .filter(item => item.type === 'file')
+                                      .map((item, fileIndex) => (
+                                        <div
+                                          key={`edit-file-${fileIndex}`}
+                                          className="flex w-[220px] max-w-full h-16 items-center gap-3 rounded-xl border border-white/15 bg-white/10 px-3 py-2"
+                                        >
+                                          <FileText className="h-5 w-5 text-white/80 flex-shrink-0" aria-hidden="true" />
+                                          <div className="min-w-0 flex-1">
+                                            <p className="truncate text-sm font-medium text-white" title={item.file?.name || 'Attachment'}>
+                                              {item.file?.name || 'Attachment'}
+                                            </p>
+                                            {item.file?.mimeType && (
+                                              <p className="text-xs uppercase text-white/60">
+                                                {item.file.mimeType === 'application/pdf' ? 'PDF' : item.file.mimeType.toUpperCase()}
+                                              </p>
+                                            )}
+                                          </div>
+                                        </div>
+                                      ))
+                                    }
+                                  </div>
+                                )}
+                              </>
+                            )}
                             <textarea
                               value={editingContent}
                               onChange={(e) => setEditingContent(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' && !e.shiftKey) {
+                                  e.preventDefault();
+                                  saveInlineEdit();
+                                }
+                              }}
                               className="w-full bg-white/5 border border-white/10 rounded-2xl p-3 text-sm text-white focus:outline-none focus:border-white/40"
                               rows={3}
                               autoFocus
@@ -231,7 +284,8 @@ export default function ChatMessages({
                               </button>
                               <button
                                 onClick={saveInlineEdit}
-                                className="text-xs text-black bg-white px-3 py-1.5 rounded-md hover:bg-white/90 transition-colors cursor-pointer"
+                                disabled={isLoading}
+                                className="text-xs text-black bg-white px-3 py-1.5 rounded-md hover:bg-white/90 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-white/70"
                               >
                                 Send
                               </button>
@@ -240,7 +294,7 @@ export default function ChatMessages({
                         ) : (
                           <div>
                             <div className="group relative">
-                              <div className="bg-zinc-700/70 rounded-2xl py-2 px-4 text-white">
+                              <div className="bg-white/10 rounded-2xl py-2 px-4 text-white">
                                 <div className="text-[18px]">
                                   <MessageContentRenderer content={message.content} />
                                 </div>

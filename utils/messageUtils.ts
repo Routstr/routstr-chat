@@ -1,4 +1,4 @@
-import { Message, MessageContent } from '@/types/chat';
+import { Message, MessageAttachment, MessageContent } from '@/types/chat';
 
 /**
  * Extracts text content from a message that can be either string or multimodal content
@@ -7,7 +7,7 @@ import { Message, MessageContent } from '@/types/chat';
  */
 export const getTextFromContent = (content: string | MessageContent[]): string => {
   if (typeof content === 'string') return content;
-  const textContent = content.find(item => item.type === 'text');
+  const textContent = content.find(item => item.type === 'text' && !item.hidden);
   return textContent?.text || '';
 };
 
@@ -37,23 +37,54 @@ export const createTextMessage = (role: string, text: string): Message => {
 };
 
 /**
- * Creates a multimodal message with text and images
+ * Creates a multimodal message with text and attachments
  * @param role The message role (user, assistant, system)
  * @param text The text content
- * @param images Array of image URLs
+ * @param attachments Array of attachments (images, files, etc.)
  * @returns A Message object with multimodal content
  */
-export const createMultimodalMessage = (role: string, text: string, images: string[]): Message => {
-  const content: MessageContent[] = [
-    { type: 'text', text }
-  ];
+export const createMultimodalMessage = (role: string, text: string, attachments: MessageAttachment[]): Message => {
+  const content: MessageContent[] = [];
 
-  images.forEach(imageUrl => {
-    content.push({
-      type: 'image_url',
-      image_url: { url: imageUrl }
-    });
+  if (text.trim().length > 0) {
+    content.push({ type: 'text', text });
+  }
+
+  attachments.forEach(attachment => {
+    if (attachment.type === 'image') {
+      content.push({
+        type: 'image_url',
+        image_url: { url: attachment.dataUrl }
+      });
+    } else {
+      content.push({
+        type: 'file',
+        file: {
+          url: attachment.dataUrl,
+          name: attachment.name,
+          mimeType: attachment.mimeType,
+          size: attachment.size
+        }
+      });
+
+      if (attachment.textContent && attachment.textContent.trim().length > 0) {
+        const header = `PDF attachment (${attachment.name}):`;
+        content.push({
+          type: 'text',
+          text: `${header}\n\n${attachment.textContent}`,
+          hidden: true
+        });
+      }
+    }
   });
+
+  if (content.length === 0) {
+    // Fallback to an empty string message to avoid invalid payloads
+    return {
+      role,
+      content: ''
+    };
+  }
 
   return {
     role,
@@ -69,12 +100,15 @@ export const createMultimodalMessage = (role: string, text: string, images: stri
 export const stripImageDataFromMessages = (messages: Message[]): Message[] => {
   return messages.map(msg => {
     if (Array.isArray(msg.content)) {
-      const textContent = msg.content.filter(item => item.type === 'text');
-      if (textContent.length === 0 && msg.content.some(item => item.type === 'image_url')) {
-        // If only images were present, save a placeholder
-        return { ...msg, content: '[Image(s) not saved to local storage]' };
+      const textContent = msg.content.filter(item => item.type === 'text' && !item.hidden);
+      if (textContent.length === 0) {
+        const hasMedia = msg.content.some(item => item.type === 'image_url' || item.type === 'file');
+        if (hasMedia) {
+          return { ...msg, content: '[Attachment(s) not saved to local storage]' };
+        }
+        return { ...msg, content: '[Content removed]' };
       }
-      return { ...msg, content: textContent.length > 0 ? textContent : '[Content removed]' };
+      return { ...msg, content: textContent };
     }
     return msg;
   });

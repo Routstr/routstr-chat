@@ -1,15 +1,36 @@
+export type MessageContentType = 'text' | 'image_url' | 'file';
+
 export interface MessageContent {
-  type: 'text' | 'image_url';
+  type: MessageContentType;
   text?: string;
   image_url?: {
     url: string;
   };
+  file?: {
+    url: string;
+    name?: string;
+    mimeType?: string;
+    size?: number;
+  };
+  hidden?: boolean;
 }
 
 export interface Message {
   role: string;
   content: string | MessageContent[];
   thinking?: string;
+}
+
+export type AttachmentType = 'image' | 'file';
+
+export interface MessageAttachment {
+  id: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  dataUrl: string;
+  type: AttachmentType;
+  textContent?: string;
 }
 
 export interface Conversation {

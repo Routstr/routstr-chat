@@ -34,8 +34,8 @@ const MainChatArea: React.FC = () => {
     // Chat Actions
     inputMessage,
     setInputMessage,
-    uploadedImages,
-    setUploadedImages,
+    uploadedAttachments,
+    setUploadedAttachments,
     isLoading,
     textareaHeight,
     setTextareaHeight,
@@ -127,14 +127,15 @@ const MainChatArea: React.FC = () => {
         messagesEndRef={messagesEndRef}
         isMobile={isMobile}
         textareaHeight={textareaHeight}
+        isLoading={isLoading}
       />
 
       {/* Chat Input */}
       <ChatInput
         inputMessage={inputMessage}
         setInputMessage={setInputMessage}
-        uploadedImages={uploadedImages}
-        setUploadedImages={setUploadedImages}
+        uploadedAttachments={uploadedAttachments}
+        setUploadedAttachments={setUploadedAttachments}
         sendMessage={handleSendMessage}
         isLoading={isLoading}
         isAuthenticated={isAuthenticated}

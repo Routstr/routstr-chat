@@ -155,6 +155,10 @@ export const useConversationState = (): UseConversationStateReturn => {
     setEditingMessageIndex(index);
     const messageText = getTextFromContent(messages[index].content);
     setEditingContent(messageText);
+    // Store the original message content for preserving attachments
+    if (typeof messages[index].content !== 'string') {
+      // Already an array with possible attachments
+    }
   }, [messages]);
 
   const cancelEditing = useCallback(() => {
