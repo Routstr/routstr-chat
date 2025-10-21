@@ -41,7 +41,7 @@ export default function MessageContentRenderer({ content }: MessageContentProps)
             <div key={`image-${index}`} className="relative group">
               <img
                 src={item.image_url?.url}
-                alt="User uploaded image"
+                alt="Image"
                 className={`${imageCount > 1 ? 'max-w-[200px] max-h-[200px]' : 'max-w-[300px] max-h-[300px]'} w-auto h-auto object-contain rounded-lg border border-white/10`}
               />
               {item.image_url?.url && (

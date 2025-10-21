@@ -1,4 +1,4 @@
-import { Message, TransactionHistory } from '@/types/chat';
+import { Message, MessageContent, TransactionHistory } from '@/types/chat';
 import { convertMessageForAPI, createTextMessage, extractThinkingFromStream } from './messageUtils';
 import { fetchBalances, getBalanceFromStoredProofs, refundRemainingBalance, unifiedRefund } from '@/utils/cashuUtils';
 import { getLocalCashuToken, removeLocalCashuToken } from './storageUtils';
@@ -203,11 +203,8 @@ export const fetchAIResponse = async (params: FetchAIResponseParams): Promise<vo
 
     const streamingResult = await processStreamingResponse(response, onStreamingUpdate, onThinkingUpdate, selectedModel?.id);
 
-    if (streamingResult.content) {
-      const assistantMessage = createTextMessage('assistant', streamingResult.content);
-      if (streamingResult.thinking) {
-        assistantMessage.thinking = streamingResult.thinking;
-      }
+    if (streamingResult.content || streamingResult.images) {
+      const assistantMessage = createAssistantMessage(streamingResult);
       onMessagesUpdate([...messageHistory, assistantMessage]);
     }
 
@@ -366,20 +363,176 @@ async function handleApiError(
 }
 
 /**
- * Processes streaming response from the API
+ * Image type from API response
+ */
+interface ImageData {
+  type: 'image_url';
+  image_url: {
+    url: string;
+  };
+  index?: number;
+}
+
+/**
+ * Merges new images into the accumulated images array, avoiding duplicates
+ * @param accumulatedImages Current array of images
+ * @param newImages New images to merge
+ */
+function mergeImages(accumulatedImages: ImageData[], newImages: ImageData[]): void {
+  newImages.forEach((img) => {
+    const existingIndex = accumulatedImages.findIndex(
+      (existing) => existing.index === img.index
+    );
+    if (existingIndex === -1) {
+      accumulatedImages.push(img);
+    } else {
+      accumulatedImages[existingIndex] = img;
+    }
+  });
+}
+
+/**
+ * Creates an assistant message from streaming result
+ * @param streamingResult The result from streaming response
+ * @returns Assistant message with text, images, and optional thinking
+ */
+function createAssistantMessage(streamingResult: StreamingResult): Message {
+  const hasImages = streamingResult.images && streamingResult.images.length > 0;
+  
+  if (hasImages) {
+    // Create multimodal message with text and images
+    const content: MessageContent[] = [];
+    
+    if (streamingResult.content) {
+      content.push({ type: 'text', text: streamingResult.content });
+    }
+    
+    streamingResult.images!.forEach(img => {
+      content.push({
+        type: 'image_url',
+        image_url: { url: img.image_url.url }
+      });
+    });
+    
+    const message: Message = {
+      role: 'assistant',
+      content
+    };
+    
+    if (streamingResult.thinking) {
+      message.thinking = streamingResult.thinking;
+    }
+    
+    return message;
+  }
+  
+  // Create simple text message
+  const message = createTextMessage('assistant', streamingResult.content);
+  if (streamingResult.thinking) {
+    message.thinking = streamingResult.thinking;
+  }
+  
+  return message;
+}
+
+/**
+ * Usage statistics from API response
+ */
+interface UsageStats {
+  total_tokens?: number;
+  prompt_tokens?: number;
+  completion_tokens?: number;
+}
+
+/**
+ * Result type for both streaming and non-streaming responses
  */
 interface StreamingResult {
   content: string;
   thinking?: string;
-  usage?: {
-    total_tokens?: number;
-    prompt_tokens?: number;
-    completion_tokens?: number;
-  };
+  images?: ImageData[];
+  usage?: UsageStats;
   model?: string;
   finish_reason?: string;
 }
 
+/**
+ * Processes non-streaming (complete) response from the API
+ * @param response The fetch response object
+ * @param onStreamingUpdate Callback to update streaming content
+ * @param onThinkingUpdate Callback to update thinking content
+ * @param modelId Optional model ID for thinking-capable model handling
+ * @returns Parsed streaming result with content, images, and metadata
+ */
+async function processNonStreamingResponse(
+  response: Response,
+  onStreamingUpdate: (content: string) => void,
+  onThinkingUpdate: (content: string) => void,
+  modelId?: string
+): Promise<StreamingResult> {
+  const data = await response.json();
+  
+  let content = '';
+  let thinking = '';
+  let images: StreamingResult['images'];
+  let usage: StreamingResult['usage'];
+  let model: string | undefined;
+  let finish_reason: string | undefined;
+
+  // Extract data from the response
+  if (data.choices && data.choices[0]) {
+    const choice = data.choices[0];
+    
+    // Extract content
+    if (choice.message?.content) {
+      content = choice.message.content;
+      onStreamingUpdate(content);
+    }
+    
+    // Extract images
+    if (choice.message?.images && Array.isArray(choice.message.images)) {
+      images = choice.message.images;
+    }
+    
+    // Extract finish reason
+    if (choice.finish_reason) {
+      finish_reason = choice.finish_reason;
+    }
+  }
+  
+  // Extract usage statistics
+  if (data.usage) {
+    usage = {
+      total_tokens: data.usage.total_tokens,
+      prompt_tokens: data.usage.prompt_tokens,
+      completion_tokens: data.usage.completion_tokens
+    };
+  }
+  
+  // Extract model
+  if (data.model) {
+    model = data.model;
+  }
+
+  return {
+    content,
+    thinking,
+    images,
+    usage,
+    model,
+    finish_reason
+  };
+}
+
+/**
+ * Processes streaming SSE response from the API with line buffering for large payloads
+ * Handles incomplete JSON chunks by buffering lines until complete
+ * @param response The fetch response object with streaming body
+ * @param onStreamingUpdate Callback to update streaming content as it arrives
+ * @param onThinkingUpdate Callback to update thinking content as it arrives
+ * @param modelId Optional model ID for thinking-capable model handling
+ * @returns Parsed streaming result with accumulated content, images, and metadata
+ */
 async function processStreamingResponse(
   response: Response,
   onStreamingUpdate: (content: string) => void,
@@ -392,9 +545,14 @@ async function processStreamingResponse(
   let accumulatedThinking = '';
   let isInThinking = false;
   let isInContent = false;
-  let usage: StreamingResult['usage'];
+  let accumulatedImages: ImageData[] = [];
+  let usage: UsageStats | undefined;
   let model: string | undefined;
   let finish_reason: string | undefined;
+  
+  // Buffer for incomplete lines - critical for handling large base64 image data
+  // that may be split across multiple stream chunks
+  let buffer = '';
 
   while (true) {
     const { done, value } = await reader.read();
@@ -404,9 +562,14 @@ async function processStreamingResponse(
     }
 
     const chunk = decoder.decode(value, { stream: true });
+    buffer += chunk;
 
     try {
-      const lines = chunk.split('\n');
+      const lines = buffer.split('\n');
+      
+      // Keep the last element in buffer as it may be an incomplete line
+      // (Stream chunks can break in the middle of JSON data)
+      buffer = lines.pop() || '';
 
       for (const line of lines) {
         if (!line.trim()) continue;
@@ -496,6 +659,20 @@ async function processStreamingResponse(
               parsedData.choices[0].finish_reason) {
               finish_reason = parsedData.choices[0].finish_reason;
             }
+
+            // Handle images in the message (for models that generate images)
+            // This typically arrives in the final complete chunk before [DONE]
+            if (parsedData.choices?.[0]?.message?.images && 
+                Array.isArray(parsedData.choices[0].message.images)) {
+              mergeImages(accumulatedImages, parsedData.choices[0].message.images);
+            }
+
+            // Handle images in delta (for streaming image generation)
+            // Some models may send images incrementally in delta chunks
+            if (parsedData.choices?.[0]?.delta?.images && 
+                Array.isArray(parsedData.choices[0].delta.images)) {
+              mergeImages(accumulatedImages, parsedData.choices[0].delta.images);
+            }
           } catch {
             // Swallow parse errors for streaming chunks
           }
@@ -509,6 +686,7 @@ async function processStreamingResponse(
   return {
     content: accumulatedContent,
     thinking: (modelId && accumulatedThinking) ? accumulatedThinking : undefined,
+    images: accumulatedImages.length > 0 ? accumulatedImages : undefined,
     usage,
     model,
     finish_reason
