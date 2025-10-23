@@ -12,6 +12,11 @@ export const QueryTimeoutModal: React.FC<QueryTimeoutModalProps> = ({ isOpen, on
     window.location.reload();
   };
 
+  const handleDismiss = () => {
+    try { localStorage.setItem('cashu_relays_timeout', 'false'); } catch {}
+    onClose();
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -22,10 +27,16 @@ export const QueryTimeoutModal: React.FC<QueryTimeoutModalProps> = ({ isOpen, on
           It looks like there was a problem connecting to the relays. Please add/remove relays and refresh the page to try again.
         </p>
         <NostrRelayManager/>
-        <div className="flex justify-center">
+        <div className="flex gap-3 justify-center">
+          <button
+            onClick={handleDismiss}
+            className="flex-1 py-2 bg-gray-800 text-white rounded-md text-sm font-medium hover:bg-gray-700 transition-colors border border-white/10"
+          >
+            Dismiss
+          </button>
           <button
             onClick={handleRefresh}
-            className="w-full py-2 bg-white text-black rounded-md text-sm font-medium hover:bg-gray-200 transition-colors"
+            className="flex-1 py-2 bg-white text-black rounded-md text-sm font-medium hover:bg-gray-200 transition-colors"
           >
             Refresh Page
           </button>

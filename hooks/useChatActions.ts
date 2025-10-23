@@ -309,7 +309,6 @@ export const useChatActions = (): UseChatActionsReturn => {
         mintUrl,
         usingNip60,
         balance,
-        unit: mintUnits[cashuStore.activeMintUrl??mintUrl],
         spendCashu: spendCashu,
         storeCashu: storeCashu,
         activeMintUrl: cashuStore.activeMintUrl,

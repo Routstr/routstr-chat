@@ -480,5 +480,6 @@ export function useCashuWallet() {
     showQueryTimeoutModal,
     setShowQueryTimeoutModal,
     didRelaysTimeout: hasTimedOut,
+    setDidRelaysTimeout,
   };
 }

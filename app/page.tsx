@@ -65,7 +65,7 @@ function ChatPageContent() {
 
   const [isTopUpPromptOpen, setIsTopUpPromptOpen] = useState(false);
   const [topUpPromptDismissed, setTopUpPromptDismissed] = useState(false);
-  const { showQueryTimeoutModal, setShowQueryTimeoutModal, didRelaysTimeout, isLoading: isWalletLoading } = useCashuWallet();
+  const { showQueryTimeoutModal, setShowQueryTimeoutModal, didRelaysTimeout, setDidRelaysTimeout, isLoading: isWalletLoading } = useCashuWallet();
   const pendingUrlSyncRef = useRef(false);
   const searchParamsString = useMemo(() => searchParams.toString(), [searchParams]);
   const chatIdFromUrl = useMemo(() => searchParams.get('chatId'), [searchParams]);
@@ -218,7 +218,7 @@ function ChatPageContent() {
 
       <QueryTimeoutModal
         isOpen={showQueryTimeoutModal || (didRelaysTimeout && !isWalletLoading)}
-        onClose={() => setShowQueryTimeoutModal(false)}
+        onClose={() => { console.log('rdlogs: closing query timeout modal', showQueryTimeoutModal, didRelaysTimeout, isWalletLoading); setShowQueryTimeoutModal(false); setDidRelaysTimeout(false); }}
       />
     </div>
   );

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useCashuToken } from '@/features/wallet/hooks/useCashuToken';
 import { useCashuStore, useCashuWallet, useCreateCashuWallet } from '@/features/wallet';
 import { calculateBalanceByMint } from '@/features/wallet';
-import { getBalanceFromStoredProofs, getPendingCashuTokenAmount, fetchBalances, getPendingCashuTokenDistribution } from '@/utils/cashuUtils';
+import { getBalanceFromStoredProofs, getPendingCashuTokenAmount, fetchBalances, getPendingCashuTokenDistribution, unifiedRefund } from '@/utils/cashuUtils';
 import { useWalletOperations } from '@/features/wallet/hooks/useWalletOperations';
 import { getLocalCashuToken, setLocalCashuToken } from '@/utils/storageUtils';
 import { loadTransactionHistory, saveTransactionHistory } from '@/utils/storageUtils';
@@ -196,7 +196,7 @@ export function useCashuWithXYZ() {
       }
     };
 
-    if (isAuthenticated) {
+    if (isAuthenticated && false) {
       void initializeWallet();
     }
   }, [initWallet]);
@@ -211,23 +211,12 @@ export function useCashuWithXYZ() {
    * @returns Promise with token string, null if failed, or object with hasTokens: false if no tokens available
    */
   const spendCashu = async (
-    mintUrl: string, 
-    amount: number, 
+    mintUrl: string,
+    amount: number,
     baseUrl: string,
+    reuseToken: boolean = false,
     p2pkPubkey?: string
-  ): Promise<string | null | { hasTokens: false }> => {
-    // Try to get existing token for the given baseUrl
-    const storedToken = getLocalCashuToken(baseUrl);
-    const pendingBalances = getPendingCashuTokenDistribution();
-
-    // TODO: Implement useProviderBalancesSync instead of local storage once the nodes are all stable with the refunds. Too early. 
-    if (storedToken) {
-      const balanceForBaseUrl = pendingBalances.find(b => b.baseUrl === baseUrl)?.amount || 0;
-      if (balanceForBaseUrl > amount) {
-        return storedToken;
-      }
-    }
-
+  ): Promise<string | null> => {
     // Check if amount is a decimal and round up if necessary
     let adjustedAmount = amount;
     if (amount % 1 !== 0) {
@@ -239,6 +228,50 @@ export function useCashuWithXYZ() {
       return null;
     }
 
+    // Try to get existing token for the given baseUrl
+    const storedToken = getLocalCashuToken(baseUrl);
+    let pendingBalances = getPendingCashuTokenDistribution();
+
+    // TODO: Implement useProviderBalancesSync instead of local storage once the nodes are all stable with the refunds. Too early. 
+    if (storedToken && !reuseToken) {
+      const balanceForBaseUrl = pendingBalances.find(b => b.baseUrl === baseUrl)?.amount || 0;
+      if (balanceForBaseUrl > amount) {
+        return storedToken;
+      }
+      else {
+        const refundResult = await unifiedRefund(mintUrl, baseUrl, usingNip60, receiveToken, storedToken);
+        if (refundResult.success) {
+          console.log(refundResult.message || 'Refund completed successfully!');
+          pendingBalances = getPendingCashuTokenDistribution();
+        } else {
+          console.error(refundResult.message || 'Failed to complete refund.');
+        }
+      }
+    }
+    let nip60Balance = 0; 
+    const localBalance = getBalanceFromStoredProofs();
+
+    for (const mintUrl in mintBalances) {
+      const balance = mintBalances[mintUrl];
+      const unit = mintUnits[mintUrl];
+      let balanceInSats = 0;
+      if (unit === 'msat') {
+        balanceInSats = (balance / 1000);
+      } else {
+        balanceInSats = balance;
+      }
+      nip60Balance += balanceInSats;
+    }
+
+    const totalPendingBalance = pendingBalances.reduce((total, item) => total + item.amount, 0);
+    const totalBalance = nip60Balance + localBalance + totalPendingBalance;
+    console.log('rdlogs: totalBalance', totalBalance, adjustedAmount);
+
+    if (totalBalance < adjustedAmount) {
+      console.error("Insufficient balance to spend. Please add more tokens to your wallet. You need at least ${adjustedAmount} sats to use the model.", adjustedAmount);
+      return null;
+    }
+
     let token: string | null = null;
 
     if (usingNip60) {      // Generate new token if none exists
@@ -247,11 +280,70 @@ export function useCashuWithXYZ() {
         return null;
       }
 
-      try {
-        token = await sendToken(cashuStore.activeMintUrl, adjustedAmount, p2pkPubkey);
-      } catch (error) {
-        console.error("Error generating token:", error);
-        console.error(error instanceof Error ? error.message : String(error));
+      // Check if the active mint has sufficient balance
+      const activeMintBalance = mintBalances[cashuStore.activeMintUrl] || 0;
+      const activeMintUnit = mintUnits[cashuStore.activeMintUrl];
+      let activeMintBalanceInSats = 0;
+      if (activeMintUnit === 'msat') {
+        activeMintBalanceInSats = activeMintBalance / 1000;
+      } else {
+        activeMintBalanceInSats = activeMintBalance;
+      }
+      console.log('rdlogs: activeMintBalanceInSats', activeMintBalanceInSats);
+
+      // Check if any mint has sufficient balance
+      let selectedMintUrl: string | null = null;
+      let selectedMintBalance = 0;
+      
+      for (const mintUrl in mintBalances) {
+        const balance = mintBalances[mintUrl];
+        const unit = mintUnits[mintUrl];
+        let balanceInSats = 0;
+        if (unit === 'msat') {
+          balanceInSats = balance / 1000;
+        } else {
+          balanceInSats = balance;
+        }
+        
+        if (balanceInSats > adjustedAmount) {
+          selectedMintUrl = mintUrl;
+          selectedMintBalance = balanceInSats;
+          break;
+        }
+      }
+      console.log('rdlogs: selectedMintUrl', selectedMintUrl);
+
+      if (activeMintBalanceInSats > adjustedAmount) {
+        try {
+          token = await sendToken(cashuStore.activeMintUrl, adjustedAmount, p2pkPubkey);
+        } catch (error) {
+          console.error("Error generating token:", error);
+          console.error(error instanceof Error ? error.message : String(error));
+        }
+      } else if (selectedMintUrl) {
+        console.log(`Active mint insufficient. Using mint ${selectedMintUrl} with balance ${selectedMintBalance} sats instead`);
+        try {
+          token = await sendToken(selectedMintUrl, adjustedAmount, p2pkPubkey);
+        } catch (error) {
+          console.error("Error generating token from alternate mint:", error);
+          console.error(error instanceof Error ? error.message : String(error));
+        }
+      } else {
+        console.error('=== Insufficient Balance Error ===');
+        console.error(`Required amount: ${adjustedAmount} sats`);
+        console.error(`Active mint (${cashuStore.activeMintUrl}): ${activeMintBalanceInSats} sats`);
+        console.error('\nAll mint balances:');
+        for (const mintUrl in mintBalances) {
+          const balance = mintBalances[mintUrl];
+          const unit = mintUnits[mintUrl];
+          let balanceInSats = 0;
+          if (unit === 'msat') {
+            balanceInSats = balance / 1000;
+          } else {
+            balanceInSats = balance;
+          }
+          console.error(`  ${mintUrl}: ${balanceInSats} sats`);
+        }
       }
     } else {
       try {

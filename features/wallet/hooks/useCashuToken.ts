@@ -103,7 +103,7 @@ export function useCashuToken() {
    * @param p2pkPubkey The P2PK pubkey to lock the proofs to
    * @returns Encoded token string
    */
-  const sendToken = async (mintUrl: string, amount: number, p2pkPubkey?: string): Promise<string> => {
+  const sendToken = async (mintUrl: string, amount: number, p2pkPubkey?: string, unit?: string): Promise<string> => {
     setIsLoading(true);
     setError(null);
 
@@ -113,8 +113,14 @@ export function useCashuToken() {
       
       // Get preferred unit: msat over sat if both are active
       const activeKeysets = keysets.keysets.filter(k => k.active);
-      const units = [...new Set(activeKeysets.map(k => k.unit))];
-      const preferredUnit = units.includes('msat') ? 'msat' : (units.includes('sat') ? 'sat' : 'not supported');
+      let preferredUnit = 'not supported';
+      if (unit) {
+        preferredUnit = unit as 'sat' | 'msat';
+      }
+      else {
+        const units = [...new Set(activeKeysets.map(k => k.unit))];
+        preferredUnit = units.includes('msat') ? 'msat' : (units.includes('sat') ? 'sat' : 'not supported') as 'sat' | 'msat';
+      }
       
       const wallet = new CashuWallet(mint, { unit: preferredUnit });
 
@@ -130,6 +136,8 @@ export function useCashuToken() {
         return acc;
       }, {} as Record<number, number>);
       // console.log('rdlogs: Proof denomination groups:', denominationCounts);
+      amount = preferredUnit == 'msat' ? amount * 1000 : amount;
+      console.log('amiout', amount);
       if (proofsAmount < amount) {
         throw new Error(`Not enough funds on mint ${mintUrl}`);
       }

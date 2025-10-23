@@ -5,6 +5,31 @@ import { getLocalCashuToken, removeLocalCashuToken } from './storageUtils';
 import { getDecodedToken } from '@cashu/cashu-ts';
 import { isThinkingCapableModel } from './thinkingParser';
 
+/**
+ * Helper function to properly read response body text from a ReadableStream
+ */
+async function readResponseBodyText(response: Response): Promise<string> {
+  if (!response.body) {
+    return '';
+  }
+  
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder('utf-8');
+  let text = '';
+  
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      text += decoder.decode(value, { stream: true });
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  
+  return text;
+}
+
 export interface FetchAIResponseParams {
   messageHistory: Message[];
   selectedModel: any;
@@ -12,8 +37,7 @@ export interface FetchAIResponseParams {
   mintUrl: string;
   usingNip60: boolean;
   balance: number;
-  unit: string;
-  spendCashu: (mintUrl: string, amount: number, baseUrl: string, p2pkPubkey?: string) => Promise<string | null | { hasTokens: false }>;
+  spendCashu: (mintUrl: string, amount: number, baseUrl: string, reuseToken?: boolean, p2pkPubkey?: string) => Promise<string | null>;
   storeCashu: (token: string) => Promise<any[]>;
   activeMintUrl?: string | null;
   onStreamingUpdate: (content: string) => void;
@@ -36,7 +60,7 @@ async function routstrRequest(params: {
   mintUrl: string;
   usingNip60: boolean;
   tokenAmount: number;
-  spendCashu: (mintUrl: string, amount: number, baseUrl: string, p2pkPubkey?: string) => Promise<string | null | { hasTokens: false }>;
+  spendCashu: (mintUrl: string, amount: number, baseUrl: string, reuseToken?: boolean, p2pkPubkey?: string) => Promise<string | null>;
   storeCashu: (token: string) => Promise<any[]>;
   activeMintUrl?: string | null;
   onMessageAppend: (message: Message) => void;
@@ -57,10 +81,6 @@ async function routstrRequest(params: {
     token,
     retryOnInsufficientBalance = true
   } = params;
-
-  if (!token) {
-    throw new Error(`Insufficient balance. Please add more funds to continue. You need at least ${Number(tokenAmount).toFixed(0)} sats to use ${selectedModel?.id}`);
-  }
 
   // token is expected to be a string here
 
@@ -217,7 +237,6 @@ export const fetchAIResponse = async (params: FetchAIResponseParams): Promise<vo
     mintUrl,
     usingNip60,
     balance,
-    unit,
     spendCashu,
     storeCashu,
     activeMintUrl,
@@ -244,22 +263,25 @@ export const fetchAIResponse = async (params: FetchAIResponseParams): Promise<vo
   try {
     const token = await spendCashu(
       mintUrl,
-      usingNip60 && unit == 'msat'? tokenAmount*1000 : tokenAmount,
-      baseUrl
+      tokenAmount,
+      baseUrl,
+      true
     );
 
-    if (token && typeof token === 'string') {
-      const decodedToken = getDecodedToken(token)
-      if (decodedToken.unit == 'msat') {
-        onTokenCreated(tokenAmount)
+    if (!token || typeof token !== 'string') {
+      throw new Error(`Insufficient balance. Please add more funds to continue. You need at least ${Number(tokenAmount).toFixed(0)} sats to use ${selectedModel?.id}`);
+    }
+  
+    const decodedToken = getDecodedToken(token)
+    if (decodedToken.unit == 'msat') {
+      onTokenCreated(tokenAmount)
+    }
+    else {
+      let roundedTokenAmount = tokenAmount;
+      if (roundedTokenAmount % 1 !== 0) {
+        roundedTokenAmount = Math.ceil(roundedTokenAmount);
       }
-      else {
-        let roundedTokenAmount = tokenAmount;
-        if (roundedTokenAmount % 1 !== 0) {
-          roundedTokenAmount = Math.ceil(roundedTokenAmount);
-        }
-        onTokenCreated(roundedTokenAmount);
-      }
+      onTokenCreated(roundedTokenAmount);
     }
 
     const response = await routstrRequest({
@@ -316,8 +338,8 @@ export const fetchAIResponse = async (params: FetchAIResponseParams): Promise<vo
       messageHistory,
       onMessagesUpdate,
       onMessageAppend,
-      estimatedCosts, // Pass estimatedCosts here
-      unit // Pass unit here
+      estimatedCosts,
+      unit: decodedToken.unit ?? 'sat'
     });
     console.log("rdlogs:rdlogs: respon 42069", response)
 
@@ -343,7 +365,7 @@ async function handleApiError(
     storeCashu: (token: string) => Promise<any[]>;
     tokenAmount: number;
     selectedModel: any;
-    spendCashu: (mintUrl: string, amount: number, baseUrl: string, p2pkPubkey?: string) => Promise<string | null | { hasTokens: false }>;
+    spendCashu: (mintUrl: string, amount: number, baseUrl: string, reuseToken?: boolean, p2pkPubkey?: string) => Promise<string | null | { hasTokens: false }>;
     activeMintUrl?: string | null;
     retryOnInsufficientBalance: boolean;
     onMessageAppend: (message: Message) => void;
@@ -363,9 +385,10 @@ async function handleApiError(
   } = params;
 
   if (response.status === 401 || response.status === 403) {
-    console.log('rdlogs: ,',response.body)
+    const responseBodyText = await readResponseBodyText(response);
+    console.log('rdlogs: ,', responseBodyText);
     const requestId = response.headers.get('x-routstr-request-id');
-    const mainMessage = response.body?.toString() + ". Trying to get a refund.";
+    const mainMessage = responseBodyText + ". Trying to get a refund.";
     const requestIdText = requestId ? `Request ID: ${requestId}` : '';
     const providerText = `Provider: ${baseUrl}`;
     const fullMessage = requestId
@@ -420,6 +443,8 @@ async function handleApiError(
     removeLocalCashuToken(baseUrl); // Pass baseUrl here
   } 
   else if (response.status === 413) {
+    const responseBodyText = await readResponseBodyText(response);
+    logApiError(responseBodyText, onMessageAppend);
     const refundStatus = await unifiedRefund(mintUrl, baseUrl, usingNip60, storeCashu);
     if (!refundStatus.success){
       const mainMessage = `Refund failed: ${refundStatus.message}.`;
