@@ -1,39 +1,43 @@
-'use client';
+"use client";
 
-import ReactMarkdown from 'react-markdown';
-import remarkMath from 'remark-math';
-import remarkGfm from 'remark-gfm';
-import rehypeKatex from 'rehype-katex';
-import CodeBlock from './CodeBlock';
-import 'katex/dist/katex.min.css';
-import { downloadImageFromSrc } from '../utils/download';
+import ReactMarkdown from "react-markdown";
+import remarkMath from "remark-math";
+import remarkGfm from "remark-gfm";
+import rehypeKatex from "rehype-katex";
+import rehypeRaw from "rehype-raw";
+import CodeBlock from "./CodeBlock";
+import "katex/dist/katex.min.css";
+import { downloadImageFromSrc } from "../utils/download";
 
 interface MarkdownRendererProps {
   content: string;
   className?: string;
 }
 
-export default function MarkdownRenderer({ content, className }: MarkdownRendererProps) {
+export default function MarkdownRenderer({
+  content,
+  className,
+}: MarkdownRendererProps) {
   return (
-    <div className={`prose prose-invert max-w-none text-[1rem] leading-relaxed ${className || ''}`}>
+    <div
+      className={`prose prose-invert max-w-none text-[1rem] leading-relaxed ${
+        className || ""
+      }`}
+    >
       <ReactMarkdown
         remarkPlugins={[remarkMath, remarkGfm]}
-        rehypePlugins={[rehypeKatex]}
+        rehypePlugins={[rehypeRaw, rehypeKatex]}
         components={{
           // Code blocks and inline code
           code: ({ className, children, ...props }: any) => {
             const inline = !className;
             return (
-              <CodeBlock
-                className={className}
-                inline={inline}
-                {...props}
-              >
-                {String(children).replace(/\n$/, '')}
+              <CodeBlock className={className} inline={inline} {...props}>
+                {String(children).replace(/\n$/, "")}
               </CodeBlock>
             );
           },
-          
+
           // Headings
           h1: ({ children }) => (
             <h1 className="text-2xl font-bold text-white mb-4 mt-6 first:mt-0">
@@ -85,9 +89,7 @@ export default function MarkdownRenderer({ content, className }: MarkdownRendere
             </ol>
           ),
           li: ({ children }) => (
-            <li className="text-white/90 leading-relaxed">
-              {children}
-            </li>
+            <li className="text-white/90 leading-relaxed">{children}</li>
           ),
 
           // Links
@@ -118,19 +120,13 @@ export default function MarkdownRenderer({ content, className }: MarkdownRendere
             </div>
           ),
           thead: ({ children }) => (
-            <thead className="bg-white/10">
-              {children}
-            </thead>
+            <thead className="bg-white/10">{children}</thead>
           ),
           tbody: ({ children }) => (
-            <tbody className="divide-y divide-white/10">
-              {children}
-            </tbody>
+            <tbody className="divide-y divide-white/10">{children}</tbody>
           ),
           tr: ({ children }) => (
-            <tr className="hover:bg-white/5 transition-colors">
-              {children}
-            </tr>
+            <tr className="hover:bg-white/5 transition-colors">{children}</tr>
           ),
           th: ({ children }) => (
             <th className="px-4 py-2 text-left text-sm font-medium text-white border-b border-white/10">
@@ -138,26 +134,18 @@ export default function MarkdownRenderer({ content, className }: MarkdownRendere
             </th>
           ),
           td: ({ children }) => (
-            <td className="px-4 py-2 text-sm text-white/90">
-              {children}
-            </td>
+            <td className="px-4 py-2 text-sm text-white/90">{children}</td>
           ),
 
           // Horizontal rule
-          hr: () => (
-            <hr className="border-white/20 my-6" />
-          ),
+          hr: () => <hr className="border-white/20 my-6" />,
 
           // Strong and emphasis
           strong: ({ children }) => (
-            <strong className="font-semibold text-white">
-              {children}
-            </strong>
+            <strong className="font-semibold text-white">{children}</strong>
           ),
           em: ({ children }) => (
-            <em className="italic text-white/90">
-              {children}
-            </em>
+            <em className="italic text-white/90">{children}</em>
           ),
 
           // Images with download button overlay
@@ -184,4 +172,4 @@ export default function MarkdownRenderer({ content, className }: MarkdownRendere
       </ReactMarkdown>
     </div>
   );
-} 
+}

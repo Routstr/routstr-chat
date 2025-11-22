@@ -61,6 +61,7 @@
     "react-qr-code": "^2.0.15",
     "react-syntax-highlighter": "^15.6.1",
     "rehype-katex": "^7.0.1",
+    "rehype-raw": "^7.0.0",
     "remark-gfm": "^4.0.1",
     "remark-math": "^6.0.0",
     "rxjs": "^7.8.1",
