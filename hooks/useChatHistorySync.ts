@@ -324,6 +324,7 @@ export const useChatHistorySync = ({
     const controller = new AbortController();
 
     const fetchCloudHistory = async () => {
+      console.log("FETCHING CLOUD CONVOS");
       try {
         const filter = {
           kinds: [KINDS.ARBITRARY_APP_DATA],

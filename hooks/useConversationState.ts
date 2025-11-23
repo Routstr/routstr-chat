@@ -48,20 +48,19 @@ export const useConversationState = (): UseConversationStateReturn => {
   const [editingMessageIndex, setEditingMessageIndex] = useState<number | null>(null);
   const [editingContent, setEditingContent] = useState('');
 
-  useChatHistorySync({
-    conversations,
-    setConversations,
-    activeConversationId,
-    setMessages,
-    conversationsLoaded
-  });
+  // useChatHistorySync({
+  //   conversations,
+  //   setConversations,
+  //   activeConversationId,
+  //   setMessages,
+  //   conversationsLoaded
+  // });
 
   // Load conversations and active conversation ID from storage on mount
   useEffect(() => {
     const loadedConversations = loadConversationsFromStorage();
     setConversations(loadedConversations);
     setConversationsLoaded(true);
-
   }, []);
 
   // Save current conversation whenever messages change

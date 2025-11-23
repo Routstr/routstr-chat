@@ -412,7 +412,7 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({ isOpen, onClose, on
       </div>
 
       {/* Tab Content Container */}
-      <div className="min-h-[400px]">
+      <div className="">
       {/* Lightning Tab */}
       {activeTab === 'lightning' && (
         <div className="space-y-4">
@@ -644,9 +644,18 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({ isOpen, onClose, on
         <div className="bg-green-500/10 border border-green-500/30 text-green-200 p-3 rounded-lg text-sm">{successMessage}</div>
       )}
 
+      {/* OR separator */}
+      <div className="relative py-1">
+        <div className="absolute inset-0 flex items-center">
+          <div className="w-full border-t border-white/20"></div>
+        </div>
+        <div className="relative flex justify-center">
+          <span className="bg-[#181818] px-1 text-lg font-bold text-white/90">OR</span>
+        </div>
+      </div>
+
       {/* Login button */}
       <div className="pt-2">
-        <div className="text-center text-base font-bold text-white/70 mb-2">OR</div>
         <button
           onClick={() => { onClose(); setIsLoginModalOpen(true); }}
           className="w-full bg-white/10 border border-white/20 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-white/15 transition-colors cursor-pointer"
