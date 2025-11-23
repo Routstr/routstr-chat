@@ -49,6 +49,14 @@ const ApiKeysTab = ({ baseUrl, baseUrls: _ignoredBaseUrlsProp, setActiveTab, isM
         if (resp.ok) {
           const data = await resp.json();
           const providers: any[] = Array.isArray(data?.providers) ? data.providers : [];
+          
+          // Add localhost in development
+          if (process.env.NODE_ENV === 'development') {
+            providers.push({
+              endpoint_url: 'http://localhost:8000/'
+            });
+          }
+
           providers.forEach((p: any) => {
             const primary = p?.endpoint_url;
             const alternates: string[] = Array.isArray(p?.endpoint_urls) ? p.endpoint_urls : [];

@@ -58,14 +58,19 @@ export const useApiState = (isAuthenticated: boolean, balance: number, maxBalanc
       if (!res.ok) throw new Error(`Failed providers ${res.status}`);
       const data = await res.json();
       const providers = Array.isArray(data?.providers) ? data.providers : [];
+      
+      if (process.env.NODE_ENV === 'development') {
+        providers.push({ endpoint_url: 'http://localhost:8000/' });
+      }
+
       const bases = new Set<string>();
       for (const p of providers) {
         const primary = normalizeBase(p?.endpoint_url);
-        if (primary && !primary.startsWith('http://')) bases.add(primary);
+        if (primary && (!primary.startsWith('http://') || primary.includes('localhost'))) bases.add(primary);
         const alts: string[] = Array.isArray(p?.endpoint_urls) ? p.endpoint_urls : [];
         for (const alt of alts) {
           const n = normalizeBase(alt);
-          if (n && !n.startsWith('http://')) bases.add(n);
+          if (n && (!n.startsWith('http://') || n.includes('localhost'))) bases.add(n);
         }
       }
       // Filter out disabled providers

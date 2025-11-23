@@ -55,6 +55,15 @@ const ModelsTab: React.FC<ModelsTabProps> = ({
           endpoint_url: p.endpoint_url,
           endpoint_urls: p.endpoint_urls
         }));
+
+        // Add localhost in development
+        if (process.env.NODE_ENV === 'development') {
+          list.push({
+            name: 'Localhost',
+            endpoint_url: 'http://localhost:8000/'
+          });
+        }
+
         // Keep provided order; optionally alphabetical by name for UX
         const sorted = list.slice().sort((a, b) => (a.name || a.endpoint_url).localeCompare(b.name || b.endpoint_url));
         // Store all providers for Disable Providers section
@@ -251,7 +260,8 @@ const ModelsTab: React.FC<ModelsTabProps> = ({
                 allProviders.map((provider) => {
                   const normalized = normalizeProviderUrl(provider.endpoint_url);
                   const isDisabled = isProviderDisabled(provider.endpoint_url);
-                  if (normalized.includes('http://')) return null;
+                  // Skip non-secure http (except localhost)
+                  if (normalized.includes('http://') && !normalized.includes('localhost')) return null;
                   return (
                     <div key={`${provider.name}-${normalized}`} className="flex items-center justify-between py-2">
                       <div className="min-w-0 flex-1">
@@ -336,7 +346,8 @@ const ModelsTab: React.FC<ModelsTabProps> = ({
                         const primary = p.endpoint_url?.startsWith('http') ? p.endpoint_url : `https://${p.endpoint_url}`;
                         const normalized = primary.endsWith('/') ? primary : `${primary}/`;
                         const isActive = normalized === selectedProvider;
-                        if (normalized.includes('http://')) return null;
+                        // Skip non-secure http (except localhost)
+                        if (normalized.includes('http://') && !normalized.includes('localhost')) return null;
                         return (
                           <button
                             key={`${p.name}-${normalized}`}
