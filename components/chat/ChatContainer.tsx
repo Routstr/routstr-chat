@@ -38,7 +38,11 @@ const ChatContainer: React.FC<ChatContainerProps> = ({ onShowQRCode, isQrModalOp
     deleteConversation,
     
     // Balance
-    balance
+    balance,
+
+    // Sync
+    syncWithNostr,
+    isSyncing
   } = useChat();
 
   return (
@@ -70,6 +74,8 @@ const ChatContainer: React.FC<ChatContainerProps> = ({ onShowQRCode, isQrModalOp
           setIsSettingsOpen={setIsSettingsOpen}
           setInitialSettingsTab={setInitialSettingsTab}
           balance={balance}
+          syncWithNostr={syncWithNostr}
+          isSyncing={isSyncing}
         />
       )}
 

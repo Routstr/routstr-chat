@@ -72,7 +72,9 @@ export interface UseChatActionsReturn {
  * Manages message sending logic, AI response streaming,
  * token management for API calls, and error handling and retries
  */
-export const useChatActions = (): UseChatActionsReturn => {
+export const useChatActions = (
+  publishMessageToNostr?: (conversationId: string, message: Message, modelId: string, previousEventId?: string) => Promise<string | null>
+): UseChatActionsReturn => {
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
@@ -144,6 +146,15 @@ export const useChatActions = (): UseChatActionsReturn => {
     const originConversationId = activeConversationId ?? createNewConversationHandler(updatedMessages, timestamp);
     if (activeConversationId) {
       setMessages(updatedMessages);
+    }
+
+    // Publish user message to Nostr
+    if (publishMessageToNostr) {
+      // We need the previous event ID for the linked list.
+      // Ideally, we should store this in the conversation metadata.
+      // For now, let's pass undefined and let the hook handle it (or not link it yet).
+      // TODO: Retrieve last event ID from conversation metadata.
+      publishMessageToNostr(originConversationId, userMessage, selectedModel.id).catch(console.error);
     }
 
     setInputMessage('');
@@ -324,6 +335,11 @@ export const useChatActions = (): UseChatActionsReturn => {
           // Append to current messages state
           const updatedMessages = [...currentMessages, message];
           updateMessages(updatedMessages);
+
+          // Publish AI response to Nostr
+          if (publishMessageToNostr && originConversationId) {
+             publishMessageToNostr(originConversationId, message, selectedModel.id).catch(console.error);
+          }
         },
         onBalanceUpdate: setBalance,
         onTransactionUpdate: (transaction) => {

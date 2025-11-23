@@ -1,4 +1,4 @@
-import { ChevronDown, PlusCircle, Settings, Trash2, X, Key, SquarePen } from 'lucide-react';
+import { ChevronDown, PlusCircle, Settings, Trash2, X, Key, SquarePen, RefreshCw } from 'lucide-react';
 import { Conversation } from '@/types/chat';
 
 interface SidebarProps {
@@ -16,6 +16,8 @@ interface SidebarProps {
   setIsSettingsOpen: (isOpen: boolean) => void;
   setInitialSettingsTab: (tab: 'settings' | 'wallet' | 'history' | 'api-keys') => void;
   balance: number;
+  syncWithNostr: () => Promise<void>;
+  isSyncing: boolean;
 }
 
 export default function Sidebar({
@@ -32,7 +34,9 @@ export default function Sidebar({
   deleteConversation,
   setIsSettingsOpen,
   setInitialSettingsTab,
-  balance
+  balance,
+  syncWithNostr,
+  isSyncing
 }: SidebarProps) {
   return (
     <div className="relative h-full flex-shrink-0 z-50">
@@ -84,7 +88,17 @@ export default function Sidebar({
 
         {/* Conversations List */}
         <div className="flex-1 overflow-y-auto px-4 py-2 space-y-2">
-          <div className="text-xs text-white/50 font-medium px-2 pb-2">Chats</div>
+          <div className="flex items-center justify-between px-2 pb-2">
+            <div className="text-xs text-white/50 font-medium">Chats</div>
+            <button
+              onClick={() => syncWithNostr()}
+              disabled={isSyncing}
+              className={`p-1 rounded hover:bg-white/10 text-white/50 hover:text-white transition-colors ${isSyncing ? 'animate-spin' : ''}`}
+              title="Sync with Nostr"
+            >
+              <RefreshCw className="h-3 w-3" />
+            </button>
+          </div>
           {conversations.length === 0 ? (
             <p className="text-xs text-white/50 text-center py-2">No saved conversations</p>
           ) : (

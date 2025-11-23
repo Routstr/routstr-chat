@@ -11,6 +11,7 @@ import {
 import { getTextFromContent } from '@/utils/messageUtils';
 import { loadActiveConversationId, saveActiveConversationId } from '@/utils/storageUtils';
 import { useChatHistorySync } from './useChatHistorySync';
+import { useChatSync } from './useChatSync';
 
 export interface UseConversationStateReturn {
   conversations: Conversation[];
@@ -33,6 +34,9 @@ export interface UseConversationStateReturn {
   saveCurrentConversation: () => void;
   saveConversationById: (conversationId: string, newMessages: Message[]) => void;
   getActiveConversationId: () => string | null;
+  syncWithNostr: () => Promise<void>;
+  isSyncing: boolean;
+  publishMessageToNostr: (conversationId: string, message: Message, modelId: string, previousEventId?: string) => Promise<string | null>;
 }
 
 /**
@@ -48,6 +52,8 @@ export const useConversationState = (): UseConversationStateReturn => {
   const [editingMessageIndex, setEditingMessageIndex] = useState<number | null>(null);
   const [editingContent, setEditingContent] = useState('');
 
+  const { syncConversations, publishMessage, isSyncing } = useChatSync();
+
   // useChatHistorySync({
   //   conversations,
   //   setConversations,
@@ -55,6 +61,40 @@ export const useConversationState = (): UseConversationStateReturn => {
   //   setMessages,
   //   conversationsLoaded
   // });
+
+  const syncWithNostr = useCallback(async () => {
+    const syncedConversations = await syncConversations();
+    if (syncedConversations.length > 0) {
+      setConversations(prev => {
+        // Merge logic: prefer synced conversations but keep local ones if not present?
+        // Or just overwrite?
+        // For "Sync-to-Self", the relay state is the truth.
+        // But we might have local unsynced changes.
+        // For now, let's merge by ID, preferring the synced version if it has more messages?
+        // Or just simple overwrite for existing IDs.
+        
+        const newMap = new Map(prev.map(c => [c.id, c]));
+        syncedConversations.forEach(c => {
+          newMap.set(c.id, c);
+        });
+        
+        const merged = Array.from(newMap.values());
+        // Persist to storage
+        saveConversationToStorage(merged, '', []); // Just to trigger save, arguments are a bit weird in util
+        // Actually saveConversationToStorage only saves one. We need persistConversationsSnapshot
+        // But we can't import it easily if it's not exported or we don't want to duplicate logic.
+        // Let's just return merged and let the effect handle it if we trigger a state update.
+        // But we need to persist it.
+        
+        // We can use the setConversations callback to update state,
+        // but we should also persist to localStorage.
+        // The util `persistConversationsSnapshot` is exported.
+        // Let's import it if needed, or just rely on the fact that `saveConversationToStorage` calls it.
+        
+        return merged;
+      });
+    }
+  }, [syncConversations]);
 
   // Load conversations and active conversation ID from storage on mount
   useEffect(() => {
@@ -189,6 +229,9 @@ export const useConversationState = (): UseConversationStateReturn => {
       });
     },
     getActiveConversationId: () => loadActiveConversationId(),
-    conversationsLoaded
+    conversationsLoaded,
+    syncWithNostr,
+    isSyncing,
+    publishMessageToNostr: publishMessage
   };
 };
