@@ -131,7 +131,6 @@ const SettingsModal = ({
         {activeTab === 'settings' ? (
           <GeneralTab
               publicKey={user?.pubkey}
-              nsecData={logins[0].data}
               loginType={user?.method}
               logout={logout}
               router={router}

@@ -12,6 +12,7 @@ import { getTextFromContent } from '@/utils/messageUtils';
 import { loadActiveConversationId, saveActiveConversationId } from '@/utils/storageUtils';
 import { useChatHistorySync } from './useChatHistorySync';
 import { useChatSync } from './useChatSync';
+import { useAppContext } from './useAppContext';
 
 export interface UseConversationStateReturn {
   conversations: Conversation[];
@@ -52,7 +53,9 @@ export const useConversationState = (): UseConversationStateReturn => {
   const [editingMessageIndex, setEditingMessageIndex] = useState<number | null>(null);
   const [editingContent, setEditingContent] = useState('');
 
-  const { syncConversations, publishMessage, isSyncing } = useChatSync();
+  const { config } = useAppContext(); // Keep presetRelays even if not used directly here
+
+  const { syncConversations, publishMessage, isSyncing } = useChatSync(config.relayUrls);
 
   // useChatHistorySync({
   //   conversations,

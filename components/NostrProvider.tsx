@@ -28,7 +28,7 @@ class TimestampTrackingNPool extends NPool {
 const NostrProvider: React.FC<NostrProviderProps> = (props) => {
   const { children } = props;
 
-  const { config, presetRelays } = useAppContext(); // Keep presetRelays even if not used directly here
+  const { config } = useAppContext(); // Keep presetRelays even if not used directly here
   
   // NPool instance created once
   const pool = useRef<NPool | undefined>(undefined);

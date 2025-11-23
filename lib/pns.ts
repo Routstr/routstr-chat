@@ -1,12 +1,13 @@
-import { hkdf } from '@noble/hashes/hkdf';
-import { sha256 } from '@noble/hashes/sha256';
+import { hkdf, extract as hkdf_extract } from '@noble/hashes/hkdf';
+import { sha256 } from '@noble/hashes/sha2';
+import { randomBytes } from '@noble/hashes/utils';
 import * as secp from '@noble/secp256k1';
 import { nip44, getPublicKey, finalizeEvent, Event } from 'nostr-tools';
 import { decodePrivateKey } from './nostr';
 
 // Constants
 export const KIND_PNS = 1080;
-const SALT_PNS = 'nip-pns';
+const SALT_PNS = 'routstr-chat-history-v2';
 const SALT_NIP44 = 'nip44-v2';
 
 // Types
@@ -25,7 +26,7 @@ export interface PnsKeys {
 export function derivePnsKeys(deviceKey: Uint8Array): PnsKeys {
   // 1. Key Derivation
   // pns_key = hkdf_extract(ikm=device_key, salt="nip-pns")
-  const pnsKey = hkdf(sha256, deviceKey, new TextEncoder().encode(SALT_PNS), new Uint8Array(0), 32);
+  const pnsKey = hkdf_extract(sha256, deviceKey, new TextEncoder().encode(SALT_PNS));
 
   // pns_keypair = derive_secp256k1_keypair(pns_key)
   // Note: pns_key is used as the private key for the keypair
@@ -34,7 +35,7 @@ export function derivePnsKeys(deviceKey: Uint8Array): PnsKeys {
 
   // 2. Symmetric Key Derivation for Encryption
   // pns_nip44_key = hkdf_extract(ikm=pns_key, salt="nip44-v2")
-  const pnsNip44Key = hkdf(sha256, pnsKey, new TextEncoder().encode(SALT_NIP44), new Uint8Array(0), 32);
+  const pnsNip44Key = hkdf_extract(sha256, pnsKey, new TextEncoder().encode(SALT_NIP44));
 
   return {
     pnsKey,
@@ -56,7 +57,7 @@ export function encryptPnsEvent(
   const innerEventJson = JSON.stringify(innerEvent);
   
   // Generate a random 32-byte nonce
-  const nonce = nip44.v2.utils.randomBytes(32);
+  const nonce = randomBytes(32);
   
   // Encrypt the inner note using pns_nip44_key and the nonce via NIP-44 v2
   const ciphertext = nip44.v2.encrypt(innerEventJson, pnsKeys.pnsNip44Key, nonce);
@@ -99,13 +100,4 @@ export function decryptPnsEvent(
     console.error('Failed to decrypt PNS event:', error);
     return null;
   }
-}
-
-/**
- * Helper to get PNS keys from an nsec string
- */
-export function getPnsKeysFromNsec(nsec: string): PnsKeys | null {
-  const deviceKey = decodePrivateKey(nsec);
-  if (!deviceKey) return null;
-  return derivePnsKeys(deviceKey);
 }

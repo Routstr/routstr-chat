@@ -108,7 +108,6 @@ export function useCashuWithXYZ() {
   // Effect to listen for changes in localStorage for 'current_cashu_token'
   useEffect(() => {
     const updatePendingAmount = () => {
-      console.log('rdlogs: pendigl', getPendingCashuTokenAmount())
       setPendingCashuAmountState(getPendingCashuTokenAmount());
     };
 
@@ -156,9 +155,7 @@ export function useCashuWithXYZ() {
           console.log('rdlogs: No wallet found, creating new wallet');
           handleCreateWallet();
         }
-      } else {
-        console.log('rdlogs: Wallet still loading, skipping actions');
-      }
+      } 
     }
   }, [wallet, isWalletLoading, logins, handleCreateWallet, didRelaysTimeout]);
 

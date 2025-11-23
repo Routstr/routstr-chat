@@ -337,7 +337,7 @@ export const useChatActions = (
           updateMessages(updatedMessages);
 
           // Publish AI response to Nostr
-          if (publishMessageToNostr && originConversationId) {
+          if (publishMessageToNostr && originConversationId && message.role !== 'system') {
              publishMessageToNostr(originConversationId, message, selectedModel.id).catch(console.error);
           }
         },

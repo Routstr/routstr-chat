@@ -9,7 +9,6 @@ import { useNostrLogin } from '@nostrify/react/login';
 
 interface GeneralTabProps {
   publicKey: string | undefined;
-  nsecData?: { nsec: `nsec1${string}`; } | { bunkerPubkey: string; clientNsec: `nsec1${string}`; relays: string[]; } | { [key: string]: unknown; } | null;
   loginType: 'nsec' | "bunker" | "extension" | `x-${string}` | undefined;
   logout?: () => void;
   router?: AppRouterInstance;
@@ -19,7 +18,6 @@ interface GeneralTabProps {
 
 const GeneralTab: React.FC<GeneralTabProps> = ({
   publicKey,
-  nsecData,
   loginType,
   logout,
   router,
@@ -151,10 +149,11 @@ const GeneralTab: React.FC<GeneralTabProps> = ({
           </div>
         </div>
         <div className="flex gap-2 mt-2">
-          {loginType === 'nsec' && nsecData && (
+          {loginType === 'nsec' && logins[0]?.data && (
             <button
               className="grow flex items-center justify-center gap-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 px-3 py-2 rounded-md text-sm transition-colors cursor-pointer"
               onClick={() => {
+                const nsecData = logins[0]?.data;
                 const nsec = nsecData && 'nsec' in nsecData && typeof nsecData.nsec === 'string' && nsecData.nsec.startsWith('nsec1') ? nsecData.nsec : '';
                 setNsecValue(nsec);
                 setShowNsec(!showNsec);
