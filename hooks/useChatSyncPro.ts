@@ -1,9 +1,16 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { Relay, onlyEvents } from 'applesauce-relay'
 import { BehaviorSubject, filter, shareReplay, switchMap, takeWhile, defaultIfEmpty, combineLatest, merge, tap } from 'rxjs'
 import type { NostrEvent } from 'nostr-tools'
-import { KIND_PNS } from '@/lib/pns'
+import { nip19 } from 'nostr-tools'
+import { KIND_PNS, PnsKeys } from '@/lib/pns'
 import { useAppContext } from '@/hooks/useAppContext'
+import { Conversation } from '@/types/chat'
+import {
+  decryptPnsEventToInner,
+  processInnerEvent,
+} from '@/utils/eventProcessing'
+import { getStorageManager } from '@/utils/storageManager'
 
 // Relay pool so we reuse relay instances by URL
 const relayPool = new Map<string, Relay>()
@@ -27,11 +34,11 @@ const relayUrlsDefined$ = relayUrls$.pipe(
   shareReplay(1),
 )
 
-// Reactive pubkey input - exported so it can be updated from ChatProvider
-export const pubkey$ = new BehaviorSubject<string | null>(null)
-const pubkeyDefined$ = pubkey$.pipe(
-  filter((p): p is string => {
-    return p !== null
+// Reactive PNS keys input - exported so it can be updated from ChatProvider
+export const pnsKeys$ = new BehaviorSubject<PnsKeys | null>(null)
+const pnsKeysDefined$ = pnsKeys$.pipe(
+  filter((keys): keys is PnsKeys => {
+    return keys !== null
   }),
   shareReplay(1),
 )
@@ -40,8 +47,8 @@ const pubkeyDefined$ = pubkey$.pipe(
 const relayEventCounts = new Map<string, number>()
 
 // Fetch kind 1080 events from configured relays
-const kind1080Events$ = combineLatest([pubkeyDefined$, relayUrlsDefined$]).pipe(
-  switchMap(([pubkey, relayUrls]) => {
+const kind1080Events$ = combineLatest([pnsKeysDefined$, relayUrlsDefined$]).pipe(
+  switchMap(([pnsKeys, relayUrls]) => {
     // Reset counts for new subscription
     relayEventCounts.clear()
     
@@ -49,7 +56,7 @@ const kind1080Events$ = combineLatest([pubkeyDefined$, relayUrlsDefined$]).pipe(
     const relaySubscriptions = relayUrls.map((url) => {
       const relay = getRelay(url)
       return relay
-        .subscription({ kinds: [KIND_PNS], authors: [pubkey] })
+        .subscription({ kinds: [KIND_PNS], authors: [pnsKeys.pnsKeypair.pubKey] })
         .pipe(
           // Keep subscription open for real-time events (don't stop at EOSE)
           onlyEvents(),
@@ -69,9 +76,18 @@ const kind1080Events$ = combineLatest([pubkeyDefined$, relayUrlsDefined$]).pipe(
 export function useChatSyncPro() {
   const { config } = useAppContext()
   const [events, setEvents] = useState<NostrEvent[]>([])
+  const [conversations, setConversations] = useState<Conversation[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const relayCountsRef = useRef<Map<string, number>>(new Map())
+  const conversationsMapRef = useRef<Map<string, Conversation>>(new Map())
+  const [currentPnsKeys, setCurrentPnsKeys] = useState<PnsKeys | null>(null)
+
+  // Subscribe to PNS keys from the observable
+  useEffect(() => {
+    const sub = pnsKeys$.subscribe(setCurrentPnsKeys)
+    return () => sub.unsubscribe()
+  }, [])
 
   // Update relay URLs when config changes
   useEffect(() => {
@@ -79,6 +95,14 @@ export function useChatSyncPro() {
       relayUrls$.next(config.relayUrls)
     }
   }, [config.relayUrls])
+
+  // Initialize storage manager with existing conversations
+  useEffect(() => {
+    const storageManager = getStorageManager()
+    if (conversations.length > 0) {
+      storageManager.initialize(conversations)
+    }
+  }, []) // Only on mount
 
   useEffect(() => {
     // Update local ref with current relay counts
@@ -89,6 +113,39 @@ export function useChatSyncPro() {
     console.log('Events per relay:', counts, '| Total unique events:', events.length)
   }, [events])
 
+  // Process event and update conversations
+  const processEvent = useCallback((event: NostrEvent) => {
+    if (!currentPnsKeys) {
+      console.warn('Cannot process event: PNS keys not available')
+      return
+    }
+
+    // Decrypt and process the event
+    const innerEvent = decryptPnsEventToInner(event, currentPnsKeys)
+    if (!innerEvent) {
+      return
+    }
+
+    // Update conversations map
+    processInnerEvent(conversationsMapRef.current, innerEvent)
+
+    // Update state with new conversations array
+    const updatedConversations = Array.from(conversationsMapRef.current.values())
+    
+    // Sort by most recent activity
+    updatedConversations.sort((a, b) => {
+      const aTime = Math.max(...a.messages.map(m => m._createdAt || 0))
+      const bTime = Math.max(...b.messages.map(m => m._createdAt || 0))
+      return bTime - aTime
+    })
+
+    setConversations(updatedConversations)
+
+    // Queue storage update (debounced)
+    const storageManager = getStorageManager()
+    storageManager.queueBatchUpdate(updatedConversations)
+  }, [currentPnsKeys])
+
   // Subscribe to kind 1080 events
   useEffect(() => {
     setLoading(true)
@@ -96,6 +153,7 @@ export function useChatSyncPro() {
     const sub = kind1080Events$.subscribe({
       next: (event) => {
         if (event) {
+          // Update raw events array
           setEvents((prev) => {
             // Avoid duplicates
             if (prev.some((e) => e.id === event.id)) {
@@ -105,6 +163,9 @@ export function useChatSyncPro() {
             const newEvents = [...prev, event].sort((a, b) => b.created_at - a.created_at)
             return newEvents
           })
+
+          // Process event and update conversations
+          processEvent(event)
         }
         setLoading(false)
       },
@@ -119,11 +180,15 @@ export function useChatSyncPro() {
 
     return () => {
       sub.unsubscribe()
+      // Flush any pending storage updates on unmount
+      const storageManager = getStorageManager()
+      storageManager.flush()
     }
-  }, [])
+  }, [processEvent])
 
   return {
     events,
+    conversations,
     loading,
     error,
   }

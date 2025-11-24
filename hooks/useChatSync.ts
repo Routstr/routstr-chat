@@ -9,7 +9,8 @@ import {
   encryptPnsEvent,
   createPnsEvent,
   decryptPnsEvent,
-  KIND_PNS
+  KIND_PNS,
+  PnsKeys
 } from '@/lib/pns';
 import { useCurrentUser } from './useCurrentUser';
 import { useNostrLogin } from '@nostrify/react/login';
@@ -18,6 +19,13 @@ import { useNostr as useNostrify } from '@nostrify/react';
 import { saveEventIdInStorage } from '@/utils/conversationUtils';
 import { useConversationState } from './useConversationState';
 import { useChatSyncPro } from './useChatSyncPro';
+import {
+  decryptPnsEventToInner,
+  processInnerEvent,
+  extractConversationMetadata,
+  InnerEvent
+} from '@/utils/eventProcessing';
+import { getStorageManager } from '@/utils/storageManager';
 
 // Custom Kinds
 const KIND_CHAT_INNER = 20001;
@@ -34,6 +42,10 @@ interface ChatSyncHook {
     updateMessages: (newMessages: Message[]) => void
   ) => Promise<string | null>;
   syncConversations: () => Promise<Conversation[]>;
+  syncConversationsIncremental: (
+    onConversationUpdate?: (conv: Conversation) => void,
+    onComplete?: (conversations: Conversation[]) => void
+  ) => Promise<Conversation[]>;
 }
 
 interface InnerEventPayload {
@@ -176,122 +188,103 @@ export const useChatSync = (
     [createInnerEvent, createPnsChatEvent, nostr]
   );
 
-  // Sync Conversations Flow
-  const syncConversations = useCallback(async (): Promise<Conversation[]> => {
+  /**
+   * Process a single PNS event incrementally
+   * @param pnsEvent The PNS event to process
+   * @param pnsKeys The PNS keys for decryption
+   * @param conversationsMap Map of conversations being built
+   * @param onConversationUpdate Optional callback for incremental updates
+   */
+  const processPnsEventIncremental = useCallback((
+    pnsEvent: Event,
+    pnsKeys: PnsKeys,
+    conversationsMap: Map<string, Conversation>,
+    onConversationUpdate?: (conv: Conversation) => void
+  ): void => {
+    // Decrypt PNS Event -> Inner Event
+    const innerEvent = decryptPnsEventToInner(pnsEvent, pnsKeys);
+    if (!innerEvent) {
+      return;
+    }
+
+    // Process the inner event and update the conversations map
+    processInnerEvent(conversationsMap, innerEvent);
+
+    // Get the updated conversation
+    const metadata = extractConversationMetadata(innerEvent);
+    if (metadata && onConversationUpdate) {
+      const conversation = conversationsMap.get(metadata.conversationId);
+      if (conversation) {
+        onConversationUpdate(conversation);
+      }
+    }
+  }, []);
+
+  /**
+   * Sync conversations with incremental processing
+   * Events are processed and displayed as they arrive
+   */
+  const syncConversationsIncremental = useCallback(async (
+    onConversationUpdate?: (conv: Conversation) => void,
+    onComplete?: (conversations: Conversation[]) => void
+  ): Promise<Conversation[]> => {
     try {
       setIsSyncing(true);
       setError(null);
       
-      console.log(user);
       const myPubkey = user?.pubkey;
       if (!myPubkey) throw new Error('No public key');
 
-      // 1. Fetch Kind 1080 PNS events for us
+      // Get PNS keys
       const pnsKeys = getPnsKeys();
-      console.log("PNGS", pnsKeys.pnsKeypair.pubKey);
+      console.log("Syncing conversations for PNS pubkey:", pnsKeys.pnsKeypair.pubKey);
+      
       const filter = {
         kinds: [KIND_PNS],
         authors: [pnsKeys.pnsKeypair.pubKey],
-        // We might want to limit by time if we have a lastSyncTime
-        // since: lastSyncTime ? lastSyncTime : undefined
       };
 
-      // Use the nostrify pool to query events
-      // This follows the same pattern as useChatHistorySync
+      // Fetch all PNS events
       const pnsEvents = await nostr.query([filter]);
+      console.log(`Fetched ${pnsEvents.length} PNS events`);
       
-      // 2. Decrypt PNS Events
-      const decryptedEvents: any[] = [];
+      // Process events incrementally
+      const conversationsMap = new Map<string, Conversation>();
+      const storageManager = getStorageManager();
 
       for (const pnsEvent of pnsEvents) {
         try {
-          // Decrypt PNS Event (Kind 1080) -> Inner Event (Kind 20001)
-          const inner = decryptPnsEvent(pnsEvent, pnsKeys);
-          
-          if (inner && inner.kind === KIND_CHAT_INNER) {
-            // Attach the PNS event ID to the inner event so we can track the chain
-            inner.id = pnsEvent.id;
-            decryptedEvents.push(inner);
-          }
+          // Process each event
+          processPnsEventIncremental(
+            pnsEvent,
+            pnsKeys,
+            conversationsMap,
+            onConversationUpdate
+          );
         } catch (e) {
-          console.warn('Failed to decrypt PNS event:', e);
+          console.warn('Failed to process PNS event:', e);
         }
       }
 
-      // 3. Reconstruct Conversations
-      const conversationsMap = new Map<string, Conversation>();
-      console.log(decryptedEvents);
+      // Get final conversations array
+      const conversations = Array.from(conversationsMap.values());
       
-      // Group by 'd' tag (UUID)
-      for (const ev of decryptedEvents) {
-        const dTag = ev.tags.find((t: string[]) => t[0] === 'd');
-        if (!dTag) continue;
-        const uuid = dTag[1];
-        
-        if (!conversationsMap.has(uuid)) {
-          conversationsMap.set(uuid, {
-            id: uuid,
-            title: '', // Will be set to first message content
-            messages: [],
-          });
-        }
-        
-        const conv = conversationsMap.get(uuid)!;
-        
-        // Parse content
-        let content = ev.content;
-        try {
-          const parsed = JSON.parse(ev.content);
-          if (typeof parsed === 'object') content = parsed;
-        } catch {}
-
-        const roleTag = ev.tags.find((t: string[]) => t[0] === 'role');
-        const role = roleTag ? roleTag[1] : 'user';
-        
-        // We need to handle the "thinking" field if it exists in the content or tags
-        // For now, simple message mapping
-        const message: Message = {
-          role,
-          content,
-        };
-        
-        // Store the event ID for sorting
-        (message as any)._eventId = ev.id;
-        (message as any)._prevId = ev.tags.find((t: string[]) => t[0] === 'e')?.[1];
-        (message as any)._createdAt = ev.created_at;
-
-        conv.messages.push(message);
-      }
-
-      // 4. Sort Messages
-      const conversations = Array.from(conversationsMap.values()).map(conv => {
-        // Sort by created_at first as a baseline
-        conv.messages.sort((a: any, b: any) => a._createdAt - b._createdAt);
-        
-        // TODO: Implement strict linked-list sorting if needed
-        // For now, time-based sorting is usually sufficient if clocks are okay.
-        
-        // Keep all properties including _eventId, _prevId, and _createdAt
-        // No longer cleaning up internal props as we want to preserve them
-
-        // Set title to first message content if title is empty (after sorting)
-        if (!conv.title && conv.messages.length > 0) {
-          const firstMessage = conv.messages[0];
-          // If content is a string, use it directly
-          // If content is an object, convert to string or extract text
-          if (typeof firstMessage.content === 'string') {
-            conv.title = firstMessage.content.length > 50
-              ? firstMessage.content.substring(0, 50) + '...'
-              : firstMessage.content;
-          } else {
-            conv.title = JSON.stringify(firstMessage.content).length > 50
-              ? JSON.stringify(firstMessage.content).substring(0, 50) + '...'
-              : JSON.stringify(firstMessage.content);
-          }
-        }
-        
-        return conv;
+      // Sort conversations by most recent activity (newest first)
+      conversations.sort((a, b) => {
+        const aTime = Math.max(...a.messages.map(m => m._createdAt || 0));
+        const bTime = Math.max(...b.messages.map(m => m._createdAt || 0));
+        return bTime - aTime;
       });
+
+      console.log(`Sync complete: ${conversations.length} conversations`);
+
+      // Queue batch update to storage
+      storageManager.queueBatchUpdate(conversations);
+
+      // Call completion callback
+      if (onComplete) {
+        onComplete(conversations);
+      }
 
       setLastSyncTime(Date.now());
       return conversations;
@@ -303,7 +296,15 @@ export const useChatSync = (
     } finally {
       setIsSyncing(false);
     }
-  }, [getPnsKeys, nostr, user]);
+  }, [getPnsKeys, nostr, user, processPnsEventIncremental]);
+
+  /**
+   * Sync Conversations Flow (Backward compatible wrapper)
+   * Fetches all events at once and returns complete conversations
+   */
+  const syncConversations = useCallback(async (): Promise<Conversation[]> => {
+    return await syncConversationsIncremental();
+  }, [syncConversationsIncremental]);
 
   return {
     isSyncing,
@@ -311,5 +312,6 @@ export const useChatSync = (
     error,
     publishMessage,
     syncConversations,
+    syncConversationsIncremental,
   };
 };

@@ -54,7 +54,7 @@ export const useConversationState = (): UseConversationStateReturn => {
 
   const { config } = useAppContext(); // Keep presetRelays even if not used directly here
 
-  const { syncConversations, isSyncing } = useChatSync(config.relayUrls);
+  const { syncConversations, syncConversationsIncremental, isSyncing } = useChatSync(config.relayUrls);
 
   // useChatHistorySync({
   //   conversations,
@@ -64,39 +64,42 @@ export const useConversationState = (): UseConversationStateReturn => {
   //   conversationsLoaded
   // });
 
+  /**
+   * Handle incremental conversation updates as events arrive
+   */
+  const handleConversationUpdate = useCallback((updatedConversation: Conversation) => {
+    setConversations(prev => {
+      // Find if conversation already exists
+      const existingIndex = prev.findIndex(c => c.id === updatedConversation.id);
+      
+      if (existingIndex !== -1) {
+        // Update existing conversation
+        const updated = [...prev];
+        updated[existingIndex] = updatedConversation;
+        return updated;
+      } else {
+        // Add new conversation
+        return [...prev, updatedConversation];
+      }
+    });
+  }, []);
+
+  /**
+   * Sync with Nostr using incremental processing
+   * Events are displayed as they arrive for better user experience
+   */
   const syncWithNostr = useCallback(async () => {
-    const syncedConversations = await syncConversations();
-    if (syncedConversations.length > 0) {
-      setConversations(prev => {
-        // Merge logic: prefer synced conversations but keep local ones if not present?
-        // Or just overwrite?
-        // For "Sync-to-Self", the relay state is the truth.
-        // But we might have local unsynced changes.
-        // For now, let's merge by ID, preferring the synced version if it has more messages?
-        // Or just simple overwrite for existing IDs.
-        
-        const newMap = new Map(prev.map(c => [c.id, c]));
-        syncedConversations.forEach(c => {
-          newMap.set(c.id, c);
-        });
-        
-        const merged = Array.from(newMap.values());
-        // Persist to storage
-        saveConversationToStorage(merged, '', []); // Just to trigger save, arguments are a bit weird in util
-        // Actually saveConversationToStorage only saves one. We need persistConversationsSnapshot
-        // But we can't import it easily if it's not exported or we don't want to duplicate logic.
-        // Let's just return merged and let the effect handle it if we trigger a state update.
-        // But we need to persist it.
-        
-        // We can use the setConversations callback to update state,
-        // but we should also persist to localStorage.
-        // The util `persistConversationsSnapshot` is exported.
-        // Let's import it if needed, or just rely on the fact that `saveConversationToStorage` calls it.
-        
-        return merged;
-      });
-    }
-  }, [syncConversations]);
+    await syncConversationsIncremental(
+      // Callback for each conversation update as events arrive
+      handleConversationUpdate,
+      // Callback when sync completes
+      (finalConversations) => {
+        console.log(`Sync complete: ${finalConversations.length} conversations loaded`);
+        // Final state update happens automatically through handleConversationUpdate
+        // Storage is handled by the storage manager in useChatSync
+      }
+    );
+  }, [syncConversationsIncremental, handleConversationUpdate]);
 
   // Load conversations and active conversation ID from storage on mount
   useEffect(() => {

@@ -12,7 +12,7 @@ import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useNostrLogin } from '@nostrify/react/login';
 import { nip19 } from 'nostr-tools';
 import { derivePnsKeys } from '@/lib/pns';
-import { pubkey$ } from '@/hooks/useChatSyncPro';
+import { pnsKeys$ } from '@/hooks/useChatSyncPro';
 
 interface ChatContextType extends 
   UseConversationStateReturn,
@@ -57,17 +57,17 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     return derivePnsKeys(privateKey as Uint8Array);
   }, [logins]);
 
-  // Update pubkey$ observable when user changes
+  // Update pnsKeys$ observable when user changes
   useEffect(() => {
     if (user?.pubkey && logins.length > 0) {
       try {
         const pnsKeys = getPnsKeys();
-        pubkey$.next(pnsKeys.pnsKeypair.pubKey);
+        pnsKeys$.next(pnsKeys);
       } catch (err) {
-        pubkey$.next(null);
+        pnsKeys$.next(null);
       }
     } else {
-      pubkey$.next(null);
+      pnsKeys$.next(null);
     }
   }, [user?.pubkey, logins, getPnsKeys]);
   
