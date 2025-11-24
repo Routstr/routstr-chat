@@ -71,7 +71,7 @@ export const useChatSync = (
       throw new Error('Private key not available');
     }
     return derivePnsKeys(privateKey);
-  }, [privateKey]);
+  }, [privateKey, logins]);
 
   // 1. Create Inner Event (Kind 20001)
   const createInnerEvent = useCallback(
@@ -108,7 +108,7 @@ export const useChatSync = (
         content: contentStr,
       };
     },
-    []
+    [user]
   );
 
   // 2. Create PNS Event (Kind 1080) - Encrypted Inner Event
@@ -180,6 +180,7 @@ export const useChatSync = (
     try {
       setIsSyncing(true);
       setError(null);
+      
       console.log(user);
       const myPubkey = user?.pubkey;
       if (!myPubkey) throw new Error('No public key');
@@ -300,7 +301,7 @@ export const useChatSync = (
     } finally {
       setIsSyncing(false);
     }
-  }, [getPnsKeys, nostr]);
+  }, [getPnsKeys, nostr, user]);
 
   return {
     isSyncing,
