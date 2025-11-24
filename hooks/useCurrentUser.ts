@@ -40,11 +40,9 @@ export function useCurrentUser() {
     return users;
   }, [logins, loginToUser]);
 
-  const user = users[0] as NUser | undefined;
-  
   // Fallback to useLoggedInAccounts if no user found through Nostrify
   const fallbackUser = useMemo(() => {
-    if (user || !loggedInAccount) return null;
+    if (users[0] || !loggedInAccount) return null;
     
     // Define a type for the window object with nostr extension
     interface WindowWithNostr extends Window {
@@ -66,9 +64,9 @@ export function useCurrentUser() {
       signer: typeof window !== 'undefined' && windowWithNostr.nostr ? windowWithNostr.nostr : null,
       method: 'extension' as const
     } as NUser;
-  }, [user, loggedInAccount]);
+  }, [users, loggedInAccount]);
   
-  const finalUser = user || fallbackUser;
+  const finalUser = users[0] || fallbackUser;
   const author = useAuthor(finalUser?.pubkey);
 
   return {

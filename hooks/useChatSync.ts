@@ -258,21 +258,6 @@ export const useChatSync = (
         (message as any)._createdAt = ev.created_at;
 
         conv.messages.push(message);
-        
-        // Set title to first message content if title is empty
-        if (!conv.title && conv.messages.length === 1) {
-          // If content is a string, use it directly
-          // If content is an object, convert to string or extract text
-          if (typeof message.content === 'string') {
-            conv.title = message.content.length > 50
-              ? message.content.substring(0, 50) + '...'
-              : message.content;
-          } else {
-            conv.title = JSON.stringify(message.content).length > 50
-              ? JSON.stringify(message.content).substring(0, 50) + '...'
-              : JSON.stringify(message.content);
-          }
-        }
       }
 
       // 4. Sort Messages
@@ -286,9 +271,21 @@ export const useChatSync = (
         // Keep all properties including _eventId, _prevId, and _createdAt
         // No longer cleaning up internal props as we want to preserve them
 
-        // Generate title
-        // We can use the util function if we import it, or just leave it generic
-        // The app will likely regenerate titles based on content
+        // Set title to first message content if title is empty (after sorting)
+        if (!conv.title && conv.messages.length > 0) {
+          const firstMessage = conv.messages[0];
+          // If content is a string, use it directly
+          // If content is an object, convert to string or extract text
+          if (typeof firstMessage.content === 'string') {
+            conv.title = firstMessage.content.length > 50
+              ? firstMessage.content.substring(0, 50) + '...'
+              : firstMessage.content;
+          } else {
+            conv.title = JSON.stringify(firstMessage.content).length > 50
+              ? JSON.stringify(firstMessage.content).substring(0, 50) + '...'
+              : JSON.stringify(firstMessage.content);
+          }
+        }
         
         return conv;
       });
