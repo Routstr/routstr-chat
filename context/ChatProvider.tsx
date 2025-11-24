@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext } from 'react';
+import React, { createContext, useContext, useEffect, useCallback } from 'react';
 import { useConversationState, UseConversationStateReturn } from '@/hooks/useConversationState';
 import { useApiState, UseApiStateReturn } from '@/hooks/useApiState';
 import { useUiState, UseUiStateReturn } from '@/hooks/useUiState';
@@ -8,6 +8,11 @@ import { useModelState, UseModelStateReturn } from '@/hooks/useModelState';
 import { useChatActions, UseChatActionsReturn } from '@/hooks/useChatActions';
 import { useCashuWithXYZ } from '@/hooks/useCashuWithXYZ';
 import { useAuth } from './AuthProvider';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
+import { useNostrLogin } from '@nostrify/react/login';
+import { nip19 } from 'nostr-tools';
+import { derivePnsKeys } from '@/lib/pns';
+import { pubkey$ } from '@/hooks/useChatSyncPro';
 
 interface ChatContextType extends 
   UseConversationStateReturn,
@@ -40,6 +45,35 @@ interface ChatProviderProps {
  */
 export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
   const { isAuthenticated } = useAuth();
+  const { user } = useCurrentUser();
+  const { logins } = useNostrLogin();
+  
+  // Helper to get PNS keys
+  const getPnsKeys = useCallback(() => {
+    const privateKey = logins[0]?.type === 'nsec' ? nip19.decode(logins[0].data.nsec).data : null;
+    if (!privateKey) {
+      throw new Error('Private key not available');
+    }
+    return derivePnsKeys(privateKey as Uint8Array);
+  }, [logins]);
+
+  // Update pubkey$ observable when user changes
+  useEffect(() => {
+    console.log('[ChatProvider] User/logins changed:', { userPubkey: user?.pubkey, loginsCount: logins.length });
+    if (user?.pubkey && logins.length > 0) {
+      try {
+        const pnsKeys = getPnsKeys();
+        console.log('[ChatProvider] Derived PNS keys, setting pubkey$:', pnsKeys.pnsKeypair.pubKey);
+        pubkey$.next(pnsKeys.pnsKeypair.pubKey);
+      } catch (err) {
+        console.error('[ChatProvider] Failed to derive PNS keys:', err);
+        pubkey$.next(null);
+      }
+    } else {
+      console.log('[ChatProvider] No user or logins, setting pubkey$ to null');
+      pubkey$.next(null);
+    }
+  }, [user?.pubkey, logins, getPnsKeys]);
   
   const conversationState = useConversationState();
   const cashuWithXYZ = useCashuWithXYZ();

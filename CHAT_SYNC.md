@@ -31,6 +31,8 @@ This document outlines the implementation of a robust chat sync feature for the 
 - If yes, update messages in real-time
 - If no, just store the event for later use
 
+### 6. PNS KEYS CANNOT BE CREATED WITH OTHER LOGINS> HELP!!
+
 ## Implementation Details
 
 ### Core Components

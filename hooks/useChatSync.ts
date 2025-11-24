@@ -17,6 +17,7 @@ import { relayPool } from '@/lib/applesauce-core';
 import { useNostr as useNostrify } from '@nostrify/react';
 import { saveEventIdInStorage } from '@/utils/conversationUtils';
 import { useConversationState } from './useConversationState';
+import { useChatSyncPro } from './useChatSyncPro';
 
 // Custom Kinds
 const KIND_CHAT_INNER = 20001;
@@ -50,10 +51,10 @@ export const useChatSync = (
   const [lastSyncTime, setLastSyncTime] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const poolRef = useRef<RelayPool | null>(null);
-  const { privateKey } = useNostr();
   const { user } = useCurrentUser();
   const { logins } = useNostrLogin()
   const { nostr } = useNostrify();
+  const { events } = useChatSyncPro();
 
   // Initialize RelayPool (no longer needed with nostrify)
   useEffect(() => {
@@ -62,7 +63,7 @@ export const useChatSync = (
     return () => {
       // Cleanup if needed
     };
-  }, []);
+  }, [events]);
 
   // Helper to get PNS keys
   const getPnsKeys = useCallback(() => {
@@ -71,7 +72,7 @@ export const useChatSync = (
       throw new Error('Private key not available');
     }
     return derivePnsKeys(privateKey);
-  }, [privateKey, logins]);
+  }, [logins]);
 
   // 1. Create Inner Event (Kind 20001)
   const createInnerEvent = useCallback(
@@ -187,6 +188,7 @@ export const useChatSync = (
 
       // 1. Fetch Kind 1080 PNS events for us
       const pnsKeys = getPnsKeys();
+      console.log("PNGS", pnsKeys.pnsKeypair.pubKey);
       const filter = {
         kinds: [KIND_PNS],
         authors: [pnsKeys.pnsKeypair.pubKey],
