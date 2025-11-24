@@ -16,6 +16,7 @@ import { useNostrLogin } from '@nostrify/react/login';
 import { relayPool } from '@/lib/applesauce-core';
 import { useNostr as useNostrify } from '@nostrify/react';
 import { saveEventIdInStorage } from '@/utils/conversationUtils';
+import { useConversationState } from './useConversationState';
 
 // Custom Kinds
 const KIND_CHAT_INNER = 20001;
@@ -27,8 +28,9 @@ interface ChatSyncHook {
   error: string | null;
   publishMessage: (
     conversationId: string,
-    message: Message,
-    modelId: string
+    updatedMessages: Message[],
+    modelId: string,
+    updateMessages: (newMessages: Message[]) => void
   ) => Promise<string | null>;
   syncConversations: () => Promise<Conversation[]>;
 }
@@ -127,9 +129,12 @@ export const useChatSync = (
   const publishMessage = useCallback(
     async (
       conversationId: string,
-      message: Message,
-      modelId: string
+      updatedMessages: Message[],
+      modelId: string,
+      updateMessages: (newMessages: Message[]) => void
     ): Promise<string | null> => {
+      console.log(updatedMessages)
+      const message = updatedMessages[updatedMessages.length - 1];
       try {
         setIsSyncing(true);
         setError(null);
@@ -146,9 +151,14 @@ export const useChatSync = (
         if (nostr) {
           // Use nostrify pool to publish the event
           await nostr.event(pnsEvent);
-          if (message._prevId)
+          if (message._prevId) {
+            // Edit the last message to add _eventId
+            const lastMessage = updatedMessages[updatedMessages.length - 1];
+            lastMessage._eventId = pnsEvent.id;
+            
+            updateMessages(updatedMessages)
             saveEventIdInStorage(conversationId, message._prevId, pnsEvent.id);
-          
+          }
           // Return the ID of the PNS event for the linked list
           return pnsEvent.id;
         }
@@ -218,7 +228,7 @@ export const useChatSync = (
         if (!conversationsMap.has(uuid)) {
           conversationsMap.set(uuid, {
             id: uuid,
-            title: 'New Conversation', // Will be updated
+            title: '', // Will be set to first message content
             messages: [],
           });
         }
@@ -248,6 +258,21 @@ export const useChatSync = (
         (message as any)._createdAt = ev.created_at;
 
         conv.messages.push(message);
+        
+        // Set title to first message content if title is empty
+        if (!conv.title && conv.messages.length === 1) {
+          // If content is a string, use it directly
+          // If content is an object, convert to string or extract text
+          if (typeof message.content === 'string') {
+            conv.title = message.content.length > 50
+              ? message.content.substring(0, 50) + '...'
+              : message.content;
+          } else {
+            conv.title = JSON.stringify(message.content).length > 50
+              ? JSON.stringify(message.content).substring(0, 50) + '...'
+              : JSON.stringify(message.content);
+          }
+        }
       }
 
       // 4. Sort Messages

@@ -37,7 +37,6 @@ export interface UseConversationStateReturn {
   getActiveConversationId: () => string | null;
   syncWithNostr: () => Promise<void>;
   isSyncing: boolean;
-  publishMessageToNostr: (conversationId: string, message: Message, modelId: string, previousEventId?: string) => Promise<string | null>;
 }
 
 /**
@@ -55,7 +54,7 @@ export const useConversationState = (): UseConversationStateReturn => {
 
   const { config } = useAppContext(); // Keep presetRelays even if not used directly here
 
-  const { syncConversations, publishMessage, isSyncing } = useChatSync(config.relayUrls);
+  const { syncConversations, isSyncing } = useChatSync(config.relayUrls);
 
   // useChatHistorySync({
   //   conversations,
@@ -108,6 +107,7 @@ export const useConversationState = (): UseConversationStateReturn => {
 
   // Save current conversation whenever messages change
   const saveCurrentConversation = useCallback(() => {
+    console.log('logging COVNERTS')
     if (!activeConversationId) return;
 
     setConversations(prevConversations => {
@@ -234,7 +234,6 @@ export const useConversationState = (): UseConversationStateReturn => {
     getActiveConversationId: () => loadActiveConversationId(),
     conversationsLoaded,
     syncWithNostr,
-    isSyncing,
-    publishMessageToNostr: publishMessage
+    isSyncing
   };
 };

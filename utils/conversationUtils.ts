@@ -1,5 +1,6 @@
 import { Conversation, Message } from '@/types/chat';
 import { getTextFromContent, stripImageDataFromMessages } from './messageUtils';
+import { loadActiveConversationId } from './storageUtils';
 
 const CONVERSATIONS_STORAGE_KEY = 'saved_conversations';
 const CONVERSATIONS_UPDATED_AT_KEY = 'saved_conversations_updated_at';
@@ -267,19 +268,30 @@ export const saveEventIdInStorage = (
 };
 
 
-// Find the last non-system message and get its _prevId
-export const getLastNonSystemMessageEventId = (messages: Message[]): string => {
+// Find the last non-system message and get its _eventId from the active conversation in storage
+export const getLastNonSystemMessageEventId = (): string => {
   // Create a string of 64 zeros (empty Nostr event ID)
   const emptyEventId = '0'.repeat(64);
   
-  if (messages.length === 0) {
+  // Load the active conversation ID from storage
+  const activeConversationId = loadActiveConversationId();
+  if (!activeConversationId) {
+    return emptyEventId;
+  }
+  
+  // Load all conversations from storage
+  const conversations = loadConversationsFromStorage();
+  
+  // Find the active conversation
+  const activeConversation = findConversationById(conversations, activeConversationId);
+  if (!activeConversation || activeConversation.messages.length === 0) {
     return emptyEventId;
   }
   
   // Iterate backwards to find the last non-system message
-  for (let i = messages.length - 1; i >= 0; i--) {
-    if (messages[i].role !== 'system') {
-      return messages[i]._eventId || emptyEventId;
+  for (let i = activeConversation.messages.length - 1; i >= 0; i--) {
+    if (activeConversation.messages[i].role !== 'system') {
+      return activeConversation.messages[i]._eventId || emptyEventId;
     }
   }
   

@@ -6,6 +6,8 @@ import { getPendingCashuTokenAmount } from '@/utils/cashuUtils';
 import { useCashuWithXYZ } from './useCashuWithXYZ';
 import { DEFAULT_MINT_URL } from '@/lib/utils';
 import { getLastNonSystemMessageEventId } from '@/utils/conversationUtils';
+import { useChatSync } from './useChatSync';
+import { useAppContext } from './useAppContext';
 
 export interface UseChatActionsReturn {
   inputMessage: string;
@@ -73,9 +75,7 @@ export interface UseChatActionsReturn {
  * Manages message sending logic, AI response streaming,
  * token management for API calls, and error handling and retries
  */
-export const useChatActions = (
-  syncMessageWithNostr?: (conversationId: string, message: Message, modelId: string, previousEventId?: string) => Promise<string | null>
-): UseChatActionsReturn => {
+export const useChatActions = (): UseChatActionsReturn => {
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
@@ -113,6 +113,9 @@ export const useChatActions = (
     storeCashu,
     cashuStore
   } = useCashuWithXYZ();
+  const { config } = useAppContext(); // Keep presetRelays even if not used directly here
+
+  const { publishMessage: syncMessageWithNostr } = useChatSync(config.relayUrls);
 
   // Autoscroll moved to ChatMessages to honor user scroll position
 
@@ -135,7 +138,7 @@ export const useChatActions = (
 
     if (!inputMessage.trim() && uploadedAttachments.length === 0) return;
 
-    const prevId = getLastNonSystemMessageEventId(messages);
+    const prevId = getLastNonSystemMessageEventId();
 
     // Create user message with text and images
     const userMessage = uploadedAttachments.length > 0
@@ -151,10 +154,19 @@ export const useChatActions = (
       setMessages(updatedMessages);
     }
 
+    const updateMessages = (newMessages: Message[]) => {
+      const currentlyActive = getActiveConversationId();
+      if (originConversationId && currentlyActive && currentlyActive !== originConversationId) {
+        saveConversationById(originConversationId, newMessages);
+      } else {
+        setMessages(newMessages);
+        saveConversationById(originConversationId, newMessages);
+      }
+    };
     // Publish user message to Nostr
     if (syncMessageWithNostr) {
       // The _prevId is already set in the userMessage from our getLastNonSystemMessagePrevId function
-      syncMessageWithNostr(originConversationId, userMessage, selectedModel.id).catch(console.error);
+      syncMessageWithNostr(originConversationId, updatedMessages, selectedModel.id, updateMessages).catch(console.error);
     }
 
     setInputMessage('');
@@ -332,7 +344,7 @@ export const useChatActions = (
           }
         },
         onMessageAppend: (message) => {
-          const prevId = getLastNonSystemMessageEventId(currentMessages);
+          const prevId = getLastNonSystemMessageEventId();
           // Update message object with prevId
           const updatedMessage = { ...message, _prevId: prevId };
           // Append to current messages state
@@ -341,7 +353,7 @@ export const useChatActions = (
 
           // Publish AI response to Nostr
           if (syncMessageWithNostr && originConversationId && message.role !== 'system') {
-             syncMessageWithNostr(originConversationId, updatedMessage, selectedModel.id, prevId).catch(console.error);
+              syncMessageWithNostr(originConversationId, updatedMessages, selectedModel.id, updateMessages).catch(console.error);
           }
         },
         onBalanceUpdate: setBalance,
