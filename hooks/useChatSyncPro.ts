@@ -131,13 +131,6 @@ export function useChatSyncPro() {
 
     // Update state with new conversations array
     const updatedConversations = Array.from(conversationsMapRef.current.values())
-    
-    // Sort by most recent activity
-    updatedConversations.sort((a, b) => {
-      const aTime = Math.max(...a.messages.map(m => m._createdAt || 0))
-      const bTime = Math.max(...b.messages.map(m => m._createdAt || 0))
-      return bTime - aTime
-    })
 
     setConversations(updatedConversations)
 

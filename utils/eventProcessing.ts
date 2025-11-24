@@ -175,7 +175,7 @@ export function shouldUpdateTitle(
 ): boolean {
   // Don't update if there are no messages yet
   if (conversation.messages.length === 0) {
-    return true;
+    return false;
   }
 
   // Find the earliest message timestamp
@@ -189,7 +189,7 @@ export function shouldUpdateTitle(
   const messageTime = message._createdAt || Infinity;
 
   // Update title if this message is earlier than the current earliest
-  return messageTime < earliestTime;
+  return messageTime <= earliestTime;
 }
 
 /**

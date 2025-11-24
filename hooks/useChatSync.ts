@@ -154,11 +154,9 @@ export const useChatSync = (
 
         // 1. Create Inner
         const inner = await createInnerEvent(conversationId, message, modelId);
-        console.log('iner event', inner);
         
         // 2. Create PNS Event (Encrypted and Signed)
         const pnsEvent = await createPnsChatEvent(inner);
-        console.log('pns', pnsEvent);
 
         // 3. Publish
         if (nostr) {

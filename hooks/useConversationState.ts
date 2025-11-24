@@ -12,6 +12,7 @@ import { getTextFromContent } from '@/utils/messageUtils';
 import { loadActiveConversationId, saveActiveConversationId } from '@/utils/storageUtils';
 import { useChatHistorySync } from './useChatHistorySync';
 import { useChatSync } from './useChatSync';
+import { useChatSyncPro } from './useChatSyncPro';
 import { useAppContext } from './useAppContext';
 
 export interface UseConversationStateReturn {
@@ -54,7 +55,8 @@ export const useConversationState = (): UseConversationStateReturn => {
 
   const { config } = useAppContext(); // Keep presetRelays even if not used directly here
 
-  const { syncConversations, syncConversationsIncremental, isSyncing } = useChatSync(config.relayUrls);
+  const { syncConversationsIncremental, isSyncing } = useChatSync(config.relayUrls);
+  const { conversations: realtimeConversations, events } = useChatSyncPro();
 
   // useChatHistorySync({
   //   conversations,
@@ -108,9 +110,38 @@ export const useConversationState = (): UseConversationStateReturn => {
     setConversationsLoaded(true);
   }, []);
 
+  // Sync real-time conversations from useChatSyncPro
+  useEffect(() => {
+    if (realtimeConversations.length > 0) {
+      setConversations(prev => {
+        // Merge real-time conversations with existing ones
+        const mergedMap = new Map(prev.map(c => [c.id, c]));
+        
+        // Update with real-time data
+        realtimeConversations.forEach((conv: Conversation) => {
+          mergedMap.set(conv.id, conv);
+          
+          // If this updated conversation is the currently active one, update messages
+          if (activeConversationId && conv.id === activeConversationId) {
+            console.log('rdlogs: Real-time update for active conversation:', conv.id);
+            setMessages(conv.messages);
+          }
+        });
+        const updatedConversations = Array.from(mergedMap.values());
+    
+        // Sort by most recent activity
+        updatedConversations.sort((a, b) => {
+          const aTime = Math.max(...a.messages.map(m => m._createdAt || 0))
+          const bTime = Math.max(...b.messages.map(m => m._createdAt || 0))
+          return aTime - bTime
+        }) 
+        return updatedConversations;
+      });
+    }
+  }, [realtimeConversations, activeConversationId]);
+
   // Save current conversation whenever messages change
   const saveCurrentConversation = useCallback(() => {
-    console.log('logging COVNERTS')
     if (!activeConversationId) return;
 
     setConversations(prevConversations => {

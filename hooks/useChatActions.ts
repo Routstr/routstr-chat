@@ -352,7 +352,7 @@ export const useChatActions = (): UseChatActionsReturn => {
           updateMessages(updatedMessages);
 
           // Publish AI response to Nostr
-          if (syncMessageWithNostr && originConversationId && message.role !== 'system') {
+          if (syncMessageWithNostr && originConversationId) {
               syncMessageWithNostr(originConversationId, updatedMessages, selectedModel.id, updateMessages).catch(console.error);
           }
         },
