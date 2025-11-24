@@ -299,7 +299,18 @@ export default function ChatMessages({
                                   <MessageContentRenderer content={message.content} />
                                 </div>
                               </div>
-                              <div className={`flex justify-end mt-1 ${isMobile ? 'opacity-100' : 'opacity-100 md:opacity-0 md:group-hover:opacity-100'} transition-opacity duration-200`}>
+                              <div className={`flex justify-end gap-2 mt-1 ${isMobile ? 'opacity-100' : 'opacity-100 md:opacity-0 md:group-hover:opacity-100'} transition-opacity duration-200`}>
+                                <button
+                                  onClick={() => copyMessageContent(index, message.content)}
+                                  className="p-1 rounded-full text-white/70 hover:text-white transition-colors"
+                                  aria-label="Copy message"
+                                >
+                                  {copiedMessageIndex === index ? (
+                                    <Check className="w-4 h-4" />
+                                  ) : (
+                                    <Copy className="w-4 h-4" />
+                                  )}
+                                </button>
                                 <button
                                   onClick={() => startEditingMessage(index)}
                                   className="p-1 rounded-full text-white/70 hover:text-white transition-colors"
