@@ -13,6 +13,9 @@ import {
 } from '@/lib/pns';
 import { useCurrentUser } from './useCurrentUser';
 import { useNostrLogin } from '@nostrify/react/login';
+import { relayPool } from '@/lib/applesauce-core';
+import { useNostr as useNostrify } from '@nostrify/react';
+import { saveEventIdInStorage } from '@/utils/conversationUtils';
 
 // Custom Kinds
 const KIND_CHAT_INNER = 20001;
@@ -25,8 +28,7 @@ interface ChatSyncHook {
   publishMessage: (
     conversationId: string,
     message: Message,
-    modelId: string,
-    previousEventId?: string
+    modelId: string
   ) => Promise<string | null>;
   syncConversations: () => Promise<Conversation[]>;
 }
@@ -49,16 +51,14 @@ export const useChatSync = (
   const { privateKey } = useNostr();
   const { user } = useCurrentUser();
   const { logins } = useNostrLogin()
+  const { nostr } = useNostrify();
 
-  // Initialize RelayPool
+  // Initialize RelayPool (no longer needed with nostrify)
   useEffect(() => {
-    if (!poolRef.current) {
-      poolRef.current = new RelayPool();
-    }
+    // This effect is kept for compatibility but the poolRef is no longer used
+    // as we're now using the nostrify pool from the context
     return () => {
-      // RelayPool might not have a close method, or it's named differently.
-      // If it doesn't, we just leave it.
-      // poolRef.current?.close();
+      // Cleanup if needed
     };
   }, []);
 
@@ -76,8 +76,7 @@ export const useChatSync = (
     async (
       conversationId: string,
       message: Message,
-      modelId: string,
-      previousEventId?: string
+      modelId: string
     ): Promise<InnerEventPayload> => {
       const pubkey = user?.pubkey;
       if (!pubkey) throw new Error('No public key available');
@@ -89,8 +88,8 @@ export const useChatSync = (
         ['client', 'routstr-chat'],
       ];
 
-      if (previousEventId) {
-        tags.push(['e', previousEventId]);
+      if (message._prevId) {
+        tags.push(['e', message._prevId]);
       }
 
       // Serialize content if it's complex (e.g., with images)
@@ -129,15 +128,14 @@ export const useChatSync = (
     async (
       conversationId: string,
       message: Message,
-      modelId: string,
-      previousEventId?: string
+      modelId: string
     ): Promise<string | null> => {
       try {
         setIsSyncing(true);
         setError(null);
 
         // 1. Create Inner
-        const inner = await createInnerEvent(conversationId, message, modelId, previousEventId);
+        const inner = await createInnerEvent(conversationId, message, modelId);
         console.log('iner event', inner);
         
         // 2. Create PNS Event (Encrypted and Signed)
@@ -145,10 +143,11 @@ export const useChatSync = (
         console.log('pns', pnsEvent);
 
         // 3. Publish
-        if (poolRef.current) {
-          // RelayPool.publish(relays: string[], event: Event)
-          const pubred = await poolRef.current.publish(relays, pnsEvent);
-          console.log(pubred);
+        if (nostr) {
+          // Use nostrify pool to publish the event
+          await nostr.event(pnsEvent);
+          if (message._prevId)
+            saveEventIdInStorage(conversationId, message._prevId, pnsEvent.id);
           
           // Return the ID of the PNS event for the linked list
           return pnsEvent.id;
@@ -163,7 +162,7 @@ export const useChatSync = (
         setIsSyncing(false);
       }
     },
-    [createInnerEvent, createPnsChatEvent, relays]
+    [createInnerEvent, createPnsChatEvent, nostr]
   );
 
   // Sync Conversations Flow
@@ -171,11 +170,11 @@ export const useChatSync = (
     try {
       setIsSyncing(true);
       setError(null);
+      console.log(user);
       const myPubkey = user?.pubkey;
       if (!myPubkey) throw new Error('No public key');
 
       // 1. Fetch Kind 1080 PNS events for us
-      // We need to use a filter
       const pnsKeys = getPnsKeys();
       const filter = {
         kinds: [KIND_PNS],
@@ -184,60 +183,9 @@ export const useChatSync = (
         // since: lastSyncTime ? lastSyncTime : undefined
       };
 
-      // Use applesauce pool to query
-      // pool.query(relays, filter) -> Observable or Promise?
-      // The snippet showed: pool.sync(relays, eventStore, filter)
-      // But we might not want to use a full EventStore if we are just processing them once.
-      // Let's assume we can get a list of events.
-      
-      // If applesauce-relay doesn't have a simple "list" method, we might need to subscribe.
-      // Let's use a simple subscription and collect events until EOSE.
-      
-      // For now, let's assume we can get the events. 
-      // I'll implement a helper to fetch all events from the pool.
-      const events: Event[] = [];
-      
-      // We need to check the RelayPool API. 
-      // Assuming a standard-ish API or I'll wrap it.
-      // If I can't verify the API, I'll use a standard pattern.
-      
-      // Let's use a promise-based fetcher
-      const fetchEvents = () => new Promise<Event[]>((resolve) => {
-        if (!poolRef.current) return resolve([]);
-        
-        // Assuming subscribe returns a Sub object with on() methods
-        // If applesauce-relay uses RxJS observables (as seen in the example: pool.sync(...).pipe(...))
-        // we should probably use that if possible, but for a simple fetch, subscribe is easier if available.
-        // The example showed: pool.sync(relays, eventStore, filter)
-        // Let's try to use a standard subscription if available, or fallback to a simple implementation.
-        
-        // If subscribe is not available on RelayPool, we might need to use individual relay connections
-        // or check if there's a 'query' method.
-        
-        // Based on standard Nostr pools (like nostr-tools SimplePool), subscribe is common.
-        // But applesauce-relay might be different.
-        // Let's try to use the `subscribe` method if it exists, but cast it to any to avoid TS errors if definitions are missing.
-        
-        const sub = (poolRef.current as any).subscribe(relays, [filter]);
-        const collected: Event[] = [];
-        
-        sub.on('event', (event: Event) => {
-          collected.push(event);
-        });
-        
-        sub.on('eose', () => {
-          sub.close();
-          resolve(collected);
-        });
-        
-        // Timeout safety
-        setTimeout(() => {
-          sub.close();
-          resolve(collected);
-        }, 5000);
-      });
-
-      const pnsEvents = await fetchEvents();
+      // Use the nostrify pool to query events
+      // This follows the same pattern as useChatHistorySync
+      const pnsEvents = await nostr.query([filter]);
       
       // 2. Decrypt PNS Events
       const decryptedEvents: any[] = [];
@@ -310,11 +258,8 @@ export const useChatSync = (
         // TODO: Implement strict linked-list sorting if needed
         // For now, time-based sorting is usually sufficient if clocks are okay.
         
-        // Clean up internal props
-        conv.messages = conv.messages.map(m => {
-          const { _eventId, _prevId, _createdAt, ...rest } = m as any;
-          return rest as Message;
-        });
+        // Keep all properties including _eventId, _prevId, and _createdAt
+        // No longer cleaning up internal props as we want to preserve them
 
         // Generate title
         // We can use the util function if we import it, or just leave it generic
@@ -333,7 +278,7 @@ export const useChatSync = (
     } finally {
       setIsSyncing(false);
     }
-  }, [getPnsKeys, relays]);
+  }, [getPnsKeys, nostr]);
 
   return {
     isSyncing,

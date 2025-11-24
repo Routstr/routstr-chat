@@ -5,6 +5,7 @@ import { fetchAIResponse } from '@/utils/apiUtils';
 import { getPendingCashuTokenAmount } from '@/utils/cashuUtils';
 import { useCashuWithXYZ } from './useCashuWithXYZ';
 import { DEFAULT_MINT_URL } from '@/lib/utils';
+import { getLastNonSystemMessageEventId } from '@/utils/conversationUtils';
 
 export interface UseChatActionsReturn {
   inputMessage: string;
@@ -73,7 +74,7 @@ export interface UseChatActionsReturn {
  * token management for API calls, and error handling and retries
  */
 export const useChatActions = (
-  publishMessageToNostr?: (conversationId: string, message: Message, modelId: string, previousEventId?: string) => Promise<string | null>
+  syncMessageWithNostr?: (conversationId: string, message: Message, modelId: string, previousEventId?: string) => Promise<string | null>
 ): UseChatActionsReturn => {
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -134,10 +135,12 @@ export const useChatActions = (
 
     if (!inputMessage.trim() && uploadedAttachments.length === 0) return;
 
+    const prevId = getLastNonSystemMessageEventId(messages);
+
     // Create user message with text and images
     const userMessage = uploadedAttachments.length > 0
-      ? createMultimodalMessage('user', inputMessage, uploadedAttachments)
-      : createTextMessage('user', inputMessage);
+      ? createMultimodalMessage('user', inputMessage, uploadedAttachments, prevId)
+      : createTextMessage('user', inputMessage, prevId);
 
     const updatedMessages = [...messages, userMessage];
     
@@ -149,12 +152,9 @@ export const useChatActions = (
     }
 
     // Publish user message to Nostr
-    if (publishMessageToNostr) {
-      // We need the previous event ID for the linked list.
-      // Ideally, we should store this in the conversation metadata.
-      // For now, let's pass undefined and let the hook handle it (or not link it yet).
-      // TODO: Retrieve last event ID from conversation metadata.
-      publishMessageToNostr(originConversationId, userMessage, selectedModel.id).catch(console.error);
+    if (syncMessageWithNostr) {
+      // The _prevId is already set in the userMessage from our getLastNonSystemMessagePrevId function
+      syncMessageWithNostr(originConversationId, userMessage, selectedModel.id).catch(console.error);
     }
 
     setInputMessage('');
@@ -332,13 +332,16 @@ export const useChatActions = (
           }
         },
         onMessageAppend: (message) => {
+          const prevId = getLastNonSystemMessageEventId(currentMessages);
+          // Update message object with prevId
+          const updatedMessage = { ...message, _prevId: prevId };
           // Append to current messages state
-          const updatedMessages = [...currentMessages, message];
+          const updatedMessages = [...currentMessages, updatedMessage];
           updateMessages(updatedMessages);
 
           // Publish AI response to Nostr
-          if (publishMessageToNostr && originConversationId && message.role !== 'system') {
-             publishMessageToNostr(originConversationId, message, selectedModel.id).catch(console.error);
+          if (syncMessageWithNostr && originConversationId && message.role !== 'system') {
+             syncMessageWithNostr(originConversationId, updatedMessage, selectedModel.id, prevId).catch(console.error);
           }
         },
         onBalanceUpdate: setBalance,

@@ -7,7 +7,7 @@ import { decodePrivateKey } from './nostr';
 
 // Constants
 export const KIND_PNS = 1080;
-const SALT_PNS = 'routstr-chat-history-v2';
+const SALT_PNS = 'routstr-chat-sync-test';
 const SALT_NIP44 = 'nip44-v2';
 
 // Types

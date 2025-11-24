@@ -19,6 +19,9 @@ export interface Message {
   role: string;
   content: string | MessageContent[];
   thinking?: string;
+  _eventId?: string;
+  _prevId?: string;
+  _createdAt?: number;
 }
 
 export type AttachmentType = 'image' | 'file';

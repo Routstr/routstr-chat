@@ -208,3 +208,82 @@ export const updateConversation = (
   persistConversationsSnapshot(updatedConversations);
   return updatedConversations;
 };
+
+/**
+ * Saves an event ID to a message in storage by matching the prevId
+ * @param conversationId ID of the conversation
+ * @param prevId The previous event ID to match against the message's _prevId
+ * @param eventId The event ID to add to the matched message
+ * @returns Updated conversations array or null if not found
+ */
+export const saveEventIdInStorage = (
+  conversationId: string,
+  prevId: string,
+  eventId: string
+): Conversation[] | null => {
+  // Load conversations from storage
+  const conversations = loadConversationsFromStorage();
+  
+  // Find the target conversation
+  const targetConversation = findConversationById(conversations, conversationId);
+  if (!targetConversation) {
+    console.error(`Conversation with ID ${conversationId} not found`);
+    return null;
+  }
+  
+  // Find the message by matching prevId
+  let messageFound = false;
+  const updatedConversations = conversations.map(conversation => {
+    if (conversation.id === conversationId) {
+      const updatedMessages = conversation.messages.map(message => {
+        // Check if this message has the matching _prevId
+        if (message._prevId === prevId) {
+          messageFound = true;
+          // Add the eventId to the message
+          return {
+            ...message,
+            _eventId: eventId
+          };
+        }
+        return message;
+      });
+      
+      return {
+        ...conversation,
+        messages: updatedMessages
+      };
+    }
+    return conversation;
+  });
+  
+  if (!messageFound) {
+    console.error(`No message found with _prevId: ${prevId} in conversation ${conversationId}`);
+    return null;
+  }
+  
+  // Persist the updated conversations
+  persistConversationsSnapshot(updatedConversations);
+  return updatedConversations;
+};
+
+
+// Find the last non-system message and get its _prevId
+export const getLastNonSystemMessageEventId = (messages: Message[]): string => {
+  // Create a string of 64 zeros (empty Nostr event ID)
+  const emptyEventId = '0'.repeat(64);
+  
+  if (messages.length === 0) {
+    return emptyEventId;
+  }
+  
+  // Iterate backwards to find the last non-system message
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role !== 'system') {
+      return messages[i]._eventId || emptyEventId;
+    }
+  }
+  
+  // If no non-system messages found, return empty Nostr event
+  return emptyEventId;
+};
+    
