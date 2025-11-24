@@ -59,18 +59,14 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
 
   // Update pubkey$ observable when user changes
   useEffect(() => {
-    console.log('[ChatProvider] User/logins changed:', { userPubkey: user?.pubkey, loginsCount: logins.length });
     if (user?.pubkey && logins.length > 0) {
       try {
         const pnsKeys = getPnsKeys();
-        console.log('[ChatProvider] Derived PNS keys, setting pubkey$:', pnsKeys.pnsKeypair.pubKey);
         pubkey$.next(pnsKeys.pnsKeypair.pubKey);
       } catch (err) {
-        console.error('[ChatProvider] Failed to derive PNS keys:', err);
         pubkey$.next(null);
       }
     } else {
-      console.log('[ChatProvider] No user or logins, setting pubkey$ to null');
       pubkey$.next(null);
     }
   }, [user?.pubkey, logins, getPnsKeys]);

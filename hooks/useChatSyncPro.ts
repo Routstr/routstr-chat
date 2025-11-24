@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { Relay, onlyEvents } from 'applesauce-relay'
-import { BehaviorSubject, filter, shareReplay, switchMap, takeWhile, defaultIfEmpty, combineLatest } from 'rxjs'
+import { BehaviorSubject, filter, shareReplay, switchMap, takeWhile, defaultIfEmpty, combineLatest, merge, tap } from 'rxjs'
 import type { NostrEvent } from 'nostr-tools'
 import { KIND_PNS } from '@/lib/pns'
 import { useAppContext } from '@/hooks/useAppContext'
@@ -11,7 +11,8 @@ function getRelay(url: string): Relay {
   let r = relayPool.get(url)
   if (!r) {
     r = new Relay(url)
-    r.keepAlive = 0
+    // Keep connection alive for real-time updates
+    r.keepAlive = 30000 // 30 seconds
     relayPool.set(url, r)
   }
   return r
@@ -21,7 +22,6 @@ function getRelay(url: string): Relay {
 export const relayUrls$ = new BehaviorSubject<string[]>([])
 const relayUrlsDefined$ = relayUrls$.pipe(
   filter((urls): urls is string[] => {
-    console.log('[relayUrls$ filter] Received relay URLs:', urls)
     return urls.length > 0
   }),
   shareReplay(1),
@@ -31,30 +31,37 @@ const relayUrlsDefined$ = relayUrls$.pipe(
 export const pubkey$ = new BehaviorSubject<string | null>(null)
 const pubkeyDefined$ = pubkey$.pipe(
   filter((p): p is string => {
-    console.log('[pubkey$ filter] Received pubkey:', p)
     return p !== null
   }),
   shareReplay(1),
 )
 
+// Track relay event counts
+const relayEventCounts = new Map<string, number>()
+
 // Fetch kind 1080 events from configured relays
 const kind1080Events$ = combineLatest([pubkeyDefined$, relayUrlsDefined$]).pipe(
   switchMap(([pubkey, relayUrls]) => {
-    console.log('[kind1080Events$] switchMap triggered for pubkey:', pubkey, 'relays:', relayUrls)
-    // Use the first configured relay for fetching kind 1080 events
-    const relay = getRelay(relayUrls[0])
-    console.log('[kind1080Events$] Creating subscription to relay:', relayUrls[0])
+    // Reset counts for new subscription
+    relayEventCounts.clear()
     
-    return relay
-      .subscription({ kinds: [KIND_PNS], authors: [pubkey] })
-      .pipe(
-        takeWhile((v) => {
-          console.log('[kind1080Events$] Received value:', v)
-          return v !== 'EOSE'
-        }),
-        onlyEvents(),
-        defaultIfEmpty(null),
-      )
+    // Query all configured relays and merge results
+    const relaySubscriptions = relayUrls.map((url) => {
+      const relay = getRelay(url)
+      return relay
+        .subscription({ kinds: [KIND_PNS], authors: [pubkey] })
+        .pipe(
+          // Keep subscription open for real-time events (don't stop at EOSE)
+          onlyEvents(),
+          tap(() => {
+            // Increment count for this relay
+            relayEventCounts.set(url, (relayEventCounts.get(url) || 0) + 1)
+          }),
+        )
+    })
+    
+    // Merge all relay subscriptions into a single stream
+    return merge(...relaySubscriptions).pipe(defaultIfEmpty(null))
   }),
   shareReplay(1),
 )
@@ -64,53 +71,53 @@ export function useChatSyncPro() {
   const [events, setEvents] = useState<NostrEvent[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const relayCountsRef = useRef<Map<string, number>>(new Map())
 
   // Update relay URLs when config changes
   useEffect(() => {
     if (config.relayUrls.length > 0) {
-      console.log('[useChatSyncPro] Updating relay URLs:', config.relayUrls)
       relayUrls$.next(config.relayUrls)
     }
   }, [config.relayUrls])
 
+  useEffect(() => {
+    // Update local ref with current relay counts
+    relayCountsRef.current = new Map(relayEventCounts)
+    
+    // Log event counts per relay
+    const counts = Object.fromEntries(relayCountsRef.current)
+    console.log('Events per relay:', counts, '| Total unique events:', events.length)
+  }, [events])
+
   // Subscribe to kind 1080 events
   useEffect(() => {
-    console.log('[useChatSyncPro] Hook initialized, subscribing to kind1080Events$')
     setLoading(true)
 
     const sub = kind1080Events$.subscribe({
       next: (event) => {
-        console.log('[useChatSyncPro] Received event:', event)
         if (event) {
           setEvents((prev) => {
             // Avoid duplicates
             if (prev.some((e) => e.id === event.id)) {
-              console.log('[useChatSyncPro] Duplicate event, skipping:', event.id)
               return prev
             }
             // Add new event and sort by created_at descending
             const newEvents = [...prev, event].sort((a, b) => b.created_at - a.created_at)
-            console.log('[useChatSyncPro] Added new event, total events:', newEvents.length)
             return newEvents
           })
-        } else {
-          console.log('[useChatSyncPro] Received null event (probably EOSE)')
         }
         setLoading(false)
       },
       error: (err) => {
-        console.error('[useChatSyncPro] Error:', err)
         setError(err instanceof Error ? err.message : String(err))
         setLoading(false)
       },
       complete: () => {
-        console.log('[useChatSyncPro] Observable completed')
         setLoading(false)
       },
     })
 
     return () => {
-      console.log('[useChatSyncPro] Unsubscribing')
       sub.unsubscribe()
     }
   }, [])
