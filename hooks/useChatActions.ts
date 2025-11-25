@@ -115,7 +115,7 @@ export const useChatActions = (): UseChatActionsReturn => {
   } = useCashuWithXYZ();
   const { config } = useAppContext(); // Keep presetRelays even if not used directly here
 
-  const { publishMessage: syncMessageWithNostr } = useChatSync(config.relayUrls);
+  const { publishMessage: syncMessageWithNostr, chatSyncEnabled } = useChatSync();
 
   // Autoscroll moved to ChatMessages to honor user scroll position
 
@@ -138,7 +138,7 @@ export const useChatActions = (): UseChatActionsReturn => {
 
     if (!inputMessage.trim() && uploadedAttachments.length === 0) return;
 
-    const prevId = getLastNonSystemMessageEventId();
+    const prevId = activeConversationId ? getLastNonSystemMessageEventId(activeConversationId) : '0'.repeat(64);
 
     // Create user message with text and images
     const userMessage = uploadedAttachments.length > 0
@@ -164,7 +164,7 @@ export const useChatActions = (): UseChatActionsReturn => {
       }
     };
     // Publish user message to Nostr
-    if (syncMessageWithNostr) {
+    if (syncMessageWithNostr && chatSyncEnabled) {
       // The _prevId is already set in the userMessage from our getLastNonSystemMessagePrevId function
       syncMessageWithNostr(originConversationId, updatedMessages, selectedModel.id, updateMessages).catch(console.error);
     }
@@ -344,7 +344,7 @@ export const useChatActions = (): UseChatActionsReturn => {
           }
         },
         onMessageAppend: (message) => {
-          const prevId = getLastNonSystemMessageEventId();
+          const prevId = getLastNonSystemMessageEventId(originConversationId);
           // Update message object with prevId
           const updatedMessage = { ...message, _prevId: prevId };
           // Append to current messages state
@@ -352,7 +352,7 @@ export const useChatActions = (): UseChatActionsReturn => {
           updateMessages(updatedMessages);
 
           // Publish AI response to Nostr
-          if (syncMessageWithNostr && originConversationId) {
+          if (syncMessageWithNostr && originConversationId && chatSyncEnabled) {
               syncMessageWithNostr(originConversationId, updatedMessages, selectedModel.id, updateMessages).catch(console.error);
           }
         },

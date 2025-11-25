@@ -5,11 +5,6 @@ This document outlines the implementation of a robust chat sync feature for the 
 
 ## Requirements
 
-### 1. Initial Event Fetching with Pagination
-- Fetch the first 50 events from Nostr
-- If exactly 50 events are received, continue fetching from the last timestamp
-- Implement proper pagination to handle large conversation histories
-
 ### 2. Negentropy-based Event Filtering
 - Create a list of known events
 - Use negentropy protocol to only sync events not already in the local list
@@ -19,17 +14,6 @@ This document outlines the implementation of a robust chat sync feature for the 
 - Create function to identify messages in storage that don't have eventIds
 - Sync these messages to Nostr one by one with appropriate delays
 - Handle rate limiting and network issues gracefully
-
-### 4. Real-time Event Subscription
-- Subscribe to new events from Nostr
-- When new events are received, check against existing lists
-- Sync new events if they're not already present
-- Update active conversation if the new event belongs to it
-
-### 5. Active Conversation Management
-- Check if new event belongs to activeConversationId
-- If yes, update messages in real-time
-- If no, just store the event for later use
 
 ### 6. PNS KEYS CANNOT BE CREATED WITH OTHER LOGINS> HELP!!
 

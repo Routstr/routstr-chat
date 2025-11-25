@@ -14,27 +14,28 @@ import {
 } from '@/lib/pns';
 import { useCurrentUser } from './useCurrentUser';
 import { useNostrLogin } from '@nostrify/react/login';
-import { relayPool } from '@/lib/applesauce-core';
 import { useNostr as useNostrify } from '@nostrify/react';
 import { saveEventIdInStorage } from '@/utils/conversationUtils';
-import { useConversationState } from './useConversationState';
 import { useChatSyncPro } from './useChatSyncPro';
 import {
   decryptPnsEventToInner,
   processInnerEvent,
-  extractConversationMetadata,
-  InnerEvent
+  extractConversationMetadata
 } from '@/utils/eventProcessing';
 import { getStorageManager } from '@/utils/storageManager';
 
+// LocalStorage key for chat sync enabled state
+const CHAT_SYNC_ENABLED_KEY = 'chatSyncEnabled';
+
 // Custom Kinds
 const KIND_CHAT_INNER = 20001;
-const SALT_CHAT_HISTORY = 'routstr-chat-history-v2';
 
 interface ChatSyncHook {
   isSyncing: boolean;
   lastSyncTime: number | null;
   error: string | null;
+  chatSyncEnabled: boolean;
+  setChatSyncEnabled: (enabled: boolean) => void;
   publishMessage: (
     conversationId: string,
     updatedMessages: Message[],
@@ -56,26 +57,36 @@ interface InnerEventPayload {
   pubkey: string;
 }
 
-export const useChatSync = (
-  relays: string[] = ['wss://relay.damus.io', 'wss://nos.lol', 'wss://relay.primal.net']
-): ChatSyncHook => {
+export const useChatSync = (): ChatSyncHook => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const poolRef = useRef<RelayPool | null>(null);
+  const [chatSyncEnabled, setChatSyncEnabledState] = useState<boolean>(true);
   const { user } = useCurrentUser();
   const { logins } = useNostrLogin()
   const { nostr } = useNostrify();
-  const { events } = useChatSyncPro();
 
-  // Initialize RelayPool (no longer needed with nostrify)
+  // Initialize chatSyncEnabled from localStorage
   useEffect(() => {
-    // This effect is kept for compatibility but the poolRef is no longer used
-    // as we're now using the nostrify pool from the context
-    return () => {
-      // Cleanup if needed
-    };
-  }, [events]);
+    try {
+      const storedValue = localStorage.getItem(CHAT_SYNC_ENABLED_KEY);
+      if (storedValue !== null) {
+        setChatSyncEnabledState(storedValue === 'true');
+      }
+    } catch (error) {
+      console.error('Failed to read chatSyncEnabled from localStorage:', error);
+    }
+  }, []);
+
+  // Function to update chatSyncEnabled in both state and localStorage
+  const setChatSyncEnabled = useCallback((enabled: boolean) => {
+    try {
+      localStorage.setItem(CHAT_SYNC_ENABLED_KEY, enabled.toString());
+      setChatSyncEnabledState(enabled);
+    } catch (error) {
+      console.error('Failed to save chatSyncEnabled to localStorage:', error);
+    }
+  }, []);
 
   // Helper to get PNS keys
   const getPnsKeys = useCallback(() => {
@@ -308,6 +319,8 @@ export const useChatSync = (
     isSyncing,
     lastSyncTime,
     error,
+    chatSyncEnabled,
+    setChatSyncEnabled,
     publishMessage,
     syncConversations,
     syncConversationsIncremental,

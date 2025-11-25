@@ -269,7 +269,7 @@ export const saveEventIdInStorage = (
 
 
 // Find the last non-system message and get its _eventId from the active conversation in storage
-export const getLastNonSystemMessageEventId = (): string => {
+export const getLastNonSystemMessageEventId = (originConversationId: string): string => {
   // Create a string of 64 zeros (empty Nostr event ID)
   const emptyEventId = '0'.repeat(64);
   
@@ -283,15 +283,15 @@ export const getLastNonSystemMessageEventId = (): string => {
   const conversations = loadConversationsFromStorage();
   
   // Find the active conversation
-  const activeConversation = findConversationById(conversations, activeConversationId);
-  if (!activeConversation || activeConversation.messages.length === 0) {
+  const currentConversation = findConversationById(conversations, originConversationId);
+  if (!currentConversation || currentConversation.messages.length === 0) {
     return emptyEventId;
   }
   
   // Iterate backwards to find the last non-system message
-  for (let i = activeConversation.messages.length - 1; i >= 0; i--) {
-    if (activeConversation.messages[i].role !== 'system') {
-      return activeConversation.messages[i]._eventId || emptyEventId;
+  for (let i = currentConversation.messages.length - 1; i >= 0; i--) {
+    if (currentConversation.messages[i].role !== 'system') {
+      return currentConversation.messages[i]._eventId || emptyEventId;
     }
   }
   

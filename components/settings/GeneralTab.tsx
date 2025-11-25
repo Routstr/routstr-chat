@@ -6,6 +6,7 @@ import NWCWalletManager from './NWCWalletManager'; // Import the NWC wallet mana
 import { useLoggedInAccounts } from '@/hooks/useLoggedInAccounts';
 import { useLoginActions } from '@/hooks/useLoginActions';
 import { useNostrLogin } from '@nostrify/react/login';
+import { useChatSync } from '@/hooks/useChatSync';
 
 interface GeneralTabProps {
   publicKey: string | undefined;
@@ -37,6 +38,7 @@ const GeneralTab: React.FC<GeneralTabProps> = ({
   const { currentUser, otherUsers, setLogin, removeLogin } = useLoggedInAccounts();
   const { logins } = useNostrLogin();
   const loginActions = useLoginActions();
+  const { chatSyncEnabled, setChatSyncEnabled } = useChatSync();
 
   useEffect(() => {
     if (localStorage.getItem('nsec_storing_skipped') === 'true') {
@@ -78,6 +80,34 @@ const GeneralTab: React.FC<GeneralTabProps> = ({
         </div>
       )}
 
+
+      {/* Chat Sync Settings */}
+      <div className="mb-6">
+        <h3 className="text-sm font-medium text-white/80 mb-2">Chat Sync</h3>
+        <div className="bg-white/5 border border-white/10 rounded-md p-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-sm text-white/70">Enable Chat Sync</div>
+              <div className="text-xs text-white/40 mt-1">Sync chat messages with Nostr relays</div>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={chatSyncEnabled}
+              onClick={() => setChatSyncEnabled(!chatSyncEnabled)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-900 ${
+                chatSyncEnabled ? 'bg-blue-600' : 'bg-gray-600'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  chatSyncEnabled ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+      </div>
 
       {/* Nostr Relays */}
       <NostrRelayManager />

@@ -55,7 +55,7 @@ export const useConversationState = (): UseConversationStateReturn => {
 
   const { config } = useAppContext(); // Keep presetRelays even if not used directly here
 
-  const { syncConversationsIncremental, isSyncing } = useChatSync(config.relayUrls);
+  const { syncConversationsIncremental, isSyncing } = useChatSync();
   const { conversations: realtimeConversations, events } = useChatSyncPro();
 
   // useChatHistorySync({

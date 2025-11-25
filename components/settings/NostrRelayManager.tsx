@@ -176,7 +176,7 @@ const NostrRelayManager: React.FC = () => {
   return (
     <div className="mb-6">
       <div className="flex items-center justify-between mb-2">
-        <h3 className="text-sm font-medium text-white/80">Nostr Relays</h3>
+        <h3 className="text-sm font-medium text-white/80">Nostr Management</h3>
         <button
           onClick={handleRefreshConnections}
           disabled={isRefreshing}
