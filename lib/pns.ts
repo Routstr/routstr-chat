@@ -7,7 +7,7 @@ import { decodePrivateKey } from './nostr';
 
 // Constants
 export const KIND_PNS = 1080;
-const SALT_PNS = process.env.NODE_ENV === 'development' ? 'routstr-chat-sync-test' : 'routstr-chat-sync-v1';
+const SALT_PNS = process.env.NODE_ENV === 'development' ? 'routstr-chat-sync-test2' : 'routstr-chat-sync-v1';
 const SALT_NIP44 = 'nip44-v2';
 
 // Types

@@ -1,14 +1,10 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { RelayPool } from 'applesauce-relay';
+import { useState, useEffect, useCallback} from 'react';
 import { Event, nip19 } from 'nostr-tools';
 import { Conversation, Message } from '@/types/chat';
-import { useNostr } from '@/context/NostrContext';
-import { toast } from 'sonner';
 import {
   derivePnsKeys,
   encryptPnsEvent,
   createPnsEvent,
-  decryptPnsEvent,
   KIND_PNS,
   PnsKeys
 } from '@/lib/pns';
@@ -16,16 +12,13 @@ import { useCurrentUser } from './useCurrentUser';
 import { useNostrLogin } from '@nostrify/react/login';
 import { useNostr as useNostrify } from '@nostrify/react';
 import { saveEventIdInStorage } from '@/utils/conversationUtils';
-import { useChatSyncPro } from './useChatSyncPro';
 import {
   decryptPnsEventToInner,
   processInnerEvent,
   extractConversationMetadata
 } from '@/utils/eventProcessing';
 import { getStorageManager } from '@/utils/storageManager';
-
-// LocalStorage key for chat sync enabled state
-const CHAT_SYNC_ENABLED_KEY = 'chatSyncEnabled';
+import { getStorageItem, setStorageItem } from '@/utils/storageUtils';
 
 // Custom Kinds
 const KIND_CHAT_INNER = 20001;
@@ -66,26 +59,16 @@ export const useChatSync = (): ChatSyncHook => {
   const { logins } = useNostrLogin()
   const { nostr } = useNostrify();
 
-  // Initialize chatSyncEnabled from localStorage
+  // Initialize chatSyncEnabled from storage using storageUtils
   useEffect(() => {
-    try {
-      const storedValue = localStorage.getItem(CHAT_SYNC_ENABLED_KEY);
-      if (storedValue !== null) {
-        setChatSyncEnabledState(storedValue === 'true');
-      }
-    } catch (error) {
-      console.error('Failed to read chatSyncEnabled from localStorage:', error);
-    }
+    const storedValue = getStorageItem<boolean>('chatSyncEnabled', true);
+    setChatSyncEnabledState(storedValue);
   }, []);
 
-  // Function to update chatSyncEnabled in both state and localStorage
+  // Function to update chatSyncEnabled in both state and storage
   const setChatSyncEnabled = useCallback((enabled: boolean) => {
-    try {
-      localStorage.setItem(CHAT_SYNC_ENABLED_KEY, enabled.toString());
-      setChatSyncEnabledState(enabled);
-    } catch (error) {
-      console.error('Failed to save chatSyncEnabled to localStorage:', error);
-    }
+    setStorageItem('chatSyncEnabled', enabled);
+    setChatSyncEnabledState(enabled);
   }, []);
 
   // Helper to get PNS keys
