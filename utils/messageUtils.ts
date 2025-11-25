@@ -32,8 +32,7 @@ export const convertMessageForAPI = (message: Message): { role: string; content:
 export const createTextMessage = (role: string, text: string, prevId?: string): Message => {
   return {
     role,
-    content: text,
-    _prevId: prevId
+    content: text
   };
 };
 
@@ -83,15 +82,13 @@ export const createMultimodalMessage = (role: string, text: string, attachments:
     // Fallback to an empty string message to avoid invalid payloads
     return {
       role,
-      content: '',
-      _prevId: prevId
+      content: ''
     };
   }
 
   return {
     role,
-    content,
-    _prevId: prevId
+    content
   };
 };
 

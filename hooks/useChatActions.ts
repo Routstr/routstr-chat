@@ -142,10 +142,12 @@ export const useChatActions = (): UseChatActionsReturn => {
 
     // Create user message with text and images
     const userMessage = uploadedAttachments.length > 0
-      ? createMultimodalMessage('user', inputMessage, uploadedAttachments, prevId)
-      : createTextMessage('user', inputMessage, prevId);
+      ? createMultimodalMessage('user', inputMessage, uploadedAttachments)
+      : createTextMessage('user', inputMessage);
+    
+    const updatedMessage = { ...userMessage, _prevId: prevId, _createdAt: Date.now() };
 
-    const updatedMessages = [...messages, userMessage];
+    const updatedMessages = [...messages, updatedMessage];
     
     // Determine origin conversation id and update UI optimistically
     const timestamp = Date.now().toString();
@@ -346,7 +348,7 @@ export const useChatActions = (): UseChatActionsReturn => {
         onMessageAppend: (message) => {
           const prevId = getLastNonSystemMessageEventId(originConversationId);
           // Update message object with prevId
-          const updatedMessage = { ...message, _prevId: prevId };
+          const updatedMessage = { ...message, _prevId: prevId, _createdAt: Date.now() };
           // Append to current messages state
           const updatedMessages = [...currentMessages, updatedMessage];
           updateMessages(updatedMessages);

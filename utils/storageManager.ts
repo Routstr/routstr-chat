@@ -86,6 +86,7 @@ export class StorageBatchManager {
       });
 
       // Persist to localStorage
+      console.log('Persisting conversations to storage:', allConversations);
       persistConversationsSnapshot(allConversations);
 
       // Clear pending updates

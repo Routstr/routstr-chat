@@ -10,7 +10,6 @@ import {
   decryptPnsEventToInner,
   processInnerEvent,
 } from '@/utils/eventProcessing'
-import { getStorageManager } from '@/utils/storageManager'
 
 // Relay pool so we reuse relay instances by URL
 const relayPool = new Map<string, Relay>()
@@ -96,14 +95,6 @@ export function useChatSyncPro() {
     }
   }, [config.relayUrls])
 
-  // Initialize storage manager with existing conversations
-  useEffect(() => {
-    const storageManager = getStorageManager()
-    if (conversations.length > 0) {
-      storageManager.initialize(conversations)
-    }
-  }, []) // Only on mount
-
   useEffect(() => {
     // Update local ref with current relay counts
     relayCountsRef.current = new Map(relayEventCounts)
@@ -133,10 +124,6 @@ export function useChatSyncPro() {
     const updatedConversations = Array.from(conversationsMapRef.current.values())
 
     setConversations(updatedConversations)
-
-    // Queue storage update (debounced)
-    const storageManager = getStorageManager()
-    storageManager.queueBatchUpdate(updatedConversations)
   }, [currentPnsKeys])
 
   // Subscribe to kind 1080 events
@@ -173,9 +160,6 @@ export function useChatSyncPro() {
 
     return () => {
       sub.unsubscribe()
-      // Flush any pending storage updates on unmount
-      const storageManager = getStorageManager()
-      storageManager.flush()
     }
   }, [processEvent])
 

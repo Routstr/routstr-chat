@@ -6,11 +6,12 @@ import {
   createAndStoreNewConversation,
   deleteConversationFromStorage,
   findConversationById,
-  clearAllConversations
+  clearAllConversations,
+  persistConversationsSnapshot,
+  sortConversationsByRecentActivity
 } from '@/utils/conversationUtils';
 import { getTextFromContent } from '@/utils/messageUtils';
 import { loadActiveConversationId, saveActiveConversationId } from '@/utils/storageUtils';
-import { useChatHistorySync } from './useChatHistorySync';
 import { useChatSync } from './useChatSync';
 import { useChatSyncPro } from './useChatSyncPro';
 import { useAppContext } from './useAppContext';
@@ -55,7 +56,7 @@ export const useConversationState = (): UseConversationStateReturn => {
 
   const { config } = useAppContext(); // Keep presetRelays even if not used directly here
 
-  const { syncConversationsIncremental, isSyncing } = useChatSync();
+  const { syncConversationsIncremental, isSyncing, publishMessage } = useChatSync();
   const { conversations: realtimeConversations, events } = useChatSyncPro();
 
   // useChatHistorySync({
@@ -106,6 +107,7 @@ export const useConversationState = (): UseConversationStateReturn => {
   // Load conversations and active conversation ID from storage on mount
   useEffect(() => {
     const loadedConversations = loadConversationsFromStorage();
+    console.log("LOADING ", loadedConversations)
     setConversations(loadedConversations);
     setConversationsLoaded(true);
   }, []);
@@ -116,29 +118,95 @@ export const useConversationState = (): UseConversationStateReturn => {
       setConversations(prev => {
         // Merge real-time conversations with existing ones
         const mergedMap = new Map(prev.map(c => [c.id, c]));
-        
+
+
         // Update with real-time data
-        realtimeConversations.forEach((conv: Conversation) => {
-          mergedMap.set(conv.id, conv);
-          
-          // If this updated conversation is the currently active one, update messages
-          if (activeConversationId && conv.id === activeConversationId) {
-            console.log('rdlogs: Real-time update for active conversation:', conv.id);
-            setMessages(conv.messages);
+        realtimeConversations.forEach((realtimeConv: Conversation) => {
+          const localConv = mergedMap.get(realtimeConv.id);
+
+          if (localConv) {
+            // Common conversation ID found - merge messages
+            const realtimeMessages = realtimeConv.messages;
+            const localMessages = localConv.messages;
+
+            // Map of realtime event IDs for quick lookup
+            const realtimeEventIds = new Set(
+              realtimeMessages
+                .map(m => m._eventId)
+                .filter(id => id !== undefined)
+            );
+
+            // Start with realtime messages as the base (source of truth for synced content)
+            const mergedMessages = [...realtimeMessages];
+            let hasChanges = false;
+
+            // Check local messages for any that are missing in realtime (unsynced)
+            localMessages.forEach(localMsg => {
+              // If message has an event ID, check if it exists in realtime
+              // If message has no event ID, it's definitely unsynced
+              const isSynced = localMsg._eventId && realtimeEventIds.has(localMsg._eventId);
+
+              if (!isSynced) {
+                // This message exists locally but not in realtime sync
+                // Add it to our merged list
+                mergedMessages.push(localMsg);
+                hasChanges = true;
+
+                // TODO: Publish this missing event
+                // if (localMsg.role === 'user') {
+                //   publishMessage(
+                //     realtimeConv.id,
+                //     [...realtimeMessages, localMsg], // Context + new message
+                //     'current-model-id', // We need the model ID here
+                //     (newMsgs) => {
+                //       // Callback to update messages after publish
+                //       console.log('Published missing message:', localMsg);
+                //     }
+                //   );
+                // }
+              }
+            });
+
+            // If we merged anything, sort by creation time
+            if (hasChanges) {
+              mergedMessages.sort((a, b) => (a._createdAt || 0) - (b._createdAt || 0));
+            }
+
+            const mergedConv = {
+              ...realtimeConv,
+              messages: mergedMessages
+            };
+
+            mergedMap.set(realtimeConv.id, mergedConv);
+
+            // If this updated conversation is the currently active one, update messages
+            if (activeConversationId && realtimeConv.id === activeConversationId) {
+              console.log('rdlogs: Real-time update for active conversation (merged):', realtimeConv.id);
+              setMessages(mergedMessages);
+            }
+          } else {
+            // New conversation from realtime
+            mergedMap.set(realtimeConv.id, realtimeConv);
+
+            // If this updated conversation is the currently active one, update messages
+            if (activeConversationId && realtimeConv.id === activeConversationId) {
+              console.log('rdlogs: Real-time update for active conversation:', realtimeConv.id);
+              setMessages(realtimeConv.messages);
+            }
           }
         });
         const updatedConversations = Array.from(mergedMap.values());
-    
+
         // Sort by most recent activity
-        updatedConversations.sort((a, b) => {
-          const aTime = Math.max(...a.messages.map(m => m._createdAt || 0))
-          const bTime = Math.max(...b.messages.map(m => m._createdAt || 0))
-          return aTime - bTime
-        }) 
-        return updatedConversations;
+        const sortedConversations = sortConversationsByRecentActivity(updatedConversations);
+        console.log("realtimeConversations", sortedConversations);
+        // Persist the merged conversations to storage
+        persistConversationsSnapshot(sortedConversations);
+        
+        return sortedConversations;
       });
     }
-  }, [realtimeConversations, activeConversationId]);
+  }, [realtimeConversations, activeConversationId, publishMessage]);
 
   // Save current conversation whenever messages change
   const saveCurrentConversation = useCallback(() => {

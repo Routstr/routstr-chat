@@ -25,6 +25,7 @@ export const persistConversationsSnapshot = (
   }
 
   const timestamp = typeof updatedAt === 'number' ? updatedAt : Date.now();
+  console.log('persist', conversations);
 
   try {
     window.localStorage.setItem(CONVERSATIONS_STORAGE_KEY, JSON.stringify(conversations));
@@ -94,8 +95,12 @@ export const saveConversationToStorage = (
     return conversation;
   });
 
-  persistConversationsSnapshot(updatedConversations);
-  return updatedConversations;
+  // Sort by most recent activity
+  const sortedConversations = sortConversationsByRecentActivity(updatedConversations);
+  console.log('Updated conversations:', sortedConversations)
+
+  persistConversationsSnapshot(sortedConversations);
+  return sortedConversations;
 };
 
 /**
@@ -133,6 +138,18 @@ export const createAndStoreNewConversation = (
   newConversation: Conversation;
   updatedConversations: Conversation[];
 } => {
+  // First check if there's an existing conversation with no messages
+  const emptyConversation = existingConversations.find(conv => conv.messages.length === 0);
+  
+  if (emptyConversation) {
+    // Return the existing empty conversation
+    return {
+      newConversation: emptyConversation,
+      updatedConversations: existingConversations
+    };
+  }
+
+  // If no empty conversation found, create a new one
   const newId = timestamp ?? Date.now().toString();
   const messagesToStore = stripImageDataFromMessages(initialMessages);
   const newConversation: Conversation = {
@@ -142,6 +159,7 @@ export const createAndStoreNewConversation = (
   };
 
   const updatedConversations = [...existingConversations, newConversation];
+  console.log('insdie', updatedConversations);
   persistConversationsSnapshot(updatedConversations);
 
   return {
@@ -161,6 +179,7 @@ export const deleteConversationFromStorage = (
   conversationId: string
 ): Conversation[] => {
   const updatedConversations = conversations.filter(c => c.id !== conversationId);
+  console.log('insdie', updatedConversations);
   persistConversationsSnapshot(updatedConversations);
   return updatedConversations;
 };
@@ -206,8 +225,34 @@ export const updateConversation = (
     return conversation;
   });
 
+  console.log('insdie', updatedConversations);
   persistConversationsSnapshot(updatedConversations);
   return updatedConversations;
+};
+
+/**
+ * Sorts conversations by most recent activity based on message creation timestamps
+ * @param conversations Array of conversations to sort
+ * @returns Sorted conversations array (most recent first)
+ */
+export const sortConversationsByRecentActivity = (
+  conversations: Conversation[]
+): Conversation[] => {
+  return conversations.sort((a, b) => {
+    // Check if conversations have empty messages
+    const aIsEmpty = a.messages.length === 0;
+    const bIsEmpty = b.messages.length === 0;
+    
+    // If both are empty or both have messages, sort by timestamp
+    if (aIsEmpty === bIsEmpty) {
+      const aTime = Math.max(...a.messages.map(m => m._createdAt || 0));
+      const bTime = Math.max(...b.messages.map(m => m._createdAt || 0));
+      return bTime - aTime; // Sort in descending order (most recent first)
+    }
+    
+    // If one is empty and the other is not, empty comes first
+    return aIsEmpty ? -1 : 1;
+  });
 };
 
 /**
@@ -261,6 +306,7 @@ export const saveEventIdInStorage = (
     console.error(`No message found with _prevId: ${prevId} in conversation ${conversationId}`);
     return null;
   }
+  console.log('insdie EVNETS', updatedConversations);
   
   // Persist the updated conversations
   persistConversationsSnapshot(updatedConversations);

@@ -102,7 +102,7 @@ export default function Sidebar({
           {conversations.length === 0 ? (
             <p className="text-xs text-white/50 text-center py-2">No saved conversations</p>
           ) : (
-            [...conversations].reverse().map(conversation => (
+            [...conversations].map(conversation => (
               <div
                 key={conversation.id}
                 onClick={() => {
