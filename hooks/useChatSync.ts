@@ -20,6 +20,7 @@ import {
 import { getStorageManager } from '@/utils/storageManager';
 import { getStorageItem, setStorageItem } from '@/utils/storageUtils';
 import { eventStore} from '@/lib/applesauce-core';
+import { triggerSync } from './useChatSyncProMax';
 
 // Storage key for chat sync enabled
 const CHAT_SYNC_ENABLED_KEY = 'chatSyncEnabled';
@@ -190,8 +191,11 @@ export const useChatSync = (): ChatSyncHook => {
         const pnsEvent = await createPnsChatEvent(inner);
         eventStore.add(pnsEvent);
         console.log('Published message with event ID:', pnsEvent.id)
+        
+        // Trigger sync to push the new event to relays
+        triggerSync();
 
-        saveEventIdInStorage(conversationId, message, pnsEvent.id)
+        // saveEventIdInStorage(conversationId, message, pnsEvent.id)
         return pnsEvent.id;
       } catch (err) {
         console.error('Failed to publish message:', err);

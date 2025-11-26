@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
-import { BehaviorSubject, filter, shareReplay, combineLatest, switchMap, tap } from 'rxjs'
+import { BehaviorSubject, Subject, filter, shareReplay, combineLatest, switchMap, tap, merge, map } from 'rxjs'
 import type { NostrEvent } from 'nostr-tools'
 import { KIND_PNS, PnsKeys } from '@/lib/pns'
 import { useAppContext } from '@/hooks/useAppContext'
@@ -8,6 +8,15 @@ import { SyncDirection } from 'applesauce-relay'
 
 // Reactive relay URLs input - exported so it can be updated from the component
 export const relayUrls$ = new BehaviorSubject<string[]>([])
+
+// Subject to trigger sync manually (e.g., after adding a new event to eventStore)
+export const syncTrigger$ = new Subject<void>()
+
+// Function to trigger a sync - call this after adding events to eventStore
+export function triggerSync() {
+  console.log('[useChatSyncProMax] Manual sync triggered')
+  syncTrigger$.next()
+}
 const relayUrlsDefined$ = relayUrls$.pipe(
   filter((urls): urls is string[] => {
     return urls.length > 0
@@ -30,8 +39,21 @@ const syncStats = {
   lastSyncTime: null as Date | null,
 }
 
+// Combined stream that emits when keys/relays are ready OR when manually triggered
+const syncInputs$ = merge(
+  // Initial emission when keys and relays are both defined
+  combineLatest([pnsKeysDefined$, relayUrlsDefined$]),
+  // Re-emit current values when sync is manually triggered
+  syncTrigger$.pipe(
+    switchMap(() => combineLatest([pnsKeysDefined$, relayUrlsDefined$]).pipe(
+      // Take only the first emission to avoid duplicate syncs
+      map(values => values)
+    ))
+  )
+)
+
 // Sync kind 1080 events between eventStore and relays
-const syncEvents$ = combineLatest([pnsKeysDefined$, relayUrlsDefined$]).pipe(
+const syncEvents$ = syncInputs$.pipe(
   switchMap(([pnsKeys, relayUrls]) => {
     // Reset sync stats for new sync
     syncStats.eventsReceived = 0
