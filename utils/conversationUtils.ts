@@ -195,7 +195,6 @@ export const findConversationById = (
   conversationId: string
 ): Conversation | undefined => {
   return conversations.find(c => {
-    console.log(c);
     if (c.id === conversationId) return c
   });
 };

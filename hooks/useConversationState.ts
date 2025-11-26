@@ -7,14 +7,11 @@ import {
   deleteConversationFromStorage,
   findConversationById,
   clearAllConversations,
-  persistConversationsSnapshot,
   sortConversationsByRecentActivity
 } from '@/utils/conversationUtils';
 import { getTextFromContent } from '@/utils/messageUtils';
 import { loadActiveConversationId, saveActiveConversationId, loadLastUsedModel } from '@/utils/storageUtils';
 import { useChatSync } from './useChatSync';
-import { useChatSyncPro } from './useChatSyncPro';
-import { useAppContext } from './useAppContext';
 import { useChatSyncProMax } from './useChatSyncProMax';
 import { processInnerEvent, decryptPnsEventToInner } from '@/utils/eventProcessing';
 import { eventStore } from '@/lib/applesauce-core';
@@ -61,7 +58,6 @@ export const useConversationState = (): UseConversationStateReturn => {
   const processedEventIdsRef = useRef<Set<string>>(new Set());
 
   const { syncConversationsIncremental, isSyncing, publishMessage, chatSyncEnabled } = useChatSync();
-  const { conversations: realtimeConversations, events } = useChatSyncPro();
   const { syncedEvents, loading, currentPnsKeys } = useChatSyncProMax()
 
   /**
@@ -157,110 +153,6 @@ export const useConversationState = (): UseConversationStateReturn => {
     }
   }, [syncedEvents, currentPnsKeys, loading]);
 
-  // Sync real-time conversations from useChatSyncPro and backfill unsynced messages
-  useEffect(() => {
-    console.log(chatSyncEnabled);
-
-    setConversations(prev => {
-      if (prev.length === 0 && realtimeConversations.length === 0) {
-        return prev;
-      }
-
-      const mergedMap = new Map(prev.map(c => [c.id, c]));
-      const realtimeConversationIds = new Set(realtimeConversations.map(conv => conv.id));
-
-      if (realtimeConversations.length > 0) {
-        realtimeConversations.forEach((realtimeConv: Conversation) => {
-          const localConv = mergedMap.get(realtimeConv.id);
-
-          if (localConv) {
-            const realtimeMessages = realtimeConv.messages;
-            const localMessages = localConv.messages;
-
-            const realtimeEventIds = new Set(
-              realtimeMessages
-                .map(m => m._eventId)
-                .filter((id): id is string => id !== undefined)
-            );
-
-            const mergedMessages = [...realtimeMessages];
-            let hasChanges = false;
-
-            localMessages.forEach((localMsg, localIndex) => {
-              const isSynced = localMsg._eventId && realtimeEventIds.has(localMsg._eventId);
-
-              if (!isSynced) {
-                mergedMessages.push(localMsg);
-                hasChanges = true;
-                // publishMessage(localConv.id, localMsg, localMsg._modelId??'unknown-model')
-              }
-            });
-
-            if (hasChanges) {
-              mergedMessages.sort((a, b) => (a._createdAt || 0) - (b._createdAt || 0));
-            }
-
-            const mergedConv = {
-              ...realtimeConv,
-              messages: mergedMessages
-            };
-
-            mergedMap.set(realtimeConv.id, mergedConv);
-
-            if (activeConversationId && realtimeConv.id === activeConversationId) {
-              console.log('rdlogs: Real-time update for active conversation (merged):', realtimeConv.id);
-              setMessages(mergedMessages);
-            }
-          } else {
-            mergedMap.set(realtimeConv.id, realtimeConv);
-
-            if (activeConversationId && realtimeConv.id === activeConversationId) {
-              console.log('rdlogs: Real-time update for active conversation:', realtimeConv.id);
-              setMessages(realtimeConv.messages);
-            }
-          }
-        });
-      }
-
-      const unsyncedLocalConversationIds: string[] = [];
-      prev.forEach(localConv => {
-        if (!realtimeConversationIds.has(localConv.id) && localConv.messages.length > 0) {
-          unsyncedLocalConversationIds.push(localConv.id);
-
-          if (chatSyncEnabled) {
-            const progressiveMessages: Message[] = [];
-            localConv.messages.forEach((message, idx) => {
-              progressiveMessages.push(message);
-              if (!message._eventId) {
-                // const eventId = publishMessage(localConv.id, message, message._modelId ?? 'unknown-model');
-              }
-            });
-          }
-
-          if (activeConversationId && localConv.id === activeConversationId) {
-            console.log('rdlogs: Active conversation awaiting realtime presence:', localConv.id);
-            setMessages(localConv.messages);
-          }
-        }
-      });
-
-      if (unsyncedLocalConversationIds.length > 0) {
-        console.log('rdlogs: Conversations missing from realtime sync:', unsyncedLocalConversationIds);
-      }
-
-      if (realtimeConversations.length > 0) {
-        const updatedConversations = Array.from(mergedMap.values());
-        const sortedConversations = sortConversationsByRecentActivity(updatedConversations);
-        console.log('realtimeConversations', sortedConversations);
-        persistConversationsSnapshot(sortedConversations);
-
-        return sortedConversations;
-      }
-
-      return prev;
-    });
-  }, []);
-  
   // Set editing content when editing message index changes
   useEffect(() => {
     if (editingMessageIndex !== null && messages[editingMessageIndex]) {

@@ -1,11 +1,10 @@
 import { useEffect, useState, useRef } from 'react'
-import { BehaviorSubject, Subject, filter, shareReplay, combineLatest, switchMap, tap, map, defaultIfEmpty, merge } from 'rxjs'
+import { BehaviorSubject, Subject, filter, shareReplay, combineLatest, switchMap, tap, map, defaultIfEmpty, merge, catchError, EMPTY } from 'rxjs'
 import type { NostrEvent } from 'nostr-tools'
 import { KIND_PNS, PnsKeys } from '@/lib/pns'
 import { useAppContext } from '@/hooks/useAppContext'
 import { eventStore, relayPool } from '@/lib/applesauce-core'
 import { onlyEvents, SyncDirection } from 'applesauce-relay'
-import { SeenRelaysSymbol } from 'applesauce-core/helpers'
 
 // Reactive relay URLs input - exported so it can be updated from the component
 export const relayUrls$ = new BehaviorSubject<string[]>([])
@@ -66,7 +65,6 @@ const syncEvents$ = syncInputs$.pipe(
       authors: [pnsKeys.pnsKeypair.pubKey],
     }
 
-    console.log('[useChatSyncProMax] Starting sync with filter:', kind1080Filter)
     console.log('[useChatSyncProMax] Syncing with relays:', relayUrls)
 
     // Use relayPool.sync to synchronize events between eventStore and relays
@@ -77,20 +75,26 @@ const syncEvents$ = syncInputs$.pipe(
         console.log('[useChatSyncProMax] Synced event:', event.id, 'Total:', syncStats.eventsReceived, eventStore.hasEvent(event.id))
         eventStore.add(event);
       }),
+      // Handle EmptyError when sync completes with no events to sync
+      // This happens when there are no events matching the filter on any relay
+      catchError((err) => {
+        // EmptyError is thrown when firstValueFrom receives no emissions
+        if (err.name === 'EmptyError') {
+          console.log('[useChatSyncProMax] Sync complete - no events to sync')
+          return EMPTY
+        }
+        // Re-throw other errors
+        throw err
+      }),
     )
   }),
   shareReplay(1),
 )
 
-// Track relay event counts
-const relayEventCounts = new Map<string, number>()
-
 // Fetch kind 1080 events from configured relays using relayPool.subscription
 const kind1080EventsLive$ = combineLatest([pnsKeysDefined$, relayUrlsDefined$]).pipe(
   switchMap(([pnsKeys, relayUrls]) => {
     // Reset counts for new subscription
-    relayEventCounts.clear()
-    
     console.log('[useChatSyncProMax] Starting subscription with relays:', relayUrls)
     
     // Use relayPool.subscription to subscribe to multiple relays at once
@@ -100,7 +104,6 @@ const kind1080EventsLive$ = combineLatest([pnsKeysDefined$, relayUrlsDefined$]).
     ).pipe(
       onlyEvents(),
       tap((event) => {
-        console.log('Reveived evnets', event.id)
       }),
       defaultIfEmpty(null)
     )
@@ -200,8 +203,6 @@ export function useChatSyncProMax() {
     }
   }, [loading])
   
-  
-
   // Log sync statistics
   useEffect(() => {
     console.log('[useChatSyncProMax] Synced events count:', syncedEvents.length, 'Last sync:', syncStats.lastSyncTime)

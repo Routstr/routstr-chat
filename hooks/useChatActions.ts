@@ -111,10 +111,8 @@ export const useChatActions = (): UseChatActionsReturn => {
     storeCashu,
     cashuStore
   } = useCashuWithXYZ();
-  const { config } = useAppContext(); // Keep presetRelays even if not used directly here
 
   const { publishMessage: syncMessageWithNostr, chatSyncEnabled } = useChatSync();
-  const {saveConversationById} = useConversationState();
 
   // Autoscroll moved to ChatMessages to honor user scroll position
 
