@@ -127,6 +127,7 @@ export function useChatSyncProMax() {
     syncedEvents,
     loading,
     error,
+    currentPnsKeys,
     syncStats: {
       eventsReceived: syncStats.eventsReceived,
       lastSyncTime: syncStats.lastSyncTime,

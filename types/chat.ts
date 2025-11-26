@@ -20,7 +20,7 @@ export interface Message {
   content: string | MessageContent[];
   thinking?: string;
   _eventId?: string;
-  _prevId: string;
+  _prevId?: string;
   _createdAt?: number;
   _modelId?: string;
 }

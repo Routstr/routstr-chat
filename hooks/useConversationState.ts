@@ -16,7 +16,8 @@ import { useChatSync } from './useChatSync';
 import { useChatSyncPro } from './useChatSyncPro';
 import { useAppContext } from './useAppContext';
 import { useChatSyncProMax } from './useChatSyncProMax';
-import { processInnerEvent } from '@/utils/eventProcessing';
+import { processInnerEvent, decryptPnsEventToInner } from '@/utils/eventProcessing';
+import { eventStore } from '@/lib/applesauce-core';
 
 export interface UseConversationStateReturn {
   conversations: Conversation[];
@@ -56,10 +57,12 @@ export const useConversationState = (): UseConversationStateReturn => {
   const [editingContent, setEditingContent] = useState('');
 
   const activeConversationIdRef = useRef<string | null>(null);
+  const conversationsMapRef = useRef<Map<string, Conversation>>(new Map());
+  const processedEventIdsRef = useRef<Set<string>>(new Set());
 
   const { syncConversationsIncremental, isSyncing, publishMessage, chatSyncEnabled } = useChatSync();
   const { conversations: realtimeConversations, events } = useChatSyncPro();
-  const { loading } = useChatSyncProMax()
+  const { syncedEvents, loading, currentPnsKeys } = useChatSyncProMax()
 
   /**
    * Handle incremental conversation updates as events arrive
@@ -109,6 +112,50 @@ export const useConversationState = (): UseConversationStateReturn => {
   useEffect(() => {
     activeConversationIdRef.current = activeConversationId;
   }, [activeConversationId]);
+
+  // Process synced events from useChatSyncProMax
+  useEffect(() => {
+    if (!currentPnsKeys) {
+      return;
+    }
+
+    let hasNewEvents = false;
+
+    const eventsToLoad = eventStore.getByFilters({ kinds: [1080] });
+    eventsToLoad.forEach((event) => {
+      // Skip already processed events
+      if (processedEventIdsRef.current.has(event.id)) {
+        return;
+      }
+
+      // Decrypt and process the event
+      const innerEvent = decryptPnsEventToInner(event, currentPnsKeys);
+      if (!innerEvent) {
+        return;
+      }
+
+      // Update conversations map
+      processInnerEvent(conversationsMapRef.current, innerEvent);
+      processedEventIdsRef.current.add(event.id);
+      hasNewEvents = true;
+    });
+
+    // Update state with new conversations array if we processed any new events
+    if (hasNewEvents) {
+      const updatedConversations = Array.from(conversationsMapRef.current.values());
+      const sortedConversations = sortConversationsByRecentActivity(updatedConversations);
+      setConversations(sortedConversations);
+
+      // Update messages for active conversation
+      const currentActiveId = activeConversationIdRef.current;
+      if (currentActiveId) {
+        const activeConv = conversationsMapRef.current.get(currentActiveId);
+        if (activeConv) {
+          setMessages(activeConv.messages);
+        }
+      }
+    }
+  }, [syncedEvents, currentPnsKeys, loading]);
 
   // Sync real-time conversations from useChatSyncPro and backfill unsynced messages
   useEffect(() => {
