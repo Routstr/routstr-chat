@@ -48,7 +48,6 @@ const MainChatArea: React.FC = () => {
     // Conversation State
     activeConversationId,
     createNewConversationHandler,
-    saveConversationById,
     getActiveConversationId,
     
     // API State
@@ -71,7 +70,6 @@ const MainChatArea: React.FC = () => {
       baseUrl,
       isAuthenticated,
       setIsLoginModalOpen,
-      saveConversationById,
       getActiveConversationId
     );
   };
@@ -87,7 +85,6 @@ const MainChatArea: React.FC = () => {
       selectedModel,
       baseUrl,
       activeConversationId,
-      saveConversationById,
       getActiveConversationId
     );
   };
@@ -100,7 +97,6 @@ const MainChatArea: React.FC = () => {
       selectedModel,
       baseUrl,
       activeConversationId,
-      saveConversationById,
       getActiveConversationId
     );
   };

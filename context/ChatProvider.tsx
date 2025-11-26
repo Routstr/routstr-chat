@@ -13,6 +13,7 @@ import { useNostrLogin } from '@nostrify/react/login';
 import { nip19 } from 'nostr-tools';
 import { derivePnsKeys } from '@/lib/pns';
 import { pnsKeys$ } from '@/hooks/useChatSyncPro';
+import { pnsKeysMax$ } from '@/hooks/useChatSyncProMax';
 
 interface ChatContextType extends 
   UseConversationStateReturn,
@@ -68,6 +69,16 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
       }
     } else {
       pnsKeys$.next(null);
+    }
+    if (user?.pubkey && logins.length > 0) {
+      try {
+        const pnsKeys = getPnsKeys();
+        pnsKeysMax$.next(pnsKeys);
+      } catch (err) {
+        pnsKeysMax$.next(null);
+      }
+    } else {
+      pnsKeysMax$.next(null);
     }
   }, [user?.pubkey, logins, getPnsKeys]);
   

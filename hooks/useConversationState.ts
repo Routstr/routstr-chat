@@ -15,6 +15,8 @@ import { loadActiveConversationId, saveActiveConversationId, loadLastUsedModel }
 import { useChatSync } from './useChatSync';
 import { useChatSyncPro } from './useChatSyncPro';
 import { useAppContext } from './useAppContext';
+import { useChatSyncProMax } from './useChatSyncProMax';
+import { processInnerEvent } from '@/utils/eventProcessing';
 
 export interface UseConversationStateReturn {
   conversations: Conversation[];
@@ -34,18 +36,10 @@ export interface UseConversationStateReturn {
   clearConversations: () => void;
   startEditingMessage: (index: number) => void;
   cancelEditing: () => void;
-  saveCurrentConversation: () => void;
   saveConversationById: (conversationId: string, newMessages: Message[]) => void;
   getActiveConversationId: () => string | null;
   syncWithNostr: () => Promise<void>;
   isSyncing: boolean;
-}
-
-interface PendingPublishTask {
-  conversationId: string;
-  messages: Message[];
-  key: string;
-  modelId: string;
 }
 
 /**
@@ -62,19 +56,10 @@ export const useConversationState = (): UseConversationStateReturn => {
   const [editingContent, setEditingContent] = useState('');
 
   const activeConversationIdRef = useRef<string | null>(null);
-  const pendingPublishKeysRef = useRef<Set<string>>(new Set());
-
 
   const { syncConversationsIncremental, isSyncing, publishMessage, chatSyncEnabled } = useChatSync();
   const { conversations: realtimeConversations, events } = useChatSyncPro();
-
-  // useChatHistorySync({
-  //   conversations,
-  //   setConversations,
-  //   activeConversationId,
-  //   setMessages,
-  //   conversationsLoaded
-  // });
+  const { loading } = useChatSyncProMax()
 
   /**
    * Handle incremental conversation updates as events arrive
@@ -125,53 +110,9 @@ export const useConversationState = (): UseConversationStateReturn => {
     activeConversationIdRef.current = activeConversationId;
   }, [activeConversationId]);
 
-  const updateConversationAfterPublish = useCallback((conversationId: string, newMessages: Message[]) => {
-    setConversations(prevConversations => {
-      return saveConversationToStorage(prevConversations, conversationId, newMessages);
-    });
-
-    if (activeConversationIdRef.current === conversationId) {
-      setMessages(newMessages);
-    }
-  }, [setConversations, setMessages]);
-
   // Sync real-time conversations from useChatSyncPro and backfill unsynced messages
   useEffect(() => {
     console.log(chatSyncEnabled);
-    const pendingPublishes: PendingPublishTask[] = [];
-
-    const buildPendingKey = (conversationId: string, message: Message, fallbackIndex: number): string => {
-      const createdKey = message._createdAt ?? `created-${fallbackIndex}`;
-      const prevKey = message._prevId ?? `prev-${fallbackIndex}`;
-      return `${conversationId}:${createdKey}:${prevKey}`;
-    };
-
-    const getModelIdForMessage = (message?: Message): string => {
-      const candidate = (message && typeof (message as any)?.model === 'string')
-        ? (message as any).model
-        : (message && typeof (message as any)?.metadata?.model === 'string')
-          ? (message as any).metadata.model
-          : undefined;
-      return candidate ?? loadLastUsedModel() ?? 'unknown-model';
-    };
-
-    const enqueuePublish = (conversationId: string, message: Message, snapshot: Message[], fallbackIndex: number) => {
-      if (!chatSyncEnabled) return;
-
-      const key = buildPendingKey(conversationId, message, fallbackIndex);
-      if (pendingPublishKeysRef.current.has(key)) {
-        return;
-      }
-      console.log(pendingPublishes, pendingPublishKeysRef);
-
-      pendingPublishKeysRef.current.add(key);
-      pendingPublishes.push({
-        conversationId,
-        messages: snapshot,
-        key,
-        modelId: getModelIdForMessage(message),
-      });
-    };
 
     setConversations(prev => {
       if (prev.length === 0 && realtimeConversations.length === 0) {
@@ -204,13 +145,7 @@ export const useConversationState = (): UseConversationStateReturn => {
               if (!isSynced) {
                 mergedMessages.push(localMsg);
                 hasChanges = true;
-
-                enqueuePublish(
-                  realtimeConv.id,
-                  localMsg,
-                  mergedMessages.slice(),
-                  localIndex
-                );
+                // publishMessage(localConv.id, localMsg, localMsg._modelId??'unknown-model')
               }
             });
 
@@ -250,7 +185,7 @@ export const useConversationState = (): UseConversationStateReturn => {
             localConv.messages.forEach((message, idx) => {
               progressiveMessages.push(message);
               if (!message._eventId) {
-                enqueuePublish(localConv.id, message, progressiveMessages.slice(), idx);
+                // const eventId = publishMessage(localConv.id, message, message._modelId ?? 'unknown-model');
               }
             });
           }
@@ -277,48 +212,8 @@ export const useConversationState = (): UseConversationStateReturn => {
 
       return prev;
     });
-    console.log(pendingPublishKeysRef, pendingPublishes);
-
-    if (pendingPublishes.length > 0 && chatSyncEnabled) {
-      pendingPublishes.forEach(task => {
-        publishMessage(
-          task.conversationId,
-          task.messages,
-          task.modelId,
-          (newMessages) => updateConversationAfterPublish(task.conversationId, newMessages)
-        )
-          .catch(err => {
-            console.error('Failed to publish pending message:', err);
-          })
-          .finally(() => {
-            pendingPublishKeysRef.current.delete(task.key);
-          });
-      });
-    } else if (pendingPublishes.length > 0) {
-      pendingPublishes.forEach(task => pendingPublishKeysRef.current.delete(task.key));
-    }
-  }, [realtimeConversations, activeConversationId, publishMessage, chatSyncEnabled, updateConversationAfterPublish, setMessages]);
-
-  // Save current conversation whenever messages change
-  const saveCurrentConversation = useCallback(() => {
-    if (!activeConversationId) return;
-
-    setConversations(prevConversations => {
-      return saveConversationToStorage(
-        prevConversations,
-        activeConversationId,
-        messages
-      );
-    });
-  }, [activeConversationId, messages]);
-
-  // Auto-save conversation when messages change
-  useEffect(() => {
-    if (activeConversationId && messages.length > 0) {
-      saveCurrentConversation();
-    }
-  }, [messages, activeConversationId, saveCurrentConversation]);
-
+  }, []);
+  
   // Set editing content when editing message index changes
   useEffect(() => {
     if (editingMessageIndex !== null && messages[editingMessageIndex]) {
@@ -418,7 +313,6 @@ export const useConversationState = (): UseConversationStateReturn => {
     clearConversations,
     startEditingMessage,
     cancelEditing,
-    saveCurrentConversation,
     saveConversationById: (conversationId: string, newMessages: Message[]) => {
       setConversations(prevConversations => {
         return saveConversationToStorage(prevConversations, conversationId, newMessages);

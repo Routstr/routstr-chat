@@ -19,6 +19,7 @@ import {
 } from '@/utils/eventProcessing';
 import { getStorageManager } from '@/utils/storageManager';
 import { getStorageItem, setStorageItem } from '@/utils/storageUtils';
+import { eventStore} from '@/lib/applesauce-core';
 
 // Storage key for chat sync enabled
 const CHAT_SYNC_ENABLED_KEY = 'chatSyncEnabled';
@@ -72,9 +73,7 @@ interface ChatSyncHook {
   setChatSyncEnabled: (enabled: boolean) => void;
   publishMessage: (
     conversationId: string,
-    updatedMessages: Message[],
-    modelId: string,
-    updateMessages: (newMessages: Message[]) => void
+    message: Message,
   ) => Promise<string | null>;
   syncConversations: () => Promise<Conversation[]>;
   syncConversationsIncremental: (
@@ -124,8 +123,7 @@ export const useChatSync = (): ChatSyncHook => {
   const createInnerEvent = useCallback(
     async (
       conversationId: string,
-      message: Message,
-      modelId: string
+      message: Message
     ): Promise<InnerEventPayload> => {
       const pubkey = user?.pubkey;
       if (!pubkey) throw new Error('No public key available');
@@ -133,12 +131,15 @@ export const useChatSync = (): ChatSyncHook => {
       const tags = [
         ['d', conversationId],
         ['role', message.role],
-        ['model', modelId],
         ['client', 'routstr-chat'],
       ];
 
       if (message._prevId) {
         tags.push(['e', message._prevId]);
+      }
+      
+      if (message.role === 'assistant') {
+        tags.push(['model', message._modelId || 'unknown-model']);
       }
 
       // Serialize content if it's complex (e.g., with images)
@@ -176,39 +177,22 @@ export const useChatSync = (): ChatSyncHook => {
   const publishMessage = useCallback(
     async (
       conversationId: string,
-      updatedMessages: Message[],
-      modelId: string,
-      updateMessages: (newMessages: Message[]) => void
+      message: Message,
     ): Promise<string | null> => {
-      console.log(updatedMessages)
-      const message = updatedMessages[updatedMessages.length - 1];
       try {
         setIsSyncing(true);
         setError(null);
 
         // 1. Create Inner
-        const inner = await createInnerEvent(conversationId, message, modelId);
+        const inner = await createInnerEvent(conversationId, message);
         
         // 2. Create PNS Event (Encrypted and Signed)
         const pnsEvent = await createPnsChatEvent(inner);
+        eventStore.add(pnsEvent);
+        console.log('Published message with event ID:', pnsEvent.id)
 
-        // 3. Publish
-        if (nostr) {
-          // Use nostrify pool to publish the event
-          await nostr.event(pnsEvent);
-          if (message._prevId) {
-            // Edit the last message to add _eventId
-            const lastMessage = updatedMessages[updatedMessages.length - 1];
-            lastMessage._eventId = pnsEvent.id;
-            
-            updateMessages(updatedMessages)
-            saveEventIdInStorage(conversationId, message._prevId, pnsEvent.id);
-          }
-          // Return the ID of the PNS event for the linked list
-          return pnsEvent.id;
-        }
-        return null;
-
+        saveEventIdInStorage(conversationId, message, pnsEvent.id)
+        return pnsEvent.id;
       } catch (err) {
         console.error('Failed to publish message:', err);
         setError(err instanceof Error ? err.message : 'Unknown error');

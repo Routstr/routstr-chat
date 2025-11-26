@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
-import { Relay, onlyEvents } from 'applesauce-relay'
+import { Relay, onlyEvents, RelayPool } from 'applesauce-relay'
 import { BehaviorSubject, filter, shareReplay, switchMap, takeWhile, defaultIfEmpty, combineLatest, merge, tap } from 'rxjs'
 import type { NostrEvent } from 'nostr-tools'
 import { nip19 } from 'nostr-tools'

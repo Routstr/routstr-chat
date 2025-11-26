@@ -32,6 +32,7 @@ export const persistConversationsSnapshot = (
   } catch (error) {
     console.error('Error persisting conversations to storage:', error);
   }
+  console.log('persis', conversations)
 
   return timestamp;
 };
@@ -96,6 +97,7 @@ export const saveConversationToStorage = (
 
   // Sort by most recent activity
   const sortedConversations = sortConversationsByRecentActivity(updatedConversations);
+  console.log(sortedConversations);
 
   persistConversationsSnapshot(sortedConversations);
   return sortedConversations;
@@ -192,7 +194,10 @@ export const findConversationById = (
   conversations: Conversation[],
   conversationId: string
 ): Conversation | undefined => {
-  return conversations.find(c => c.id === conversationId);
+  return conversations.find(c => {
+    console.log(c);
+    if (c.id === conversationId) return c
+  });
 };
 
 /**
@@ -262,7 +267,7 @@ export const sortConversationsByRecentActivity = (
  */
 export const saveEventIdInStorage = (
   conversationId: string,
-  prevId: string,
+  message: Message,
   eventId: string
 ): Conversation[] | null => {
   // Load conversations from storage
@@ -275,35 +280,17 @@ export const saveEventIdInStorage = (
     return null;
   }
   
-  // Find the message by matching prevId
-  let messageFound = false;
+  // Append the message to the end of the target conversation
   const updatedConversations = conversations.map(conversation => {
     if (conversation.id === conversationId) {
-      const updatedMessages = conversation.messages.map(message => {
-        // Check if this message has the matching _prevId
-        if (message._prevId === prevId) {
-          messageFound = true;
-          // Add the eventId to the message
-          return {
-            ...message,
-            _eventId: eventId
-          };
-        }
-        return message;
-      });
-      
       return {
         ...conversation,
-        messages: updatedMessages
+        messages: [...conversation.messages, { ...message, _eventId: eventId }]
       };
     }
     return conversation;
   });
   
-  if (!messageFound) {
-    console.error(`No message found with _prevId: ${prevId} in conversation ${conversationId}`);
-    return null;
-  }
   console.log('insdie EVNETS', updatedConversations);
   
   // Persist the updated conversations
