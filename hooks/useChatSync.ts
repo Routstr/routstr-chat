@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback} from 'react';
+import { useState, useEffect, useCallback, useSyncExternalStore } from 'react';
 import { Event, nip19 } from 'nostr-tools';
 import { Conversation, Message } from '@/types/chat';
 import {
@@ -19,6 +19,47 @@ import {
 } from '@/utils/eventProcessing';
 import { getStorageManager } from '@/utils/storageManager';
 import { getStorageItem, setStorageItem } from '@/utils/storageUtils';
+
+// Storage key for chat sync enabled
+const CHAT_SYNC_ENABLED_KEY = 'chatSyncEnabled';
+
+// Subscribers for storage changes
+const chatSyncSubscribers = new Set<() => void>();
+
+// Subscribe function for useSyncExternalStore
+const subscribeToChatSync = (callback: () => void) => {
+  chatSyncSubscribers.add(callback);
+  
+  // Also listen for storage events from other tabs
+  const handleStorage = (e: StorageEvent) => {
+    if (e.key === CHAT_SYNC_ENABLED_KEY) {
+      callback();
+    }
+  };
+  window.addEventListener('storage', handleStorage);
+  
+  return () => {
+    chatSyncSubscribers.delete(callback);
+    window.removeEventListener('storage', handleStorage);
+  };
+};
+
+// Get current value from localStorage
+const getChatSyncSnapshot = (): boolean => {
+  return getStorageItem<boolean>(CHAT_SYNC_ENABLED_KEY, true);
+};
+
+// Server snapshot (for SSR)
+const getChatSyncServerSnapshot = (): boolean => {
+  return true; // Default value for SSR
+};
+
+// Function to update the value and notify all subscribers
+const setChatSyncEnabledGlobal = (enabled: boolean): void => {
+  setStorageItem(CHAT_SYNC_ENABLED_KEY, enabled);
+  // Notify all subscribers that the value changed
+  chatSyncSubscribers.forEach(callback => callback());
+};
 
 // Custom Kinds
 const KIND_CHAT_INNER = 20001;
@@ -54,22 +95,20 @@ export const useChatSync = (): ChatSyncHook => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [chatSyncEnabled, setChatSyncEnabledState] = useState<boolean>(true);
   const { user } = useCurrentUser();
   const { logins } = useNostrLogin()
   const { nostr } = useNostrify();
 
-  // Initialize chatSyncEnabled from storage using storageUtils
-  useEffect(() => {
-    const storedValue = getStorageItem<boolean>('chatSyncEnabled', true);
-    setChatSyncEnabledState(storedValue);
-  }, [chatSyncEnabled]);
-  console.log(chatSyncEnabled);
+  // Use useSyncExternalStore to share chatSyncEnabled state across all hook instances
+  const chatSyncEnabled = useSyncExternalStore(
+    subscribeToChatSync,
+    getChatSyncSnapshot,
+    getChatSyncServerSnapshot
+  );
 
-  // Function to update chatSyncEnabled in both state and storage
+  // Wrapper function that calls the global setter
   const setChatSyncEnabled = useCallback((enabled: boolean) => {
-    setStorageItem('chatSyncEnabled', enabled);
-    setChatSyncEnabledState(enabled);
+    setChatSyncEnabledGlobal(enabled);
   }, []);
 
   // Helper to get PNS keys

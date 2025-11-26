@@ -162,6 +162,7 @@ export const useConversationState = (): UseConversationStateReturn => {
       if (pendingPublishKeysRef.current.has(key)) {
         return;
       }
+      console.log(pendingPublishes, pendingPublishKeysRef);
 
       pendingPublishKeysRef.current.add(key);
       pendingPublishes.push({
@@ -276,6 +277,7 @@ export const useConversationState = (): UseConversationStateReturn => {
 
       return prev;
     });
+    console.log(pendingPublishKeysRef, pendingPublishes);
 
     if (pendingPublishes.length > 0 && chatSyncEnabled) {
       pendingPublishes.forEach(task => {
