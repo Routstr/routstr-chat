@@ -25,7 +25,6 @@ export const persistConversationsSnapshot = (
   }
 
   const timestamp = typeof updatedAt === 'number' ? updatedAt : Date.now();
-  console.log('persist', conversations);
 
   try {
     window.localStorage.setItem(CONVERSATIONS_STORAGE_KEY, JSON.stringify(conversations));
@@ -97,7 +96,6 @@ export const saveConversationToStorage = (
 
   // Sort by most recent activity
   const sortedConversations = sortConversationsByRecentActivity(updatedConversations);
-  console.log('Updated conversations:', sortedConversations)
 
   persistConversationsSnapshot(sortedConversations);
   return sortedConversations;

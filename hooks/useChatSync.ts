@@ -63,7 +63,8 @@ export const useChatSync = (): ChatSyncHook => {
   useEffect(() => {
     const storedValue = getStorageItem<boolean>('chatSyncEnabled', true);
     setChatSyncEnabledState(storedValue);
-  }, []);
+  }, [chatSyncEnabled]);
+  console.log(chatSyncEnabled);
 
   // Function to update chatSyncEnabled in both state and storage
   const setChatSyncEnabled = useCallback((enabled: boolean) => {

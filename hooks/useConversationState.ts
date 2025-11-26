@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Conversation, Message } from '@/types/chat';
 import {
   loadConversationsFromStorage,
@@ -11,7 +11,7 @@ import {
   sortConversationsByRecentActivity
 } from '@/utils/conversationUtils';
 import { getTextFromContent } from '@/utils/messageUtils';
-import { loadActiveConversationId, saveActiveConversationId } from '@/utils/storageUtils';
+import { loadActiveConversationId, saveActiveConversationId, loadLastUsedModel } from '@/utils/storageUtils';
 import { useChatSync } from './useChatSync';
 import { useChatSyncPro } from './useChatSyncPro';
 import { useAppContext } from './useAppContext';
@@ -41,6 +41,13 @@ export interface UseConversationStateReturn {
   isSyncing: boolean;
 }
 
+interface PendingPublishTask {
+  conversationId: string;
+  messages: Message[];
+  key: string;
+  modelId: string;
+}
+
 /**
  * Custom hook for managing conversation and message state
  * Handles conversation CRUD operations, message state management,
@@ -54,9 +61,11 @@ export const useConversationState = (): UseConversationStateReturn => {
   const [editingMessageIndex, setEditingMessageIndex] = useState<number | null>(null);
   const [editingContent, setEditingContent] = useState('');
 
-  const { config } = useAppContext(); // Keep presetRelays even if not used directly here
+  const activeConversationIdRef = useRef<string | null>(null);
+  const pendingPublishKeysRef = useRef<Set<string>>(new Set());
 
-  const { syncConversationsIncremental, isSyncing, publishMessage } = useChatSync();
+
+  const { syncConversationsIncremental, isSyncing, publishMessage, chatSyncEnabled } = useChatSync();
   const { conversations: realtimeConversations, events } = useChatSyncPro();
 
   // useChatHistorySync({
@@ -112,62 +121,98 @@ export const useConversationState = (): UseConversationStateReturn => {
     setConversationsLoaded(true);
   }, []);
 
-  // Sync real-time conversations from useChatSyncPro
   useEffect(() => {
-    if (realtimeConversations.length > 0) {
-      setConversations(prev => {
-        // Merge real-time conversations with existing ones
-        const mergedMap = new Map(prev.map(c => [c.id, c]));
+    activeConversationIdRef.current = activeConversationId;
+  }, [activeConversationId]);
 
+  const updateConversationAfterPublish = useCallback((conversationId: string, newMessages: Message[]) => {
+    setConversations(prevConversations => {
+      return saveConversationToStorage(prevConversations, conversationId, newMessages);
+    });
 
-        // Update with real-time data
+    if (activeConversationIdRef.current === conversationId) {
+      setMessages(newMessages);
+    }
+  }, [setConversations, setMessages]);
+
+  // Sync real-time conversations from useChatSyncPro and backfill unsynced messages
+  useEffect(() => {
+    console.log(chatSyncEnabled);
+    const pendingPublishes: PendingPublishTask[] = [];
+
+    const buildPendingKey = (conversationId: string, message: Message, fallbackIndex: number): string => {
+      const createdKey = message._createdAt ?? `created-${fallbackIndex}`;
+      const prevKey = message._prevId ?? `prev-${fallbackIndex}`;
+      return `${conversationId}:${createdKey}:${prevKey}`;
+    };
+
+    const getModelIdForMessage = (message?: Message): string => {
+      const candidate = (message && typeof (message as any)?.model === 'string')
+        ? (message as any).model
+        : (message && typeof (message as any)?.metadata?.model === 'string')
+          ? (message as any).metadata.model
+          : undefined;
+      return candidate ?? loadLastUsedModel() ?? 'unknown-model';
+    };
+
+    const enqueuePublish = (conversationId: string, message: Message, snapshot: Message[], fallbackIndex: number) => {
+      if (!chatSyncEnabled) return;
+
+      const key = buildPendingKey(conversationId, message, fallbackIndex);
+      if (pendingPublishKeysRef.current.has(key)) {
+        return;
+      }
+
+      pendingPublishKeysRef.current.add(key);
+      pendingPublishes.push({
+        conversationId,
+        messages: snapshot,
+        key,
+        modelId: getModelIdForMessage(message),
+      });
+    };
+
+    setConversations(prev => {
+      if (prev.length === 0 && realtimeConversations.length === 0) {
+        return prev;
+      }
+
+      const mergedMap = new Map(prev.map(c => [c.id, c]));
+      const realtimeConversationIds = new Set(realtimeConversations.map(conv => conv.id));
+
+      if (realtimeConversations.length > 0) {
         realtimeConversations.forEach((realtimeConv: Conversation) => {
           const localConv = mergedMap.get(realtimeConv.id);
 
           if (localConv) {
-            // Common conversation ID found - merge messages
             const realtimeMessages = realtimeConv.messages;
             const localMessages = localConv.messages;
 
-            // Map of realtime event IDs for quick lookup
             const realtimeEventIds = new Set(
               realtimeMessages
                 .map(m => m._eventId)
-                .filter(id => id !== undefined)
+                .filter((id): id is string => id !== undefined)
             );
 
-            // Start with realtime messages as the base (source of truth for synced content)
             const mergedMessages = [...realtimeMessages];
             let hasChanges = false;
 
-            // Check local messages for any that are missing in realtime (unsynced)
-            localMessages.forEach(localMsg => {
-              // If message has an event ID, check if it exists in realtime
-              // If message has no event ID, it's definitely unsynced
+            localMessages.forEach((localMsg, localIndex) => {
               const isSynced = localMsg._eventId && realtimeEventIds.has(localMsg._eventId);
 
               if (!isSynced) {
-                // This message exists locally but not in realtime sync
-                // Add it to our merged list
                 mergedMessages.push(localMsg);
                 hasChanges = true;
 
-                // TODO: Publish this missing event
-                // if (localMsg.role === 'user') {
-                //   publishMessage(
-                //     realtimeConv.id,
-                //     [...realtimeMessages, localMsg], // Context + new message
-                //     'current-model-id', // We need the model ID here
-                //     (newMsgs) => {
-                //       // Callback to update messages after publish
-                //       console.log('Published missing message:', localMsg);
-                //     }
-                //   );
-                // }
+                enqueuePublish(
+                  realtimeConv.id,
+                  localMsg,
+                  mergedMessages.slice(),
+                  localIndex
+                );
               }
             });
 
-            // If we merged anything, sort by creation time
             if (hasChanges) {
               mergedMessages.sort((a, b) => (a._createdAt || 0) - (b._createdAt || 0));
             }
@@ -179,34 +224,78 @@ export const useConversationState = (): UseConversationStateReturn => {
 
             mergedMap.set(realtimeConv.id, mergedConv);
 
-            // If this updated conversation is the currently active one, update messages
             if (activeConversationId && realtimeConv.id === activeConversationId) {
               console.log('rdlogs: Real-time update for active conversation (merged):', realtimeConv.id);
               setMessages(mergedMessages);
             }
           } else {
-            // New conversation from realtime
             mergedMap.set(realtimeConv.id, realtimeConv);
 
-            // If this updated conversation is the currently active one, update messages
             if (activeConversationId && realtimeConv.id === activeConversationId) {
               console.log('rdlogs: Real-time update for active conversation:', realtimeConv.id);
               setMessages(realtimeConv.messages);
             }
           }
         });
-        const updatedConversations = Array.from(mergedMap.values());
+      }
 
-        // Sort by most recent activity
-        const sortedConversations = sortConversationsByRecentActivity(updatedConversations);
-        console.log("realtimeConversations", sortedConversations);
-        // Persist the merged conversations to storage
-        persistConversationsSnapshot(sortedConversations);
-        
-        return sortedConversations;
+      const unsyncedLocalConversationIds: string[] = [];
+      prev.forEach(localConv => {
+        if (!realtimeConversationIds.has(localConv.id) && localConv.messages.length > 0) {
+          unsyncedLocalConversationIds.push(localConv.id);
+
+          if (chatSyncEnabled) {
+            const progressiveMessages: Message[] = [];
+            localConv.messages.forEach((message, idx) => {
+              progressiveMessages.push(message);
+              if (!message._eventId) {
+                enqueuePublish(localConv.id, message, progressiveMessages.slice(), idx);
+              }
+            });
+          }
+
+          if (activeConversationId && localConv.id === activeConversationId) {
+            console.log('rdlogs: Active conversation awaiting realtime presence:', localConv.id);
+            setMessages(localConv.messages);
+          }
+        }
       });
+
+      if (unsyncedLocalConversationIds.length > 0) {
+        console.log('rdlogs: Conversations missing from realtime sync:', unsyncedLocalConversationIds);
+      }
+
+      if (realtimeConversations.length > 0) {
+        const updatedConversations = Array.from(mergedMap.values());
+        const sortedConversations = sortConversationsByRecentActivity(updatedConversations);
+        console.log('realtimeConversations', sortedConversations);
+        persistConversationsSnapshot(sortedConversations);
+
+        return sortedConversations;
+      }
+
+      return prev;
+    });
+
+    if (pendingPublishes.length > 0 && chatSyncEnabled) {
+      pendingPublishes.forEach(task => {
+        publishMessage(
+          task.conversationId,
+          task.messages,
+          task.modelId,
+          (newMessages) => updateConversationAfterPublish(task.conversationId, newMessages)
+        )
+          .catch(err => {
+            console.error('Failed to publish pending message:', err);
+          })
+          .finally(() => {
+            pendingPublishKeysRef.current.delete(task.key);
+          });
+      });
+    } else if (pendingPublishes.length > 0) {
+      pendingPublishes.forEach(task => pendingPublishKeysRef.current.delete(task.key));
     }
-  }, [realtimeConversations, activeConversationId, publishMessage]);
+  }, [realtimeConversations, activeConversationId, publishMessage, chatSyncEnabled, updateConversationAfterPublish, setMessages]);
 
   // Save current conversation whenever messages change
   const saveCurrentConversation = useCallback(() => {
