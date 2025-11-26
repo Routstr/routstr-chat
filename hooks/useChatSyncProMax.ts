@@ -1,10 +1,11 @@
 import { useEffect, useState, useRef } from 'react'
-import { BehaviorSubject, Subject, filter, shareReplay, combineLatest, switchMap, tap, merge, map } from 'rxjs'
+import { BehaviorSubject, Subject, filter, shareReplay, combineLatest, switchMap, tap, map, defaultIfEmpty, merge } from 'rxjs'
 import type { NostrEvent } from 'nostr-tools'
 import { KIND_PNS, PnsKeys } from '@/lib/pns'
 import { useAppContext } from '@/hooks/useAppContext'
 import { eventStore, relayPool } from '@/lib/applesauce-core'
-import { SyncDirection } from 'applesauce-relay'
+import { onlyEvents, SyncDirection } from 'applesauce-relay'
+import { SeenRelaysSymbol } from 'applesauce-core/helpers'
 
 // Reactive relay URLs input - exported so it can be updated from the component
 export const relayUrls$ = new BehaviorSubject<string[]>([])
@@ -81,6 +82,32 @@ const syncEvents$ = syncInputs$.pipe(
   shareReplay(1),
 )
 
+// Track relay event counts
+const relayEventCounts = new Map<string, number>()
+
+// Fetch kind 1080 events from configured relays using relayPool.subscription
+const kind1080EventsLive$ = combineLatest([pnsKeysDefined$, relayUrlsDefined$]).pipe(
+  switchMap(([pnsKeys, relayUrls]) => {
+    // Reset counts for new subscription
+    relayEventCounts.clear()
+    
+    console.log('[useChatSyncProMax] Starting subscription with relays:', relayUrls)
+    
+    // Use relayPool.subscription to subscribe to multiple relays at once
+    return relayPool.subscription(
+      relayUrls,
+      { kinds: [KIND_PNS], authors: [pnsKeys.pnsKeypair.pubKey] }
+    ).pipe(
+      onlyEvents(),
+      tap((event) => {
+        console.log('Reveived evnets', event.id)
+      }),
+      defaultIfEmpty(null)
+    )
+  }),
+  shareReplay(1),
+)
+
 export function useChatSyncProMax() {
   const { config } = useAppContext()
   const [syncedEvents, setSyncedEvents] = useState<NostrEvent[]>([])
@@ -139,6 +166,41 @@ export function useChatSyncProMax() {
       sub.unsubscribe()
     }
   }, [])
+
+  // Subscribe to kind 1080 live events and add them to synced events
+  useEffect(() => {
+    if (!loading) {
+      const sub = kind1080EventsLive$.subscribe({
+        next: (event: NostrEvent | null) => {
+          if (event) {
+            // Add event to eventStore for persistence
+            eventStore.hasEvent(event.id) ? {} : eventStore.add(event);
+            
+            // Update synced events array
+            setSyncedEvents((prev) => {
+              // Avoid duplicates
+              if (prev.some((e) => e.id === event.id)) {
+                return prev
+              }
+              // Add new event and sort by created_at descending
+              const newEvents = [...prev, event].sort((a, b) => b.created_at - a.created_at)
+              return newEvents
+            })
+          }
+        },
+        error: (err: Error | unknown) => {
+          console.error('[useChatSyncProMax] Live subscription error:', err)
+          setError(err instanceof Error ? err.message : String(err))
+        },
+      })
+
+      return () => {
+        sub.unsubscribe()
+      }
+    }
+  }, [loading])
+  
+  
 
   // Log sync statistics
   useEffect(() => {
