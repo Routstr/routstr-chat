@@ -176,7 +176,7 @@ export const useConversationState = (): UseConversationStateReturn => {
   const createNewConversationHandler = useCallback((initialMessages: Message[] = [], timestamp?: string) => {
     let createdId: string = '';
     setConversations(prevConversations => {
-      const { newConversation, updatedConversations } = createAndStoreNewConversation(prevConversations, initialMessages, timestamp);
+      const { newConversation, updatedConversations } = createAndStoreNewConversation(conversationsMapRef.current, initialMessages, timestamp);
       createdId = newConversation.id;
       setActiveConversationIdWithStorage(newConversation.id);
       // Set messages to the initial messages (empty array if none provided)
@@ -188,7 +188,7 @@ export const useConversationState = (): UseConversationStateReturn => {
 
   const loadConversation = useCallback((conversationId: string) => {
     setConversations(prevConversations => {
-      const conversation = findConversationById(prevConversations, conversationId);
+      const conversation = conversationsMapRef.current.get(conversationId);
       if (conversation) {
         setActiveConversationIdWithStorage(conversationId);
         console.log("rdlogs: loadConversation", conversationId)

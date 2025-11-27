@@ -5,6 +5,31 @@ import { KIND_PNS, PnsKeys } from '@/lib/pns'
 import { useAppContext } from '@/hooks/useAppContext'
 import { eventStore, relayPool } from '@/lib/applesauce-core'
 import { onlyEvents, SyncDirection } from 'applesauce-relay'
+import { getStorageItem } from '@/utils/storageUtils'
+
+// Storage key for chat sync enabled (shared with useChatSync.ts)
+const CHAT_SYNC_ENABLED_KEY = 'chatSyncEnabled'
+
+// Reactive chat sync enabled state - reads from localStorage
+export const chatSyncEnabled$ = new BehaviorSubject<boolean>(
+  typeof window !== 'undefined' ? getStorageItem<boolean>(CHAT_SYNC_ENABLED_KEY, true) : true
+)
+
+// Function to update chatSyncEnabled$ when storage changes
+// This should be called from components that update the setting
+export function updateChatSyncEnabled(enabled: boolean) {
+  chatSyncEnabled$.next(enabled)
+}
+
+// Listen for storage events from other tabs (only in browser)
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (e: StorageEvent) => {
+    if (e.key === CHAT_SYNC_ENABLED_KEY) {
+      const newValue = e.newValue ? JSON.parse(e.newValue) : true
+      chatSyncEnabled$.next(newValue)
+    }
+  })
+}
 
 // Reactive relay URLs input - exported so it can be updated from the component
 export const relayUrls$ = new BehaviorSubject<string[]>([])
@@ -39,13 +64,13 @@ const syncStats = {
   lastSyncTime: null as Date | null,
 }
 
-// Combined stream that emits when keys/relays are ready OR when manually triggered
+// Combined stream that emits when keys/relays/chatSyncEnabled are ready OR when manually triggered
 const syncInputs$ = merge(
-  // Initial emission when keys and relays are both defined
-  combineLatest([pnsKeysDefined$, relayUrlsDefined$]),
+  // Initial emission when keys, relays, and chatSyncEnabled are all defined
+  combineLatest([pnsKeysDefined$, relayUrlsDefined$, chatSyncEnabled$]),
   // Re-emit current values when sync is manually triggered
   syncTrigger$.pipe(
-    switchMap(() => combineLatest([pnsKeysDefined$, relayUrlsDefined$]).pipe(
+    switchMap(() => combineLatest([pnsKeysDefined$, relayUrlsDefined$, chatSyncEnabled$]).pipe(
       // Take only the first emission to avoid duplicate syncs
       map(values => values)
     ))
@@ -54,7 +79,7 @@ const syncInputs$ = merge(
 
 // Sync kind 1080 events between eventStore and relays
 const syncEvents$ = syncInputs$.pipe(
-  switchMap(([pnsKeys, relayUrls]) => {
+  switchMap(([pnsKeys, relayUrls, chatSyncEnabled]) => {
     // Reset sync stats for new sync
     syncStats.eventsReceived = 0
     syncStats.lastSyncTime = new Date()
@@ -65,11 +90,14 @@ const syncEvents$ = syncInputs$.pipe(
       authors: [pnsKeys.pnsKeypair.pubKey],
     }
 
-    console.log('[useChatSyncProMax] Syncing with relays:', relayUrls)
+    // Determine sync direction based on chatSyncEnabled setting
+    const syncDirection = chatSyncEnabled ? SyncDirection.BOTH : SyncDirection.RECEIVE
+
+    console.log('[useChatSyncProMax] Syncing with relays:', relayUrls, 'Direction:', syncDirection)
 
     // Use relayPool.sync to synchronize events between eventStore and relays
     // The sync function uses negentropy protocol for efficient synchronization
-    return relayPool.sync(relayUrls, eventStore, kind1080Filter, SyncDirection.BOTH).pipe(
+    return relayPool.sync(relayUrls, eventStore, kind1080Filter, syncDirection).pipe(
       tap((event) => {
         syncStats.eventsReceived++
         console.log('[useChatSyncProMax] Synced event:', event.id, 'Total:', syncStats.eventsReceived, eventStore.hasEvent(event.id))
@@ -104,6 +132,7 @@ const kind1080EventsLive$ = combineLatest([pnsKeysDefined$, relayUrlsDefined$]).
     ).pipe(
       onlyEvents(),
       tap((event) => {
+        console.log('new event found', event.id)
       }),
       defaultIfEmpty(null)
     )
@@ -201,7 +230,7 @@ export function useChatSyncProMax() {
         sub.unsubscribe()
       }
     }
-  }, [loading])
+  }, [])
   
   // Log sync statistics
   useEffect(() => {

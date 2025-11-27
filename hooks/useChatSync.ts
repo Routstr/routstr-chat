@@ -20,7 +20,7 @@ import {
 import { getStorageManager } from '@/utils/storageManager';
 import { getStorageItem, setStorageItem } from '@/utils/storageUtils';
 import { eventStore} from '@/lib/applesauce-core';
-import { triggerSync } from './useChatSyncProMax';
+import { triggerSync, updateChatSyncEnabled } from './useChatSyncProMax';
 
 // Storage key for chat sync enabled
 const CHAT_SYNC_ENABLED_KEY = 'chatSyncEnabled';
@@ -61,6 +61,8 @@ const setChatSyncEnabledGlobal = (enabled: boolean): void => {
   setStorageItem(CHAT_SYNC_ENABLED_KEY, enabled);
   // Notify all subscribers that the value changed
   chatSyncSubscribers.forEach(callback => callback());
+  // Also update the reactive observable in useChatSyncProMax
+  updateChatSyncEnabled(enabled);
 };
 
 // Custom Kinds

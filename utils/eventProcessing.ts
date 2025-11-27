@@ -98,6 +98,7 @@ export function extractConversationMetadata(
 export function innerEventToMessage(innerEvent: InnerEvent): Message {
   // Parse content - try JSON first, fall back to string
   let content = innerEvent.content;
+  console.log(innerEvent)
   try {
     const parsed = JSON.parse(innerEvent.content);
     if (typeof parsed === 'object') {
