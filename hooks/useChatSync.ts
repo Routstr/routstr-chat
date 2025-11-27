@@ -77,6 +77,7 @@ interface ChatSyncHook {
   publishMessage: (
     conversationId: string,
     message: Message,
+    onMessagePublished?: (conversationId: string, message: Message) => void
   ) => Promise<string | null>;
   syncConversations: () => Promise<Conversation[]>;
   syncConversationsIncremental: (
@@ -181,6 +182,7 @@ export const useChatSync = (): ChatSyncHook => {
     async (
       conversationId: string,
       message: Message,
+      onMessagePublished?: (conversationId: string, message: Message) => void
     ): Promise<string | null> => {
       try {
         setIsSyncing(true);
@@ -197,7 +199,11 @@ export const useChatSync = (): ChatSyncHook => {
         // Trigger sync to push the new event to relays
         triggerSync();
 
-        // saveEventIdInStorage(conversationId, message, pnsEvent.id)
+        // Append message to conversationMapRef after successful publish
+        if (onMessagePublished) {
+          onMessagePublished(conversationId, { ...message, _eventId: pnsEvent.id });
+        }
+
         return pnsEvent.id;
       } catch (err) {
         console.error('Failed to publish message:', err);

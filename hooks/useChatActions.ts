@@ -116,6 +116,8 @@ export const useChatActions = (): UseChatActionsReturn => {
 
   // Autoscroll moved to ChatMessages to honor user scroll position
 
+  const { appendMessageToConversation } = useConversationState();
+
   const sendMessage = useCallback(async (
     messages: Message[],
     setMessages: (messages: Message[]) => void,
@@ -155,7 +157,7 @@ export const useChatActions = (): UseChatActionsReturn => {
     // Publish user message to Nostr
     if (syncMessageWithNostr) {
       // The _prevId is already set in the userMessage from our getLastNonSystemMessagePrevId function
-      syncMessageWithNostr(originConversationId, updatedMessage).catch(console.error);
+      syncMessageWithNostr(originConversationId, updatedMessage, appendMessageToConversation).catch(console.error);
     }
 
     setInputMessage('');
@@ -336,7 +338,7 @@ export const useChatActions = (): UseChatActionsReturn => {
 
           // Publish AI response to Nostr
           if (syncMessageWithNostr && originConversationId && chatSyncEnabled) {
-              syncMessageWithNostr(originConversationId, updatedMessage).catch(console.error);
+              syncMessageWithNostr(originConversationId, updatedMessage, appendMessageToConversation).catch(console.error);
           }
         },
         onBalanceUpdate: setBalance,
