@@ -36,6 +36,7 @@ export interface UseConversationStateReturn {
   startEditingMessage: (index: number) => void;
   cancelEditing: () => void;
   saveConversationById: (conversationId: string, newMessages: Message[]) => void;
+  appendMessageToConversation: (conversationId: string, message: Message) => void;
   getActiveConversationId: () => string | null;
   syncWithNostr: () => Promise<void>;
   isSyncing: boolean;
@@ -236,6 +237,37 @@ export const useConversationState = (): UseConversationStateReturn => {
     setEditingContent('');
   }, []);
 
+  const appendMessageToConversation = useCallback((conversationId: string, message: Message) => {
+    // Get or create conversation in map
+    let conversation = conversationsMapRef.current.get(conversationId);
+    
+    if (!conversation) {
+      // Create new conversation if it doesn't exist
+      conversation = {
+        id: conversationId,
+        title: 'New Chat',
+        messages: [],
+      };
+      conversationsMapRef.current.set(conversationId, conversation);
+    }
+    
+    // Append message to conversation
+    conversation.messages.push(message);
+    
+    // Update state with new conversation array
+    const updatedConversations = Array.from(conversationsMapRef.current.values());
+    const sortedConversations = sortConversationsByRecentActivity(updatedConversations);
+    setConversations(sortedConversations);
+    
+    // Update messages if this is the active conversation
+    if (activeConversationIdRef.current === conversationId) {
+      setMessages([...conversation.messages]);
+    }
+    
+    // Save to storage
+    saveConversationToStorage(sortedConversations, conversationId, conversation.messages);
+  }, []);
+
   return {
     conversations,
     activeConversationId,
@@ -258,6 +290,7 @@ export const useConversationState = (): UseConversationStateReturn => {
         return saveConversationToStorage(prevConversations, conversationId, newMessages);
       });
     },
+    appendMessageToConversation,
     getActiveConversationId: () => loadActiveConversationId(),
     conversationsLoaded,
     syncWithNostr,
