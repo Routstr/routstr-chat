@@ -153,7 +153,7 @@ export const useChatActions = (): UseChatActionsReturn => {
     }
 
     // Publish user message to Nostr
-    if (syncMessageWithNostr && chatSyncEnabled) {
+    if (syncMessageWithNostr) {
       // The _prevId is already set in the userMessage from our getLastNonSystemMessagePrevId function
       syncMessageWithNostr(originConversationId, updatedMessage).catch(console.error);
     }

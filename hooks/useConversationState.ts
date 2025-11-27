@@ -4,6 +4,7 @@ import {
   loadConversationsFromStorage,
   saveConversationToStorage,
   createAndStoreNewConversation,
+  createNewConversationWithMap,
   deleteConversationFromStorage,
   findConversationById,
   clearAllConversations,
@@ -176,7 +177,7 @@ export const useConversationState = (): UseConversationStateReturn => {
   const createNewConversationHandler = useCallback((initialMessages: Message[] = [], timestamp?: string) => {
     let createdId: string = '';
     setConversations(prevConversations => {
-      const { newConversation, updatedConversations } = createAndStoreNewConversation(conversationsMapRef.current, initialMessages, timestamp);
+      const { newConversation, updatedConversations } = createNewConversationWithMap(conversationsMapRef.current, initialMessages, timestamp);
       createdId = newConversation.id;
       setActiveConversationIdWithStorage(newConversation.id);
       // Set messages to the initial messages (empty array if none provided)
