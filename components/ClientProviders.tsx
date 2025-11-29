@@ -76,9 +76,10 @@ export default function ClientProviders({ children }: { children: ReactNode }) {
     useReactEffect(() => {
       if (logins.length === 0) {
         try {
-          const sk = generateSecretKey();
-          const nsec = nip19.nsecEncode(sk);
-          loginActions.nsec(nsec);
+          // const sk = generateSecretKey();
+          // const nsec = nip19.nsecEncode(sk);
+          // console.log("RTRUE nsse", nsec)
+          // loginActions.nsec(nsec);
         } catch (err) {
           // no-op
         }

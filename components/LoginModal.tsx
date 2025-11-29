@@ -5,16 +5,18 @@ import { generateSecretKey, getPublicKey, nip19 } from 'nostr-tools';
 import { useLoginActions } from '@/hooks/useLoginActions';
 import { useLoggedInAccounts } from '@/hooks/useLoggedInAccounts';
 import { Shield, Eye, EyeOff, Copy, Check } from 'lucide-react';
+import { hasCreatedEphemeralNsec, markEphemeralNsecDeleted } from '@/utils/storageUtils';
 
 interface LoginModalProps {
   isOpen: boolean;
   onClose: () => void;
   onLogin: () => void;
+  logout: () => void;
 }
 
 type SignupStep = 'initial' | 'save-keys';
 
-export default function LoginModal({ isOpen, onClose, onLogin }: LoginModalProps) {
+export default function LoginModal({ isOpen, onClose, onLogin, logout }: LoginModalProps) {
   const [nsec, setNsec] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -55,6 +57,10 @@ export default function LoginModal({ isOpen, onClose, onLogin }: LoginModalProps
       if (!('nostr' in window)) {
         throw new Error('Nostr extension not found. Please install a NIP-07 extension.');
       }
+      if (hasCreatedEphemeralNsec()) {
+        logout()
+        markEphemeralNsecDeleted()
+      }
       const login = await loginActions.extension();
       setLogin(login.id);
       onLogin();
@@ -73,6 +79,10 @@ export default function LoginModal({ isOpen, onClose, onLogin }: LoginModalProps
     setError(null);
 
     try {
+      if (hasCreatedEphemeralNsec()) {
+        logout()
+        markEphemeralNsecDeleted()
+      }
       const login = loginActions.nsec(nsec);
       setLogin(login.id);
       onLogin();

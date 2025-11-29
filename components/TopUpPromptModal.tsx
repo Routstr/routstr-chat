@@ -10,6 +10,11 @@ import { PendingTransaction } from '@/features/wallet/state/transactionHistorySt
 import { createLightningInvoice, mintTokensFromPaidInvoice } from '@/lib/cashuLightning';
 import { MintQuoteState, getDecodedToken } from '@cashu/cashu-ts';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { useNostrLogin } from '@nostrify/react/login';
+import { useLoginActions } from '@/hooks/useLoginActions';
+import { generateSecretKey, nip19 } from 'nostr-tools';
+import { useAuth } from '@/context/AuthProvider';
+import { markEphemeralNsecCreated } from '@/utils/storageUtils';
 
 interface TopUpPromptModalProps {
   isOpen: boolean;
@@ -43,6 +48,11 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({ isOpen, onClose, on
   const [activeTab, setActiveTab] = useState<'lightning' | 'token' | 'wallet'>('lightning');
   const [nwcCustomAmount, setNwcCustomAmount] = useState('');
   const [isPayingWithNWC, setIsPayingWithNWC] = useState(false);
+
+
+  const { logins } = useNostrLogin();
+  const loginActions = useLoginActions();
+  const { isAuthenticated } = useAuth();
 
   useEffect(() => {
     let unsubConnect: undefined | (() => void);
@@ -113,6 +123,14 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({ isOpen, onClose, on
 
   const quickAmounts = [500, 1000, 5000];
 
+  const createNsecForLogin = () => {
+    const sk = generateSecretKey();
+    const nsec = nip19.nsecEncode(sk);
+    console.log("RTRUE nsse", nsec)
+    loginActions.nsec(nsec);
+    markEphemeralNsecCreated()
+  }
+
   const copyInvoiceToClipboard = async () => {
     if (!invoice) return;
     try {
@@ -141,6 +159,8 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({ isOpen, onClose, on
       setTimeout(() => setError(null), 2000);
       return;
     }
+    
+    createNsecForLogin()
 
     try {
       setIsReceivingToken(true);
@@ -182,6 +202,8 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({ isOpen, onClose, on
       setError('No active mint selected.');
       return;
     }
+
+    createNsecForLogin()
 
     const amt = amount !== undefined ? amount : parseInt(customAmount);
     if (isNaN(amt) || amt <= 0) {
@@ -558,6 +580,7 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({ isOpen, onClose, on
                 <button
                   onClick={async () => {
                     try {
+                      createNsecForLogin();
                       const mod = await import('@getalby/bitcoin-connect-react');
                       mod.launchModal();
                     } catch {}

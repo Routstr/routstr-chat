@@ -387,14 +387,27 @@ export const saveUsingNip60 = (usingNip60: boolean): void => {
  * @returns True if top-up prompt has been seen
  */
 export const hasSeenTopUpPrompt = (): boolean => {
-  return hasStorageItem(STORAGE_KEYS.TOPUP_PROMPT_SEEN);
+  return getStorageItem<boolean>(STORAGE_KEYS.TOPUP_PROMPT_SEEN, false);
 };
 
 /**
  * Mark top-up prompt as seen
  */
 export const markTopUpPromptSeen = (): void => {
-  setStorageItem(STORAGE_KEYS.TOPUP_PROMPT_SEEN, 'true');
+  setStorageItem(STORAGE_KEYS.TOPUP_PROMPT_SEEN, true);
+};
+
+
+export const hasCreatedEphemeralNsec = (): boolean => {
+  return getStorageItem<boolean>(STORAGE_KEYS.CREATED_EPHEMERAL_NSEC, false);
+};
+
+export const markEphemeralNsecCreated = (): void => {
+  setStorageItem(STORAGE_KEYS.CREATED_EPHEMERAL_NSEC, true);
+};
+
+export const markEphemeralNsecDeleted = (): void => {
+  setStorageItem(STORAGE_KEYS.CREATED_EPHEMERAL_NSEC, false);
 };
 
 /**
@@ -467,6 +480,7 @@ export const STORAGE_KEYS = {
   WRAPPED_CASHU_TOKENS: 'wrapped_cashu_tokens',
   RELAYS: 'nostr_relays',
   TOPUP_PROMPT_SEEN: 'topup_prompt_seen',
+  CREATED_EPHEMERAL_NSEC: 'created_ephemeral_nsec',
   DISABLED_PROVIDERS: 'disabled_providers',
   MINTS_FROM_ALL_PROVIDERS: 'mints_from_all_providers',
   INFO_FROM_ALL_PROVIDERS: 'info_from_all_providers',
