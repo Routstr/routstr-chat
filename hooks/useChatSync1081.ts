@@ -50,7 +50,15 @@ const relayUrlsDefined$ = relayUrls$.pipe(
 )
 
 // Reactive PNS keys input - exported so it can be updated from ChatProvider
-export const pnsKeysMax$ = new BehaviorSubject<PnsKeys | null>(null)
+export const userPubkey$ = new BehaviorSubject<string | null>(null)
+const userPubkeyDefined$ = userPubkey$.pipe(
+  filter((pubkey): pubkey is string => {
+    return pubkey !== null
+  }),
+  shareReplay(1),
+)
+
+const pnsKeysMax$ = new BehaviorSubject<PnsKeys | null>(null)
 const pnsKeysDefined$ = pnsKeysMax$.pipe(
   filter((keys): keys is PnsKeys => {
     return keys !== null
@@ -60,6 +68,12 @@ const pnsKeysDefined$ = pnsKeysMax$.pipe(
 
 // Track sync statistics
 const syncStats = {
+  eventsReceived: 0,
+  lastSyncTime: null as Date | null,
+}
+
+// Track sync statistics
+const syncStats1081 = {
   eventsReceived: 0,
   lastSyncTime: null as Date | null,
 }
@@ -86,7 +100,7 @@ const syncEvents$ = syncInputs$.pipe(
 
     // Create the kind 1080 filter for this user's PNS events
     const kind1080Filter = {
-      kinds: [1081],
+      kinds: [KIND_PNS],
       authors: [pnsKeys.pnsKeypair.pubKey],
     }
 
@@ -119,13 +133,53 @@ const syncEvents$ = syncInputs$.pipe(
   shareReplay(1),
 )
 
-export function useChatSyncProMax() {
+const sync1081Event$ = combineLatest([userPubkeyDefined$, relayUrlsDefined$]).pipe(
+  switchMap(([userPubkey, relayUrls]) => {
+    // Reset sync stats for new sync
+    syncStats1081.eventsReceived = 0
+    syncStats1081.lastSyncTime = new Date()
+
+    // Create the kind 1080 filter for this user's PNS events
+    const kind1081Filter = {
+      kinds: [1081],
+      authors: [userPubkey],
+    }
+    console.log('[useChatSync1081] Syncing with relays:', relayUrls, 'user.pub', userPubkey)
+
+    // Use relayPool.sync to synchronize events between eventStore and relays
+    // The sync function uses negentropy protocol for efficient synchronization
+    return relayPool.sync(relayUrls, eventStore, kind1081Filter, SyncDirection.BOTH).pipe(
+      tap((event) => {
+        syncStats1081.eventsReceived++
+        console.log('[useChatSyncProMax] Synced 1081 event:', event.id, 'Total:', syncStats1081.eventsReceived, eventStore.hasEvent(event.id))
+        eventStore.add(event);
+      }),
+      // Handle EmptyError when sync completes with no events to sync
+      // This happens when there are no events matching the filter on any relay
+      catchError((err) => {
+        console.log("some er", err)
+        // EmptyError is thrown when firstValueFrom receives no emissions
+        if (err.name === 'EmptyError') {
+          console.log('[useChatSyncProMax] Sync complete - no events to sync')
+          return EMPTY
+        }
+        // Re-throw other errors
+        throw err
+      }),
+    )
+  }),
+  shareReplay(1),
+)
+
+export function useChatSync1081() {
   const { config } = useAppContext()
   const [syncedEvents, setSyncedEvents] = useState<NostrEvent[]>([])
   const [loading, setLoading] = useState(false)
+  const [loading1081, setLoading1081] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [currentPnsKeys, setCurrentPnsKeys] = useState<PnsKeys | null>(null)
   const syncCountRef = useRef(0)
+  const syncCount1081Ref = useRef(0)
 
   // Subscribe to PNS keys from the observable
   useEffect(() => {
@@ -139,6 +193,37 @@ export function useChatSyncProMax() {
       relayUrls$.next(config.relayUrls)
     }
   }, [config.relayUrls])
+
+  // Subscribe to sync events
+  useEffect(() => {
+    const sub = sync1081Event$.subscribe({
+      next: (event) => {
+        if (event) {
+          syncCount1081Ref.current++
+          console.log("1081 EVNET, ", event);
+        }
+        setLoading1081(false)
+      },
+      error: (err) => {
+        console.error('[useChatSyncProMax] Sync error:', err)
+        setError(err instanceof Error ? err.message : String(err))
+        setLoading1081(false)
+      },
+      complete: () => {
+        console.log('[useChatSyncProMax] Sync complete. Total events:', syncCount1081Ref.current)
+        setLoading1081(false)
+      },
+    })
+
+    return () => {
+      sub.unsubscribe()
+    }
+  }, [])
+
+  useEffect(() => {
+    console.log('Event sync loading done, ', syncStats1081.lastSyncTime, loading1081)
+    console.log('TOKTAL SYNC done, ', syncCount1081Ref.current)
+  }, [loading1081])
 
   // Subscribe to sync events
   useEffect(() => {

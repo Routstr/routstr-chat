@@ -16,6 +16,7 @@ import { useChatSync } from './useChatSync';
 import { useChatSyncProMax } from './useChatSyncProMax';
 import { processInnerEvent, decryptPnsEventToInner } from '@/utils/eventProcessing';
 import { eventStore } from '@/lib/applesauce-core';
+import { useChatSync1081 } from './useChatSync1081';
 
 export interface UseConversationStateReturn {
   conversations: Conversation[];
@@ -61,6 +62,7 @@ export const useConversationState = (): UseConversationStateReturn => {
 
   const { syncConversationsIncremental, isSyncing, publishMessage, chatSyncEnabled } = useChatSync();
   const { syncedEvents, loading, currentPnsKeys } = useChatSyncProMax()
+  const { loading: loading2 } = useChatSync1081()
 
   /**
    * Handle incremental conversation updates as events arrive

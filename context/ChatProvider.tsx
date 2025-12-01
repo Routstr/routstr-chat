@@ -13,6 +13,7 @@ import { useNostrLogin } from '@nostrify/react/login';
 import { nip19 } from 'nostr-tools';
 import { derivePnsKeys } from '@/lib/pns';
 import { pnsKeysMax$ } from '@/hooks/useChatSyncProMax';
+import { userPubkey$ } from '@/hooks/useChatSync1081';
 
 interface ChatContextType extends 
   UseConversationStateReturn,
@@ -60,9 +61,10 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
   // Update pnsKeys$ observable when user changes
   useEffect(() => {
     if (user?.pubkey && logins.length > 0) {
+      userPubkey$.next(user?.pubkey);
       try {
         const pnsKeys = getPnsKeys();
-        pnsKeysMax$.next(pnsKeys);
+        // pnsKeysMax$.next(pnsKeys);
       } catch (err) {
         pnsKeysMax$.next(null);
       }
