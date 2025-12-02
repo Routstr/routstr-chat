@@ -6,7 +6,6 @@ import { nip44, getPublicKey, finalizeEvent, Event } from 'nostr-tools';
 // Constants
 export const KIND_PNS = 1080;
 const SALT_PNS = process.env.NODE_ENV === 'development' ? 'routstr-chat-sync-test3' : 'routstr-chat-sync-v1';
-const SALT_NIP44 = 'nip44-v2';
 
 // Types
 export interface PnsKeys {
@@ -15,25 +14,20 @@ export interface PnsKeys {
     privKey: Uint8Array;
     pubKey: string;
   };
-  pnsNip44Key: Uint8Array;
 }
 
 /**
  * Derives PNS keys from a device secret key (nsec)
  */
-export function derivePnsKeys(deviceKey: Uint8Array): PnsKeys {
+export function derivePnsKeys(deviceKey: Uint8Array, salt?: string): PnsKeys {
   // 1. Key Derivation
   // pns_key = hkdf_extract(ikm=device_key, salt="nip-pns")
-  const pnsKey = hkdf_extract(sha256, deviceKey, SALT_PNS);
+  const pnsKey = hkdf_extract(sha256, deviceKey, salt ?? SALT_PNS);
 
   // pns_keypair = derive_secp256k1_keypair(pns_key)
   // Note: pns_key is used as the private key for the keypair
   const pnsPrivKey = pnsKey;
   const pnsPubKey = getPublicKey(pnsPrivKey);
-
-  // 2. Symmetric Key Derivation for Encryption
-  // pns_nip44_key = hkdf_extract(ikm=pns_key, salt="nip44-v2")
-  const pnsNip44Key = hkdf_extract(sha256, pnsKey, SALT_NIP44);
 
   return {
     pnsKey,
@@ -41,7 +35,6 @@ export function derivePnsKeys(deviceKey: Uint8Array): PnsKeys {
       privKey: pnsPrivKey,
       pubKey: pnsPubKey,
     },
-    pnsNip44Key,
   };
 }
 
@@ -58,7 +51,7 @@ export function encryptPnsEvent(
   const nonce = randomBytes(32);
   
   // Encrypt the inner note using pns_nip44_key and the nonce via NIP-44 v2
-  const ciphertext = nip44.v2.encrypt(innerEventJson, pnsKeys.pnsNip44Key, nonce);
+  const ciphertext = nip44.v2.encrypt(innerEventJson, pnsKeys.pnsKeypair.privKey, nonce);
   
   return { content: ciphertext, nonce };
 }
@@ -90,7 +83,7 @@ export function decryptPnsEvent(
 ): any | null {
   try {
     // Attempt NIP-44 decryption using pns_nip44_key
-    const plaintext = nip44.v2.decrypt(pnsEvent.content, pnsKeys.pnsNip44Key);
+    const plaintext = nip44.v2.decrypt(pnsEvent.content, pnsKeys.pnsKeypair.privKey);
     
     // Parse the decrypted contents as JSON
     return JSON.parse(plaintext);

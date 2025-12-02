@@ -103,7 +103,8 @@ newDerivedPnsKey$.pipe(
  * Interface for the decrypted 1081 event content
  */
 interface Decrypted1081Content {
-  nsec?: string
+  nsec?: string,
+  salt?: string
   // Add other fields that might be in the decrypted content
   [key: string]: unknown
 }
@@ -236,7 +237,16 @@ const sync1081Event$ = combineLatest([userPubkeyDefined$, relayUrlsDefined$, use
 
     // Use relayPool.sync to synchronize events between eventStore and relays
     // The sync function uses negentropy protocol for efficient synchronization
-    return relayPool.sync(relayUrls, eventStore, kind1081Filter, SyncDirection.BOTH).pipe(
+    return relayPool.subscription(relayUrls, kind1081Filter).pipe(
+      // Check for EOSE signal and log it
+      // Cast to unknown first since sync may emit "EOSE" at runtime even if not typed
+      tap((value: unknown) => {
+        if (value === "EOSE") {
+          console.log('[useChatSync1081] EOSE REACHED')
+        }
+      }),
+      // Only process actual events, not EOSE signal
+      filter((value): value is NostrEvent => value !== "EOSE" && typeof value === 'object' && value !== null),
       mergeMap((event: NostrEvent) => {
         syncStats1081.eventsReceived++
         console.log('[useChatSync1081] Synced 1081 event:', event.id, 'Total:', syncStats1081.eventsReceived, eventStore.hasEvent(event.id))
