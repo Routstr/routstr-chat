@@ -1,10 +1,12 @@
 import { useEffect, useState, useRef } from 'react'
-import { BehaviorSubject, Subject, filter, shareReplay, combineLatest, switchMap, tap, map, defaultIfEmpty, merge, catchError, EMPTY } from 'rxjs'
+import { BehaviorSubject, Subject, filter, shareReplay, combineLatest, switchMap, tap, map, defaultIfEmpty, merge, catchError, EMPTY, scan, distinctUntilChanged } from 'rxjs'
 import type { NostrEvent } from 'nostr-tools'
-import { KIND_PNS, PnsKeys } from '@/lib/pns'
+import { nip44 } from 'nostr-tools'
+import { KIND_PNS, PnsKeys, derivePnsKeys } from '@/lib/pns'
+import { decodePrivateKey } from '@/lib/nostr'
 import { useAppContext } from '@/hooks/useAppContext'
 import { eventStore, relayPool } from '@/lib/applesauce-core'
-import { onlyEvents, SyncDirection } from 'applesauce-relay'
+import { SyncDirection } from 'applesauce-relay'
 import { getStorageItem } from '@/utils/storageUtils'
 
 // Storage key for chat sync enabled (shared with useChatSync.ts)
@@ -58,6 +60,13 @@ const userPubkeyDefined$ = userPubkey$.pipe(
   shareReplay(1),
 )
 
+// User's private key for decrypting 1081 events - exported so it can be set from auth provider
+export const userPrivateKey$ = new BehaviorSubject<Uint8Array | null>(null)
+const userPrivateKeyDefined$ = userPrivateKey$.pipe(
+  filter((key): key is Uint8Array => key !== null),
+  shareReplay(1),
+)
+
 const pnsKeysMax$ = new BehaviorSubject<PnsKeys | null>(null)
 const pnsKeysDefined$ = pnsKeysMax$.pipe(
   filter((keys): keys is PnsKeys => {
@@ -65,6 +74,80 @@ const pnsKeysDefined$ = pnsKeysMax$.pipe(
   }),
   shareReplay(1),
 )
+
+// Observable to collect derived PNS keys from decrypted 1081 events
+// This accumulates PNS keys extracted from nsecs found in 1081 event content
+export const derivedPnsKeys$ = new BehaviorSubject<Map<string, PnsKeys>>(new Map())
+
+// Subject to emit newly derived PNS keys
+const newDerivedPnsKey$ = new Subject<PnsKeys>()
+
+// Accumulate derived PNS keys in the BehaviorSubject
+newDerivedPnsKey$.pipe(
+  scan((acc, pnsKeys) => {
+    const newMap = new Map(acc)
+    // Use pubkey as the key to avoid duplicates
+    newMap.set(pnsKeys.pnsKeypair.pubKey, pnsKeys)
+    return newMap
+  }, new Map<string, PnsKeys>())
+).subscribe(derivedPnsKeys$)
+
+/**
+ * Interface for the decrypted 1081 event content
+ */
+interface Decrypted1081Content {
+  nsec?: string
+  // Add other fields that might be in the decrypted content
+  [key: string]: unknown
+}
+
+/**
+ * Decrypts a 1081 event content using NIP-44 and extracts nsec
+ * @param event The 1081 event to decrypt
+ * @param userPrivateKey The user's private key for decryption
+ * @returns The decrypted content or null if decryption fails
+ */
+function decrypt1081Event(event: NostrEvent, userPrivateKey: Uint8Array): Decrypted1081Content | null {
+  try {
+    // For NIP-44, we need to derive the conversation key from our private key and the event's pubkey
+    const conversationKey = nip44.v2.utils.getConversationKey(userPrivateKey, event.pubkey)
+    
+    // Decrypt the content
+    const plaintext = nip44.v2.decrypt(event.content, conversationKey)
+    
+    // Parse as JSON
+    const content = JSON.parse(plaintext) as Decrypted1081Content
+    console.log('[useChatSync1081] Decrypted 1081 event content:', event.id)
+    return content
+  } catch (error) {
+    console.error('[useChatSync1081] Failed to decrypt 1081 event:', event.id, error)
+    return null
+  }
+}
+
+/**
+ * Extracts nsec from decrypted content and derives PNS keys
+ * @param content The decrypted 1081 event content
+ * @returns PnsKeys if nsec was found and derived successfully, null otherwise
+ */
+function extractAndDerivePnsKeys(content: Decrypted1081Content): PnsKeys | null {
+  if (!content.nsec || typeof content.nsec !== 'string') {
+    console.log('[useChatSync1081] No nsec found in decrypted content')
+    return null
+  }
+  
+  // Decode the nsec to get the private key bytes
+  const deviceKey = decodePrivateKey(content.nsec)
+  if (!deviceKey) {
+    console.error('[useChatSync1081] Failed to decode nsec from content')
+    return null
+  }
+  
+  // Derive PNS keys from the device key
+  const pnsKeys = derivePnsKeys(deviceKey)
+  console.log('[useChatSync1081] Derived PNS keys for pubkey:', pnsKeys.pnsKeypair.pubKey)
+  return pnsKeys
+}
 
 // Track sync statistics
 const syncStats = {
@@ -112,7 +195,7 @@ const syncEvents$ = syncInputs$.pipe(
     // Use relayPool.sync to synchronize events between eventStore and relays
     // The sync function uses negentropy protocol for efficient synchronization
     return relayPool.sync(relayUrls, eventStore, kind1080Filter, syncDirection).pipe(
-      tap((event) => {
+      tap((event: NostrEvent) => {
         syncStats.eventsReceived++
         console.log('[useChatSyncProMax] Synced event:', event.id, 'Total:', syncStats.eventsReceived, eventStore.hasEvent(event.id))
         eventStore.add(event);
@@ -133,13 +216,13 @@ const syncEvents$ = syncInputs$.pipe(
   shareReplay(1),
 )
 
-const sync1081Event$ = combineLatest([userPubkeyDefined$, relayUrlsDefined$]).pipe(
-  switchMap(([userPubkey, relayUrls]) => {
+const sync1081Event$ = combineLatest([userPubkeyDefined$, relayUrlsDefined$, userPrivateKeyDefined$]).pipe(
+  switchMap(([userPubkey, relayUrls, userPrivateKey]) => {
     // Reset sync stats for new sync
     syncStats1081.eventsReceived = 0
     syncStats1081.lastSyncTime = new Date()
 
-    // Create the kind 1080 filter for this user's PNS events
+    // Create the kind 1081 filter for this user's events
     const kind1081Filter = {
       kinds: [1081],
       authors: [userPubkey],
@@ -149,18 +232,30 @@ const sync1081Event$ = combineLatest([userPubkeyDefined$, relayUrlsDefined$]).pi
     // Use relayPool.sync to synchronize events between eventStore and relays
     // The sync function uses negentropy protocol for efficient synchronization
     return relayPool.sync(relayUrls, eventStore, kind1081Filter, SyncDirection.BOTH).pipe(
-      tap((event) => {
+      tap((event: NostrEvent) => {
         syncStats1081.eventsReceived++
-        console.log('[useChatSyncProMax] Synced 1081 event:', event.id, 'Total:', syncStats1081.eventsReceived, eventStore.hasEvent(event.id))
-        eventStore.add(event);
+        console.log('[useChatSync1081] Synced 1081 event:', event.id, 'Total:', syncStats1081.eventsReceived, eventStore.hasEvent(event.id))
+        eventStore.add(event)
+        
+        // Decrypt the event and extract nsec
+        const decryptedContent = decrypt1081Event(event, userPrivateKey)
+        if (decryptedContent) {
+          // Derive PNS keys from the nsec
+          const pnsKeys = extractAndDerivePnsKeys(decryptedContent)
+          if (pnsKeys) {
+            // Emit the newly derived PNS keys
+            newDerivedPnsKey$.next(pnsKeys)
+            console.log('[useChatSync1081] Added derived PNS key to observable:', pnsKeys.pnsKeypair.pubKey)
+          }
+        }
       }),
       // Handle EmptyError when sync completes with no events to sync
       // This happens when there are no events matching the filter on any relay
       catchError((err) => {
-        console.log("some er", err)
+        console.log('[useChatSync1081] Sync error:', err)
         // EmptyError is thrown when firstValueFrom receives no emissions
         if (err.name === 'EmptyError') {
-          console.log('[useChatSyncProMax] Sync complete - no events to sync')
+          console.log('[useChatSync1081] Sync complete - no events to sync')
           return EMPTY
         }
         // Re-throw other errors
@@ -171,19 +266,78 @@ const sync1081Event$ = combineLatest([userPubkeyDefined$, relayUrlsDefined$]).pi
   shareReplay(1),
 )
 
+// Observable that emits array of all derived PNS pubkeys for syncing
+export const derivedPnsPubkeys$ = derivedPnsKeys$.pipe(
+  map(keysMap => Array.from(keysMap.keys())),
+  distinctUntilChanged((prev, curr) =>
+    prev.length === curr.length && prev.every((key, i) => key === curr[i])
+  ),
+  shareReplay(1),
+)
+
+// Track sync statistics for derived PNS events
+const syncStatsDerivedPns = {
+  eventsReceived: 0,
+  lastSyncTime: null as Date | null,
+}
+
+// Sync kind 1080 events for all derived PNS pubkeys
+const syncDerivedPnsEvents$ = combineLatest([derivedPnsPubkeys$, relayUrlsDefined$]).pipe(
+  filter(([pubkeys, _]) => pubkeys.length > 0),
+  switchMap(([pubkeys, relayUrls]) => {
+    // Reset sync stats for new sync
+    syncStatsDerivedPns.eventsReceived = 0
+    syncStatsDerivedPns.lastSyncTime = new Date()
+
+    // Create filter for all derived PNS pubkeys
+    const kind1080Filter = {
+      kinds: [KIND_PNS],
+      authors: pubkeys,
+    }
+
+    console.log('[useChatSync1081] Syncing derived PNS events for pubkeys:', pubkeys.length)
+
+    return relayPool.sync(relayUrls, eventStore, kind1080Filter, SyncDirection.RECEIVE).pipe(
+      tap((event: NostrEvent) => {
+        syncStatsDerivedPns.eventsReceived++
+        console.log('[useChatSync1081] Synced derived PNS event:', event.id, 'from:', event.pubkey.slice(0, 8))
+        eventStore.add(event)
+      }),
+      catchError((err) => {
+        if (err.name === 'EmptyError') {
+          console.log('[useChatSync1081] Derived PNS sync complete - no events')
+          return EMPTY
+        }
+        throw err
+      }),
+    )
+  }),
+  shareReplay(1),
+)
+
 export function useChatSync1081() {
   const { config } = useAppContext()
   const [syncedEvents, setSyncedEvents] = useState<NostrEvent[]>([])
+  const [derivedPnsEvents, setDerivedPnsEvents] = useState<NostrEvent[]>([])
+  const [currentDerivedPnsKeys, setCurrentDerivedPnsKeys] = useState<Map<string, PnsKeys>>(new Map())
   const [loading, setLoading] = useState(false)
   const [loading1081, setLoading1081] = useState(false)
+  const [loadingDerivedPns, setLoadingDerivedPns] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [currentPnsKeys, setCurrentPnsKeys] = useState<PnsKeys | null>(null)
   const syncCountRef = useRef(0)
   const syncCount1081Ref = useRef(0)
+  const syncCountDerivedPnsRef = useRef(0)
 
   // Subscribe to PNS keys from the observable
   useEffect(() => {
     const sub = pnsKeysMax$.subscribe(setCurrentPnsKeys)
+    return () => sub.unsubscribe()
+  }, [])
+
+  // Subscribe to derived PNS keys
+  useEffect(() => {
+    const sub = derivedPnsKeys$.subscribe(setCurrentDerivedPnsKeys)
     return () => sub.unsubscribe()
   }, [])
 
@@ -263,19 +417,75 @@ export function useChatSync1081() {
     }
   }, [])
 
+  // Subscribe to derived PNS events sync
+  useEffect(() => {
+    setLoadingDerivedPns(true)
+    syncCountDerivedPnsRef.current = 0
+
+    const sub = syncDerivedPnsEvents$.subscribe({
+      next: (event) => {
+        if (event) {
+          syncCountDerivedPnsRef.current++
+
+          // Update derived PNS events array
+          setDerivedPnsEvents((prev) => {
+            // Avoid duplicates
+            if (prev.some((e) => e.id === event.id)) {
+              return prev
+            }
+            // Add new event and sort by created_at descending
+            const newEvents = [...prev, event].sort((a, b) => b.created_at - a.created_at)
+            return newEvents
+          })
+        }
+        setLoadingDerivedPns(false)
+      },
+      error: (err) => {
+        console.error('[useChatSync1081] Derived PNS sync error:', err)
+        setError(err instanceof Error ? err.message : String(err))
+        setLoadingDerivedPns(false)
+      },
+      complete: () => {
+        console.log('[useChatSync1081] Derived PNS sync complete. Total events:', syncCountDerivedPnsRef.current)
+        setLoadingDerivedPns(false)
+      },
+    })
+
+    return () => {
+      sub.unsubscribe()
+    }
+  }, [])
+
   // Log sync statistics
   useEffect(() => {
-    console.log('[useChatSyncProMax] Synced events count:', syncedEvents.length, 'Last sync:', syncStats.lastSyncTime)
+    console.log('[useChatSync1081] Synced events count:', syncedEvents.length, 'Last sync:', syncStats.lastSyncTime)
   }, [syncedEvents])
+
+  // Log derived PNS sync statistics
+  useEffect(() => {
+    console.log('[useChatSync1081] Derived PNS events count:', derivedPnsEvents.length, 'Pub keys:', currentDerivedPnsKeys.size)
+  }, [derivedPnsEvents, currentDerivedPnsKeys])
 
   return {
     syncedEvents,
+    derivedPnsEvents,
+    derivedPnsKeys: currentDerivedPnsKeys,
     loading,
+    loading1081,
+    loadingDerivedPns,
     error,
     currentPnsKeys,
     syncStats: {
       eventsReceived: syncStats.eventsReceived,
       lastSyncTime: syncStats.lastSyncTime,
+    },
+    syncStats1081: {
+      eventsReceived: syncStats1081.eventsReceived,
+      lastSyncTime: syncStats1081.lastSyncTime,
+    },
+    syncStatsDerivedPns: {
+      eventsReceived: syncStatsDerivedPns.eventsReceived,
+      lastSyncTime: syncStatsDerivedPns.lastSyncTime,
     },
   }
 }
