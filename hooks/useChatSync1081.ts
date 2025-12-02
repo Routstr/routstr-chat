@@ -45,6 +45,15 @@ export function triggerSync() {
   console.log('[useChatSyncProMax] Manual sync triggered')
   syncTrigger$.next()
 }
+
+// Subject to trigger derived PNS sync manually
+export const syncDerivedPnsTrigger$ = new Subject<void>()
+
+// Function to trigger derived PNS sync manually
+export function triggerDerivedPnsSync() {
+  console.log('[useChatSync1081] Manual derived PNS sync triggered')
+  syncDerivedPnsTrigger$.next()
+}
 const relayUrlsDefined$ = relayUrls$.pipe(
   filter((urls): urls is string[] => {
     return urls.length > 0
@@ -405,8 +414,20 @@ const syncStatsDerivedPns = {
   lastSyncTime: null as Date | null,
 }
 
+// Combined stream for derived PNS sync - emits when pubkeys/relays are ready OR when manually triggered
+const syncDerivedPnsInputs$ = merge(
+  // Initial emission when pubkeys and relays are defined
+  combineLatest([derivedPnsPubkeys$, relayUrlsDefined$]),
+  // Re-emit current values when sync is manually triggered
+  syncDerivedPnsTrigger$.pipe(
+    switchMap(() => combineLatest([derivedPnsPubkeys$, relayUrlsDefined$]).pipe(
+      map(values => values)
+    ))
+  )
+)
+
 // Sync kind 1080 events for all derived PNS pubkeys
-const syncDerivedPnsEvents$ = combineLatest([derivedPnsPubkeys$, relayUrlsDefined$]).pipe(
+const syncDerivedPnsEvents$ = syncDerivedPnsInputs$.pipe(
   filter(([pubkeys, _]) => pubkeys.length > 0),
   switchMap(([pubkeys, relayUrls]) => {
     // Reset sync stats for new sync
@@ -599,6 +620,7 @@ export function useChatSync1081() {
     loadingDerivedPns,
     error,
     currentPnsKeys,
+    triggerDerivedPnsSync,
     syncStats: {
       eventsReceived: syncStats.eventsReceived,
       lastSyncTime: syncStats.lastSyncTime,

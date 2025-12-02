@@ -112,11 +112,9 @@ export const useChatActions = (): UseChatActionsReturn => {
     cashuStore
   } = useCashuWithXYZ();
 
-  const { publishMessage: syncMessageWithNostr, chatSyncEnabled } = useChatSync();
-
   // Autoscroll moved to ChatMessages to honor user scroll position
 
-  const { appendMessageToConversation } = useConversationState();
+  const { appendMessageToConversation, createAndStoreEvent, currentPns } = useConversationState();
 
   const sendMessage = useCallback(async (
     messages: Message[],
@@ -337,7 +335,7 @@ export const useChatActions = (): UseChatActionsReturn => {
           updateMessages(updatedMessages);
 
           // Publish AI response to Nostr
-          if (syncMessageWithNostr && originConversationId && chatSyncEnabled) {
+          if (syncMessageWithNostr && originConversationId) {
               syncMessageWithNostr(originConversationId, updatedMessage, appendMessageToConversation).catch(console.error);
           }
         },

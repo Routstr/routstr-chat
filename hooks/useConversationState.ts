@@ -17,6 +17,7 @@ import { useChatSyncProMax } from './useChatSyncProMax';
 import { processInnerEvent, decryptPnsEventToInner } from '@/utils/eventProcessing';
 import { eventStore } from '@/lib/applesauce-core';
 import { useChatSync1081 } from './useChatSync1081';
+import { PnsKeys } from '@/lib/pns';
 
 export interface UseConversationStateReturn {
   conversations: Conversation[];
@@ -41,6 +42,12 @@ export interface UseConversationStateReturn {
   getActiveConversationId: () => string | null;
   syncWithNostr: () => Promise<void>;
   isSyncing: boolean;
+  createAndStoreChatEvent: (
+    conversationId: string,
+    message: Message,
+    pnsKeys: PnsKeys,
+    onMessagePublished?: (conversationId: string, message: Message) => void
+  ) => Promise<string | null>;
 }
 
 /**
@@ -60,8 +67,15 @@ export const useConversationState = (): UseConversationStateReturn => {
   const conversationsMapRef = useRef<Map<string, Conversation>>(new Map());
   const processedEventIdsRef = useRef<Set<string>>(new Set());
 
-  const { syncConversationsIncremental, isSyncing, publishMessage, chatSyncEnabled } = useChatSync();
+  const { isSyncing, publishMessage, chatSyncEnabled } = useChatSync();
   const { derivedPnsEvents: syncedEvents, loading, currentPnsKeys } = useChatSync1081()
+
+
+  const createAndStoreChatEvent(conversationId, message)
+  {
+    if (currentPnsKeys)
+      publishMessage(conversationId,message, currentPnsKeys, appendMessageToConversation)
+  }
 
   /**
    * Handle incremental conversation updates as events arrive
@@ -88,17 +102,7 @@ export const useConversationState = (): UseConversationStateReturn => {
    * Events are displayed as they arrive for better user experience
    */
   const syncWithNostr = useCallback(async () => {
-    await syncConversationsIncremental(
-      // Callback for each conversation update as events arrive
-      handleConversationUpdate,
-      // Callback when sync completes
-      (finalConversations) => {
-        console.log(`Sync complete: ${finalConversations.length} conversations loaded`);
-        // Final state update happens automatically through handleConversationUpdate
-        // Storage is handled by the storage manager in useChatSync
-      }
-    );
-  }, [syncConversationsIncremental, handleConversationUpdate]);
+  }, [handleConversationUpdate]);
 
   // Load conversations and active conversation ID from storage on mount
   useEffect(() => {
@@ -295,6 +299,7 @@ export const useConversationState = (): UseConversationStateReturn => {
     getActiveConversationId: () => loadActiveConversationId(),
     conversationsLoaded,
     syncWithNostr,
-    isSyncing
+    isSyncing,
+    createAndStoreChatEvent
   };
 };

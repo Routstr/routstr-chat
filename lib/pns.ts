@@ -42,12 +42,12 @@ export function derivePnsKeys(deviceKey: Uint8Array, salt?: string): PnsKeys {
 }
 
 /**
- * Encrypts an inner event using PNS
+ * Creates a signed PNS event (Kind 1080)
  */
-export function encryptPnsEvent(
+export function createPnsEvent(
   innerEvent: any,
   pnsKeys: PnsKeys
-): { content: string; nonce: Uint8Array } {
+): Event {
   const innerEventJson = JSON.stringify(innerEvent);
   
   // Generate a random 32-byte nonce
@@ -55,17 +55,6 @@ export function encryptPnsEvent(
   
   // Encrypt the inner note using pns_nip44_key and the nonce via NIP-44 v2
   const ciphertext = nip44.v2.encrypt(innerEventJson, pnsKeys.pnsKeypair.privKey, nonce);
-  
-  return { content: ciphertext, nonce };
-}
-
-/**
- * Creates a signed PNS event (Kind 1080)
- */
-export function createPnsEvent(
-  ciphertext: string,
-  pnsKeys: PnsKeys
-): Event {
   const pnsEvent = {
     kind: KIND_PNS,
     pubkey: pnsKeys.pnsKeypair.pubKey,
