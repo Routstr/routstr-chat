@@ -13,7 +13,7 @@ import { useNostrLogin } from '@nostrify/react/login';
 import { nip19 } from 'nostr-tools';
 import { derivePnsKeys } from '@/lib/pns';
 import { pnsKeysMax$ } from '@/hooks/useChatSyncProMax';
-import { userPubkey$ } from '@/hooks/useChatSync1081';
+import { userPubkey$, userSigner$ } from '@/hooks/useChatSync1081';
 
 interface ChatContextType extends 
   UseConversationStateReturn,
@@ -58,10 +58,21 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     return derivePnsKeys(privateKey as Uint8Array);
   }, [logins]);
 
-  // Update pnsKeys$ observable when user changes
+  // Update pnsKeys$ and userSigner$ observables when user changes
   useEffect(() => {
     if (user?.pubkey && logins.length > 0) {
       userPubkey$.next(user?.pubkey);
+      
+      // Set the user signer for 1081 event decryption
+      if (user.signer?.nip44) {
+        userSigner$.next({
+          signer: user.signer as { nip44: { decrypt: (pubkey: string, content: string) => Promise<string> } },
+          pubkey: user.pubkey
+        });
+      } else {
+        userSigner$.next(null);
+      }
+      
       try {
         const pnsKeys = getPnsKeys();
         // pnsKeysMax$.next(pnsKeys);
@@ -70,8 +81,9 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
       }
     } else {
       pnsKeysMax$.next(null);
+      userSigner$.next(null);
     }
-  }, [user?.pubkey, logins, getPnsKeys]);
+  }, [user?.pubkey, user?.signer, logins, getPnsKeys]);
   
   const conversationState = useConversationState();
   const cashuWithXYZ = useCashuWithXYZ();

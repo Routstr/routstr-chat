@@ -1,9 +1,7 @@
-import { hkdf, extract as hkdf_extract } from '@noble/hashes/hkdf';
+import { extract as hkdf_extract } from '@noble/hashes/hkdf';
 import { sha256 } from '@noble/hashes/sha2';
 import { randomBytes } from '@noble/hashes/utils';
-import * as secp from '@noble/secp256k1';
 import { nip44, getPublicKey, finalizeEvent, Event } from 'nostr-tools';
-import { decodePrivateKey } from './nostr';
 
 // Constants
 export const KIND_PNS = 1080;
@@ -26,7 +24,7 @@ export interface PnsKeys {
 export function derivePnsKeys(deviceKey: Uint8Array): PnsKeys {
   // 1. Key Derivation
   // pns_key = hkdf_extract(ikm=device_key, salt="nip-pns")
-  const pnsKey = hkdf_extract(sha256, deviceKey, new TextEncoder().encode(SALT_PNS));
+  const pnsKey = hkdf_extract(sha256, deviceKey, SALT_PNS);
 
   // pns_keypair = derive_secp256k1_keypair(pns_key)
   // Note: pns_key is used as the private key for the keypair
@@ -35,7 +33,7 @@ export function derivePnsKeys(deviceKey: Uint8Array): PnsKeys {
 
   // 2. Symmetric Key Derivation for Encryption
   // pns_nip44_key = hkdf_extract(ikm=pns_key, salt="nip44-v2")
-  const pnsNip44Key = hkdf_extract(sha256, pnsKey, new TextEncoder().encode(SALT_NIP44));
+  const pnsNip44Key = hkdf_extract(sha256, pnsKey, SALT_NIP44);
 
   return {
     pnsKey,

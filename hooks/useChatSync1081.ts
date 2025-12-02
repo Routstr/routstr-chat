@@ -1,7 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
-import { BehaviorSubject, Subject, filter, shareReplay, combineLatest, switchMap, tap, map, defaultIfEmpty, merge, catchError, EMPTY, scan, distinctUntilChanged } from 'rxjs'
+import { BehaviorSubject, Subject, filter, shareReplay, combineLatest, switchMap, tap, map, defaultIfEmpty, merge, catchError, EMPTY, scan, distinctUntilChanged, from, mergeMap } from 'rxjs'
 import type { NostrEvent } from 'nostr-tools'
-import { nip44 } from 'nostr-tools'
 import { KIND_PNS, PnsKeys, derivePnsKeys } from '@/lib/pns'
 import { decodePrivateKey } from '@/lib/nostr'
 import { useAppContext } from '@/hooks/useAppContext'
@@ -60,10 +59,18 @@ const userPubkeyDefined$ = userPubkey$.pipe(
   shareReplay(1),
 )
 
-// User's private key for decrypting 1081 events - exported so it can be set from auth provider
-export const userPrivateKey$ = new BehaviorSubject<Uint8Array | null>(null)
-const userPrivateKeyDefined$ = userPrivateKey$.pipe(
-  filter((key): key is Uint8Array => key !== null),
+// User's signer for decrypting 1081 events - exported so it can be set from auth provider
+interface UserSignerInfo {
+  signer: {
+    nip44: {
+      decrypt: (pubkey: string, content: string) => Promise<string>
+    }
+  }
+  pubkey: string
+}
+export const userSigner$ = new BehaviorSubject<UserSignerInfo | null>(null)
+const userSignerDefined$ = userSigner$.pipe(
+  filter((info): info is UserSignerInfo => info !== null && info.signer?.nip44 !== undefined),
   shareReplay(1),
 )
 
@@ -102,20 +109,18 @@ interface Decrypted1081Content {
 }
 
 /**
- * Decrypts a 1081 event content using NIP-44 and extracts nsec
+ * Decrypts a 1081 event content using NIP-44 via the user's signer and extracts nsec
  * @param event The 1081 event to decrypt
- * @param userPrivateKey The user's private key for decryption
+ * @param signerInfo The user's signer info for decryption
  * @returns The decrypted content or null if decryption fails
  */
-function decrypt1081Event(event: NostrEvent, userPrivateKey: Uint8Array): Decrypted1081Content | null {
+async function decrypt1081Event(event: NostrEvent, signerInfo: UserSignerInfo): Promise<Decrypted1081Content | null> {
   try {
-    // For NIP-44, we need to derive the conversation key from our private key and the event's pubkey
-    const conversationKey = nip44.v2.utils.getConversationKey(userPrivateKey, event.pubkey)
-    
-    // Decrypt the content
-    const plaintext = nip44.v2.decrypt(event.content, conversationKey)
+    // Use the signer's NIP-44 decrypt method - decrypt with our own pubkey for self-encrypted content
+    const plaintext = await signerInfo.signer.nip44.decrypt(signerInfo.pubkey, event.content)
     
     // Parse as JSON
+    console.log(plaintext);
     const content = JSON.parse(plaintext) as Decrypted1081Content
     console.log('[useChatSync1081] Decrypted 1081 event content:', event.id)
     return content
@@ -216,8 +221,8 @@ const syncEvents$ = syncInputs$.pipe(
   shareReplay(1),
 )
 
-const sync1081Event$ = combineLatest([userPubkeyDefined$, relayUrlsDefined$, userPrivateKeyDefined$]).pipe(
-  switchMap(([userPubkey, relayUrls, userPrivateKey]) => {
+const sync1081Event$ = combineLatest([userPubkeyDefined$, relayUrlsDefined$, userSignerDefined$]).pipe(
+  switchMap(([userPubkey, relayUrls, signerInfo]) => {
     // Reset sync stats for new sync
     syncStats1081.eventsReceived = 0
     syncStats1081.lastSyncTime = new Date()
@@ -232,22 +237,30 @@ const sync1081Event$ = combineLatest([userPubkeyDefined$, relayUrlsDefined$, use
     // Use relayPool.sync to synchronize events between eventStore and relays
     // The sync function uses negentropy protocol for efficient synchronization
     return relayPool.sync(relayUrls, eventStore, kind1081Filter, SyncDirection.BOTH).pipe(
-      tap((event: NostrEvent) => {
+      mergeMap((event: NostrEvent) => {
         syncStats1081.eventsReceived++
         console.log('[useChatSync1081] Synced 1081 event:', event.id, 'Total:', syncStats1081.eventsReceived, eventStore.hasEvent(event.id))
         eventStore.add(event)
         
-        // Decrypt the event and extract nsec
-        const decryptedContent = decrypt1081Event(event, userPrivateKey)
-        if (decryptedContent) {
-          // Derive PNS keys from the nsec
-          const pnsKeys = extractAndDerivePnsKeys(decryptedContent)
-          if (pnsKeys) {
-            // Emit the newly derived PNS keys
-            newDerivedPnsKey$.next(pnsKeys)
-            console.log('[useChatSync1081] Added derived PNS key to observable:', pnsKeys.pnsKeypair.pubKey)
-          }
-        }
+        // Decrypt the event and extract nsec (async operation)
+        return from(decrypt1081Event(event, signerInfo)).pipe(
+          tap((decryptedContent) => {
+            if (decryptedContent) {
+              // Derive PNS keys from the nsec
+              const pnsKeys = extractAndDerivePnsKeys(decryptedContent)
+              if (pnsKeys) {
+                // Emit the newly derived PNS keys
+                newDerivedPnsKey$.next(pnsKeys)
+                console.log('[useChatSync1081] Added derived PNS key to observable:', pnsKeys.pnsKeypair.pubKey)
+              }
+            }
+          }),
+          map(() => event), // Return the original event for downstream subscribers
+          catchError((err) => {
+            console.error('[useChatSync1081] Decryption error for event:', event.id, err)
+            return from([event]) // Still return the event even if decryption fails
+          })
+        )
       }),
       // Handle EmptyError when sync completes with no events to sync
       // This happens when there are no events matching the filter on any relay
@@ -354,9 +367,7 @@ export function useChatSync1081() {
       next: (event) => {
         if (event) {
           syncCount1081Ref.current++
-          console.log("1081 EVNET, ", event);
         }
-        setLoading1081(false)
       },
       error: (err) => {
         console.error('[useChatSyncProMax] Sync error:', err)
@@ -374,10 +385,10 @@ export function useChatSync1081() {
     }
   }, [])
 
-  useEffect(() => {
-    console.log('Event sync loading done, ', syncStats1081.lastSyncTime, loading1081)
-    console.log('TOKTAL SYNC done, ', syncCount1081Ref.current)
-  }, [loading1081])
+  // useEffect(() => {
+  //   console.log('Event sync loading done, ', syncStats1081.lastSyncTime, loading1081)
+  //   console.log('TOKTAL SYNC done, ', syncCount1081Ref.current)
+  // }, [loading1081])
 
   // Subscribe to sync events
   useEffect(() => {
@@ -458,12 +469,12 @@ export function useChatSync1081() {
 
   // Log sync statistics
   useEffect(() => {
-    console.log('[useChatSync1081] Synced events count:', syncedEvents.length, 'Last sync:', syncStats.lastSyncTime)
+    // console.log('[useChatSync1081] Synced events count:', syncedEvents.length, 'Last sync:', syncStats.lastSyncTime)
   }, [syncedEvents])
 
   // Log derived PNS sync statistics
   useEffect(() => {
-    console.log('[useChatSync1081] Derived PNS events count:', derivedPnsEvents.length, 'Pub keys:', currentDerivedPnsKeys.size)
+    // console.log('[useChatSync1081] Derived PNS events count:', derivedPnsEvents.length, 'Pub keys:', currentDerivedPnsKeys.size)
   }, [derivedPnsEvents, currentDerivedPnsKeys])
 
   return {
