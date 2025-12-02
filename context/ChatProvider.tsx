@@ -11,6 +11,7 @@ import { useAuth } from './AuthProvider';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useNostrLogin } from '@nostrify/react/login';
 import { nip19 } from 'nostr-tools';
+import type { NostrEvent } from 'nostr-tools';
 import { derivePnsKeys } from '@/lib/pns';
 import { pnsKeysMax$ } from '@/hooks/useChatSyncProMax';
 import { userPubkey$, userSigner$ } from '@/hooks/useChatSync1081';
@@ -64,9 +65,20 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
       userPubkey$.next(user?.pubkey);
       
       // Set the user signer for 1081 event decryption
-      if (user.signer?.nip44) {
+      if (user.signer?.nip44 && typeof user.signer.signEvent === 'function') {
         userSigner$.next({
-          signer: user.signer as { nip44: { decrypt: (pubkey: string, content: string) => Promise<string> } },
+          signer: user.signer as {
+            nip44: {
+              encrypt: (pubkey: string, plaintext: string) => Promise<string>
+              decrypt: (pubkey: string, content: string) => Promise<string>
+            }
+            signEvent: (event: {
+              kind: number
+              created_at: number
+              tags: string[][]
+              content: string
+            }) => Promise<NostrEvent>
+          },
           pubkey: user.pubkey
         });
       } else {

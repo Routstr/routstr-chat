@@ -1,10 +1,12 @@
 import { useEffect, useState, useRef } from 'react'
 import { BehaviorSubject, Subject, filter, shareReplay, combineLatest, switchMap, tap, map, defaultIfEmpty, merge, catchError, EMPTY, scan, distinctUntilChanged, from, mergeMap } from 'rxjs'
+import { nip19, generateSecretKey } from 'nostr-tools'
 import type { NostrEvent } from 'nostr-tools'
 import { KIND_PNS, PnsKeys, derivePnsKeys } from '@/lib/pns'
 import { decodePrivateKey } from '@/lib/nostr'
 import { useAppContext } from '@/hooks/useAppContext'
 import { eventStore, relayPool } from '@/lib/applesauce-core'
+import { useEventDatabase } from '@/lib/eventDatabase'
 import { SyncDirection } from 'applesauce-relay'
 import { getStorageItem } from '@/utils/storageUtils'
 
@@ -59,18 +61,30 @@ const userPubkeyDefined$ = userPubkey$.pipe(
   shareReplay(1),
 )
 
-// User's signer for decrypting 1081 events - exported so it can be set from auth provider
+// User's signer for encrypting/decrypting 1081 events - exported so it can be set from auth provider
 interface UserSignerInfo {
   signer: {
     nip44: {
+      encrypt: (pubkey: string, plaintext: string) => Promise<string>
       decrypt: (pubkey: string, content: string) => Promise<string>
     }
+    signEvent: (event: {
+      kind: number
+      created_at: number
+      tags: string[][]
+      content: string
+    }) => Promise<NostrEvent>
   }
   pubkey: string
 }
 export const userSigner$ = new BehaviorSubject<UserSignerInfo | null>(null)
 const userSignerDefined$ = userSigner$.pipe(
-  filter((info): info is UserSignerInfo => info !== null && info.signer?.nip44 !== undefined),
+  filter((info): info is UserSignerInfo =>
+    info !== null &&
+    info.signer?.nip44?.encrypt !== undefined &&
+    info.signer?.nip44?.decrypt !== undefined &&
+    info.signer?.signEvent !== undefined
+  ),
   shareReplay(1),
 )
 
@@ -150,9 +164,66 @@ function extractAndDerivePnsKeys(content: Decrypted1081Content): PnsKeys | null 
   }
   
   // Derive PNS keys from the device key
-  const pnsKeys = derivePnsKeys(deviceKey)
+  const pnsKeys = derivePnsKeys(deviceKey, content.salt)
   console.log('[useChatSync1081] Derived PNS keys for pubkey:', pnsKeys.pnsKeypair.pubKey)
   return pnsKeys
+}
+
+/**
+ * Creates and publishes an initial 1081 event with a new nsec
+ * This is called when EOSE is reached and no 1081 events exist for the user
+ */
+async function createAndPublishInitial1081Event(
+  signerInfo: UserSignerInfo,
+  relayUrls: string[]
+): Promise<NostrEvent | null> {
+  try {
+    console.log('[useChatSync1081] No 1081 events found, creating initial event...')
+    
+    // Generate new private key
+    const privateKey = generateSecretKey()
+    const nsec = nip19.nsecEncode(privateKey)
+    
+    // Create content with nsec and empty salt
+    const contentObj: Decrypted1081Content = {
+      nsec: nsec,
+      salt: ""
+    }
+    const contentJson = JSON.stringify(contentObj)
+    
+    // Encrypt with user's own pubkey (self-encryption)
+    const encrypted = await signerInfo.signer.nip44.encrypt(signerInfo.pubkey, contentJson)
+    
+    // Create and sign the event
+    const eventTemplate = {
+      kind: 1081,
+      created_at: Math.floor(Date.now() / 1000),
+      tags: [] as string[][],
+      content: encrypted
+    }
+    
+    const signedEvent = await signerInfo.signer.signEvent(eventTemplate)
+    console.log('[useChatSync1081] Created initial 1081 event:', signedEvent.id)
+    
+    // Publish to relays
+    await relayPool.publish(relayUrls, signedEvent)
+    console.log('[useChatSync1081] Published initial 1081 event to relays:', relayUrls)
+    
+    // Add to event store
+    eventStore.add(signedEvent)
+    
+    // Also derive and emit PNS keys from the new nsec
+    const pnsKeys = extractAndDerivePnsKeys(contentObj)
+    if (pnsKeys) {
+      newDerivedPnsKey$.next(pnsKeys)
+      console.log('[useChatSync1081] Added derived PNS key for new nsec:', pnsKeys.pnsKeypair.pubKey)
+    }
+    
+    return signedEvent
+  } catch (error) {
+    console.error('[useChatSync1081] Failed to create initial 1081 event:', error)
+    return null
+  }
 }
 
 // Track sync statistics
@@ -235,18 +306,42 @@ const sync1081Event$ = combineLatest([userPubkeyDefined$, relayUrlsDefined$, use
     }
     console.log('[useChatSync1081] Syncing with relays:', relayUrls, 'user.pub', userPubkey)
 
-    // Use relayPool.sync to synchronize events between eventStore and relays
-    // The sync function uses negentropy protocol for efficient synchronization
+    // Use relayPool.subscription to get events from relays
     return relayPool.subscription(relayUrls, kind1081Filter).pipe(
-      // Check for EOSE signal and log it
+      // Check for EOSE signal and handle initial 1081 creation if needed
       // Cast to unknown first since sync may emit "EOSE" at runtime even if not typed
-      tap((value: unknown) => {
+      mergeMap((value: unknown) => {
         if (value === "EOSE") {
           console.log('[useChatSync1081] EOSE REACHED')
+          
+          // Check if we have any 1081 events from this user in the event store
+          const eventDatabase = useEventDatabase.getState()
+          const existing1081Events = eventDatabase.getByFilters({
+            kinds: [1081],
+            authors: [userPubkey]
+          })
+          
+          console.log('[useChatSync1081] Existing 1081 events after EOSE:', existing1081Events.length)
+          
+          // If no 1081 events exist, create and publish initial one
+          if (existing1081Events.length === 0) {
+            return from(createAndPublishInitial1081Event(signerInfo, relayUrls)).pipe(
+              filter((event): event is NostrEvent => event !== null),
+              catchError((err) => {
+                console.error('[useChatSync1081] Error creating initial 1081 event:', err)
+                return EMPTY
+              })
+            )
+          }
+          
+          // EOSE received but events exist, return empty
+          return EMPTY
         }
+        // Return the value wrapped in from() for non-EOSE values
+        return from([value])
       }),
-      // Only process actual events, not EOSE signal
-      filter((value): value is NostrEvent => value !== "EOSE" && typeof value === 'object' && value !== null),
+      // Only process actual events, not EOSE signal (already filtered above, but double check)
+      filter((value): value is NostrEvent => typeof value === 'object' && value !== null && 'id' in value),
       mergeMap((event: NostrEvent) => {
         syncStats1081.eventsReceived++
         console.log('[useChatSync1081] Synced 1081 event:', event.id, 'Total:', syncStats1081.eventsReceived, eventStore.hasEvent(event.id))
