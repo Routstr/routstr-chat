@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { BehaviorSubject, Subject, filter, shareReplay, combineLatest, switchMap, tap, map, defaultIfEmpty, merge, catchError, EMPTY, scan, distinctUntilChanged, from, mergeMap } from 'rxjs'
 import { nip19, generateSecretKey } from 'nostr-tools'
 import type { NostrEvent } from 'nostr-tools'
-import { KIND_PNS, PnsKeys, derivePnsKeys } from '@/lib/pns'
+import { KIND_PNS, PnsKeys, derivePnsKeys, SALT_PNS } from '@/lib/pns'
 import { decodePrivateKey } from '@/lib/nostr'
 import { useAppContext } from '@/hooks/useAppContext'
 import { eventStore, relayPool } from '@/lib/applesauce-core'
@@ -137,6 +137,12 @@ async function decrypt1081Event(event: NostrEvent, signerInfo: UserSignerInfo): 
     // Parse as JSON
     console.log(plaintext);
     const content = JSON.parse(plaintext) as Decrypted1081Content
+    
+    // Remove salt property if it's an empty string
+    if (content.salt === "") {
+      delete content.salt
+    }
+    
     console.log('[useChatSync1081] Decrypted 1081 event content:', event.id)
     return content
   } catch (error) {
@@ -164,8 +170,8 @@ function extractAndDerivePnsKeys(content: Decrypted1081Content): PnsKeys | null 
   }
   
   // Derive PNS keys from the device key
+  // content.salt might be undefined if it was removed due to being an empty string
   const pnsKeys = derivePnsKeys(deviceKey, content.salt)
-  console.log('[useChatSync1081] Derived PNS keys for pubkey:', pnsKeys.pnsKeypair.pubKey)
   return pnsKeys
 }
 
@@ -447,17 +453,19 @@ export function useChatSync1081() {
   const syncCount1081Ref = useRef(0)
   const syncCountDerivedPnsRef = useRef(0)
 
-  // Subscribe to PNS keys from the observable
-  useEffect(() => {
-    const sub = pnsKeysMax$.subscribe(setCurrentPnsKeys)
-    return () => sub.unsubscribe()
-  }, [])
-
   // Subscribe to derived PNS keys
   useEffect(() => {
     const sub = derivedPnsKeys$.subscribe(setCurrentDerivedPnsKeys)
     return () => sub.unsubscribe()
   }, [])
+
+  useEffect(() => {
+    // Find the first PNS keys with SALT_PNS from currentDerivedPnsKeys
+    const firstPnsKeysWithSalt = Array.from(currentDerivedPnsKeys.values()).find(
+      pnsKeys => pnsKeys.salt === SALT_PNS
+    )
+    setCurrentPnsKeys(firstPnsKeysWithSalt || null)
+  }, [currentDerivedPnsKeys])
 
   // Update relay URLs when config changes
   useEffect(() => {
@@ -574,12 +582,12 @@ export function useChatSync1081() {
 
   // Log sync statistics
   useEffect(() => {
-    // console.log('[useChatSync1081] Synced events count:', syncedEvents.length, 'Last sync:', syncStats.lastSyncTime)
+    console.log('[useChatSync1081] Synced events count:', syncedEvents.length, 'Last sync:', syncStats.lastSyncTime)
   }, [syncedEvents])
 
   // Log derived PNS sync statistics
   useEffect(() => {
-    // console.log('[useChatSync1081] Derived PNS events count:', derivedPnsEvents.length, 'Pub keys:', currentDerivedPnsKeys.size)
+    console.log('[useChatSync1081] Derived PNS events count:', derivedPnsEvents.length, 'Pub keys:', currentDerivedPnsKeys.size)
   }, [derivedPnsEvents, currentDerivedPnsKeys])
 
   return {

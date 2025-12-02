@@ -61,8 +61,7 @@ export const useConversationState = (): UseConversationStateReturn => {
   const processedEventIdsRef = useRef<Set<string>>(new Set());
 
   const { syncConversationsIncremental, isSyncing, publishMessage, chatSyncEnabled } = useChatSync();
-  const { syncedEvents, loading, currentPnsKeys } = useChatSyncProMax()
-  const { loading: loading2 } = useChatSync1081()
+  const { derivedPnsEvents: syncedEvents, loading, currentPnsKeys } = useChatSync1081()
 
   /**
    * Handle incremental conversation updates as events arrive

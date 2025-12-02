@@ -5,7 +5,7 @@ import { nip44, getPublicKey, finalizeEvent, Event } from 'nostr-tools';
 
 // Constants
 export const KIND_PNS = 1080;
-const SALT_PNS = process.env.NODE_ENV === 'development' ? 'routstr-chat-sync-test3' : 'routstr-chat-sync-v1';
+export const SALT_PNS = process.env.NODE_ENV === 'development' ? 'routstr-chat-sync-test3' : 'routstr-chat-sync-v1';
 
 // Types
 export interface PnsKeys {
@@ -14,6 +14,7 @@ export interface PnsKeys {
     privKey: Uint8Array;
     pubKey: string;
   };
+  salt: string;
 }
 
 /**
@@ -21,6 +22,7 @@ export interface PnsKeys {
  */
 export function derivePnsKeys(deviceKey: Uint8Array, salt?: string): PnsKeys {
   // 1. Key Derivation
+  const salt_used = salt ?? SALT_PNS;
   // pns_key = hkdf_extract(ikm=device_key, salt="nip-pns")
   const pnsKey = hkdf_extract(sha256, deviceKey, salt ?? SALT_PNS);
 
@@ -35,6 +37,7 @@ export function derivePnsKeys(deviceKey: Uint8Array, salt?: string): PnsKeys {
       privKey: pnsPrivKey,
       pubKey: pnsPubKey,
     },
+    salt: salt_used
   };
 }
 
