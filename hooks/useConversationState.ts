@@ -42,11 +42,10 @@ export interface UseConversationStateReturn {
   getActiveConversationId: () => string | null;
   syncWithNostr: () => Promise<void>;
   isSyncing: boolean;
+  currentPns: PnsKeys | null;
   createAndStoreChatEvent: (
     conversationId: string,
-    message: Message,
-    pnsKeys: PnsKeys,
-    onMessagePublished?: (conversationId: string, message: Message) => void
+    message: Message
   ) => Promise<string | null>;
 }
 
@@ -70,12 +69,6 @@ export const useConversationState = (): UseConversationStateReturn => {
   const { isSyncing, publishMessage, chatSyncEnabled } = useChatSync();
   const { derivedPnsEvents: syncedEvents, loading, currentPnsKeys } = useChatSync1081()
 
-
-  const createAndStoreChatEvent(conversationId, message)
-  {
-    if (currentPnsKeys)
-      publishMessage(conversationId,message, currentPnsKeys, appendMessageToConversation)
-  }
 
   /**
    * Handle incremental conversation updates as events arrive
@@ -273,6 +266,17 @@ export const useConversationState = (): UseConversationStateReturn => {
     saveConversationToStorage(sortedConversations, conversationId, conversation.messages);
   }, []);
 
+  const createAndStoreChatEvent = useCallback(async (
+    conversationId: string,
+    message: Message
+  ): Promise<string | null> => {
+    console.log("Createing mes 1081", currentPnsKeys);
+    if (currentPnsKeys) {
+      return await publishMessage(conversationId, message, currentPnsKeys, appendMessageToConversation);
+    }
+    return null;
+  }, [publishMessage, currentPnsKeys, appendMessageToConversation]);
+
   return {
     conversations,
     activeConversationId,
@@ -300,6 +304,7 @@ export const useConversationState = (): UseConversationStateReturn => {
     conversationsLoaded,
     syncWithNostr,
     isSyncing,
+    currentPns: currentPnsKeys,
     createAndStoreChatEvent
   };
 };

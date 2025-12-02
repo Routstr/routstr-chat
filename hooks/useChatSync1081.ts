@@ -319,7 +319,7 @@ const sync1081Event$ = combineLatest([userPubkeyDefined$, relayUrlsDefined$, use
       kinds: [1081],
       authors: [userPubkey],
     }
-    console.log('[useChatSync1081] Syncing with relays:', relayUrls, 'user.pub', userPubkey)
+    console.log('[useChatSync1081] Syncing with relays:', relayUrls, 'user.pub', userPubkey, 'user.sign', signerInfo)
 
     // Use relayPool.subscription to get events from relays
     return relayPool.subscription(relayUrls, kind1081Filter).pipe(
@@ -440,9 +440,9 @@ const syncDerivedPnsEvents$ = syncDerivedPnsInputs$.pipe(
       authors: pubkeys,
     }
 
-    console.log('[useChatSync1081] Syncing derived PNS events for pubkeys:', pubkeys.length)
+    console.log('[useChatSync1081] Syncing derived PNS events for pubkeys:', pubkeys)
 
-    return relayPool.sync(relayUrls, eventStore, kind1080Filter, SyncDirection.RECEIVE).pipe(
+    return relayPool.sync(relayUrls, eventStore, kind1080Filter, SyncDirection.BOTH).pipe(
       tap((event: NostrEvent) => {
         syncStatsDerivedPns.eventsReceived++
         console.log('[useChatSync1081] Synced derived PNS event:', event.id, 'from:', event.pubkey.slice(0, 8))
@@ -601,14 +601,10 @@ export function useChatSync1081() {
     }
   }, [])
 
-  // Log sync statistics
-  useEffect(() => {
-    console.log('[useChatSync1081] Synced events count:', syncedEvents.length, 'Last sync:', syncStats.lastSyncTime)
-  }, [syncedEvents])
-
   // Log derived PNS sync statistics
   useEffect(() => {
-    console.log('[useChatSync1081] Derived PNS events count:', derivedPnsEvents.length, 'Pub keys:', currentDerivedPnsKeys.size)
+    if (currentDerivedPnsKeys.size !== 0)
+      console.log('[useChatSync1081] Derived PNS events count:', derivedPnsEvents.length, 'Pub keys:', currentDerivedPnsKeys.size)
   }, [derivedPnsEvents, currentDerivedPnsKeys])
 
   return {
