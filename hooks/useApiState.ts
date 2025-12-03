@@ -68,11 +68,17 @@ export const useApiState = (isAuthenticated: boolean, balance: number, maxBalanc
           if (n && !n.startsWith('http://')) bases.add(n);
         }
       }
-      // Filter out disabled providers
+      // Filter out disabled providers and staging providers on production
       const disabledProviders = loadDisabledProviders();
+      const isProduction = typeof window !== 'undefined' && 
+        window.location.hostname === 'chat.routstr.com';
       const list = Array.from(bases).filter(base => {
         const normalized = base.endsWith('/') ? base : `${base}/`;
-        return !disabledProviders.includes(normalized);
+        // Filter out disabled providers
+        if (disabledProviders.includes(normalized)) return false;
+        // Filter out staging providers on production
+        if (isProduction && base.includes('staging')) return false;
+        return true;
       });
       if (list.length > 0) {
         saveBaseUrlsList(list);

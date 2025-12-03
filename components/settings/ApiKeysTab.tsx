@@ -58,7 +58,13 @@ const ApiKeysTab = ({ baseUrl, baseUrls: _ignoredBaseUrlsProp, setActiveTab, isM
             });
           });
         }
-        const list = Array.from(urls);
+        // Filter out staging providers on production
+        const isProduction = typeof window !== 'undefined' && 
+          window.location.hostname === 'chat.routstr.com';
+        const list = Array.from(urls).filter(url => {
+          if (isProduction && url.includes('staging')) return false;
+          return true;
+        });
         // Prioritize api.routstr.com first
         const preferred = 'api.routstr.com';
         list.sort((a, b) => {

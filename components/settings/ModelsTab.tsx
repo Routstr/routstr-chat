@@ -55,8 +55,14 @@ const ModelsTab: React.FC<ModelsTabProps> = ({
           endpoint_url: p.endpoint_url,
           endpoint_urls: p.endpoint_urls
         }));
+        // Filter out staging providers on production
+        const isProduction = typeof window !== 'undefined' && 
+          window.location.hostname === 'chat.routstr.com';
+        const filteredList = isProduction 
+          ? list.filter(p => !p.endpoint_url?.includes('staging'))
+          : list;
         // Keep provided order; optionally alphabetical by name for UX
-        const sorted = list.slice().sort((a, b) => (a.name || a.endpoint_url).localeCompare(b.name || b.endpoint_url));
+        const sorted = filteredList.slice().sort((a, b) => (a.name || a.endpoint_url).localeCompare(b.name || b.endpoint_url));
         // Store all providers for Disable Providers section
         setAllProviders(sorted);
         // Filter out disabled providers for dropdown
