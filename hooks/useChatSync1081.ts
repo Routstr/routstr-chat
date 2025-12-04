@@ -7,7 +7,7 @@ import { decodePrivateKey } from '@/lib/nostr'
 import { useAppContext } from '@/hooks/useAppContext'
 import { eventStore, relayPool } from '@/lib/applesauce-core'
 import { useEventDatabase } from '@/lib/eventDatabase'
-import { SyncDirection } from 'applesauce-relay'
+import { onlyEvents, SyncDirection } from 'applesauce-relay'
 import { getStorageItem } from '@/utils/storageUtils'
 
 // Storage key for chat sync enabled (shared with useChatSync.ts)
@@ -387,6 +387,42 @@ const syncDerivedPnsEvents$ = syncDerivedPnsInputs$.pipe(
   shareReplay(1),
 )
 
+// Sync kind 1080 events for all derived PNS pubkeys
+const liveDerivedPnsEvents$ = combineLatest([derivedPnsPubkeys$, relayUrlsDefined$]).pipe(
+  filter(([pubkeys, _]) => pubkeys.length > 0),
+  switchMap(([pubkeys, relayUrls]) => {
+    // Reset sync stats for new sync
+    syncStatsDerivedPns.lastSyncTime = new Date()
+
+    // Create filter for all derived PNS pubkeys
+    const kind1080Filter = {
+      kinds: [KIND_PNS],
+      authors: pubkeys
+    }
+
+    console.log('[useChatSync1081] Live derived PNS events for pubkeys:', pubkeys)
+
+    return relayPool.subscription(relayUrls, kind1080Filter).pipe(
+      onlyEvents(),
+      tap((event: NostrEvent) => {
+        syncStatsDerivedPns.eventsReceived++
+        console.log('[useChatSync1081] Live derived PNS event:', event.id, 'from:', event.pubkey.slice(0, 8))
+        eventStore.add(event)
+      }),
+      defaultIfEmpty(null),
+      catchError((err) => {
+        if (err.name === 'EmptyError') {
+          console.log('[useChatSync1081] Derived PNS sync complete - no events')
+          return EMPTY
+        }
+        throw err
+      }),
+    )
+  }),
+  shareReplay(1),
+)
+
+
 export function useChatSync1081() {
   const { config } = useAppContext()
   const [derivedPnsEvents, setDerivedPnsEvents] = useState<NostrEvent[]>([])
@@ -479,6 +515,38 @@ export function useChatSync1081() {
 
     return () => {
       sub.unsubscribe()
+    }
+  }, [])
+
+  // Subscribe to kind 1080 live events and add them to synced events
+  useEffect(() => {
+    if (!loading1081) {
+      const sub = liveDerivedPnsEvents$.subscribe({
+        next: (event: NostrEvent | null) => {
+        if (event) {
+          syncCountDerivedPnsRef.current++
+
+          // Update derived PNS events array
+          setDerivedPnsEvents((prev) => {
+            // Avoid duplicates
+            if (prev.some((e) => e.id === event.id)) {
+              return prev
+            }
+            // Add new event and sort by created_at descending
+            const newEvents = [...prev, event].sort((a, b) => b.created_at - a.created_at)
+            return newEvents
+          })
+        }
+        },
+        error: (err: Error | unknown) => {
+          console.error('[useChatSyncProMax] Live subscription error:', err)
+          setError(err instanceof Error ? err.message : String(err))
+        },
+      })
+
+      return () => {
+        sub.unsubscribe()
+      }
     }
   }, [])
 
