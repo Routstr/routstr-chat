@@ -10,8 +10,7 @@ import { useNostrLogin } from '@nostrify/react/login';
 import { useNostr as useNostrify } from '@nostrify/react';
 import { getStorageItem, setStorageItem } from '@/utils/storageUtils';
 import { eventStore} from '@/lib/applesauce-core';
-import { updateChatSyncEnabled } from './useChatSyncProMax';
-import { triggerDerivedPnsSync } from './useChatSync1081';
+import { triggerDerivedPnsSync, updateChatSyncEnabled } from './useChatSync1081';
 
 // Storage key for chat sync enabled
 const CHAT_SYNC_ENABLED_KEY = 'chatSyncEnabled';

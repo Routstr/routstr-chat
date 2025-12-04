@@ -98,7 +98,6 @@ export function extractConversationMetadata(
 export function innerEventToMessage(innerEvent: InnerEvent): Message {
   // Parse content - try JSON first, fall back to string
   let content = innerEvent.content;
-  console.log(innerEvent)
   try {
     const parsed = JSON.parse(innerEvent.content);
     if (typeof parsed === 'object') {
@@ -120,6 +119,69 @@ export function innerEventToMessage(innerEvent: InnerEvent): Message {
 
   return message;
 }
+/**
+ * Sorts messages by following the _prevId chain
+ * First message has _prevId of "000000", each subsequent message's _prevId
+ * points to the previous message's _eventId
+ * @param messages Array of messages to sort
+ * @returns Sorted array of messages
+ */
+function sortMessagesByPrevIdChain(messages: Message[]): Message[] {
+  if (messages.length === 0) return messages;
+
+  // Build a map of eventId -> message for quick lookup
+  const messageMap = new Map<string, Message>();
+  messages.forEach(msg => {
+    if (msg._eventId) {
+      messageMap.set(msg._eventId, msg);
+    }
+  });
+
+  // Find the first message (prevId is "000000" or undefined)
+  const firstMessage = messages.find(
+    msg => msg._prevId === '0'.repeat(64) || !msg._prevId
+  );
+
+  if (!firstMessage) {
+    // Fallback to timestamp sorting if we can't find the chain start
+    console.warn('Could not find first message in chain, falling back to timestamp sort');
+    return [...messages].sort((a, b) => {
+      const aTime = a._createdAt || 0;
+      const bTime = b._createdAt || 0;
+      return aTime - bTime;
+    });
+  }
+
+  // Build the sorted array by following the chain
+  const sorted: Message[] = [firstMessage];
+  const used = new Set<string>([firstMessage._eventId!]);
+
+  let currentEventId = firstMessage._eventId;
+  
+  // Find each subsequent message by looking for the one whose _prevId matches current _eventId
+  while (sorted.length < messages.length && currentEventId) {
+    const nextMessage = messages.find(
+      msg => msg._prevId === currentEventId && !used.has(msg._eventId!)
+    );
+    
+    if (!nextMessage) break;
+    
+    sorted.push(nextMessage);
+    used.add(nextMessage._eventId!);
+    currentEventId = nextMessage._eventId;
+  }
+
+  // If we didn't sort all messages, append the remaining ones
+  // (this handles edge cases where the chain is broken)
+  if (sorted.length < messages.length) {
+    const remaining = messages.filter(msg => !used.has(msg._eventId!));
+    console.warn(`Chain incomplete, appending ${remaining.length} remaining messages`);
+    sorted.push(...remaining);
+  }
+
+  return sorted;
+}
+
 
 /**
  * Adds a message to a conversation, maintaining sort order
@@ -149,13 +211,9 @@ export function addMessageToConversation(
     updatedMessages = [...conversation.messages, message];
   }
 
-  // Sort messages by created_at if requested
+  // Sort messages by _prevId chain if requested
   if (options.sortMessages) {
-    updatedMessages.sort((a, b) => {
-      const aTime = a._createdAt || 0;
-      const bTime = b._createdAt || 0;
-      return aTime - bTime;
-    });
+    updatedMessages = sortMessagesByPrevIdChain(updatedMessages);
   }
 
   return {

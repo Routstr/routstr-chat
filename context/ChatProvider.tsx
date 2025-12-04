@@ -10,10 +10,7 @@ import { useCashuWithXYZ } from '@/hooks/useCashuWithXYZ';
 import { useAuth } from './AuthProvider';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useNostrLogin } from '@nostrify/react/login';
-import { nip19 } from 'nostr-tools';
 import type { NostrEvent } from 'nostr-tools';
-import { derivePnsKeys } from '@/lib/pns';
-import { pnsKeysMax$ } from '@/hooks/useChatSyncProMax';
 import { userPubkey$, userSigner$ } from '@/hooks/useChatSync1081';
 
 interface ChatContextType extends 
@@ -50,15 +47,6 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
   const { user } = useCurrentUser();
   const { logins } = useNostrLogin();
   
-  // Helper to get PNS keys
-  const getPnsKeys = useCallback(() => {
-    const privateKey = logins[0]?.type === 'nsec' ? nip19.decode(logins[0].data.nsec).data : null;
-    if (!privateKey) {
-      throw new Error('Private key not available');
-    }
-    return derivePnsKeys(privateKey as Uint8Array);
-  }, [logins]);
-
   // Update pnsKeys$ and userSigner$ observables when user changes
   useEffect(() => {
     if (user?.pubkey && logins.length > 0) {
@@ -84,18 +72,11 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
       } else {
         userSigner$.next(null);
       }
-      
-      try {
-        const pnsKeys = getPnsKeys();
-        // pnsKeysMax$.next(pnsKeys);
-      } catch (err) {
-        pnsKeysMax$.next(null);
-      }
+    
     } else {
-      pnsKeysMax$.next(null);
       userSigner$.next(null);
     }
-  }, [user?.pubkey, user?.signer, logins, getPnsKeys]);
+  }, [user?.pubkey, user?.signer, logins]);
   
   const conversationState = useConversationState();
   const cashuWithXYZ = useCashuWithXYZ();

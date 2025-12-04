@@ -3,17 +3,14 @@ import { Conversation, Message } from '@/types/chat';
 import {
   loadConversationsFromStorage,
   saveConversationToStorage,
-  createAndStoreNewConversation,
   createNewConversationWithMap,
   deleteConversationFromStorage,
-  findConversationById,
   clearAllConversations,
   sortConversationsByRecentActivity
 } from '@/utils/conversationUtils';
 import { getTextFromContent } from '@/utils/messageUtils';
 import { loadActiveConversationId, saveActiveConversationId, loadLastUsedModel } from '@/utils/storageUtils';
 import { useChatSync } from './useChatSync';
-import { useChatSyncProMax } from './useChatSyncProMax';
 import { processInnerEvent, decryptPnsEventToInner } from '@/utils/eventProcessing';
 import { eventStore } from '@/lib/applesauce-core';
 import { useChatSync1081 } from './useChatSync1081';
@@ -67,7 +64,7 @@ export const useConversationState = (): UseConversationStateReturn => {
   const processedEventIdsRef = useRef<Set<string>>(new Set());
 
   const { isSyncing, publishMessage, chatSyncEnabled } = useChatSync();
-  const { derivedPnsEvents: syncedEvents, loading, currentPnsKeys } = useChatSync1081()
+  const { derivedPnsEvents: syncedEvents, loading1081: loading, currentPnsKeys } = useChatSync1081()
 
 
   /**
@@ -100,7 +97,6 @@ export const useConversationState = (): UseConversationStateReturn => {
   // Load conversations and active conversation ID from storage on mount
   useEffect(() => {
     const loadedConversations = loadConversationsFromStorage();
-    console.log("LOADING ", loadedConversations)
     setConversations(loadedConversations);
     setConversationsLoaded(true);
   }, []);

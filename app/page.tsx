@@ -69,7 +69,6 @@ function ChatPageContent() {
   const [qrModalData, setQrModalData] = useState<{ invoice: string; amount: string; unit: string } | null>(null);
 
   useEffect(() => {
-    console.log("PAGE", balance, isBalanceLoading, isAuthenticated, isSettingsOpen, topUpPromptDismissed, hasSeenTopUpPrompt());
     let topUpTimer: NodeJS.Timeout | null = null;
 
     if (!isBalanceLoading && balance === 0 && !isSettingsOpen) {

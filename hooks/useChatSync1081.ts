@@ -37,15 +37,6 @@ if (typeof window !== 'undefined') {
 // Reactive relay URLs input - exported so it can be updated from the component
 export const relayUrls$ = new BehaviorSubject<string[]>([])
 
-// Subject to trigger sync manually (e.g., after adding a new event to eventStore)
-export const syncTrigger$ = new Subject<void>()
-
-// Function to trigger a sync - call this after adding events to eventStore
-export function triggerSync() {
-  console.log('[useChatSyncProMax] Manual sync triggered')
-  syncTrigger$.next()
-}
-
 // Subject to trigger derived PNS sync manually
 export const syncDerivedPnsTrigger$ = new Subject<void>()
 
@@ -58,6 +49,9 @@ const relayUrlsDefined$ = relayUrls$.pipe(
   filter((urls): urls is string[] => {
     return urls.length > 0
   }),
+  distinctUntilChanged((prev, curr) =>
+    prev.length === curr.length && prev.every((url, i) => url === curr[i])
+  ),
   shareReplay(1),
 )
 
@@ -67,6 +61,7 @@ const userPubkeyDefined$ = userPubkey$.pipe(
   filter((pubkey): pubkey is string => {
     return pubkey !== null
   }),
+  distinctUntilChanged(),
   shareReplay(1),
 )
 
@@ -86,6 +81,7 @@ interface UserSignerInfo {
   }
   pubkey: string
 }
+
 export const userSigner$ = new BehaviorSubject<UserSignerInfo | null>(null)
 const userSignerDefined$ = userSigner$.pipe(
   filter((info): info is UserSignerInfo =>
@@ -94,14 +90,7 @@ const userSignerDefined$ = userSigner$.pipe(
     info.signer?.nip44?.decrypt !== undefined &&
     info.signer?.signEvent !== undefined
   ),
-  shareReplay(1),
-)
-
-const pnsKeysMax$ = new BehaviorSubject<PnsKeys | null>(null)
-const pnsKeysDefined$ = pnsKeysMax$.pipe(
-  filter((keys): keys is PnsKeys => {
-    return keys !== null
-  }),
+  distinctUntilChanged((prev, curr) => prev.pubkey === curr.pubkey),
   shareReplay(1),
 )
 
@@ -144,7 +133,6 @@ async function decrypt1081Event(event: NostrEvent, signerInfo: UserSignerInfo): 
     const plaintext = await signerInfo.signer.nip44.decrypt(signerInfo.pubkey, event.content)
     
     // Parse as JSON
-    console.log(plaintext);
     const content = JSON.parse(plaintext) as Decrypted1081Content
     
     // Remove salt property if it's an empty string
@@ -242,71 +230,10 @@ async function createAndPublishInitial1081Event(
 }
 
 // Track sync statistics
-const syncStats = {
-  eventsReceived: 0,
-  lastSyncTime: null as Date | null,
-}
-
-// Track sync statistics
 const syncStats1081 = {
   eventsReceived: 0,
   lastSyncTime: null as Date | null,
 }
-
-// Combined stream that emits when keys/relays/chatSyncEnabled are ready OR when manually triggered
-const syncInputs$ = merge(
-  // Initial emission when keys, relays, and chatSyncEnabled are all defined
-  combineLatest([pnsKeysDefined$, relayUrlsDefined$, chatSyncEnabled$]),
-  // Re-emit current values when sync is manually triggered
-  syncTrigger$.pipe(
-    switchMap(() => combineLatest([pnsKeysDefined$, relayUrlsDefined$, chatSyncEnabled$]).pipe(
-      // Take only the first emission to avoid duplicate syncs
-      map(values => values)
-    ))
-  )
-)
-
-// Sync kind 1080 events between eventStore and relays
-const syncEvents$ = syncInputs$.pipe(
-  switchMap(([pnsKeys, relayUrls, chatSyncEnabled]) => {
-    // Reset sync stats for new sync
-    syncStats.eventsReceived = 0
-    syncStats.lastSyncTime = new Date()
-
-    // Create the kind 1080 filter for this user's PNS events
-    const kind1080Filter = {
-      kinds: [KIND_PNS],
-      authors: [pnsKeys.pnsKeypair.pubKey],
-    }
-
-    // Determine sync direction based on chatSyncEnabled setting
-    const syncDirection = chatSyncEnabled ? SyncDirection.BOTH : SyncDirection.RECEIVE
-
-    console.log('[useChatSyncProMax] Syncing with relays:', relayUrls, 'Direction:', syncDirection)
-
-    // Use relayPool.sync to synchronize events between eventStore and relays
-    // The sync function uses negentropy protocol for efficient synchronization
-    return relayPool.sync(relayUrls, eventStore, kind1080Filter, syncDirection).pipe(
-      tap((event: NostrEvent) => {
-        syncStats.eventsReceived++
-        console.log('[useChatSyncProMax] Synced event:', event.id, 'Total:', syncStats.eventsReceived, eventStore.hasEvent(event.id))
-        eventStore.add(event);
-      }),
-      // Handle EmptyError when sync completes with no events to sync
-      // This happens when there are no events matching the filter on any relay
-      catchError((err) => {
-        // EmptyError is thrown when firstValueFrom receives no emissions
-        if (err.name === 'EmptyError') {
-          console.log('[useChatSyncProMax] Sync complete - no events to sync')
-          return EMPTY
-        }
-        // Re-throw other errors
-        throw err
-      }),
-    )
-  }),
-  shareReplay(1),
-)
 
 const sync1081Event$ = combineLatest([userPubkeyDefined$, relayUrlsDefined$, userSignerDefined$]).pipe(
   switchMap(([userPubkey, relayUrls, signerInfo]) => {
@@ -462,15 +389,12 @@ const syncDerivedPnsEvents$ = syncDerivedPnsInputs$.pipe(
 
 export function useChatSync1081() {
   const { config } = useAppContext()
-  const [syncedEvents, setSyncedEvents] = useState<NostrEvent[]>([])
   const [derivedPnsEvents, setDerivedPnsEvents] = useState<NostrEvent[]>([])
   const [currentDerivedPnsKeys, setCurrentDerivedPnsKeys] = useState<Map<string, PnsKeys>>(new Map())
-  const [loading, setLoading] = useState(false)
   const [loading1081, setLoading1081] = useState(false)
   const [loadingDerivedPns, setLoadingDerivedPns] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [currentPnsKeys, setCurrentPnsKeys] = useState<PnsKeys | null>(null)
-  const syncCountRef = useRef(0)
   const syncCount1081Ref = useRef(0)
   const syncCountDerivedPnsRef = useRef(0)
 
@@ -511,49 +435,6 @@ export function useChatSync1081() {
       complete: () => {
         console.log('[useChatSyncProMax] Sync complete. Total events:', syncCount1081Ref.current)
         setLoading1081(false)
-      },
-    })
-
-    return () => {
-      sub.unsubscribe()
-    }
-  }, [])
-
-  // useEffect(() => {
-  //   console.log('Event sync loading done, ', syncStats1081.lastSyncTime, loading1081)
-  //   console.log('TOKTAL SYNC done, ', syncCount1081Ref.current)
-  // }, [loading1081])
-
-  // Subscribe to sync events
-  useEffect(() => {
-    setLoading(true) 
-
-    const sub = syncEvents$.subscribe({
-      next: (event) => {
-        if (event) {
-          syncCountRef.current++
-
-          // Update synced events array
-          setSyncedEvents((prev) => {
-            // Avoid duplicates
-            if (prev.some((e) => e.id === event.id)) {
-              return prev
-            }
-            // Add new event and sort by created_at descending
-            const newEvents = [...prev, event].sort((a, b) => b.created_at - a.created_at)
-            return newEvents
-          })
-        }
-        setLoading(false)
-      },
-      error: (err) => {
-        console.error('[useChatSyncProMax] Sync error:', err)
-        setError(err instanceof Error ? err.message : String(err))
-        setLoading(false)
-      },
-      complete: () => {
-        console.log('[useChatSyncProMax] Sync complete. Total events:', syncCountRef.current)
-        setLoading(false)
       },
     })
 
@@ -608,19 +489,13 @@ export function useChatSync1081() {
   }, [derivedPnsEvents, currentDerivedPnsKeys])
 
   return {
-    syncedEvents,
     derivedPnsEvents,
     derivedPnsKeys: currentDerivedPnsKeys,
-    loading,
     loading1081,
     loadingDerivedPns,
     error,
     currentPnsKeys,
     triggerDerivedPnsSync,
-    syncStats: {
-      eventsReceived: syncStats.eventsReceived,
-      lastSyncTime: syncStats.lastSyncTime,
-    },
     syncStats1081: {
       eventsReceived: syncStats1081.eventsReceived,
       lastSyncTime: syncStats1081.lastSyncTime,
