@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { firstValueFrom, map, filter, timeout } from 'rxjs';
 import { Conversation, Message } from '@/types/chat';
 import {
   loadConversationsFromStorage,
@@ -13,8 +14,8 @@ import { loadActiveConversationId, saveActiveConversationId, loadLastUsedModel }
 import { useChatSync } from './useChatSync';
 import { processInnerEvent, decryptPnsEventToInner } from '@/utils/eventProcessing';
 import { eventStore } from '@/lib/applesauce-core';
-import { useChatSync1081 } from './useChatSync1081';
-import { PnsKeys } from '@/lib/pns';
+import { useChatSync1081, derivedPnsKeys$ } from './useChatSync1081';
+import { PnsKeys, SALT_PNS } from '@/lib/pns';
 
 export interface UseConversationStateReturn {
   conversations: Conversation[];
@@ -66,7 +67,7 @@ export const useConversationState = (): UseConversationStateReturn => {
   const processedEventIdsRef = useRef<Set<string>>(new Set());
 
   const { isSyncing, publishMessage, chatSyncEnabled } = useChatSync();
-  const { derivedPnsEvents: syncedEvents, loading1081: loading, currentPnsKeys } = useChatSync1081()
+  const { derivedPnsEvents: syncedEvents, loading1081: loading, currentPnsKeys, triggerProcessStored1081Events } = useChatSync1081()
 
   // Load conversations and active conversation ID from storage on mount
   useEffect(() => {
@@ -251,9 +252,33 @@ export const useConversationState = (): UseConversationStateReturn => {
     console.log("Createing mes 1081", currentPnsKeys);
     if (currentPnsKeys) {
       return await publishMessage(conversationId, message, currentPnsKeys, appendMessageToConversation);
+    } else {
+      console.log('[useConversationState] No currentPnsKeys, triggering stored 1081 events processing')
+      triggerProcessStored1081Events();
+
+      // Wait for keys to be derived
+      try {
+        const keys = await firstValueFrom(
+          derivedPnsKeys$.pipe(
+            map(keysMap => {
+               // Find the first PNS keys with SALT_PNS
+               return Array.from(keysMap.values()).find(pnsKeys => pnsKeys.salt === SALT_PNS)
+            }),
+            filter(keys => !!keys),
+            timeout(5000) // Timeout after 5 seconds
+          )
+        )
+        
+        if (keys) {
+           return await publishMessage(conversationId, message, keys, appendMessageToConversation);
+        }
+      } catch (err) {
+        console.error("Failed to derive keys in time", err)
+        return null
+      }
     }
     return null;
-  }, [publishMessage, currentPnsKeys, appendMessageToConversation]);
+  }, [publishMessage, currentPnsKeys, appendMessageToConversation, triggerProcessStored1081Events]);
 
   return {
     conversations,

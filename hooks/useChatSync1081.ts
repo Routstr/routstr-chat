@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
-import { BehaviorSubject, Subject, filter, shareReplay, combineLatest, switchMap, tap, map, defaultIfEmpty, merge, catchError, EMPTY, scan, distinctUntilChanged, from, mergeMap, withLatestFrom, share } from 'rxjs'
+import { BehaviorSubject, Subject, filter, shareReplay, combineLatest, switchMap, tap, map, defaultIfEmpty, merge, catchError, EMPTY, scan, distinctUntilChanged, from, mergeMap, withLatestFrom, share, take, timeout, of } from 'rxjs'
 import { nip19, generateSecretKey } from 'nostr-tools'
 import type { NostrEvent } from 'nostr-tools'
 import { KIND_PNS, PnsKeys, derivePnsKeys, SALT_PNS } from '@/lib/pns'
@@ -238,6 +238,12 @@ const syncStats1081 = {
 // Subject to trigger processing of stored 1081 events
 const eventsReceived$ = new BehaviorSubject<number>(0)
 
+// Function to manually trigger processing of stored 1081 events
+export function triggerProcessStored1081Events() {
+  console.log('[useChatSync1081] Manually triggering stored 1081 events processing')
+  eventsReceived$.next(syncStats1081.eventsReceived + 1) // Increment to ensure emission
+}
+
 const sync1081Event$ = combineLatest([userPubkeyDefined$, relayUrlsDefined$, userSignerDefined$]).pipe(
   switchMap(([userPubkey, relayUrls, signerInfo]) => {
     // Reset sync stats for new sync
@@ -386,14 +392,37 @@ const syncDerivedPnsInputs$ = merge(
   combineLatest([derivedPnsPubkeys$, relayUrlsDefined$]),
   // Re-emit current values when sync is manually triggered
   syncDerivedPnsTrigger$.pipe(
-    withLatestFrom(derivedPnsPubkeys$, relayUrlsDefined$),
-    tap(([_, pubkeys, relayUrls]) => {
+    switchMap(() => {
+      return derivedPnsPubkeys$.pipe(
+        take(1),
+        switchMap(pubkeys => {
+          if (pubkeys.length === 0) {
+            console.log('[useChatSync1081] No derived PNS keys found during manual trigger, attempting to process stored 1081 events')
+            triggerProcessStored1081Events()
+            
+            // Wait for keys to be derived
+            return derivedPnsPubkeys$.pipe(
+              filter(keys => keys.length > 0),
+              take(1),
+              timeout(5000), // Wait up to 5 seconds
+              catchError(err => {
+                console.warn('[useChatSync1081] Timed out waiting for derived PNS keys:', err)
+                return of([])
+              })
+            )
+          }
+          return of(pubkeys)
+        })
+      )
+    }),
+    withLatestFrom(relayUrlsDefined$),
+    tap(([pubkeys, relayUrls]) => {
       console.log('[useChatSync1081] Manual derived PNS trigger payload:', {
         pubkeysCount: pubkeys.length,
         relayUrls,
       })
     }),
-    map(([_, pubkeys, relayUrls]) => [pubkeys, relayUrls] as [string[], string[]])
+    map(([pubkeys, relayUrls]) => [pubkeys, relayUrls] as [string[], string[]])
   )
 )
 
@@ -615,6 +644,7 @@ export function useChatSync1081() {
     error,
     currentPnsKeys,
     triggerDerivedPnsSync,
+    triggerProcessStored1081Events,
     syncStats1081: {
       eventsReceived: syncStats1081.eventsReceived,
       lastSyncTime: syncStats1081.lastSyncTime,
