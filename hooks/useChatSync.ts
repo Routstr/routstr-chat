@@ -70,6 +70,10 @@ interface ChatSyncHook {
     pnsKeys: PnsKeys,
     onMessagePublished?: (conversationId: string, message: Message) => void
   ) => Promise<string | null>;
+  migrateConversations: (
+    conversations: Conversation[],
+    pnsKeys: PnsKeys
+  ) => Promise<Conversation[] | null>;
 }
 
 interface InnerEventPayload {
@@ -140,6 +144,54 @@ export const useChatSync = (): ChatSyncHook => {
     [user]
   );
 
+  const migrateConversations = useCallback(
+    async (conversations: Conversation[], pnsKeys: PnsKeys): Promise<Conversation[] | null> => {
+      try {
+        setIsSyncing(true);
+        let addedCount = 0;
+        
+        // Deep copy to avoid mutating state directly
+        const updatedConversations: Conversation[] = JSON.parse(JSON.stringify(conversations));
+
+        for (const conversation of updatedConversations) {
+          for (const message of conversation.messages) {
+            // Skip if already has event ID
+            if (message._eventId) continue;
+
+            try {
+              // 1. Create Inner
+              const inner = await createInnerEvent(conversation.id, message);
+              
+              // 2. Create PNS Event
+              const pnsEvent = createPnsEvent(inner, pnsKeys);
+              eventStore.add(pnsEvent);
+              
+              // Update message with event ID
+              message._eventId = pnsEvent.id;
+              addedCount++;
+            } catch (err) {
+              console.error('Failed to migrate message:', err);
+            }
+          }
+        }
+
+        if (addedCount > 0) {
+          console.log(`Migrated ${addedCount} messages`);
+          triggerDerivedPnsSync();
+          return updatedConversations;
+        }
+        
+        return null;
+      } catch (err) {
+        console.error('Migration failed:', err);
+        return null;
+      } finally {
+        setIsSyncing(false);
+      }
+    },
+    [createInnerEvent]
+  );
+
   // Publish Message Flow
   const publishMessage = useCallback(
     async (
@@ -186,5 +238,6 @@ export const useChatSync = (): ChatSyncHook => {
     chatSyncEnabled,
     setChatSyncEnabled,
     publishMessage,
+    migrateConversations,
   };
 };

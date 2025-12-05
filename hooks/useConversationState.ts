@@ -7,7 +7,8 @@ import {
   createNewConversationWithMap,
   deleteConversationFromStorage,
   clearAllConversations,
-  sortConversationsByRecentActivity
+  sortConversationsByRecentActivity,
+  persistConversationsSnapshot
 } from '@/utils/conversationUtils';
 import { getTextFromContent } from '@/utils/messageUtils';
 import { loadActiveConversationId, saveActiveConversationId, loadLastUsedModel } from '@/utils/storageUtils';
@@ -64,7 +65,7 @@ export const useConversationState = (): UseConversationStateReturn => {
   const conversationsMapRef = useRef<Map<string, Conversation>>(new Map());
   const processedEventIdsRef = useRef<Set<string>>(new Set());
 
-  const { isSyncing: isPublishing, publishMessage, chatSyncEnabled } = useChatSync();
+  const { isSyncing: isPublishing, publishMessage, chatSyncEnabled, migrateConversations } = useChatSync();
   const { derivedPnsEvents: syncedEvents, loading1081, loadingDerivedPns, currentPnsKeys, triggerProcessStored1081Events, triggerDerivedPnsSync } = useChatSync1081()
 
   const isSyncing = isPublishing || loading1081 || loadingDerivedPns;
@@ -78,8 +79,42 @@ export const useConversationState = (): UseConversationStateReturn => {
   useEffect(() => {
     const loadedConversations = loadConversationsFromStorage();
     setConversations(loadedConversations);
+    
+    // Initialize map with loaded conversations
+    loadedConversations.forEach(c => {
+      conversationsMapRef.current.set(c.id, c);
+    });
+    
     setConversationsLoaded(true);
   }, []);
+
+  // Migrate existing conversations when PNS keys are available
+  useEffect(() => {
+    const performMigration = async () => {
+      if (currentPnsKeys && conversationsLoaded) {
+        const storedConversations = loadConversationsFromStorage();
+        const hasUnsyncedMessages = storedConversations.some(c =>
+          c.messages.some(m => !m._eventId)
+        );
+
+        if (hasUnsyncedMessages) {
+          console.log('Found unsynced messages, starting migration...');
+          const updatedConversations = await migrateConversations(storedConversations, currentPnsKeys);
+          
+          if (updatedConversations) {
+            // Update map, state and storage with migrated conversations (containing event IDs)
+            updatedConversations.forEach(c => {
+              conversationsMapRef.current.set(c.id, c);
+            });
+            setConversations(updatedConversations);
+            persistConversationsSnapshot(updatedConversations);
+          }
+        }
+      }
+    };
+
+    performMigration();
+  }, [currentPnsKeys, conversationsLoaded, migrateConversations]);
 
   useEffect(() => {
     activeConversationIdRef.current = activeConversationId;
