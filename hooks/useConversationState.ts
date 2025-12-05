@@ -21,11 +21,13 @@ export interface UseConversationStateReturn {
   conversationsLoaded: boolean;
   activeConversationId: string | null;
   messages: Message[];
+  editedMessages: Message[];
   editingMessageIndex: number | null;
   editingContent: string;
   setConversations: (conversations: Conversation[]) => void;
   setActiveConversationId: (id: string | null) => void;
   setMessages: (messages: Message[]) => void;
+  setEditedMessages: (messages: Message[]) => void;
   setEditingMessageIndex: (index: number | null) => void;
   setEditingContent: (content: string) => void;
   createNewConversationHandler: (initialMessages?: Message[], timestamp?: string) => string;
@@ -56,6 +58,7 @@ export const useConversationState = (): UseConversationStateReturn => {
   const [conversationsLoaded, setConversationsLoaded] = useState(false);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [editedMessages, setEditedMessages] = useState<Message[]>([]);
   const [editingMessageIndex, setEditingMessageIndex] = useState<number | null>(null);
   const [editingContent, setEditingContent] = useState('');
 
@@ -187,7 +190,7 @@ export const useConversationState = (): UseConversationStateReturn => {
       const conversation = conversationsMapRef.current.get(conversationId);
       if (conversation) {
         setActiveConversationIdWithStorage(conversationId);
-        console.log("rdlogs: loadConversation", conversationId)
+        console.log("rdlogs: loadConversation", conversationId, conversation)
         setMessages(conversation.messages);
       }
       return prevConversations;
@@ -277,11 +280,13 @@ export const useConversationState = (): UseConversationStateReturn => {
     conversations,
     activeConversationId,
     messages,
+    editedMessages,
     editingMessageIndex,
     editingContent,
     setConversations,
     setActiveConversationId: setActiveConversationIdWithStorage,
     setMessages,
+    setEditedMessages,
     setEditingMessageIndex,
     setEditingContent,
     createNewConversationHandler,

@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
-import { BehaviorSubject, Subject, filter, shareReplay, combineLatest, switchMap, tap, map, defaultIfEmpty, merge, catchError, EMPTY, scan, distinctUntilChanged, from, mergeMap } from 'rxjs'
+import { BehaviorSubject, Subject, filter, shareReplay, combineLatest, switchMap, tap, map, defaultIfEmpty, merge, catchError, EMPTY, scan, distinctUntilChanged, from, mergeMap, withLatestFrom } from 'rxjs'
 import { nip19, generateSecretKey } from 'nostr-tools'
 import type { NostrEvent } from 'nostr-tools'
 import { KIND_PNS, PnsKeys, derivePnsKeys, SALT_PNS } from '@/lib/pns'
@@ -347,9 +347,8 @@ const syncDerivedPnsInputs$ = merge(
   combineLatest([derivedPnsPubkeys$, relayUrlsDefined$]),
   // Re-emit current values when sync is manually triggered
   syncDerivedPnsTrigger$.pipe(
-    switchMap(() => combineLatest([derivedPnsPubkeys$, relayUrlsDefined$]).pipe(
-      map(values => values)
-    ))
+    withLatestFrom(derivedPnsPubkeys$, relayUrlsDefined$),
+    map(([_, pubkeys, relayUrls]) => [pubkeys, relayUrls] as [string[], string[]])
   )
 )
 

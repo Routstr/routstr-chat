@@ -18,6 +18,8 @@ const MainChatArea: React.FC = () => {
     // Message State
     messages,
     setMessages,
+    editedMessages,
+    setEditedMessages,
     streamingContent,
     thinkingContent,
     streamingConversationId,
@@ -80,6 +82,8 @@ const MainChatArea: React.FC = () => {
       editingContent,
       messages,
       setMessages,
+      editedMessages,
+      setEditedMessages,
       (index) => editingMessageIndex !== null && setEditingMessageIndex(index),
       setEditingContent,
       selectedModel,
@@ -106,6 +110,7 @@ const MainChatArea: React.FC = () => {
       {/* Chat Messages */}
       <ChatMessages
         messages={messages}
+        editedMessages={editedMessages}
         streamingContent={getStreamingContentFor(activeConversationId)}
         thinkingContent={getThinkingContentFor(activeConversationId)}
         editingMessageIndex={editingMessageIndex}

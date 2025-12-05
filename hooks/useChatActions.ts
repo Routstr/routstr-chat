@@ -50,6 +50,8 @@ export interface UseChatActionsReturn {
     editingContent: string,
     messages: Message[],
     setMessages: (messages: Message[]) => void,
+    editedMessages: Message[],
+    setEditedMessages: (messages: Message[]) => void,
     setEditingMessageIndex: (index: number | null) => void,
     setEditingContent: (content: string) => void,
     selectedModel: any,
@@ -173,6 +175,8 @@ export const useChatActions = (): UseChatActionsReturn => {
     editingContent: string,
     messages: Message[],
     setMessages: (messages: Message[]) => void,
+    editedMessages: Message[],
+    setEditedMessages: (messages: Message[]) => void,
     setEditingMessageIndex: (index: number | null) => void,
     setEditingContent: (content: string) => void,
     selectedModel: any,
@@ -211,6 +215,7 @@ export const useChatActions = (): UseChatActionsReturn => {
         
         newContent = updatedContent;
       }
+      editedMessages.push(updatedMessages[editingMessageIndex], updatedMessages[editingMessageIndex + 1])
       
       updatedMessages[editingMessageIndex] = {
         ...originalMessage,
@@ -219,7 +224,9 @@ export const useChatActions = (): UseChatActionsReturn => {
 
       const truncatedMessages = updatedMessages.slice(0, editingMessageIndex + 1);
 
+      console.log("EDITED MESSSAGEA", editedMessages);
       setMessages(truncatedMessages);
+      setEditedMessages(editedMessages);
       setEditingMessageIndex(null);
       setEditingContent('');
 

@@ -3,10 +3,11 @@ import { Edit, MessageSquare, Copy, Check, Eye, EyeOff, FileText } from 'lucide-
 import MessageContentRenderer from '@/components/MessageContent';
 import MarkdownRenderer from '@/components/MarkdownRenderer';
 import ThinkingSection from '@/components/ui/ThinkingSection';
-import { RefObject, useState, useRef } from 'react';
+import { RefObject, useState, useRef, useEffect } from 'react';
 
 interface ChatMessagesProps {
   messages: Message[];
+  editedMessages: Message[];
   streamingContent: string;
   thinkingContent: string;
   editingMessageIndex: number | null;
@@ -25,6 +26,7 @@ interface ChatMessagesProps {
 
 export default function ChatMessages({
   messages,
+  editedMessages,
   streamingContent,
   thinkingContent,
   editingMessageIndex,
@@ -50,6 +52,10 @@ export default function ChatMessages({
     const textContent = getTextFromContent(content);
     return textContent.trim().startsWith('ATTENTION');
   };
+  useEffect(() => {
+    console.log(editedMessages);
+
+  },[editedMessages]);
 
   // Function to identify system message groups
   const getSystemMessageGroups = () => {

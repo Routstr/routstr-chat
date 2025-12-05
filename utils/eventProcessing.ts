@@ -175,6 +175,7 @@ function sortMessagesByPrevIdChain(messages: Message[]): Message[] {
   // (this handles edge cases where the chain is broken)
   if (sorted.length < messages.length) {
     const remaining = messages.filter(msg => !used.has(msg._eventId!));
+    console.log(remaining, sorted, messages);
     console.warn(`Chain incomplete, appending ${remaining.length} remaining messages`);
     sorted.push(...remaining);
   }
@@ -334,6 +335,7 @@ export function processInnerEvent(
   innerEvent: InnerEvent
 ): Map<string, Conversation> {
   const metadata = extractConversationMetadata(innerEvent);
+  console.log(innerEvent, metadata?.conversationId)
   if (!metadata) {
     return conversationsMap;
   }
