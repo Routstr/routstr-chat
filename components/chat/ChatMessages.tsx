@@ -230,6 +230,21 @@ export default function ChatMessages({
       console.error('Failed to copy message:', error);
     }
   };
+
+  const handleSaveInlineEdit = () => {
+    if (editingMessageIndex !== null) {
+      setSelectedVersions(prev => {
+        const newMap = new Map(prev);
+        Array.from(newMap.keys()).forEach(key => {
+          if (key >= editingMessageIndex) {
+            newMap.delete(key);
+          }
+        });
+        return newMap;
+      });
+    }
+    saveInlineEdit();
+  };
   
   return (
     <div
@@ -370,7 +385,7 @@ export default function ChatMessages({
                               onKeyDown={(e) => {
                                 if (e.key === 'Enter' && !e.shiftKey) {
                                   e.preventDefault();
-                                  saveInlineEdit();
+                                  handleSaveInlineEdit();
                                 }
                               }}
                               className="w-full bg-white/5 border border-white/10 rounded-2xl p-3 text-sm text-white focus:outline-none focus:border-white/40"
@@ -385,7 +400,7 @@ export default function ChatMessages({
                                 Cancel
                               </button>
                               <button
-                                onClick={saveInlineEdit}
+                                onClick={handleSaveInlineEdit}
                                 disabled={isLoading}
                                 className="text-xs text-black bg-white px-3 py-1.5 rounded-md hover:bg-white/90 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-white/70"
                               >
