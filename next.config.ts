@@ -56,10 +56,7 @@ const nextConfig: NextConfig = {
     }
     return config;
   },
-  // Add experimental features to improve HMR
-  experimental: {
-    serverComponentsExternalPackages: [],
-  },
+  serverExternalPackages: [],
   // Silence Next 16 Turbopack + webpack plugin warning (next-pwa injects webpack config)
   // See: https://nextjs.org/docs/app/api-reference/next-config-js/turbopack
   turbopack: {},

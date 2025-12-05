@@ -7,7 +7,6 @@ import { RefObject, useState, useRef, useEffect, useMemo } from 'react';
 
 interface ChatMessagesProps {
   messages: Message[];
-  editedMessages: Message[];
   streamingContent: string;
   thinkingContent: string;
   editingMessageIndex: number | null;
@@ -26,7 +25,6 @@ interface ChatMessagesProps {
 
 export default function ChatMessages({
   messages,
-  editedMessages,
   streamingContent,
   thinkingContent,
   editingMessageIndex,
@@ -57,7 +55,7 @@ export default function ChatMessages({
   // Group messages by their depth in the conversation tree
   const messageVersions = useMemo(() => {
     const groups = new Map<number, Message[]>();
-    const allMessages = [...messages, ...editedMessages];
+    const allMessages = [...messages];
     
     // Build adjacency list
     const childrenMap = new Map<string, Message[]>();
@@ -95,7 +93,7 @@ export default function ChatMessages({
     }
 
     return groups;
-  }, [messages, editedMessages]);
+  }, [messages]);
 
   const getMessageToDisplay = (message: Message, index: number) => {
     const versions = messageVersions.get(index);

@@ -22,13 +22,11 @@ export interface UseConversationStateReturn {
   conversationsLoaded: boolean;
   activeConversationId: string | null;
   messages: Message[];
-  editedMessages: Message[];
   editingMessageIndex: number | null;
   editingContent: string;
   setConversations: (conversations: Conversation[]) => void;
   setActiveConversationId: (id: string | null) => void;
   setMessages: (messages: Message[]) => void;
-  setEditedMessages: (messages: Message[]) => void;
   setEditingMessageIndex: (index: number | null) => void;
   setEditingContent: (content: string) => void;
   createNewConversationHandler: (initialMessages?: Message[], timestamp?: string) => string;
@@ -46,6 +44,7 @@ export interface UseConversationStateReturn {
     conversationId: string,
     message: Message
   ) => Promise<string | null>;
+  syncWithNostr: () => Promise<void>;
 }
 
 /**
@@ -58,7 +57,6 @@ export const useConversationState = (): UseConversationStateReturn => {
   const [conversationsLoaded, setConversationsLoaded] = useState(false);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [editedMessages, setEditedMessages] = useState<Message[]>([]);
   const [editingMessageIndex, setEditingMessageIndex] = useState<number | null>(null);
   const [editingContent, setEditingContent] = useState('');
 
@@ -66,8 +64,15 @@ export const useConversationState = (): UseConversationStateReturn => {
   const conversationsMapRef = useRef<Map<string, Conversation>>(new Map());
   const processedEventIdsRef = useRef<Set<string>>(new Set());
 
-  const { isSyncing, publishMessage, chatSyncEnabled } = useChatSync();
-  const { derivedPnsEvents: syncedEvents, loading1081: loading, currentPnsKeys, triggerProcessStored1081Events } = useChatSync1081()
+  const { isSyncing: isPublishing, publishMessage, chatSyncEnabled } = useChatSync();
+  const { derivedPnsEvents: syncedEvents, loading1081, loadingDerivedPns, currentPnsKeys, triggerProcessStored1081Events, triggerDerivedPnsSync } = useChatSync1081()
+
+  const isSyncing = isPublishing || loading1081 || loadingDerivedPns;
+
+  const syncWithNostr = useCallback(async () => {
+    triggerDerivedPnsSync();
+    triggerProcessStored1081Events();
+  }, [triggerDerivedPnsSync, triggerProcessStored1081Events]);
 
   // Load conversations and active conversation ID from storage on mount
   useEffect(() => {
@@ -118,13 +123,11 @@ export const useConversationState = (): UseConversationStateReturn => {
       if (currentActiveId) {
         const activeConv = conversationsMapRef.current.get(currentActiveId);
         if (activeConv) {
-          const { messages: main, editedMessages: edited } = separateMessagesWithEdits(activeConv.messages);
-          setMessages(main);
-          setEditedMessages(edited);
+          setMessages(activeConv.messages);
         }
       }
     }
-  }, [syncedEvents, currentPnsKeys, loading]);
+  }, [syncedEvents, currentPnsKeys, loading1081]);
 
   // Set editing content when editing message index changes
   useEffect(() => {
@@ -153,9 +156,7 @@ export const useConversationState = (): UseConversationStateReturn => {
       createdId = newConversation.id;
       setActiveConversationIdWithStorage(newConversation.id);
       // Set messages to the initial messages (empty array if none provided)
-      const { messages: main, editedMessages: edited } = separateMessagesWithEdits(initialMessages);
-      setMessages(main);
-      setEditedMessages(edited);
+      setMessages(newConversation.messages);
       return updatedConversations;
     });
     return createdId;
@@ -167,9 +168,7 @@ export const useConversationState = (): UseConversationStateReturn => {
       if (conversation) {
         setActiveConversationIdWithStorage(conversationId);
         console.log("rdlogs: loadConversation", conversationId, conversation)
-        const { messages: main, editedMessages: edited } = separateMessagesWithEdits(conversation.messages);
-        setMessages(main);
-        setEditedMessages(edited);
+        setMessages(conversation.messages);
       }
       return prevConversations;
     });
@@ -236,9 +235,7 @@ export const useConversationState = (): UseConversationStateReturn => {
     
     // Update messages if this is the active conversation
     if (activeConversationIdRef.current === conversationId) {
-      const { messages: main, editedMessages: edited } = separateMessagesWithEdits(conversation.messages);
-      setMessages(main);
-      setEditedMessages(edited);
+      setMessages(conversation.messages);
     }
     
     // Save to storage
@@ -284,13 +281,11 @@ export const useConversationState = (): UseConversationStateReturn => {
     conversations,
     activeConversationId,
     messages,
-    editedMessages,
     editingMessageIndex,
     editingContent,
     setConversations,
     setActiveConversationId: setActiveConversationIdWithStorage,
     setMessages,
-    setEditedMessages,
     setEditingMessageIndex,
     setEditingContent,
     createNewConversationHandler,
@@ -309,88 +304,7 @@ export const useConversationState = (): UseConversationStateReturn => {
     conversationsLoaded,
     isSyncing,
     currentPns: currentPnsKeys,
-    createAndStoreChatEvent
+    createAndStoreChatEvent,
+    syncWithNostr
   };
 };
-
-function separateMessagesWithEdits(messages: Message[]) {
-  const messagesById = new Map<string, Message>();
-  const childrenMap = new Map<string, Message[]>();
-
-  // Index messages
-  messages.forEach(msg => {
-    if (msg._eventId) {
-      messagesById.set(msg._eventId, msg);
-    }
-  });
-
-  // Build children map
-  messages.forEach(msg => {
-    const prevId = msg._prevId;
-    if (prevId && messagesById.has(prevId)) {
-      if (!childrenMap.has(prevId)) {
-        childrenMap.set(prevId, []);
-      }
-      childrenMap.get(prevId)!.push(msg);
-    }
-  });
-
-  const mainMessages: Message[] = [];
-  const editedMessages: Message[] = [];
-
-  // Helper to collect all descendants as edited
-  const collectEditedSubtree = (msg: Message) => {
-    editedMessages.push(msg);
-    if (msg._eventId) {
-      const children = childrenMap.get(msg._eventId);
-      if (children) {
-        children.forEach(child => collectEditedSubtree(child));
-      }
-    }
-  };
-
-  // Recursive function to traverse the main thread
-  const processThread = (currentMsg: Message) => {
-    mainMessages.push(currentMsg);
-    
-    if (!currentMsg._eventId) return;
-
-    const children = childrenMap.get(currentMsg._eventId);
-    if (!children || children.length === 0) return;
-
-    // Sort children by creation time, newest first
-    children.sort((a, b) => (b._createdAt || 0) - (a._createdAt || 0));
-
-    const newestChild = children[0];
-    const olderChildren = children.slice(1);
-
-    // Process the newest child as part of main thread
-    processThread(newestChild);
-
-    // All older siblings and their descendants are edited
-    olderChildren.forEach(child => collectEditedSubtree(child));
-  };
-
-  // Find roots (messages with no prevId OR prevId not in messages)
-  const roots: Message[] = [];
-  messages.forEach(msg => {
-    if (!msg._prevId || !messagesById.has(msg._prevId)) {
-      roots.push(msg);
-    }
-  });
-
-  if (roots.length > 0) {
-    // Sort roots by creation time
-    roots.sort((a, b) => (b._createdAt || 0) - (a._createdAt || 0));
-    
-    const newestRoot = roots[0];
-    const olderRoots = roots.slice(1);
-    
-    processThread(newestRoot);
-    olderRoots.forEach(root => collectEditedSubtree(root));
-  }
-  console.log("Edited", mainMessages, editedMessages);
-
-  return { messages: mainMessages, editedMessages };
-}
-
