@@ -348,6 +348,12 @@ const syncDerivedPnsInputs$ = merge(
   // Re-emit current values when sync is manually triggered
   syncDerivedPnsTrigger$.pipe(
     withLatestFrom(derivedPnsPubkeys$, relayUrlsDefined$),
+    tap(([_, pubkeys, relayUrls]) => {
+      console.log('[useChatSync1081] Manual derived PNS trigger payload:', {
+        pubkeysCount: pubkeys.length,
+        relayUrls,
+      })
+    }),
     map(([_, pubkeys, relayUrls]) => [pubkeys, relayUrls] as [string[], string[]])
   )
 )

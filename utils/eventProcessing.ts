@@ -335,7 +335,6 @@ export function processInnerEvent(
   innerEvent: InnerEvent
 ): Map<string, Conversation> {
   const metadata = extractConversationMetadata(innerEvent);
-  console.log(innerEvent, metadata?.conversationId)
   if (!metadata) {
     return conversationsMap;
   }

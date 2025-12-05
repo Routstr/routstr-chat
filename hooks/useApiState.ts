@@ -307,7 +307,6 @@ export const useApiState = (isAuthenticated: boolean, balance: number, maxBalanc
   // Only auto-selects if no model is selected or current model is not available
   useEffect(() => {
     if (!isAuthenticated || models.length === 0) return;
-    console.log('balance', balance);
 
     // Async function to handle model selection
     const selectModel = async () => {

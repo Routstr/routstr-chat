@@ -282,7 +282,6 @@ export const unifiedRefund = async (
       if (!apiKey) {
         removeLocalCashuToken(baseUrl);
       }
-      console.log("rdlogs: rdlogs: refunding: totalAmount: ", totalAmount)
       
       return {
         success: true,

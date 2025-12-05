@@ -234,6 +234,8 @@ export const useChatActions = (): UseChatActionsReturn => {
       if (!originConversationId) {
         throw new Error('No active conversation ID found');
       }
+      console.log(truncatedMessages[truncatedMessages.length-1], truncatedMessages)
+      createAndStoreChatEvent(originConversationId, truncatedMessages[truncatedMessages.length-1]).catch(console.error);
       await performAIRequest(
         truncatedMessages,
         setMessages,

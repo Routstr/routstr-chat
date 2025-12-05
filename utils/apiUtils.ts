@@ -966,7 +966,6 @@ async function handlePostResponseRefund(params: {
 
   const refundStatus = await unifiedRefund(mintUrl, baseUrl, usingNip60, storeCashu);
   if (refundStatus.success) {
-    console.log("rdlogs: refundStatus: ", refundStatus)
     if (refundStatus.message && refundStatus.message.includes("No API key to refund")) {
       satsSpent = 0;
     }
