@@ -127,60 +127,35 @@ export function innerEventToMessage(innerEvent: InnerEvent): Message {
  * @returns Sorted array of messages
  */
 function sortMessagesByPrevIdChain(messages: Message[]): Message[] {
-  if (messages.length === 0) return messages;
+  return [...messages].sort((a, b) => {
+    // 1. Sort by timestamp
+    const aTime = a._createdAt || 0;
+    const bTime = b._createdAt || 0;
 
-  // Build a map of eventId -> message for quick lookup
-  const messageMap = new Map<string, Message>();
-  messages.forEach(msg => {
-    if (msg._eventId) {
-      messageMap.set(msg._eventId, msg);
-    }
-  });
-
-  // Find the first message (prevId is "000000" or undefined)
-  const firstMessage = messages.find(
-    msg => msg._prevId === '0'.repeat(64) || !msg._prevId
-  );
-
-  if (!firstMessage) {
-    // Fallback to timestamp sorting if we can't find the chain start
-    console.warn('Could not find first message in chain, falling back to timestamp sort');
-    return [...messages].sort((a, b) => {
-      const aTime = a._createdAt || 0;
-      const bTime = b._createdAt || 0;
+    if (aTime !== bTime) {
       return aTime - bTime;
-    });
-  }
+    }
 
-  // Build the sorted array by following the chain
-  const sorted: Message[] = [firstMessage];
-  const used = new Set<string>([firstMessage._eventId!]);
+    // 2. If timestamps are equal, check prevId/eventId relationship
+    // If a is the previous message of b (b points to a), a comes first
+    if (b._prevId === a._eventId && a._eventId) {
+      return -1;
+    }
+    // If b is the previous message of a (a points to b), b comes first
+    if (a._prevId === b._eventId && b._eventId) {
+      return 1;
+    }
 
-  let currentEventId = firstMessage._eventId;
-  
-  // Find each subsequent message by looking for the one whose _prevId matches current _eventId
-  while (sorted.length < messages.length && currentEventId) {
-    const nextMessage = messages.find(
-      msg => msg._prevId === currentEventId && !used.has(msg._eventId!)
-    );
-    
-    if (!nextMessage) break;
-    
-    sorted.push(nextMessage);
-    used.add(nextMessage._eventId!);
-    currentEventId = nextMessage._eventId;
-  }
+    // 3. If can't sort by prevId, sort "user" messages before others
+    if (a.role === 'user' && b.role !== 'user') {
+      return -1;
+    }
+    if (b.role === 'user' && a.role !== 'user') {
+      return 1;
+    }
 
-  // If we didn't sort all messages, append the remaining ones
-  // (this handles edge cases where the chain is broken)
-  if (sorted.length < messages.length) {
-    const remaining = messages.filter(msg => !used.has(msg._eventId!));
-    console.log(remaining, sorted, messages);
-    console.warn(`Chain incomplete, appending ${remaining.length} remaining messages`);
-    sorted.push(...remaining);
-  }
-
-  return sorted;
+    return 0;
+  });
 }
 
 

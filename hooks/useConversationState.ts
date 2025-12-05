@@ -39,7 +39,6 @@ export interface UseConversationStateReturn {
   saveConversationById: (conversationId: string, newMessages: Message[]) => void;
   appendMessageToConversation: (conversationId: string, message: Message) => void;
   getActiveConversationId: () => string | null;
-  syncWithNostr: () => Promise<void>;
   isSyncing: boolean;
   currentPns: PnsKeys | null;
   createAndStoreChatEvent: (
@@ -68,34 +67,6 @@ export const useConversationState = (): UseConversationStateReturn => {
 
   const { isSyncing, publishMessage, chatSyncEnabled } = useChatSync();
   const { derivedPnsEvents: syncedEvents, loading1081: loading, currentPnsKeys } = useChatSync1081()
-
-
-  /**
-   * Handle incremental conversation updates as events arrive
-   */
-  const handleConversationUpdate = useCallback((updatedConversation: Conversation) => {
-    setConversations(prev => {
-      // Find if conversation already exists
-      const existingIndex = prev.findIndex(c => c.id === updatedConversation.id);
-      
-      if (existingIndex !== -1) {
-        // Update existing conversation
-        const updated = [...prev];
-        updated[existingIndex] = updatedConversation;
-        return updated;
-      } else {
-        // Add new conversation
-        return [...prev, updatedConversation];
-      }
-    });
-  }, []);
-
-  /**
-   * Sync with Nostr using incremental processing
-   * Events are displayed as they arrive for better user experience
-   */
-  const syncWithNostr = useCallback(async () => {
-  }, [handleConversationUpdate]);
 
   // Load conversations and active conversation ID from storage on mount
   useEffect(() => {
@@ -146,7 +117,9 @@ export const useConversationState = (): UseConversationStateReturn => {
       if (currentActiveId) {
         const activeConv = conversationsMapRef.current.get(currentActiveId);
         if (activeConv) {
-          setMessages(activeConv.messages);
+          const { messages: main, editedMessages: edited } = separateMessagesWithEdits(activeConv.messages);
+          setMessages(main);
+          setEditedMessages(edited);
         }
       }
     }
@@ -179,7 +152,9 @@ export const useConversationState = (): UseConversationStateReturn => {
       createdId = newConversation.id;
       setActiveConversationIdWithStorage(newConversation.id);
       // Set messages to the initial messages (empty array if none provided)
-      setMessages(initialMessages);
+      const { messages: main, editedMessages: edited } = separateMessagesWithEdits(initialMessages);
+      setMessages(main);
+      setEditedMessages(edited);
       return updatedConversations;
     });
     return createdId;
@@ -191,7 +166,9 @@ export const useConversationState = (): UseConversationStateReturn => {
       if (conversation) {
         setActiveConversationIdWithStorage(conversationId);
         console.log("rdlogs: loadConversation", conversationId, conversation)
-        setMessages(conversation.messages);
+        const { messages: main, editedMessages: edited } = separateMessagesWithEdits(conversation.messages);
+        setMessages(main);
+        setEditedMessages(edited);
       }
       return prevConversations;
     });
@@ -258,7 +235,9 @@ export const useConversationState = (): UseConversationStateReturn => {
     
     // Update messages if this is the active conversation
     if (activeConversationIdRef.current === conversationId) {
-      setMessages([...conversation.messages]);
+      const { messages: main, editedMessages: edited } = separateMessagesWithEdits(conversation.messages);
+      setMessages(main);
+      setEditedMessages(edited);
     }
     
     // Save to storage
@@ -303,9 +282,90 @@ export const useConversationState = (): UseConversationStateReturn => {
     appendMessageToConversation,
     getActiveConversationId: () => loadActiveConversationId(),
     conversationsLoaded,
-    syncWithNostr,
     isSyncing,
     currentPns: currentPnsKeys,
     createAndStoreChatEvent
   };
 };
+
+function separateMessagesWithEdits(messages: Message[]) {
+  const messagesById = new Map<string, Message>();
+  const childrenMap = new Map<string, Message[]>();
+
+  // Index messages
+  messages.forEach(msg => {
+    if (msg._eventId) {
+      messagesById.set(msg._eventId, msg);
+    }
+  });
+
+  // Build children map
+  messages.forEach(msg => {
+    const prevId = msg._prevId;
+    if (prevId && messagesById.has(prevId)) {
+      if (!childrenMap.has(prevId)) {
+        childrenMap.set(prevId, []);
+      }
+      childrenMap.get(prevId)!.push(msg);
+    }
+  });
+
+  const mainMessages: Message[] = [];
+  const editedMessages: Message[] = [];
+
+  // Helper to collect all descendants as edited
+  const collectEditedSubtree = (msg: Message) => {
+    editedMessages.push(msg);
+    if (msg._eventId) {
+      const children = childrenMap.get(msg._eventId);
+      if (children) {
+        children.forEach(child => collectEditedSubtree(child));
+      }
+    }
+  };
+
+  // Recursive function to traverse the main thread
+  const processThread = (currentMsg: Message) => {
+    mainMessages.push(currentMsg);
+    
+    if (!currentMsg._eventId) return;
+
+    const children = childrenMap.get(currentMsg._eventId);
+    if (!children || children.length === 0) return;
+
+    // Sort children by creation time, newest first
+    children.sort((a, b) => (b._createdAt || 0) - (a._createdAt || 0));
+
+    const newestChild = children[0];
+    const olderChildren = children.slice(1);
+
+    // Process the newest child as part of main thread
+    processThread(newestChild);
+
+    // All older siblings and their descendants are edited
+    olderChildren.forEach(child => collectEditedSubtree(child));
+  };
+
+  // Find roots (messages with no prevId OR prevId not in messages)
+  const roots: Message[] = [];
+  messages.forEach(msg => {
+    if (!msg._prevId || !messagesById.has(msg._prevId)) {
+      roots.push(msg);
+    }
+  });
+
+  if (roots.length > 0) {
+    // Sort roots by creation time
+    roots.sort((a, b) => (b._createdAt || 0) - (a._createdAt || 0));
+    
+    const newestRoot = roots[0];
+    const olderRoots = roots.slice(1);
+    
+    processThread(newestRoot);
+    olderRoots.forEach(root => collectEditedSubtree(root));
+  }
+  console.log("Edited", mainMessages, editedMessages);
+
+  return { messages: mainMessages, editedMessages };
+}
+

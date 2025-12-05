@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
-import { BehaviorSubject, Subject, filter, shareReplay, combineLatest, switchMap, tap, map, defaultIfEmpty, merge, catchError, EMPTY, scan, distinctUntilChanged, from, mergeMap, withLatestFrom } from 'rxjs'
+import { BehaviorSubject, Subject, filter, shareReplay, combineLatest, switchMap, tap, map, defaultIfEmpty, merge, catchError, EMPTY, scan, distinctUntilChanged, from, mergeMap, withLatestFrom, share } from 'rxjs'
 import { nip19, generateSecretKey } from 'nostr-tools'
 import type { NostrEvent } from 'nostr-tools'
 import { KIND_PNS, PnsKeys, derivePnsKeys, SALT_PNS } from '@/lib/pns'
@@ -235,11 +235,15 @@ const syncStats1081 = {
   lastSyncTime: null as Date | null,
 }
 
+// Subject to trigger processing of stored 1081 events
+const eventsReceived$ = new BehaviorSubject<number>(0)
+
 const sync1081Event$ = combineLatest([userPubkeyDefined$, relayUrlsDefined$, userSignerDefined$]).pipe(
   switchMap(([userPubkey, relayUrls, signerInfo]) => {
     // Reset sync stats for new sync
     syncStats1081.eventsReceived = 0
     syncStats1081.lastSyncTime = new Date()
+    eventsReceived$.next(0)
 
     // Create the kind 1081 filter for this user's events
     const kind1081Filter = {
@@ -284,30 +288,11 @@ const sync1081Event$ = combineLatest([userPubkeyDefined$, relayUrlsDefined$, use
       }),
       // Only process actual events, not EOSE signal (already filtered above, but double check)
       filter((value): value is NostrEvent => typeof value === 'object' && value !== null && 'id' in value),
-      mergeMap((event: NostrEvent) => {
+      tap((event: NostrEvent) => {
         syncStats1081.eventsReceived++
         console.log('[useChatSync1081] Synced 1081 event:', event.id, 'Total:', syncStats1081.eventsReceived, eventStore.hasEvent(event.id))
         eventStore.add(event)
-        
-        // Decrypt the event and extract nsec (async operation)
-        return from(decrypt1081Event(event, signerInfo)).pipe(
-          tap((decryptedContent) => {
-            if (decryptedContent) {
-              // Derive PNS keys from the nsec
-              const pnsKeys = extractAndDerivePnsKeys(decryptedContent)
-              if (pnsKeys) {
-                // Emit the newly derived PNS keys
-                newDerivedPnsKey$.next(pnsKeys)
-                console.log('[useChatSync1081] Added derived PNS key to observable:', pnsKeys.pnsKeypair.pubKey)
-              }
-            }
-          }),
-          map(() => event), // Return the original event for downstream subscribers
-          catchError((err) => {
-            console.error('[useChatSync1081] Decryption error for event:', event.id, err)
-            return from([event]) // Still return the event even if decryption fails
-          })
-        )
+        eventsReceived$.next(syncStats1081.eventsReceived)
       }),
       // Handle EmptyError when sync completes with no events to sync
       // This happens when there are no events matching the filter on any relay
@@ -324,6 +309,60 @@ const sync1081Event$ = combineLatest([userPubkeyDefined$, relayUrlsDefined$, use
     )
   }),
   shareReplay(1),
+)
+
+// Set to track processed 1081 event IDs to avoid re-processing
+const processed1081EventIds = new Set<string>()
+
+// Observable that processes 1081 events from the store when new ones are received
+const processStored1081Events$ = combineLatest([
+  eventsReceived$,
+  userSignerDefined$,
+  userPubkeyDefined$
+]).pipe(
+  filter(([count]) => count > 0),
+  switchMap(([_, signerInfo, userPubkey]) => {
+    // Read all 1081 events for this user from the store
+    const events = eventStore.getByFilters({
+      kinds: [1081],
+      authors: [userPubkey]
+    })
+    
+    // Filter out already processed events
+    const newEvents = events.filter(event => !processed1081EventIds.has(event.id))
+    
+    if (newEvents.length === 0) {
+      return EMPTY
+    }
+
+    console.log('[useChatSync1081] Processing new stored 1081 events:', newEvents.length)
+
+    return from(newEvents).pipe(
+      mergeMap(event => {
+        // Mark as processed immediately to avoid race conditions if re-triggered quickly
+        processed1081EventIds.add(event.id)
+        return from(decrypt1081Event(event, signerInfo)).pipe(
+          map(decryptedContent => ({ event, decryptedContent }))
+        )
+      }),
+      tap(({ event, decryptedContent }) => {
+        if (decryptedContent) {
+          // Derive PNS keys from the nsec
+          const pnsKeys = extractAndDerivePnsKeys(decryptedContent)
+          if (pnsKeys) {
+            // Emit the newly derived PNS keys
+            newDerivedPnsKey$.next(pnsKeys)
+            console.log('[useChatSync1081] Added derived PNS key to observable:', pnsKeys.pnsKeypair.pubKey)
+          }
+        }
+      }),
+      catchError(err => {
+        console.error('[useChatSync1081] Error processing stored events:', err)
+        return EMPTY
+      })
+    )
+  }),
+  share()
 )
 
 // Observable that emits array of all derived PNS pubkeys for syncing
@@ -445,7 +484,14 @@ export function useChatSync1081() {
     return () => sub.unsubscribe()
   }, [])
 
+  // Subscribe to process stored 1081 events
   useEffect(() => {
+    const sub = processStored1081Events$.subscribe()
+    return () => sub.unsubscribe()
+  }, [])
+
+  useEffect(() => {
+    console.log("CURRNET ", currentDerivedPnsKeys);
     // Find the first PNS keys with SALT_PNS from currentDerivedPnsKeys
     const firstPnsKeysWithSalt = Array.from(currentDerivedPnsKeys.values()).find(
       pnsKeys => pnsKeys.salt === SALT_PNS
@@ -558,7 +604,7 @@ export function useChatSync1081() {
   // Log derived PNS sync statistics
   useEffect(() => {
     if (currentDerivedPnsKeys.size !== 0)
-      console.log('[useChatSync1081] Derived PNS events count:', derivedPnsEvents.length, 'Pub keys:', currentDerivedPnsKeys.size)
+      console.log('[useChatSync1081] Derived PNS events count:', derivedPnsEvents.length, 'Pub keys:', currentDerivedPnsKeys.size, Date.now())
   }, [derivedPnsEvents, currentDerivedPnsKeys])
 
   return {

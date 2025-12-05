@@ -1,9 +1,9 @@
 import { Message, MessageContent } from '@/types/chat';
-import { Edit, MessageSquare, Copy, Check, Eye, EyeOff, FileText } from 'lucide-react';
+import { Edit, MessageSquare, Copy, Check, Eye, EyeOff, FileText, ChevronLeft, ChevronRight } from 'lucide-react';
 import MessageContentRenderer from '@/components/MessageContent';
 import MarkdownRenderer from '@/components/MarkdownRenderer';
 import ThinkingSection from '@/components/ui/ThinkingSection';
-import { RefObject, useState, useRef, useEffect } from 'react';
+import { RefObject, useState, useRef, useEffect, useMemo } from 'react';
 
 interface ChatMessagesProps {
   messages: Message[];
@@ -44,6 +44,7 @@ export default function ChatMessages({
 }: ChatMessagesProps) {
   const [copiedMessageIndex, setCopiedMessageIndex] = useState<number | null>(null);
   const [expandedSystemGroups, setExpandedSystemGroups] = useState<Set<number>>(new Set());
+  const [selectedVersions, setSelectedVersions] = useState<Map<number, string>>(new Map());
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   
 
@@ -52,10 +53,102 @@ export default function ChatMessages({
     const textContent = getTextFromContent(content);
     return textContent.trim().startsWith('ATTENTION');
   };
-  useEffect(() => {
-    console.log(editedMessages);
 
-  },[editedMessages]);
+  // Group messages by their depth in the conversation tree
+  const messageVersions = useMemo(() => {
+    const groups = new Map<number, Message[]>();
+    const allMessages = [...messages, ...editedMessages];
+    
+    // Build adjacency list
+    const childrenMap = new Map<string, Message[]>();
+    const roots: Message[] = [];
+    
+    allMessages.forEach(msg => {
+      if (!msg._prevId || msg._prevId === '0'.repeat(64)) {
+        roots.push(msg);
+      } else {
+        if (!childrenMap.has(msg._prevId)) {
+          childrenMap.set(msg._prevId, []);
+        }
+        childrenMap.get(msg._prevId)!.push(msg);
+      }
+    });
+
+    // Traverse BFS to assign depths
+    let currentDepth = 0;
+    let currentLevel = roots;
+    
+    while (currentLevel.length > 0) {
+      // Sort by creation time
+      currentLevel.sort((a, b) => (a._createdAt || 0) - (b._createdAt || 0));
+      groups.set(currentDepth, currentLevel);
+      
+      const nextLevel: Message[] = [];
+      currentLevel.forEach(msg => {
+        if (msg._eventId && childrenMap.has(msg._eventId)) {
+          nextLevel.push(...childrenMap.get(msg._eventId)!);
+        }
+      });
+      
+      currentDepth++;
+      currentLevel = nextLevel;
+    }
+
+    return groups;
+  }, [messages, editedMessages]);
+
+  const getMessageToDisplay = (message: Message, index: number) => {
+    const versions = messageVersions.get(index);
+    
+    if (!versions || versions.length <= 1) {
+      return { msg: message, currentVersion: 1, totalVersions: 1 };
+    }
+    
+    // Check if a specific version is selected for this "slot" (identified by index)
+    const selectedId = selectedVersions.get(index);
+    
+    if (selectedId) {
+      const selectedMsg = versions.find(v => v._eventId === selectedId);
+      if (selectedMsg) {
+        const versionIndex = versions.findIndex(v => v._eventId === selectedId);
+        return { msg: selectedMsg, currentVersion: versionIndex + 1, totalVersions: versions.length };
+      }
+    }
+    
+    // Default to the message passed in (which comes from the main thread)
+    // We need to find its index in the sorted versions array
+    const currentIndex = versions.findIndex(v => v._eventId === message._eventId);
+    
+    // If for some reason the message isn't in the group (shouldn't happen), default to last
+    if (currentIndex === -1) {
+      return { msg: versions[versions.length - 1], currentVersion: versions.length, totalVersions: versions.length };
+    }
+
+    return { msg: message, currentVersion: currentIndex + 1, totalVersions: versions.length };
+  };
+
+  const handleVersionChange = (index: number, direction: 'prev' | 'next', currentMessageId: string) => {
+    const versions = messageVersions.get(index);
+    console.log('ed', versions, index, messageVersions);
+    if (!versions) return;
+    
+    const currentSelectedId = selectedVersions.get(index) || currentMessageId;
+    const currentIndex = versions.findIndex(v => v._eventId === currentSelectedId);
+    console.log(currentIndex, selectedVersions, currentSelectedId);
+    
+    if (currentIndex === -1) return;
+    
+    let newIndex = direction === 'prev' ? currentIndex - 1 : currentIndex + 1;
+    
+    // Clamp index
+    if (newIndex < 0) newIndex = 0;
+    if (newIndex >= versions.length) newIndex = versions.length - 1;
+    
+    const newVersionId = versions[newIndex]._eventId;
+    if (newVersionId) {
+      setSelectedVersions(prev => new Map(prev).set(index, newVersionId));
+    }
+  };
 
   // Function to identify system message groups
   const getSystemMessageGroups = () => {
@@ -153,7 +246,10 @@ export default function ChatMessages({
             {/* Greeting message will be handled by the input component when centered */}
           </div>
         ) : (
-          messages.map((message, index) => {
+          messages.map((originalMessage, index) => {
+            // Determine which version of the message to display
+            const { msg: message, currentVersion, totalVersions } = getMessageToDisplay(originalMessage, index);
+            
             // Check if this is the start of a system message group
             const systemGroup = systemGroups.find(g => g.startIndex === index);
             const isSystemGroupStart = systemGroup &&
@@ -305,7 +401,26 @@ export default function ChatMessages({
                                   <MessageContentRenderer content={message.content} />
                                 </div>
                               </div>
-                              <div className={`flex justify-end gap-2 mt-1 ${isMobile ? 'opacity-100' : 'opacity-100 md:opacity-0 md:group-hover:opacity-100'} transition-opacity duration-200`}>
+                              <div className={`flex justify-end items-center gap-2 mt-1 ${isMobile ? 'opacity-100' : 'opacity-100 md:opacity-0 md:group-hover:opacity-100'} transition-opacity duration-200`}>
+                                {totalVersions > 1 && (
+                                  <div className="flex items-center gap-1 mr-2 text-white/50 text-xs select-none">
+                                    <button
+                                      onClick={() => handleVersionChange(index, 'prev', originalMessage._eventId!)}
+                                      disabled={currentVersion <= 1}
+                                      className={`p-0.5 hover:text-white transition-colors ${currentVersion <= 1 ? 'opacity-30 cursor-default' : 'cursor-pointer'}`}
+                                    >
+                                      <ChevronLeft className="w-3 h-3" />
+                                    </button>
+                                    <span>{currentVersion} / {totalVersions}</span>
+                                    <button
+                                      onClick={() => handleVersionChange(index, 'next', originalMessage._eventId!)}
+                                      disabled={currentVersion >= totalVersions}
+                                      className={`p-0.5 hover:text-white transition-colors ${currentVersion >= totalVersions ? 'opacity-30 cursor-default' : 'cursor-pointer'}`}
+                                    >
+                                      <ChevronRight className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                )}
                                 <button
                                   onClick={() => copyMessageContent(index, message.content)}
                                   className="p-1 rounded-full text-white/70 hover:text-white transition-colors"
@@ -389,6 +504,25 @@ export default function ChatMessages({
                         <MessageContentRenderer content={message.content} />
                       </div>
                       <div className={`mt-1.5 ${isMobile ? 'opacity-100' : 'opacity-100 md:opacity-0 md:group-hover:opacity-100'} transition-opacity duration-200 flex items-center gap-2`}>
+                        {totalVersions > 1 && (
+                          <div className="flex items-center gap-1 mr-2 text-white/50 text-xs select-none">
+                            <button
+                              onClick={() => handleVersionChange(index, 'prev', originalMessage._eventId!)}
+                              disabled={currentVersion <= 1}
+                              className={`p-0.5 hover:text-white transition-colors ${currentVersion <= 1 ? 'opacity-30 cursor-default' : 'cursor-pointer'}`}
+                            >
+                              <ChevronLeft className="w-3 h-3" />
+                            </button>
+                            <span>{currentVersion} / {totalVersions}</span>
+                            <button
+                              onClick={() => handleVersionChange(index, 'next', originalMessage._eventId!)}
+                              disabled={currentVersion >= totalVersions}
+                              className={`p-0.5 hover:text-white transition-colors ${currentVersion >= totalVersions ? 'opacity-30 cursor-default' : 'cursor-pointer'}`}
+                            >
+                              <ChevronRight className="w-3 h-3" />
+                            </button>
+                          </div>
+                        )}
                         <button
                           onClick={() => copyMessageContent(index, message.content)}
                           className="flex items-center gap-1.5 text-xs text-white/80 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 rounded-md px-3 py-1.5 transition-colors cursor-pointer"
