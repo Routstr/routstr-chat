@@ -1,20 +1,32 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
-import { Message, MessageContent, MessageAttachment, TransactionHistory } from '@/types/chat';
-import { createTextMessage, createMultimodalMessage } from '@/utils/messageUtils';
-import { fetchAIResponse } from '@/utils/apiUtils';
-import { getPendingCashuTokenAmount } from '@/utils/cashuUtils';
-import { useCashuWithXYZ } from './useCashuWithXYZ';
-import { DEFAULT_MINT_URL } from '@/lib/utils';
-import { getLastNonSystemMessageEventId } from '@/utils/conversationUtils';
-import { useChatSync } from './useChatSync';
-import { useAppContext } from './useAppContext';
-import { useConversationState } from './useConversationState';
+import { useState, useCallback, useRef, useEffect } from "react";
+import {
+  Message,
+  MessageContent,
+  MessageAttachment,
+  TransactionHistory,
+} from "@/types/chat";
+import {
+  createTextMessage,
+  createMultimodalMessage,
+} from "@/utils/messageUtils";
+import { fetchAIResponse } from "@/utils/apiUtils";
+import { getPendingCashuTokenAmount } from "@/utils/cashuUtils";
+import { useCashuWithXYZ } from "./useCashuWithXYZ";
+import { DEFAULT_MINT_URL } from "@/lib/utils";
+import {
+  getLastNonSystemMessageEventId,
+  saveConversationToStorage,
+  loadConversationsFromStorage,
+} from "@/utils/conversationUtils";
+import { useChatSync } from "./useChatSync";
+import { useAppContext } from "./useAppContext";
+import { useConversationState } from "./useConversationState";
 
 export interface UseChatActionsReturn {
   inputMessage: string;
   isLoading: boolean;
   streamingContent: string; // legacy, not used by UI after per-conv streaming
-  thinkingContent: string;  // legacy, not used by UI after per-conv streaming
+  thinkingContent: string; // legacy, not used by UI after per-conv streaming
   streamingConversationId: string | null;
   getStreamingContentFor: (conversationId: string | null) => string;
   getThinkingContentFor: (conversationId: string | null) => string;
@@ -32,13 +44,20 @@ export interface UseChatActionsReturn {
   setIsLoading: (loading: boolean) => void;
   setStreamingContent: (content: string) => void;
   setBalance: React.Dispatch<React.SetStateAction<number>>;
-  setUploadedAttachments: React.Dispatch<React.SetStateAction<MessageAttachment[]>>;
-  setTransactionHistory: React.Dispatch<React.SetStateAction<TransactionHistory[]>>;
+  setUploadedAttachments: React.Dispatch<
+    React.SetStateAction<MessageAttachment[]>
+  >;
+  setTransactionHistory: React.Dispatch<
+    React.SetStateAction<TransactionHistory[]>
+  >;
   sendMessage: (
     messages: Message[],
     setMessages: (messages: Message[]) => void,
     activeConversationId: string | null,
-    createNewConversation: (initialMessages?: Message[], timestamp?: string) => string,
+    createNewConversation: (
+      initialMessages?: Message[],
+      timestamp?: string
+    ) => string,
     selectedModel: any,
     baseUrl: string,
     isAuthenticated: boolean,
@@ -74,23 +93,35 @@ export interface UseChatActionsReturn {
  * token management for API calls, and error handling and retries
  */
 export const useChatActions = (): UseChatActionsReturn => {
-  const [inputMessage, setInputMessage] = useState('');
+  const [inputMessage, setInputMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [streamingContent, setStreamingContent] = useState('');
-  const [thinkingContent, setThinkingContent] = useState('');
-  const [streamingConversationId, setStreamingConversationId] = useState<string | null>(null);
+  const [streamingContent, setStreamingContent] = useState("");
+  const [thinkingContent, setThinkingContent] = useState("");
+  const [streamingConversationId, setStreamingConversationId] = useState<
+    string | null
+  >(null);
   const streamingConversationIdRef = useRef<string | null>(null);
-  const [streamingContentByConversation, setStreamingContentByConversation] = useState<Record<string, string>>({});
-  const [thinkingContentByConversation, setThinkingContentByConversation] = useState<Record<string, string>>({});
-  const getStreamingContentFor = useCallback((conversationId: string | null) => {
-    if (!conversationId) return '';
-    return streamingContentByConversation[conversationId] ?? '';
-  }, [streamingContentByConversation]);
-  const getThinkingContentFor = useCallback((conversationId: string | null) => {
-    if (!conversationId) return '';
-    return thinkingContentByConversation[conversationId] ?? '';
-  }, [thinkingContentByConversation]);
-  const [uploadedAttachments, setUploadedAttachments] = useState<MessageAttachment[]>([]);
+  const [streamingContentByConversation, setStreamingContentByConversation] =
+    useState<Record<string, string>>({});
+  const [thinkingContentByConversation, setThinkingContentByConversation] =
+    useState<Record<string, string>>({});
+  const getStreamingContentFor = useCallback(
+    (conversationId: string | null) => {
+      if (!conversationId) return "";
+      return streamingContentByConversation[conversationId] ?? "";
+    },
+    [streamingContentByConversation]
+  );
+  const getThinkingContentFor = useCallback(
+    (conversationId: string | null) => {
+      if (!conversationId) return "";
+      return thinkingContentByConversation[conversationId] ?? "";
+    },
+    [thinkingContentByConversation]
+  );
+  const [uploadedAttachments, setUploadedAttachments] = useState<
+    MessageAttachment[]
+  >([]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -109,258 +140,374 @@ export const useChatActions = (): UseChatActionsReturn => {
     usingNip60,
     spendCashu,
     storeCashu,
-    cashuStore
+    cashuStore,
   } = useCashuWithXYZ();
 
   // Autoscroll moved to ChatMessages to honor user scroll position
 
   const { createAndStoreChatEvent } = useConversationState();
 
-  const sendMessage = useCallback(async (
-    messages: Message[],
-    setMessages: (messages: Message[]) => void,
-    activeConversationId: string | null,
-    createNewConversationHandler: (initialMessages?: Message[], timestamp?: string) => string,
-    selectedModel: any,
-    baseUrl: string,
-    isAuthenticated: boolean,
-    setIsLoginModalOpen: (open: boolean) => void,
-    getActiveConversationId: () => string | null
-  ) => {
-    if (!isAuthenticated) {
-      setIsLoginModalOpen(true);
-      return;
-    }
-
-    if (!inputMessage.trim() && uploadedAttachments.length === 0) return;
-
-    const prevId = activeConversationId ? getLastNonSystemMessageEventId(activeConversationId) : '0'.repeat(64);
-
-    // Create user message with text and images
-    const userMessage = uploadedAttachments.length > 0
-      ? createMultimodalMessage('user', inputMessage, uploadedAttachments)
-      : createTextMessage('user', inputMessage);
-    
-    const timestamp = Date.now();
-    
-    const updatedMessage = { ...userMessage, _prevId: prevId, _createdAt: timestamp};
-
-    const updatedMessages = [...messages, updatedMessage];
-    
-    const originConversationId = activeConversationId ?? createNewConversationHandler(updatedMessages, timestamp.toString());
-    if (activeConversationId) {
-      setMessages(updatedMessages);
-    }
-
-    // The _prevId is already set in the userMessage from our getLastNonSystemMessagePrevId function
-    createAndStoreChatEvent(originConversationId, updatedMessage).catch(console.error);
-
-    setInputMessage('');
-    setUploadedAttachments([]);
-
-    await performAIRequest(
-      updatedMessages,
-      setMessages,
-      selectedModel,
-      baseUrl,
-      originConversationId,
-      getActiveConversationId
-    );
-  }, [inputMessage, uploadedAttachments]);
-
-  const saveInlineEdit = useCallback(async (
-    editingMessageIndex: number | null,
-    editingContent: string,
-    messages: Message[],
-    setMessages: (messages: Message[]) => void,
-    setEditingMessageIndex: (index: number | null) => void,
-    setEditingContent: (content: string) => void,
-    selectedModel: any,
-    baseUrl: string,
-    activeConversationId: string | null,
-    getActiveConversationId: () => string | null
-  ) => {
-    if (editingMessageIndex !== null && editingContent.trim()) {
-      const updatedMessages = [...messages];
-      const originalMessage = updatedMessages[editingMessageIndex];
-      
-      // Preserve attachments from original message
-      let newContent: string | MessageContent[];
-      if (typeof originalMessage.content === 'string') {
-        // Simple case: was just text, remains just text
-        newContent = editingContent;
-      } else {
-        // Complex case: preserve attachments and hidden text, update the visible text
-        const updatedContent: MessageContent[] = [];
-        let textReplaced = false;
-
-        originalMessage.content.forEach(item => {
-          if (item.type === 'text' && !item.hidden) {
-            if (!textReplaced) {
-              updatedContent.push({ ...item, text: editingContent });
-              textReplaced = true;
-            }
-            return;
-          }
-          updatedContent.push(item);
-        });
-
-        if (!textReplaced) {
-          updatedContent.unshift({ type: 'text', text: editingContent });
-        }
-        
-        newContent = updatedContent;
+  const sendMessage = useCallback(
+    async (
+      messages: Message[],
+      setMessages: (messages: Message[]) => void,
+      activeConversationId: string | null,
+      createNewConversationHandler: (
+        initialMessages?: Message[],
+        timestamp?: string
+      ) => string,
+      selectedModel: any,
+      baseUrl: string,
+      isAuthenticated: boolean,
+      setIsLoginModalOpen: (open: boolean) => void,
+      getActiveConversationId: () => string | null
+    ) => {
+      if (!isAuthenticated) {
+        setIsLoginModalOpen(true);
+        return;
       }
-      
-      updatedMessages[editingMessageIndex] = {
-        ...originalMessage,
-        content: newContent
+
+      if (!inputMessage.trim() && uploadedAttachments.length === 0) return;
+
+      const prevId = activeConversationId
+        ? getLastNonSystemMessageEventId(activeConversationId)
+        : "0".repeat(64);
+
+      // Create user message with text and images
+      const userMessage =
+        uploadedAttachments.length > 0
+          ? createMultimodalMessage("user", inputMessage, uploadedAttachments)
+          : createTextMessage("user", inputMessage);
+
+      const timestamp = Date.now();
+
+      const updatedMessage = {
+        ...userMessage,
+        _prevId: prevId,
+        _createdAt: timestamp,
       };
 
-      const truncatedMessages = updatedMessages.slice(0, editingMessageIndex + 1);
+      const updatedMessages = [...messages, updatedMessage];
 
-      setMessages(truncatedMessages);
-      setEditingMessageIndex(null);
-      setEditingContent('');
-
-      const originConversationId = activeConversationId ?? getActiveConversationId();
-      if (!originConversationId) {
-        throw new Error('No active conversation ID found');
+      const originConversationId =
+        activeConversationId ??
+        createNewConversationHandler(updatedMessages, timestamp.toString());
+      if (activeConversationId) {
+        setMessages(updatedMessages);
       }
-      console.log(truncatedMessages[truncatedMessages.length-1], truncatedMessages)
-      createAndStoreChatEvent(originConversationId, truncatedMessages[truncatedMessages.length-1]).catch(console.error);
+
+      // The _prevId is already set in the userMessage from our getLastNonSystemMessagePrevId function
+      createAndStoreChatEvent(originConversationId, updatedMessage).catch(
+        console.error
+      );
+
+      setInputMessage("");
+      setUploadedAttachments([]);
+
       await performAIRequest(
-        truncatedMessages,
+        updatedMessages,
         setMessages,
         selectedModel,
         baseUrl,
         originConversationId,
         getActiveConversationId
       );
-    }
-  }, []);
+    },
+    [inputMessage, uploadedAttachments]
+  );
 
-  const retryMessage = useCallback((
-    index: number,
-    messages: Message[],
-    setMessages: (messages: Message[]) => void,
-    selectedModel: any,
-    baseUrl: string,
-    activeConversationId: string | null,
-    getActiveConversationId: () => string | null
-  ) => {
-    const newMessages = messages.slice(0, index);
-    setMessages(newMessages);
-    const originConversationId = activeConversationId ?? getActiveConversationId();
-    if (!originConversationId) {
-      throw new Error('No active conversation ID found');
-    }
-    performAIRequest(
-      newMessages,
-      setMessages,
-      selectedModel,
-      baseUrl,
-      originConversationId,
-      getActiveConversationId
-    );
-  }, []);
+  const saveInlineEdit = useCallback(
+    async (
+      editingMessageIndex: number | null,
+      editingContent: string,
+      messages: Message[],
+      setMessages: (messages: Message[]) => void,
+      setEditingMessageIndex: (index: number | null) => void,
+      setEditingContent: (content: string) => void,
+      selectedModel: any,
+      baseUrl: string,
+      activeConversationId: string | null,
+      getActiveConversationId: () => string | null
+    ) => {
+      if (editingMessageIndex !== null && editingContent.trim()) {
+        const updatedMessages = [...messages];
+        const originalMessage = updatedMessages[editingMessageIndex];
 
-  const performAIRequest = useCallback(async (
-    messageHistory: Message[],
-    setMessages: (messages: Message[]) => void,
-    selectedModel: any,
-    baseUrl: string,
-    originConversationId: string,
-    getActiveConversationId: () => string | null
-  ) => {
-    setIsLoading(true);
-    setStreamingContent('');
-    setThinkingContent('');
-    setStreamingConversationId(originConversationId ?? null);
-    streamingConversationIdRef.current = originConversationId ?? null;
-    if (originConversationId) {
-      setStreamingContentByConversation(prev => ({ ...prev, [originConversationId]: '' }));
-      setThinkingContentByConversation(prev => ({ ...prev, [originConversationId]: '' }));
-    }
+        // Preserve attachments from original message
+        let newContent: string | MessageContent[];
+        if (typeof originalMessage.content === "string") {
+          // Simple case: was just text, remains just text
+          newContent = editingContent;
+        } else {
+          // Complex case: preserve attachments and hidden text, update the visible text
+          const updatedContent: MessageContent[] = [];
+          let textReplaced = false;
 
-    // Create a ref to track current messages during the API call
-    let currentMessages = messageHistory;
-    const updateMessages = (newMessages: Message[]) => {
-      currentMessages = newMessages;
-      const currentlyActive = getActiveConversationId();
-      if (originConversationId && currentlyActive && currentlyActive !== originConversationId) {
-        console.log('rdlogs: ONE messages: ', currentMessages, originConversationId, currentlyActive);
-        // Persist to the origin conversation without disrupting the UI of the current one
-        // saveConversationById(originConversationId, newMessages);
-      } else {
-        console.log('rdlogs: TWO messages: ', currentMessages, originConversationId);
-        setMessages(newMessages);
-        // saveConversationById(originConversationId, newMessages);
+          originalMessage.content.forEach((item) => {
+            if (item.type === "text" && !item.hidden) {
+              if (!textReplaced) {
+                updatedContent.push({ ...item, text: editingContent });
+                textReplaced = true;
+              }
+              return;
+            }
+            updatedContent.push(item);
+          });
+
+          if (!textReplaced) {
+            updatedContent.unshift({ type: "text", text: editingContent });
+          }
+
+          newContent = updatedContent;
+        }
+
+        updatedMessages[editingMessageIndex] = {
+          ...originalMessage,
+          content: newContent,
+        };
+
+        const truncatedMessages = updatedMessages.slice(
+          0,
+          editingMessageIndex + 1
+        );
+
+        setMessages(truncatedMessages);
+        setEditingMessageIndex(null);
+        setEditingContent("");
+
+        const originConversationId =
+          activeConversationId ?? getActiveConversationId();
+        if (!originConversationId) {
+          throw new Error("No active conversation ID found");
+        }
+        console.log(
+          truncatedMessages[truncatedMessages.length - 1],
+          truncatedMessages
+        );
+        createAndStoreChatEvent(
+          originConversationId,
+          truncatedMessages[truncatedMessages.length - 1]
+        ).catch(console.error);
+        await performAIRequest(
+          truncatedMessages,
+          setMessages,
+          selectedModel,
+          baseUrl,
+          originConversationId,
+          getActiveConversationId
+        );
       }
-    };
+    },
+    []
+  );
 
-    try {
-      const mintUrl = cashuStore.activeMintUrl || DEFAULT_MINT_URL;
-      await fetchAIResponse({
-        messageHistory,
+  const retryMessage = useCallback(
+    (
+      index: number,
+      messages: Message[],
+      setMessages: (messages: Message[]) => void,
+      selectedModel: any,
+      baseUrl: string,
+      activeConversationId: string | null,
+      getActiveConversationId: () => string | null
+    ) => {
+      const newMessages = messages.slice(0, index);
+      setMessages(newMessages);
+      const originConversationId =
+        activeConversationId ?? getActiveConversationId();
+      if (!originConversationId) {
+        throw new Error("No active conversation ID found");
+      }
+      performAIRequest(
+        newMessages,
+        setMessages,
         selectedModel,
         baseUrl,
-        mintUrl,
-        usingNip60,
-        balance,
-        spendCashu: spendCashu,
-        storeCashu: storeCashu,
-        activeMintUrl: cashuStore.activeMintUrl,
-        onStreamingUpdate: (content) => {
-          // Ignore stale updates from previous streams
-          if (streamingConversationIdRef.current !== (originConversationId ?? null)) return;
-          if (originConversationId) {
-            setStreamingContentByConversation(prev => ({ ...prev, [originConversationId]: content }));
-          }
-        },
-        onThinkingUpdate: (content) => {
-          // console.log(content, originConversationId, streamingConversationIdRef.current)
-          if (streamingConversationIdRef.current !== (originConversationId ?? null)) return;
-          if (originConversationId) {
-            setThinkingContentByConversation(prev => ({ ...prev, [originConversationId]: content }));
-          }
-        },
-        onMessageAppend: (message) => {
-          const prevId = getLastNonSystemMessageEventId(originConversationId);
-          // Update message object with prevId
-          const updatedMessage = { ...message, _prevId: prevId, _createdAt: Date.now(), _modelId: selectedModel.id};
-          // Append to current messages state
-          const updatedMessages = [...currentMessages, updatedMessage];
-          updateMessages(updatedMessages);
+        originConversationId,
+        getActiveConversationId
+      );
+    },
+    []
+  );
 
-          // Publish AI response to Nostr
-          if (originConversationId) {
-              createAndStoreChatEvent(originConversationId, updatedMessage).catch(console.error);
-          }
-        },
-        onBalanceUpdate: setBalance,
-        onTransactionUpdate: (transaction) => {
-          const updated = [...transactionHistory, transaction];
-          setTransactionHistory(updated);
-          return updated;
-        },
-        transactionHistory,
-        onTokenCreated: setPendingCashuAmountState,
-      });
-      setPendingCashuAmountState(getPendingCashuTokenAmount());
- 
-    } finally {
-      setIsLoading(false);
-      setStreamingContent('');
-      setThinkingContent('');
-      setStreamingConversationId(null);
-      streamingConversationIdRef.current = null;
+  const performAIRequest = useCallback(
+    async (
+      messageHistory: Message[],
+      setMessages: (messages: Message[]) => void,
+      selectedModel: any,
+      baseUrl: string,
+      originConversationId: string,
+      getActiveConversationId: () => string | null
+    ) => {
+      setIsLoading(true);
+      setStreamingContent("");
+      setThinkingContent("");
+      setStreamingConversationId(originConversationId ?? null);
+      streamingConversationIdRef.current = originConversationId ?? null;
       if (originConversationId) {
-        setStreamingContentByConversation(prev => ({ ...prev, [originConversationId]: '' }));
-        setThinkingContentByConversation(prev => ({ ...prev, [originConversationId]: '' }));
+        setStreamingContentByConversation((prev) => ({
+          ...prev,
+          [originConversationId]: "",
+        }));
+        setThinkingContentByConversation((prev) => ({
+          ...prev,
+          [originConversationId]: "",
+        }));
       }
-    }
-  }, [usingNip60, balance, spendCashu, storeCashu, transactionHistory, setPendingCashuAmountState]);
+
+      // Create a ref to track current messages during the API call
+      let currentMessages = messageHistory;
+      const updateMessages = (newMessages: Message[]) => {
+        currentMessages = newMessages;
+        const currentlyActive = getActiveConversationId();
+        if (
+          originConversationId &&
+          currentlyActive &&
+          currentlyActive !== originConversationId
+        ) {
+          console.log(
+            "rdlogs: ONE messages: ",
+            currentMessages,
+            originConversationId,
+            currentlyActive
+          );
+          // Persist to the origin conversation without disrupting the UI of the current one
+          // saveConversationById(originConversationId, newMessages);
+        } else {
+          console.log(
+            "rdlogs: TWO messages: ",
+            currentMessages,
+            originConversationId
+          );
+          setMessages(newMessages);
+          // saveConversationById(originConversationId, newMessages);
+        }
+      };
+
+      try {
+        const mintUrl = cashuStore.activeMintUrl || DEFAULT_MINT_URL;
+        await fetchAIResponse({
+          messageHistory,
+          selectedModel,
+          baseUrl,
+          mintUrl,
+          usingNip60,
+          balance,
+          spendCashu: spendCashu,
+          storeCashu: storeCashu,
+          activeMintUrl: cashuStore.activeMintUrl,
+          onStreamingUpdate: (content) => {
+            // Ignore stale updates from previous streams
+            if (
+              streamingConversationIdRef.current !==
+              (originConversationId ?? null)
+            )
+              return;
+            if (originConversationId) {
+              setStreamingContentByConversation((prev) => ({
+                ...prev,
+                [originConversationId]: content,
+              }));
+            }
+          },
+          onThinkingUpdate: (content) => {
+            // console.log(content, originConversationId, streamingConversationIdRef.current)
+            if (
+              streamingConversationIdRef.current !==
+              (originConversationId ?? null)
+            )
+              return;
+            if (originConversationId) {
+              setThinkingContentByConversation((prev) => ({
+                ...prev,
+                [originConversationId]: content,
+              }));
+            }
+          },
+          onMessageAppend: (message) => {
+            const prevId = getLastNonSystemMessageEventId(originConversationId);
+            // Update message object with prevId
+            const updatedMessage = {
+              ...message,
+              _prevId: prevId,
+              _createdAt: Date.now(),
+              _modelId: selectedModel.id,
+            };
+            // Append to current messages state
+            const updatedMessages = [...currentMessages, updatedMessage];
+            updateMessages(updatedMessages);
+
+            // Publish AI response to Nostr
+            if (originConversationId) {
+              createAndStoreChatEvent(
+                originConversationId,
+                updatedMessage
+              ).catch(console.error);
+            }
+          },
+          onBalanceUpdate: setBalance,
+          onTransactionUpdate: (transaction) => {
+            const updated = [...transactionHistory, transaction];
+            setTransactionHistory(updated);
+            return updated;
+          },
+          transactionHistory,
+          onTokenCreated: setPendingCashuAmountState,
+          onLastMessageSatsUpdate: (satsSpent) => {
+            // Update the last message with sats spent
+            const lastMessage = currentMessages[currentMessages.length - 1];
+            if (lastMessage && lastMessage.role === "assistant") {
+              const updatedMessage = { ...lastMessage, satsSpent };
+              const updatedMessages = [
+                ...currentMessages.slice(0, -1),
+                updatedMessage,
+              ];
+              updateMessages(updatedMessages);
+
+              // Persist to local storage to ensure stats aren't lost on reload
+              if (originConversationId) {
+                try {
+                  const conversations = loadConversationsFromStorage();
+                  saveConversationToStorage(
+                    conversations,
+                    originConversationId,
+                    updatedMessages
+                  );
+                } catch (err) {
+                  console.error("Failed to persist sats spent:", err);
+                }
+              }
+            }
+          },
+        });
+        setPendingCashuAmountState(getPendingCashuTokenAmount());
+      } finally {
+        setIsLoading(false);
+        setStreamingContent("");
+        setThinkingContent("");
+        setStreamingConversationId(null);
+        streamingConversationIdRef.current = null;
+        if (originConversationId) {
+          setStreamingContentByConversation((prev) => ({
+            ...prev,
+            [originConversationId]: "",
+          }));
+          setThinkingContentByConversation((prev) => ({
+            ...prev,
+            [originConversationId]: "",
+          }));
+        }
+      }
+    },
+    [
+      usingNip60,
+      balance,
+      spendCashu,
+      storeCashu,
+      transactionHistory,
+      setPendingCashuAmountState,
+    ]
+  );
 
   return {
     inputMessage,
@@ -388,6 +535,6 @@ export const useChatActions = (): UseChatActionsReturn => {
     setTransactionHistory,
     sendMessage,
     saveInlineEdit,
-    retryMessage
+    retryMessage,
   };
 };

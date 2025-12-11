@@ -1,4 +1,4 @@
-export type MessageContentType = 'text' | 'image_url' | 'file';
+export type MessageContentType = "text" | "image_url" | "file";
 
 export interface MessageContent {
   type: MessageContentType;
@@ -23,9 +23,10 @@ export interface Message {
   _prevId?: string;
   _createdAt?: number;
   _modelId?: string;
+  satsSpent?: number;
 }
 
-export type AttachmentType = 'image' | 'file';
+export type AttachmentType = "image" | "file";
 
 export interface MessageAttachment {
   id: string;
@@ -51,13 +52,13 @@ export interface Model {
     completion: number;
     max_cost: number;
   };
-} 
+}
 
 export interface TransactionHistory {
-  type: 'spent' | 'mint' | 'send' | 'import' | 'refund';
+  type: "spent" | "mint" | "send" | "import" | "refund";
   amount: number;
   timestamp: number;
-  status: 'success' | 'failed';
+  status: "success" | "failed";
   model?: string;
   message?: string;
   balance?: number;

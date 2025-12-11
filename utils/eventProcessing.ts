@@ -1,7 +1,7 @@
-import { Event } from 'nostr-tools';
-import { Conversation, Message } from '@/types/chat';
-import { PnsKeys, decryptPnsEvent, KIND_PNS } from '@/lib/pns';
-import { getTextFromContent } from './messageUtils';
+import { Event } from "nostr-tools";
+import { Conversation, Message } from "@/types/chat";
+import { PnsKeys, decryptPnsEvent, KIND_PNS } from "@/lib/pns";
+import { getTextFromContent } from "./messageUtils";
 
 // Custom Kinds
 const KIND_CHAT_INNER = 20001;
@@ -42,30 +42,30 @@ export function decryptPnsEventToInner(
   try {
     // Decrypt PNS Event -> Inner Event
     const inner = decryptPnsEvent(pnsEvent, pnsKeys);
-    
+
     if (!inner) {
       // Log when decryption returns null (already logged in decryptPnsEvent)
       return null;
     }
-    
+
     if (inner.kind !== KIND_CHAT_INNER) {
-      console.warn('PNS event decrypted but not a chat inner event:', {
+      console.warn("PNS event decrypted but not a chat inner event:", {
         eventId: pnsEvent.id,
         actualKind: inner.kind,
-        expectedKind: KIND_CHAT_INNER
+        expectedKind: KIND_CHAT_INNER,
       });
       return null;
     }
-    
+
     // Attach the PNS event ID to track the chain
     return {
       ...inner,
       id: pnsEvent.id,
     };
   } catch (error) {
-    console.warn('Unexpected error in decryptPnsEventToInner:', {
+    console.warn("Unexpected error in decryptPnsEventToInner:", {
       eventId: pnsEvent.id,
-      error: error instanceof Error ? error.message : error
+      error: error instanceof Error ? error.message : error,
     });
     return null;
   }
@@ -79,19 +79,19 @@ export function decryptPnsEventToInner(
 export function extractConversationMetadata(
   innerEvent: InnerEvent
 ): ConversationMetadata | null {
-  const dTag = innerEvent.tags.find((t) => t[0] === 'd');
+  const dTag = innerEvent.tags.find((t) => t[0] === "d");
   if (!dTag || !dTag[1]) {
-    console.warn('Inner event missing d tag:', innerEvent);
+    console.warn("Inner event missing d tag:", innerEvent);
     return null;
   }
 
-  const roleTag = innerEvent.tags.find((t) => t[0] === 'role');
-  const role = roleTag ? roleTag[1] : 'user';
+  const roleTag = innerEvent.tags.find((t) => t[0] === "role");
+  const role = roleTag ? roleTag[1] : "user";
 
-  const prevTag = innerEvent.tags.find((t) => t[0] === 'e');
+  const prevTag = innerEvent.tags.find((t) => t[0] === "e");
   const prevId = prevTag ? prevTag[1] : undefined;
 
-  const modelTag = innerEvent.tags.find((t) => t[0] === 'model');
+  const modelTag = innerEvent.tags.find((t) => t[0] === "model");
   const model = modelTag ? modelTag[1] : undefined;
 
   return {
@@ -113,7 +113,7 @@ export function innerEventToMessage(innerEvent: InnerEvent): Message {
   let content = innerEvent.content;
   try {
     const parsed = JSON.parse(innerEvent.content);
-    if (typeof parsed === 'object') {
+    if (typeof parsed === "object") {
       content = parsed;
     }
   } catch {
@@ -123,11 +123,15 @@ export function innerEventToMessage(innerEvent: InnerEvent): Message {
   const metadata = extractConversationMetadata(innerEvent);
 
   const message: Message = {
-    role: metadata?.role || 'user',
+    role: metadata?.role || "user",
     content,
     _eventId: innerEvent.id,
     _prevId: metadata?.prevId,
     _createdAt: innerEvent.created_at,
+    _modelId: metadata?.model,
+    satsSpent: innerEvent.tags.find((t) => t[0] === "sats")?.[1]
+      ? parseFloat(innerEvent.tags.find((t) => t[0] === "sats")?.[1] as string)
+      : undefined,
   };
 
   return message;
@@ -160,17 +164,16 @@ function sortMessagesByPrevIdChain(messages: Message[]): Message[] {
     }
 
     // 3. If can't sort by prevId, sort "user" messages before others
-    if (a.role === 'user' && b.role !== 'user') {
+    if (a.role === "user" && b.role !== "user") {
       return -1;
     }
-    if (b.role === 'user' && a.role !== 'user') {
+    if (b.role === "user" && a.role !== "user") {
       return 1;
     }
 
     return 0;
   });
 }
-
 
 /**
  * Adds a message to a conversation, maintaining sort order
@@ -252,7 +255,7 @@ export function generateTitleFromMessage(
 ): string {
   let text: string;
 
-  if (typeof message.content === 'string') {
+  if (typeof message.content === "string") {
     text = message.content;
   } else {
     // Extract text from multimodal content
@@ -262,10 +265,10 @@ export function generateTitleFromMessage(
   // Trim and truncate
   text = text.trim();
   if (text.length > maxLength) {
-    return text.substring(0, maxLength) + '...';
+    return text.substring(0, maxLength) + "...";
   }
 
-  return text || 'New Conversation';
+  return text || "New Conversation";
 }
 
 /**
@@ -305,7 +308,7 @@ export function createConversation(
     id: conversationId,
     title: initialMessage
       ? generateTitleFromMessage(initialMessage)
-      : 'New Conversation',
+      : "New Conversation",
     messages: initialMessage ? [initialMessage] : [],
   };
 
@@ -336,7 +339,7 @@ export function processInnerEvent(
   } else {
     // Add message to existing conversation
     conversation = addMessageToConversation(conversation, message);
-    
+
     // Update title if this is the earliest message
     conversation = updateConversationTitle(conversation, message);
   }

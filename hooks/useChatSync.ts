@@ -1,19 +1,18 @@
-import { useState, useEffect, useCallback, useSyncExternalStore } from 'react';
-import { Conversation, Message } from '@/types/chat';
+import { useState, useEffect, useCallback, useSyncExternalStore } from "react";
+import { Conversation, Message } from "@/types/chat";
+import { createPnsEvent, KIND_PNS, PnsKeys } from "@/lib/pns";
+import { useCurrentUser } from "./useCurrentUser";
+import { useNostrLogin } from "@nostrify/react/login";
+import { useNostr as useNostrify } from "@nostrify/react";
+import { getStorageItem, setStorageItem } from "@/utils/storageUtils";
+import { eventStore } from "@/lib/applesauce-core";
 import {
-  createPnsEvent,
-  KIND_PNS,
-  PnsKeys
-} from '@/lib/pns';
-import { useCurrentUser } from './useCurrentUser';
-import { useNostrLogin } from '@nostrify/react/login';
-import { useNostr as useNostrify } from '@nostrify/react';
-import { getStorageItem, setStorageItem } from '@/utils/storageUtils';
-import { eventStore} from '@/lib/applesauce-core';
-import { triggerDerivedPnsSync, updateChatSyncEnabled } from './useChatSync1081';
+  triggerDerivedPnsSync,
+  updateChatSyncEnabled,
+} from "./useChatSync1081";
 
 // Storage key for chat sync enabled
-const CHAT_SYNC_ENABLED_KEY = 'chatSyncEnabled';
+const CHAT_SYNC_ENABLED_KEY = "chatSyncEnabled";
 
 // Subscribers for storage changes
 const chatSyncSubscribers = new Set<() => void>();
@@ -21,18 +20,18 @@ const chatSyncSubscribers = new Set<() => void>();
 // Subscribe function for useSyncExternalStore
 const subscribeToChatSync = (callback: () => void) => {
   chatSyncSubscribers.add(callback);
-  
+
   // Also listen for storage events from other tabs
   const handleStorage = (e: StorageEvent) => {
     if (e.key === CHAT_SYNC_ENABLED_KEY) {
       callback();
     }
   };
-  window.addEventListener('storage', handleStorage);
-  
+  window.addEventListener("storage", handleStorage);
+
   return () => {
     chatSyncSubscribers.delete(callback);
-    window.removeEventListener('storage', handleStorage);
+    window.removeEventListener("storage", handleStorage);
   };
 };
 
@@ -50,7 +49,7 @@ const getChatSyncServerSnapshot = (): boolean => {
 const setChatSyncEnabledGlobal = (enabled: boolean): void => {
   setStorageItem(CHAT_SYNC_ENABLED_KEY, enabled);
   // Notify all subscribers that the value changed
-  chatSyncSubscribers.forEach(callback => callback());
+  chatSyncSubscribers.forEach((callback) => callback());
   // Also update the reactive observable in useChatSyncProMax
   updateChatSyncEnabled(enabled);
 };
@@ -89,7 +88,7 @@ export const useChatSync = (): ChatSyncHook => {
   const [lastSyncTime, setLastSyncTime] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { user } = useCurrentUser();
-  const { logins } = useNostrLogin()
+  const { logins } = useNostrLogin();
   const { nostr } = useNostrify();
 
   // Use useSyncExternalStore to share chatSyncEnabled state across all hook instances
@@ -111,25 +110,28 @@ export const useChatSync = (): ChatSyncHook => {
       message: Message
     ): Promise<InnerEventPayload> => {
       const pubkey = user?.pubkey;
-      if (!pubkey) throw new Error('No public key available');
+      if (!pubkey) throw new Error("No public key available");
 
       const tags = [
-        ['d', conversationId],
-        ['role', message.role],
-        ['client', 'routstr-chat'],
+        ["d", conversationId],
+        ["role", message.role],
+        ["client", "routstr-chat"],
       ];
 
       if (message._prevId) {
-        tags.push(['e', message._prevId]);
+        tags.push(["e", message._prevId]);
       }
-      
-      if (message.role === 'assistant') {
-        tags.push(['model', message._modelId || 'unknown-model']);
+
+      if (message.role === "assistant") {
+        tags.push(["model", message._modelId || "unknown-model"]);
+        if (message.satsSpent !== undefined && message.satsSpent > 0) {
+          tags.push(["sats", message.satsSpent.toString()]);
+        }
       }
 
       // Serialize content if it's complex (e.g., with images)
       const contentStr =
-        typeof message.content === 'string'
+        typeof message.content === "string"
           ? message.content
           : JSON.stringify(message.content);
 
@@ -145,13 +147,18 @@ export const useChatSync = (): ChatSyncHook => {
   );
 
   const migrateConversations = useCallback(
-    async (conversations: Conversation[], pnsKeys: PnsKeys): Promise<Conversation[] | null> => {
+    async (
+      conversations: Conversation[],
+      pnsKeys: PnsKeys
+    ): Promise<Conversation[] | null> => {
       try {
         setIsSyncing(true);
         let addedCount = 0;
-        
+
         // Deep copy to avoid mutating state directly
-        const updatedConversations: Conversation[] = JSON.parse(JSON.stringify(conversations));
+        const updatedConversations: Conversation[] = JSON.parse(
+          JSON.stringify(conversations)
+        );
 
         for (const conversation of updatedConversations) {
           for (const message of conversation.messages) {
@@ -161,16 +168,16 @@ export const useChatSync = (): ChatSyncHook => {
             try {
               // 1. Create Inner
               const inner = await createInnerEvent(conversation.id, message);
-              
+
               // 2. Create PNS Event
               const pnsEvent = createPnsEvent(inner, pnsKeys);
               eventStore.add(pnsEvent);
-              
+
               // Update message with event ID
               message._eventId = pnsEvent.id;
               addedCount++;
             } catch (err) {
-              console.error('Failed to migrate message:', err);
+              console.error("Failed to migrate message:", err);
             }
           }
         }
@@ -180,10 +187,10 @@ export const useChatSync = (): ChatSyncHook => {
           triggerDerivedPnsSync();
           return updatedConversations;
         }
-        
+
         return null;
       } catch (err) {
-        console.error('Migration failed:', err);
+        console.error("Migration failed:", err);
         return null;
       } finally {
         setIsSyncing(false);
@@ -206,23 +213,26 @@ export const useChatSync = (): ChatSyncHook => {
 
         // 1. Create Inner
         const inner = await createInnerEvent(conversationId, message);
-        
+
         // 2. Create PNS Event (Encrypted and Signed)
         const pnsEvent = createPnsEvent(inner, pnsKeys);
         eventStore.add(pnsEvent);
-        console.log('Published message with event ID:', pnsEvent.id)
-        
+        console.log("Published message with event ID:", pnsEvent.id);
+
         triggerDerivedPnsSync();
 
         // Append message to conversationMapRef after successful publish
         if (onMessagePublished) {
-          onMessagePublished(conversationId, { ...message, _eventId: pnsEvent.id });
+          onMessagePublished(conversationId, {
+            ...message,
+            _eventId: pnsEvent.id,
+          });
         }
 
         return pnsEvent.id;
       } catch (err) {
-        console.error('Failed to publish message:', err);
-        setError(err instanceof Error ? err.message : 'Unknown error');
+        console.error("Failed to publish message:", err);
+        setError(err instanceof Error ? err.message : "Unknown error");
         return null;
       } finally {
         setIsSyncing(false);
