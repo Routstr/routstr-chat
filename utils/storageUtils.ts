@@ -1,11 +1,13 @@
-import { TransactionHistory } from '@/types/chat';
-import { useCashuStore } from '@/features/wallet/state/cashuStore';
+import { TransactionHistory } from "@/types/chat";
+import { useCashuStore } from "@/features/wallet/state/cashuStore";
 
 /**
  * SSR-safe check for localStorage availability
  */
 const canUseLocalStorage = (): boolean => {
-  return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
+  return (
+    typeof window !== "undefined" && typeof window.localStorage !== "undefined"
+  );
 };
 
 /**
@@ -15,15 +17,16 @@ const isQuotaExceeded = (error: unknown): boolean => {
   const e = error as any;
   // name: 'QuotaExceededError' (standard),
   // code: 22 (Safari), 1014 (Firefox)
-  return !!e && (e?.name === 'QuotaExceededError' || e?.code === 22 || e?.code === 1014);
+  return (
+    !!e &&
+    (e?.name === "QuotaExceededError" || e?.code === 22 || e?.code === 1014)
+  );
 };
 
 /**
  * Keys that are safe to skip persisting when storage is full
  */
-const NON_CRITICAL_STORAGE_KEYS = new Set<string>([
-  'modelsFromAllProviders'
-]);
+const NON_CRITICAL_STORAGE_KEYS = new Set<string>(["modelsFromAllProviders"]);
 
 /**
  * Interface for a stored Cashu token entry
@@ -47,18 +50,23 @@ export const setStorageItem = <T>(key: string, value: T): void => {
     if (isQuotaExceeded(error)) {
       // If the key is non-critical (cache-like), skip persisting silently
       if (NON_CRITICAL_STORAGE_KEYS.has(key)) {
-        console.warn(`Storage quota exceeded; skipping non-critical key "${key}".`);
+        console.warn(
+          `Storage quota exceeded; skipping non-critical key "${key}".`
+        );
         return;
       }
       // Attempt minimal cleanup: remove known large, non-critical caches then retry once
       try {
-        localStorage.removeItem('modelsFromAllProviders');
+        localStorage.removeItem("modelsFromAllProviders");
       } catch {}
       try {
         localStorage.setItem(key, JSON.stringify(value));
         return;
       } catch (retryError) {
-        console.warn(`Storage quota exceeded; unable to persist key "${key}" after cleanup attempt.`, retryError);
+        console.warn(
+          `Storage quota exceeded; unable to persist key "${key}" after cleanup attempt.`,
+          retryError
+        );
         return;
       }
     }
@@ -77,13 +85,13 @@ export const getStorageItem = <T>(key: string, defaultValue: T): T => {
   try {
     const item = localStorage.getItem(key);
     if (item === null) return defaultValue;
-    
+
     // Try to parse as JSON first
     try {
       return JSON.parse(item);
     } catch (parseError) {
       // If JSON parsing fails, check if it's a string type and return the raw value
-      if (typeof defaultValue === 'string') {
+      if (typeof defaultValue === "string") {
         return item as T;
       }
       // For non-string types, throw the original parse error
@@ -96,7 +104,10 @@ export const getStorageItem = <T>(key: string, defaultValue: T): T => {
       try {
         localStorage.removeItem(key);
       } catch (removeError) {
-        console.error(`Error removing corrupted item with key "${key}":`, removeError);
+        console.error(
+          `Error removing corrupted item with key "${key}":`,
+          removeError
+        );
       }
     }
     return defaultValue;
@@ -141,7 +152,7 @@ export const clearAllStorage = (): void => {
     // Also clear the Cashu store
     useCashuStore.getState().clearStore();
   } catch (error) {
-    console.error('Error clearing storage:', error);
+    console.error("Error clearing storage:", error);
   }
 };
 
@@ -152,12 +163,12 @@ export const clearAllStorage = (): void => {
 export const migrateStorageItems = (): void => {
   if (!canUseLocalStorage()) return;
   const keysToMigrate = [
-    { key: 'base_url', defaultValue: '' },
-    { key: 'mint_url', defaultValue: 'https://mint.minibits.cash/Bitcoin' },
-    { key: 'lastUsedModel', defaultValue: null },
-    { key: 'usingNip60', defaultValue: 'true' },
+    { key: "base_url", defaultValue: "" },
+    { key: "mint_url", defaultValue: "https://mint.minibits.cash/Bitcoin" },
+    { key: "lastUsedModel", defaultValue: null },
+    { key: "usingNip60", defaultValue: "true" },
     // Initialize relays list if missing
-    { key: 'nostr_relays', defaultValue: [] as string[] }
+    { key: "nostr_relays", defaultValue: [] as string[] },
   ];
 
   keysToMigrate.forEach(({ key, defaultValue }) => {
@@ -170,8 +181,10 @@ export const migrateStorageItems = (): void => {
           // If parsing succeeds, the item is already properly formatted
         } catch (parseError) {
           // If parsing fails, re-save the item with proper JSON formatting
-          console.log(`Migrating storage item "${key}" from raw value to JSON format`);
-          if (typeof defaultValue === 'string') {
+          console.log(
+            `Migrating storage item "${key}" from raw value to JSON format`
+          );
+          if (typeof defaultValue === "string") {
             setStorageItem(key, item); // Re-save the raw string value as JSON
           } else {
             setStorageItem(key, defaultValue); // Use default value if type mismatch
@@ -193,7 +206,7 @@ export const migrateStorageItems = (): void => {
  * @returns Array of transaction history or empty array
  */
 export const loadTransactionHistory = (): TransactionHistory[] => {
-  return getStorageItem<TransactionHistory[]>('transaction_history', []);
+  return getStorageItem<TransactionHistory[]>("transaction_history", []);
 };
 
 /**
@@ -201,7 +214,7 @@ export const loadTransactionHistory = (): TransactionHistory[] => {
  * @param history Array of transaction history
  */
 export const saveTransactionHistory = (history: TransactionHistory[]): void => {
-  setStorageItem('transaction_history', history);
+  setStorageItem("transaction_history", history);
 };
 
 /**
@@ -209,7 +222,7 @@ export const saveTransactionHistory = (history: TransactionHistory[]): void => {
  * @returns Array of favorite model IDs
  */
 export const loadFavoriteModels = (): string[] => {
-  return getStorageItem<string[]>('favorite_models', []);
+  return getStorageItem<string[]>("favorite_models", []);
 };
 
 /**
@@ -217,7 +230,7 @@ export const loadFavoriteModels = (): string[] => {
  * @param favoriteModels Array of favorite model IDs
  */
 export const saveFavoriteModels = (favoriteModels: string[]): void => {
-  setStorageItem('favorite_models', favoriteModels);
+  setStorageItem("favorite_models", favoriteModels);
 };
 
 /**
@@ -226,12 +239,12 @@ export const saveFavoriteModels = (favoriteModels: string[]): void => {
  */
 export const loadConfiguredModels = (): string[] => {
   // New key for configured models
-  const configured = getStorageItem<string[]>('configured_models', []);
+  const configured = getStorageItem<string[]>("configured_models", []);
   if (configured.length > 0) return configured;
   // Migrate from legacy favorites if present
   const legacyFavorites = loadFavoriteModels();
   if (legacyFavorites.length > 0) {
-    setStorageItem('configured_models', legacyFavorites);
+    setStorageItem("configured_models", legacyFavorites);
     return legacyFavorites;
   }
   return [];
@@ -242,21 +255,21 @@ export const loadConfiguredModels = (): string[] => {
  * @param configuredModels Array of model IDs
  */
 export const saveConfiguredModels = (configuredModels: string[]): void => {
-  setStorageItem('configured_models', configuredModels);
+  setStorageItem("configured_models", configuredModels);
 };
 
 /**
  * Load mapping of modelId -> provider base URL
  */
 export const loadModelProviderMap = (): Record<string, string> => {
-  return getStorageItem<Record<string, string>>('model_provider_map', {});
+  return getStorageItem<Record<string, string>>("model_provider_map", {});
 };
 
 /**
  * Save mapping of modelId -> provider base URL
  */
 export const saveModelProviderMap = (map: Record<string, string>): void => {
-  setStorageItem('model_provider_map', map);
+  setStorageItem("model_provider_map", map);
 };
 
 /**
@@ -264,7 +277,7 @@ export const saveModelProviderMap = (map: Record<string, string>): void => {
  * @returns Last used model ID or null
  */
 export const loadLastUsedModel = (): string | null => {
-  return getStorageItem<string | null>('lastUsedModel', null);
+  return getStorageItem<string | null>("lastUsedModel", null);
 };
 
 /**
@@ -272,7 +285,7 @@ export const loadLastUsedModel = (): string | null => {
  * @param modelId Model ID to save
  */
 export const saveLastUsedModel = (modelId: string): void => {
-  setStorageItem('lastUsedModel', modelId);
+  setStorageItem("lastUsedModel", modelId);
 };
 
 /**
@@ -281,7 +294,7 @@ export const saveLastUsedModel = (modelId: string): void => {
  * @returns Stored or default mint URL
  */
 export const loadMintUrl = (defaultMintUrl: string): string => {
-  return getStorageItem<string>('mint_url', defaultMintUrl);
+  return getStorageItem<string>("mint_url", defaultMintUrl);
 };
 
 /**
@@ -289,7 +302,7 @@ export const loadMintUrl = (defaultMintUrl: string): string => {
  * @param mintUrl Mint URL to save
  */
 export const saveMintUrl = (mintUrl: string): void => {
-  setStorageItem('mint_url', mintUrl);
+  setStorageItem("mint_url", mintUrl);
 };
 
 /**
@@ -298,10 +311,10 @@ export const saveMintUrl = (mintUrl: string): void => {
  * @returns Stored or default base URL (normalized with trailing slash)
  */
 export const loadBaseUrl = (defaultBaseUrl: string): string => {
-  const baseUrl = getStorageItem<string>('base_url', defaultBaseUrl);
+  const baseUrl = getStorageItem<string>("base_url", defaultBaseUrl);
   // If nothing set, return empty string (no default base URL)
-  if (!baseUrl) return '';
-  return baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+  if (!baseUrl) return "";
+  return baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
 };
 
 /**
@@ -309,7 +322,7 @@ export const loadBaseUrl = (defaultBaseUrl: string): string => {
  * @param baseUrl Base URL to save
  */
 export const saveBaseUrl = (baseUrl: string): void => {
-  setStorageItem('base_url', baseUrl);
+  setStorageItem("base_url", baseUrl);
 };
 
 /**
@@ -350,10 +363,10 @@ export const saveRelays = (relays: string[]): void => {
  * Default relays for reset-to-default action
  */
 export const DEFAULT_RELAYS: readonly string[] = [
-  'wss://relay.chorus.community',
-  'wss://relay.damus.io',
-  'wss://relay.nostr.band',
-  'wss://nos.lol',
+  "wss://relay.chorus.community",
+  "wss://relay.damus.io",
+  "wss://relay.nostr.band",
+  "wss://nos.lol",
 ];
 
 /**
@@ -362,14 +375,14 @@ export const DEFAULT_RELAYS: readonly string[] = [
  */
 export const loadUsingNip60 = (): boolean => {
   if (!canUseLocalStorage()) return true;
-  const storedValue = localStorage.getItem('usingNip60');
+  const storedValue = localStorage.getItem("usingNip60");
   if (storedValue === null) return true;
   try {
     // Stored value may be a JSON-encoded boolean or a raw string
     return JSON.parse(storedValue);
   } catch {
     // Fallback for legacy "stringified string" format
-    return storedValue === 'true';
+    return storedValue === "true";
   }
 };
 
@@ -379,7 +392,7 @@ export const loadUsingNip60 = (): boolean => {
  */
 export const saveUsingNip60 = (usingNip60: boolean): void => {
   // Persist the raw boolean value to avoid double-encoding issues
-  setStorageItem('usingNip60', usingNip60);
+  setStorageItem("usingNip60", usingNip60);
 };
 
 /**
@@ -396,7 +409,6 @@ export const hasSeenTopUpPrompt = (): boolean => {
 export const markTopUpPromptSeen = (): void => {
   setStorageItem(STORAGE_KEYS.TOPUP_PROMPT_SEEN, true);
 };
-
 
 export const hasCreatedEphemeralNsec = (): boolean => {
   return getStorageItem<boolean>(STORAGE_KEYS.CREATED_EPHEMERAL_NSEC, false);
@@ -415,7 +427,7 @@ export const markEphemeralNsecDeleted = (): void => {
  * @returns Sidebar open state, defaults to false for first use
  */
 export const loadSidebarOpen = (): boolean => {
-  return getStorageItem<boolean>('sidebar_open', false);
+  return getStorageItem<boolean>("sidebar_open", false);
 };
 
 /**
@@ -423,7 +435,7 @@ export const loadSidebarOpen = (): boolean => {
  * @param isOpen Whether the sidebar is open
  */
 export const saveSidebarOpen = (isOpen: boolean): void => {
-  setStorageItem('sidebar_open', isOpen);
+  setStorageItem("sidebar_open", isOpen);
 };
 
 /**
@@ -431,7 +443,7 @@ export const saveSidebarOpen = (isOpen: boolean): void => {
  * @returns Sidebar collapsed state, defaults to false
  */
 export const loadSidebarCollapsed = (): boolean => {
-  return getStorageItem<boolean>('sidebar_collapsed', true);
+  return getStorageItem<boolean>("sidebar_collapsed", true);
 };
 
 /**
@@ -439,7 +451,7 @@ export const loadSidebarCollapsed = (): boolean => {
  * @param isCollapsed Whether the sidebar is collapsed
  */
 export const saveSidebarCollapsed = (isCollapsed: boolean): void => {
-  setStorageItem('sidebar_collapsed', isCollapsed);
+  setStorageItem("sidebar_collapsed", isCollapsed);
 };
 
 /**
@@ -447,14 +459,19 @@ export const saveSidebarCollapsed = (isCollapsed: boolean): void => {
  * @returns Active conversation ID or null
  */
 export const loadActiveConversationId = (): string | null => {
-  return getStorageItem<string | null>(STORAGE_KEYS.ACTIVE_CONVERSATION_ID, null);
+  return getStorageItem<string | null>(
+    STORAGE_KEYS.ACTIVE_CONVERSATION_ID,
+    null
+  );
 };
 
 /**
  * Save active conversation ID to localStorage
  * @param conversationId Conversation ID to save
  */
-export const saveActiveConversationId = (conversationId: string | null): void => {
+export const saveActiveConversationId = (
+  conversationId: string | null
+): void => {
   setStorageItem(STORAGE_KEYS.ACTIVE_CONVERSATION_ID, conversationId);
 };
 
@@ -462,29 +479,32 @@ export const saveActiveConversationId = (conversationId: string | null): void =>
  * Storage keys used throughout the application
  */
 export const STORAGE_KEYS = {
-  CONVERSATIONS: 'saved_conversations',
-  ACTIVE_CONVERSATION_ID: 'active_conversation_id',
-  TRANSACTION_HISTORY: 'transaction_history',
-  FAVORITE_MODELS: 'favorite_models',
-  CONFIGURED_MODELS: 'configured_models',
-  MODEL_PROVIDER_MAP: 'model_provider_map',
-  LAST_USED_MODEL: 'lastUsedModel',
-  MINT_URL: 'mint_url',
-  BASE_URL: 'base_url',
-  BASE_URLS_LIST: 'base_urls_list',
-  USING_NIP60: 'usingNip60',
-  SIDEBAR_OPEN: 'sidebar_open',
-  SIDEBAR_COLLAPSED: 'sidebar_collapsed',
-  LOCAL_CASHU_TOKENS: 'local_cashu_tokens',
-  CASHU_PROOFS: 'cashu_proofs',
-  WRAPPED_CASHU_TOKENS: 'wrapped_cashu_tokens',
-  RELAYS: 'nostr_relays',
-  TOPUP_PROMPT_SEEN: 'topup_prompt_seen',
-  CREATED_EPHEMERAL_NSEC: 'created_ephemeral_nsec',
-  DISABLED_PROVIDERS: 'disabled_providers',
-  MINTS_FROM_ALL_PROVIDERS: 'mints_from_all_providers',
-  INFO_FROM_ALL_PROVIDERS: 'info_from_all_providers',
-  LAST_MODELS_UPDATE: 'lastModelsUpdate'
+  CONVERSATIONS: "saved_conversations",
+  ACTIVE_CONVERSATION_ID: "active_conversation_id",
+  TRANSACTION_HISTORY: "transaction_history",
+  FAVORITE_MODELS: "favorite_models",
+  CONFIGURED_MODELS: "configured_models",
+  MODEL_PROVIDER_MAP: "model_provider_map",
+  LAST_USED_MODEL: "lastUsedModel",
+  MINT_URL: "mint_url",
+  BASE_URL: "base_url",
+  BASE_URLS_LIST: "base_urls_list",
+  USING_NIP60: "usingNip60",
+  SIDEBAR_OPEN: "sidebar_open",
+  SIDEBAR_COLLAPSED: "sidebar_collapsed",
+  LOCAL_CASHU_TOKENS: "local_cashu_tokens",
+  CASHU_PROOFS: "cashu_proofs",
+  WRAPPED_CASHU_TOKENS: "wrapped_cashu_tokens",
+  RELAYS: "nostr_relays",
+  TOPUP_PROMPT_SEEN: "topup_prompt_seen",
+  CREATED_EPHEMERAL_NSEC: "created_ephemeral_nsec",
+  DISABLED_PROVIDERS: "disabled_providers",
+  MINTS_FROM_ALL_PROVIDERS: "mints_from_all_providers",
+  INFO_FROM_ALL_PROVIDERS: "info_from_all_providers",
+  LAST_MODELS_UPDATE: "lastModelsUpdate",
+  // Auto-refill settings
+  AUTO_REFILL_NWC_SETTINGS: "auto_refill_nwc_settings",
+  AUTO_TOPUP_API_SETTINGS: "auto_topup_api_settings",
 } as const;
 
 /**
@@ -504,7 +524,7 @@ export const getLocalCashuTokens = (): CashuTokenEntry[] => {
  */
 export const setLocalCashuToken = (baseUrl: string, token: string): void => {
   const tokens = getLocalCashuTokens();
-  const existingIndex = tokens.findIndex(entry => entry.baseUrl === baseUrl);
+  const existingIndex = tokens.findIndex((entry) => entry.baseUrl === baseUrl);
 
   if (existingIndex !== -1) {
     tokens[existingIndex] = { baseUrl, token };
@@ -521,7 +541,7 @@ export const setLocalCashuToken = (baseUrl: string, token: string): void => {
  */
 export const getLocalCashuToken = (baseUrl: string): string | null => {
   const tokens = getLocalCashuTokens();
-  const entry = tokens.find(entry => entry.baseUrl === baseUrl);
+  const entry = tokens.find((entry) => entry.baseUrl === baseUrl);
   return entry ? entry.token : null;
 };
 
@@ -531,7 +551,7 @@ export const getLocalCashuToken = (baseUrl: string): string | null => {
  */
 export const removeLocalCashuToken = (baseUrl: string): void => {
   const tokens = getLocalCashuTokens();
-  const updatedTokens = tokens.filter(entry => entry.baseUrl !== baseUrl);
+  const updatedTokens = tokens.filter((entry) => entry.baseUrl !== baseUrl);
   setStorageItem(STORAGE_KEYS.LOCAL_CASHU_TOKENS, updatedTokens);
 };
 
@@ -543,15 +563,19 @@ export const removeLocalCashuToken = (baseUrl: string): void => {
 export const migrateCurrentCashuToken = (baseUrl: string): void => {
   if (!canUseLocalStorage()) return;
   try {
-    const currentToken = localStorage.getItem('current_cashu_token');
+    const currentToken = localStorage.getItem("current_cashu_token");
     if (currentToken) {
-      console.log('Migrating current_cashu_token to local_cashu_tokens format...');
+      console.log(
+        "Migrating current_cashu_token to local_cashu_tokens format..."
+      );
       setLocalCashuToken(baseUrl, currentToken);
-      localStorage.removeItem('current_cashu_token');
-      console.log('Migration complete: current_cashu_token moved to local_cashu_tokens.');
+      localStorage.removeItem("current_cashu_token");
+      console.log(
+        "Migration complete: current_cashu_token moved to local_cashu_tokens."
+      );
     }
   } catch (error) {
-    console.error('Error migrating current_cashu_token:', error);
+    console.error("Error migrating current_cashu_token:", error);
   }
 };
 
@@ -576,11 +600,18 @@ export const saveDisabledProviders = (disabledProviders: string[]): void => {
  * @returns Record mapping provider base URL to array of mint URLs
  */
 export const loadMintsFromAllProviders = (): Record<string, string[]> => {
-  const allProviderMints = getStorageItem<Record<string, string[]>>(STORAGE_KEYS.MINTS_FROM_ALL_PROVIDERS, {});
-  const normalizedMints = Object.entries(allProviderMints).map(([baseUrl, mints]) => {
-    const normalizedMints = mints.map(mint => mint.endsWith('/') ? mint.slice(0, -1) : mint);
-    return [baseUrl, normalizedMints];
-  });
+  const allProviderMints = getStorageItem<Record<string, string[]>>(
+    STORAGE_KEYS.MINTS_FROM_ALL_PROVIDERS,
+    {}
+  );
+  const normalizedMints = Object.entries(allProviderMints).map(
+    ([baseUrl, mints]) => {
+      const normalizedMints = mints.map((mint) =>
+        mint.endsWith("/") ? mint.slice(0, -1) : mint
+      );
+      return [baseUrl, normalizedMints];
+    }
+  );
   return Object.fromEntries(normalizedMints);
 };
 
@@ -588,7 +619,9 @@ export const loadMintsFromAllProviders = (): Record<string, string[]> => {
  * Save mints from all providers to localStorage
  * @param mintsMap Record mapping provider base URL to array of mint URLs
  */
-export const saveMintsFromAllProviders = (mintsMap: Record<string, string[]>): void => {
+export const saveMintsFromAllProviders = (
+  mintsMap: Record<string, string[]>
+): void => {
   setStorageItem(STORAGE_KEYS.MINTS_FROM_ALL_PROVIDERS, mintsMap);
 };
 
@@ -599,7 +632,9 @@ export const saveMintsFromAllProviders = (mintsMap: Record<string, string[]>): v
  */
 export const getProviderMints = (providerBaseUrl: string): string[] => {
   const allMints = loadMintsFromAllProviders();
-  const normalized = providerBaseUrl.endsWith('/') ? providerBaseUrl : `${providerBaseUrl}/`;
+  const normalized = providerBaseUrl.endsWith("/")
+    ? providerBaseUrl
+    : `${providerBaseUrl}/`;
   return allMints[normalized] || [];
 };
 
@@ -608,9 +643,14 @@ export const getProviderMints = (providerBaseUrl: string): string[] => {
  * @param providerBaseUrl Provider base URL
  * @param mints Array of mint URLs
  */
-export const setProviderMints = (providerBaseUrl: string, mints: string[]): void => {
+export const setProviderMints = (
+  providerBaseUrl: string,
+  mints: string[]
+): void => {
   const allMints = loadMintsFromAllProviders();
-  const normalized = providerBaseUrl.endsWith('/') ? providerBaseUrl : `${providerBaseUrl}/`;
+  const normalized = providerBaseUrl.endsWith("/")
+    ? providerBaseUrl
+    : `${providerBaseUrl}/`;
   allMints[normalized] = mints;
   saveMintsFromAllProviders(allMints);
 };
@@ -620,14 +660,19 @@ export const setProviderMints = (providerBaseUrl: string, mints: string[]): void
  * @returns Record mapping provider base URL to info object
  */
 export const loadInfoFromAllProviders = (): Record<string, any> => {
-  return getStorageItem<Record<string, any>>(STORAGE_KEYS.INFO_FROM_ALL_PROVIDERS, {});
+  return getStorageItem<Record<string, any>>(
+    STORAGE_KEYS.INFO_FROM_ALL_PROVIDERS,
+    {}
+  );
 };
 
 /**
  * Save full /v1/info responses from all providers to localStorage
  * @param infoMap Record mapping provider base URL to info object
  */
-export const saveInfoFromAllProviders = (infoMap: Record<string, any>): void => {
+export const saveInfoFromAllProviders = (
+  infoMap: Record<string, any>
+): void => {
   setStorageItem(STORAGE_KEYS.INFO_FROM_ALL_PROVIDERS, infoMap);
 };
 /**
@@ -636,8 +681,13 @@ export const saveInfoFromAllProviders = (infoMap: Record<string, any>): void => 
  * @param forceRefresh When true, ignores cache and fetches fresh info
  * @returns The provider info object, or null on failure
  */
-export const getOrFetchProviderInfo = async (providerBaseUrl: string, forceRefresh: boolean = false): Promise<any | null> => {
-  const base = providerBaseUrl.endsWith('/') ? providerBaseUrl : `${providerBaseUrl}/`;
+export const getOrFetchProviderInfo = async (
+  providerBaseUrl: string,
+  forceRefresh: boolean = false
+): Promise<any | null> => {
+  const base = providerBaseUrl.endsWith("/")
+    ? providerBaseUrl
+    : `${providerBaseUrl}/`;
 
   if (!forceRefresh) {
     const cachedAll = loadInfoFromAllProviders();
@@ -669,14 +719,19 @@ export const getOrFetchProviderInfo = async (providerBaseUrl: string, forceRefre
  * @returns Record mapping provider base URL to timestamp in milliseconds
  */
 export const loadLastModelsUpdate = (): Record<string, number> => {
-  return getStorageItem<Record<string, number>>(STORAGE_KEYS.LAST_MODELS_UPDATE, {});
+  return getStorageItem<Record<string, number>>(
+    STORAGE_KEYS.LAST_MODELS_UPDATE,
+    {}
+  );
 };
 
 /**
  * Save the timestamps of the last models update to localStorage
  * @param timestampsMap Record mapping provider base URL to timestamp in milliseconds
  */
-export const saveLastModelsUpdate = (timestampsMap: Record<string, number>): void => {
+export const saveLastModelsUpdate = (
+  timestampsMap: Record<string, number>
+): void => {
   setStorageItem(STORAGE_KEYS.LAST_MODELS_UPDATE, timestampsMap);
 };
 
@@ -685,9 +740,13 @@ export const saveLastModelsUpdate = (timestampsMap: Record<string, number>): voi
  * @param providerBaseUrl Provider base URL
  * @returns Timestamp in milliseconds or null if never updated
  */
-export const getProviderLastUpdate = (providerBaseUrl: string): number | null => {
+export const getProviderLastUpdate = (
+  providerBaseUrl: string
+): number | null => {
   const allTimestamps = loadLastModelsUpdate();
-  const normalized = providerBaseUrl.endsWith('/') ? providerBaseUrl : `${providerBaseUrl}/`;
+  const normalized = providerBaseUrl.endsWith("/")
+    ? providerBaseUrl
+    : `${providerBaseUrl}/`;
   return allTimestamps[normalized] || null;
 };
 
@@ -696,9 +755,122 @@ export const getProviderLastUpdate = (providerBaseUrl: string): number | null =>
  * @param providerBaseUrl Provider base URL
  * @param timestamp Timestamp in milliseconds
  */
-export const setProviderLastUpdate = (providerBaseUrl: string, timestamp: number): void => {
+export const setProviderLastUpdate = (
+  providerBaseUrl: string,
+  timestamp: number
+): void => {
   const allTimestamps = loadLastModelsUpdate();
-  const normalized = providerBaseUrl.endsWith('/') ? providerBaseUrl : `${providerBaseUrl}/`;
+  const normalized = providerBaseUrl.endsWith("/")
+    ? providerBaseUrl
+    : `${providerBaseUrl}/`;
   allTimestamps[normalized] = timestamp;
   saveLastModelsUpdate(allTimestamps);
+};
+
+// ============================================
+// Auto-Refill Settings
+// ============================================
+
+/**
+ * Settings for NWC (Nostr Wallet Connect) auto-refill
+ */
+export interface AutoRefillNWCSettings {
+  enabled: boolean;
+  threshold: number; // sats - refill when balance drops below this
+  amount: number; // sats - amount to refill each time
+  lastRefillAt?: number; // timestamp of last refill (for cooldown)
+}
+
+/**
+ * Settings for API key auto-topup
+ */
+export interface AutoTopupAPISettings {
+  enabled: boolean;
+  apiKey: string | null; // which API key to auto-topup (the key string)
+  threshold: number; // mSats - topup when balance drops below this
+  amount: number; // sats - amount to topup each time
+  lastTopupAt?: number; // timestamp of last topup (for cooldown)
+}
+
+/**
+ * Default NWC auto-refill settings
+ */
+export const DEFAULT_AUTO_REFILL_NWC_SETTINGS: AutoRefillNWCSettings = {
+  enabled: false,
+  threshold: 500, // refill when below 500 sats
+  amount: 1000, // refill with 1000 sats
+};
+
+/**
+ * Default API auto-topup settings
+ */
+export const DEFAULT_AUTO_TOPUP_API_SETTINGS: AutoTopupAPISettings = {
+  enabled: false,
+  apiKey: null,
+  threshold: 500000, // 500 sats in mSats (API balances are in mSats)
+  amount: 1000, // topup with 1000 sats
+};
+
+/**
+ * Load NWC auto-refill settings from localStorage
+ * @returns NWC auto-refill settings
+ */
+export const loadAutoRefillNWCSettings = (): AutoRefillNWCSettings => {
+  return getStorageItem<AutoRefillNWCSettings>(
+    STORAGE_KEYS.AUTO_REFILL_NWC_SETTINGS,
+    DEFAULT_AUTO_REFILL_NWC_SETTINGS
+  );
+};
+
+/**
+ * Save NWC auto-refill settings to localStorage
+ * @param settings NWC auto-refill settings
+ */
+export const saveAutoRefillNWCSettings = (
+  settings: AutoRefillNWCSettings
+): void => {
+  setStorageItem(STORAGE_KEYS.AUTO_REFILL_NWC_SETTINGS, settings);
+};
+
+/**
+ * Load API auto-topup settings from localStorage
+ * @returns API auto-topup settings
+ */
+export const loadAutoTopupAPISettings = (): AutoTopupAPISettings => {
+  return getStorageItem<AutoTopupAPISettings>(
+    STORAGE_KEYS.AUTO_TOPUP_API_SETTINGS,
+    DEFAULT_AUTO_TOPUP_API_SETTINGS
+  );
+};
+
+/**
+ * Save API auto-topup settings to localStorage
+ * @param settings API auto-topup settings
+ */
+export const saveAutoTopupAPISettings = (
+  settings: AutoTopupAPISettings
+): void => {
+  setStorageItem(STORAGE_KEYS.AUTO_TOPUP_API_SETTINGS, settings);
+};
+
+/**
+ * Update the last refill timestamp for NWC auto-refill
+ * @param timestamp Timestamp in milliseconds
+ */
+export const updateNWCLastRefillTime = (
+  timestamp: number = Date.now()
+): void => {
+  const settings = loadAutoRefillNWCSettings();
+  saveAutoRefillNWCSettings({ ...settings, lastRefillAt: timestamp });
+};
+
+/**
+ * Update the last topup timestamp for API auto-topup
+ * @param timestamp Timestamp in milliseconds
+ */
+export const updateAPILastTopupTime = (
+  timestamp: number = Date.now()
+): void => {
+  const settings = loadAutoTopupAPISettings();
+  saveAutoTopupAPISettings({ ...settings, lastTopupAt: timestamp });
 };
