@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState } from "react";
-import { FileText, Loader2, Paperclip, Send, X } from "lucide-react";
+import { ArrowRight, FileText, Loader2, Paperclip, X } from "lucide-react";
 import { useChat } from "@/context/ChatProvider";
 import { MessageAttachment } from "@/types/chat";
 import { extractTextFromPdf } from "@/utils/pdfUtils";
@@ -31,6 +31,8 @@ interface ChatInputProps {
   isSidebarCollapsed: boolean;
   isMobile: boolean;
   hasMessages: boolean;
+  isLoadingModels: boolean;
+  isWalletLoading: boolean;
 }
 
 export default function ChatInput({
@@ -46,6 +48,8 @@ export default function ChatInput({
   isSidebarCollapsed,
   isMobile,
   hasMessages,
+  isLoadingModels,
+  isWalletLoading,
 }: ChatInputProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -127,7 +131,7 @@ export default function ChatInput({
   };
 
   const handleFileUpload = async (
-    event: React.ChangeEvent<HTMLInputElement>,
+    event: React.ChangeEvent<HTMLInputElement>
   ) => {
     const files = event.target.files;
     if (!files) return;
@@ -143,7 +147,7 @@ export default function ChatInput({
       // Validate file type
       if (!isImage && !isAcceptedFile) {
         alert(
-          `File type "${file.type}" is not supported. Please upload images or PDF files.`,
+          `File type "${file.type}" is not supported. Please upload images or PDF files.`
         );
         continue;
       }
@@ -151,7 +155,7 @@ export default function ChatInput({
       // Validate file size
       if (file.size > MAX_FILE_SIZE_BYTES) {
         alert(
-          `File "${file.name}" is too large. Maximum size is ${MAX_FILE_SIZE_MB}MB.`,
+          `File "${file.name}" is too large. Maximum size is ${MAX_FILE_SIZE_MB}MB.`
         );
         continue;
       }
@@ -168,7 +172,7 @@ export default function ChatInput({
             error instanceof Error ? error.message : "Unknown error";
           if (errorMessage.includes("quota")) {
             alert(
-              "Storage is full. Your file will be available in this session but may not be saved in history.",
+              "Storage is full. Your file will be available in this session but may not be saved in history."
             );
           } else {
             console.warn("Failed to save file to storage:", errorMessage);
@@ -208,14 +212,14 @@ export default function ChatInput({
                 prev.map((item) =>
                   item.id === attachment.id
                     ? { ...item, textContent: text }
-                    : item,
-                ),
+                    : item
+                )
               );
             })
             .catch((error) => {
               console.warn(
                 "Failed to extract text from PDF attachment, continuing without text content.",
-                error,
+                error
               );
             });
         }
@@ -241,7 +245,7 @@ export default function ChatInput({
   };
 
   const handlePaste = async (
-    event: React.ClipboardEvent<HTMLTextAreaElement>,
+    event: React.ClipboardEvent<HTMLTextAreaElement>
   ) => {
     const items = event.clipboardData?.items;
     if (!items) return;
@@ -270,7 +274,7 @@ export default function ChatInput({
       // Validate file size
       if (file.size > MAX_FILE_SIZE_BYTES) {
         alert(
-          `Pasted image is too large. Maximum size is ${MAX_FILE_SIZE_MB}MB.`,
+          `Pasted image is too large. Maximum size is ${MAX_FILE_SIZE_MB}MB.`
         );
         continue;
       }
@@ -287,7 +291,7 @@ export default function ChatInput({
             error instanceof Error ? error.message : "Unknown error";
           if (errorMessage.includes("quota")) {
             alert(
-              "Storage is full. Your image will be available in this session but may not be saved in history.",
+              "Storage is full. Your image will be available in this session but may not be saved in history."
             );
           }
           // Continue without storageId
@@ -367,7 +371,7 @@ export default function ChatInput({
     // Validate file size
     if (file.size > MAX_FILE_SIZE_BYTES) {
       alert(
-        `File "${file.name}" is too large. Maximum size is ${MAX_FILE_SIZE_MB}MB.`,
+        `File "${file.name}" is too large. Maximum size is ${MAX_FILE_SIZE_MB}MB.`
       );
       return;
     }
@@ -384,7 +388,7 @@ export default function ChatInput({
           error instanceof Error ? error.message : "Unknown error";
         if (errorMessage.includes("quota")) {
           alert(
-            "Storage is full. Your file will be available in this session but may not be saved in history.",
+            "Storage is full. Your file will be available in this session but may not be saved in history."
           );
         }
         // Continue without storageId
@@ -411,14 +415,14 @@ export default function ChatInput({
               prev.map((item) =>
                 item.id === attachment.id
                   ? { ...item, textContent: text }
-                  : item,
-              ),
+                  : item
+              )
             );
           })
           .catch((error) => {
             console.warn(
               "Failed to extract text from PDF attachment, continuing without text content.",
-              error,
+              error
             );
           });
       }
@@ -509,7 +513,7 @@ export default function ChatInput({
         >
           {/* Unified Input Container with Attachment Preview Inside */}
           <div
-            className={`relative flex flex-col w-full rounded-3xl transition-all duration-300 ease-out ${
+            className={`relative flex flex-col w-full rounded-full transition-all duration-300 ease-out ${
               isDragging
                 ? "bg-linear-to-br from-purple-500/20 via-purple-500/10 to-purple-500/5 border-2 border-dashed border-purple-400/70 shadow-[0_0_40px_-5px_rgba(168,85,247,0.5)] scale-[1.01]"
                 : "bg-muted/50 border border-border"
@@ -589,7 +593,11 @@ export default function ChatInput({
                 onChange={(e) => setInputMessage(e.target.value)}
                 onPaste={handlePaste}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey && (!isMobile || e.metaKey || e.ctrlKey)) {
+                  if (
+                    e.key === "Enter" &&
+                    !e.shiftKey &&
+                    (!isMobile || e.metaKey || e.ctrlKey)
+                  ) {
                     e.preventDefault();
                     if (isLoading) {
                       // Show red button for 1 second
@@ -622,7 +630,7 @@ export default function ChatInput({
                   target.style.height = "auto";
                   const textareaOnlyHeight = Math.min(
                     target.scrollHeight,
-                    maxTextareaHeight,
+                    maxTextareaHeight
                   );
                   target.style.height = textareaOnlyHeight + "px";
                   // Include attachment height in total height
@@ -647,28 +655,23 @@ export default function ChatInput({
                 onClick={handleSendMessage}
                 disabled={
                   isLoading ||
+                  isLoadingModels ||
+                  isWalletLoading ||
                   (!isAuthenticated &&
                     !inputMessage.trim() &&
                     uploadedAttachments.length === 0)
                 }
-                className={`absolute right-3 bottom-2 p-2 rounded-full transition-colors cursor-pointer ${
+                className={`absolute right-3 bottom-2 p-2 rounded-full transition-colors text-foreground ${
                   showRedButton
-                    ? "bg-red-500/30 hover:bg-red-500/40"
-                    : "bg-transparent hover:bg-muted"
-                } ${
-                  !isLoading &&
-                  !isAuthenticated &&
-                  !inputMessage.trim() &&
-                  uploadedAttachments.length === 0
-                    ? "opacity-50"
-                    : ""
-                }`}
+                    ? "bg-red-500 hover:bg-red-600 text-white"
+                    : "bg-transparent hover:bg-secondary disabled:hover:bg-transparent"
+                } disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer`}
                 aria-label="Send message"
               >
                 {isLoading ? (
-                  <Loader2 className="h-5 w-5 animate-spin text-foreground" />
+                  <Loader2 className="h-5 w-5 animate-spin" />
                 ) : (
-                  <Send className="h-5 w-5 text-foreground" />
+                  <ArrowRight className="h-5 w-5" />
                 )}
               </button>
             </div>
