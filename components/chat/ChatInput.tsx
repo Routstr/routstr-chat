@@ -599,7 +599,8 @@ export default function ChatInput({
                     (!isMobile || e.metaKey || e.ctrlKey)
                   ) {
                     e.preventDefault();
-                    if (isLoading) {
+                    // Prevent sending when models or wallet are still loading
+                    if (isLoading || isLoadingModels || isWalletLoading) {
                       // Show red button for 1 second
                       setShowRedButton(true);
                       setTimeout(() => setShowRedButton(false), 1000);
