@@ -194,3 +194,10 @@ html {
     cursor: pointer;
   }
 }
+
+/* Position sonner toasts above input bar on mobile */
+@media (max-width: 768px) {
+  [data-sonner-toaster] {
+    bottom: 80px !important;
+  }
+}
