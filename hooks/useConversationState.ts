@@ -4,7 +4,6 @@ import { Conversation, Message } from "@/types/chat";
 import {
   loadConversationsFromStorage,
   saveConversationToStorage,
-  createNewConversationWithMap,
   deleteConversationFromStorage,
   clearAllConversations,
   sortConversationsByRecentActivity,
@@ -480,7 +479,11 @@ export const useConversationState = (): UseConversationStateReturn => {
       setConversations(sortedConversations);
 
       // Update messages if this is the active conversation
-      const activeConversationId = loadActiveConversationId();
+      let activeConversationId = loadActiveConversationId();
+      if (!activeConversationId) {
+        setActiveConversationIdWithStorage(conversationId);
+        activeConversationId = conversationId;
+      }
 
       if (activeConversationId === conversationId) {
         console.log(activeConversationId, conversationId);
@@ -497,6 +500,8 @@ export const useConversationState = (): UseConversationStateReturn => {
     ): Promise<string | null> => {
       console.log("Createing mes 1081", message);
       const strippedMessage = stripImageDataFromSingleMessage(message);
+      if (loadActiveConversationId())
+        setActiveConversationIdWithStorage(conversationId);
       if (currentPnsKeys) {
         return publishMessage(
           conversationId,
@@ -577,7 +582,7 @@ export const useConversationState = (): UseConversationStateReturn => {
       // If no non-system messages found, return empty Nostr event
       return emptyEventId;
     },
-    []
+    [setActiveConversationIdWithStorage]
   );
 
   const updateLastMessageSatsSpent = useCallback(

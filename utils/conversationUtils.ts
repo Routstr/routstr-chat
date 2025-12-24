@@ -187,60 +187,6 @@ export const createAndStoreNewConversation = (
 };
 
 /**
- * Creates a new conversation using a Map of conversations
- * @param conversationsMap Current conversations Map
- * @param initialMessages Optional initial messages for the conversation
- * @param timestamp Optional timestamp for the conversation ID
- * @returns Object with new conversation and updated conversations array
- */
-export const createNewConversationWithMap = (
-  conversationsMap: Map<string, Conversation>,
-  initialMessages: Message[] = [],
-  timestamp?: string
-): {
-  newConversation: Conversation;
-  updatedConversations: Conversation[];
-} => {
-  // Convert Map to array to check for empty conversations
-  const existingConversations = Array.from(conversationsMap.values());
-
-  // First check if there's an existing conversation with no messages
-  const emptyConversation = existingConversations.find(
-    (conv) => conv.messages.length === 0
-  );
-
-  if (emptyConversation) {
-    // Return the existing empty conversation
-    return {
-      newConversation: emptyConversation,
-      updatedConversations: existingConversations,
-    };
-  }
-
-  // If no empty conversation found, create a new one
-  const newId = timestamp ?? Date.now().toString();
-  const messagesToStore = stripImageDataFromMessages(initialMessages);
-  const newConversation: Conversation = createConversation(
-    newId,
-    messagesToStore[0]
-  );
-
-  // Add the new conversation to the map
-  conversationsMap.set(newId, newConversation);
-
-  // Convert the updated map back to an array
-  const updatedConversations = sortConversationsByRecentActivity(
-    Array.from(conversationsMap.values())
-  );
-  console.log("inside createNewConversationWithMap", updatedConversations);
-
-  return {
-    newConversation,
-    updatedConversations,
-  };
-};
-
-/**
  * Deletes a conversation from storage
  * @param conversations Current conversations array
  * @param conversationId ID of conversation to delete
