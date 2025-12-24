@@ -45,10 +45,6 @@ export interface UseConversationStateReturn {
   setMessages: (messages: Message[]) => void;
   setEditingMessageIndex: (index: number | null) => void;
   setEditingContent: (content: string) => void;
-  createNewConversationHandler: (
-    initialMessages?: Message[],
-    timestamp?: string
-  ) => string;
   startNewConversation: () => void;
   loadConversation: (conversationId: string) => void;
   deleteConversation: (
@@ -286,28 +282,6 @@ export const useConversationState = (): UseConversationStateReturn => {
     setActiveConversationIdWithStorage(null);
     setMessages([]);
   }, [setActiveConversationIdWithStorage]);
-
-  // Creates an actual conversation - called when AI response starts
-  const createNewConversationHandler = useCallback(
-    (initialMessages: Message[] = [], timestamp?: string) => {
-      let createdId: string = "";
-      setConversations((prevConversations) => {
-        const { newConversation, updatedConversations } =
-          createNewConversationWithMap(
-            conversationsMapRef.current,
-            initialMessages,
-            timestamp
-          );
-        createdId = newConversation.id;
-        setActiveConversationIdWithStorage(newConversation.id);
-        // Set messages to the initial messages (empty array if none provided)
-        setMessages(newConversation.messages);
-        return updatedConversations;
-      });
-      return createdId;
-    },
-    [setActiveConversationIdWithStorage]
-  );
 
   const loadConversation = useCallback(
     (conversationId: string) => {
@@ -665,7 +639,6 @@ export const useConversationState = (): UseConversationStateReturn => {
     setMessages,
     setEditingMessageIndex,
     setEditingContent,
-    createNewConversationHandler,
     startNewConversation,
     loadConversation,
     deleteConversation,

@@ -17,7 +17,7 @@ export function canMakeExactChange(
   denomCounts: Record<number, number>,
   availableProofs: Proof[],
   fees?: number,
-  errorTolerance?: number,
+  errorTolerance?: number
 ): { canMake: boolean; selectedProofs?: Proof[]; actualAmount?: number } {
   // Default error tolerance to 0 (exact change) if not specified
   const tolerance = errorTolerance || 0;
@@ -40,7 +40,7 @@ export function canMakeExactChange(
         totalNeeded,
         maxAcceptableAmount,
         denomCounts,
-        availableProofs,
+        availableProofs
       );
 
       if (!result.canMake) {
@@ -56,7 +56,7 @@ export function canMakeExactChange(
       // Check if we've converged (total amount covers both target and fees)
       const currentTotal = result.selectedProofs!.reduce(
         (sum, p) => sum + p.amount,
-        0,
+        0
       );
       const minimumRequired = targetAmount + requiredFee;
       const maximumAcceptable = Math.ceil(minimumRequired * (1 + tolerance));
@@ -98,13 +98,13 @@ export function canMakeExactChange(
     targetAmount,
     maxAcceptableAmount,
     denomCounts,
-    availableProofs,
+    availableProofs
   );
 
   if (result.canMake && result.selectedProofs) {
     const actualAmount = result.selectedProofs.reduce(
       (sum, p) => sum + p.amount,
-      0,
+      0
     );
     return {
       canMake: true,
@@ -123,7 +123,7 @@ function findCombinationWithTolerance(
   targetAmount: number,
   maxAmount: number,
   denomCounts: Record<number, number>,
-  availableProofs: Proof[],
+  availableProofs: Proof[]
 ): { canMake: boolean; selectedProofs?: Proof[] } {
   // First try exact amount
   let result = findExactCombination(targetAmount, denomCounts, availableProofs);
@@ -148,7 +148,7 @@ function findCombinationWithTolerance(
 function findExactCombination(
   targetAmount: number,
   denomCounts: Record<number, number>,
-  availableProofs: Proof[],
+  availableProofs: Proof[]
 ): { canMake: boolean; selectedProofs?: Proof[] } {
   // Use dynamic programming with proper denomination counting
   const denominations = Object.keys(denomCounts)
@@ -197,7 +197,7 @@ function findExactCombination(
       // Make sure we have enough proofs of this denomination
       if (proofsOfDenom.length < count) {
         console.error(
-          `Not enough proofs of denomination ${denom}: need ${count}, have ${proofsOfDenom.length}`,
+          `Not enough proofs of denomination ${denom}: need ${count}, have ${proofsOfDenom.length}`
         );
         return { canMake: false };
       }
@@ -231,7 +231,7 @@ export function selectProofsAdvanced(
   amount: number,
   proofs: Proof[],
   activeKeysets: Keyset[],
-  mintUrl: string,
+  mintUrl: string
 ): {
   proofsToSend: Proof[];
   proofsToKeep: Proof[];
@@ -243,7 +243,7 @@ export function selectProofsAdvanced(
   const totalAmount = proofs.reduce((sum, p) => sum + p.amount, 0);
   if (totalAmount < amount) {
     throw new Error(
-      `Not enough funds on mint ${mintUrl}: have ${totalAmount}, need ${amount}`,
+      `Not enough funds on mint ${mintUrl}: have ${totalAmount}, need ${amount}`
     );
   }
 
@@ -253,7 +253,7 @@ export function selectProofsAdvanced(
       acc[p.amount] = (acc[p.amount] || 0) + 1;
       return acc;
     },
-    {} as Record<number, number>,
+    {} as Record<number, number>
   );
 
   // Try with 0% tolerance first
@@ -263,7 +263,7 @@ export function selectProofsAdvanced(
   // If 0% fails, try with 5% tolerance
   if (!toleranceResult.canMake || !toleranceResult.selectedProofs) {
     console.log(
-      "rdlogs: Cannot make exact change with 0% tolerance, trying with 5% tolerance",
+      "rdlogs: Cannot make exact change with 0% tolerance, trying with 5% tolerance"
     );
     const fees = calculateFees(proofs, activeKeysets);
     toleranceResult = canMakeExactChange(
@@ -271,7 +271,7 @@ export function selectProofsAdvanced(
       denominationCounts,
       proofs,
       fees,
-      0.05,
+      0.05
     );
   }
 
@@ -284,7 +284,7 @@ export function selectProofsAdvanced(
         acc[denom] = (acc[denom] || 0) + 1;
         return acc;
       },
-      {} as Record<number, number>,
+      {} as Record<number, number>
     );
 
     const actualAmount = toleranceResult.actualAmount || 0;
@@ -292,14 +292,14 @@ export function selectProofsAdvanced(
     const overpaymentPercent = (overpayment / amount) * 100;
 
     console.log(
-      "rdlogs: Can make change within tolerance after wallet.send() failure",
+      "rdlogs: Can make change within tolerance after wallet.send() failure"
     );
     console.log("rdlogs: Target amount:", amount);
     console.log("rdlogs: Actual amount:", actualAmount);
     console.log(
       "rdlogs: Overpayment:",
       overpayment,
-      `(${overpaymentPercent.toFixed(2)}%)`,
+      `(${overpaymentPercent.toFixed(2)}%)`
     );
     console.log("rdlogs: Selected denominations:", selectedDenominations);
     console.log("rdlogs: Denomination breakdown:", denominationBreakdown);
@@ -316,7 +316,7 @@ export function selectProofsAdvanced(
     };
   } else {
     throw new Error(
-      `Cannot make change for amount ${amount} within tolerance on mint ${mintUrl}`,
+      `Cannot make change for amount ${amount} within tolerance on mint ${mintUrl}`
     );
   }
 }

@@ -22,9 +22,7 @@ interface WalletTabProps {
   setTransactionHistory: (
     transactionHistory:
       | TransactionHistory[]
-      | ((
-          prevTransactionHistory: TransactionHistory[],
-        ) => TransactionHistory[]),
+      | ((prevTransactionHistory: TransactionHistory[]) => TransactionHistory[])
   ) => void;
 }
 
@@ -82,7 +80,7 @@ const WalletTab: React.FC<WalletTabProps> = ({
       setMintQuote,
       setMintInvoice,
       countdown,
-      setCountdown,
+      setCountdown
     );
   }, [hookCheckMintQuote, isAutoChecking, mintAmount]);
 
@@ -95,7 +93,7 @@ const WalletTab: React.FC<WalletTabProps> = ({
       mintAmount,
       setMintQuote,
       setMintInvoice,
-      amountOverride,
+      amountOverride
     );
   };
 
@@ -105,7 +103,7 @@ const WalletTab: React.FC<WalletTabProps> = ({
       setError,
       setSuccessMessage,
       tokenToImport,
-      setTokenToImport,
+      setTokenToImport
     );
   };
 
@@ -117,7 +115,7 @@ const WalletTab: React.FC<WalletTabProps> = ({
       sendAmount,
       balance,
       setSendAmount,
-      setGeneratedToken,
+      setGeneratedToken
     );
   };
 
@@ -143,7 +141,7 @@ const WalletTab: React.FC<WalletTabProps> = ({
       isAutoChecking,
       setIsAutoChecking,
       countdown,
-      setCountdown,
+      setCountdown
     );
 
     return cleanup;
@@ -160,7 +158,7 @@ const WalletTab: React.FC<WalletTabProps> = ({
 
   // Tab state
   const [activeTab, setActiveTab] = useState<"deposit" | "send" | "history">(
-    "deposit",
+    "deposit"
   );
 
   // Handle quick mint button click

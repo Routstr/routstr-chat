@@ -85,7 +85,7 @@ async function testInvoiceStates() {
       log("⚠️  FOUND PROBLEMATIC STATE: ISSUED with paid=false", "red");
       log(
         "This is the bug we fixed - mint says tokens are issued but paid=false",
-        "yellow",
+        "yellow"
       );
       pass(`${testName} - Detected and handled ISSUED state correctly`);
     } else if (
@@ -175,7 +175,7 @@ async function testFixLogic() {
       } else {
         log(
           `  ✗ ${test.desc} => isPaid: ${result} (expected: ${test.shouldBePaid})`,
-          "red",
+          "red"
         );
         allPassed = false;
       }

@@ -79,7 +79,7 @@ const NostrRelayManager: React.FC = () => {
       const lastConnTime = new Date(lastConnection);
       const now = new Date();
       const diffMinutes = Math.floor(
-        (now.getTime() - lastConnTime.getTime()) / (1000 * 60),
+        (now.getTime() - lastConnTime.getTime()) / (1000 * 60)
       );
 
       if (diffMinutes < 1) {
@@ -228,7 +228,7 @@ const NostrRelayManager: React.FC = () => {
                       <div className="flex items-center gap-2">
                         <span
                           className={`text-xs ${getStatusColor(
-                            relayStatus.status,
+                            relayStatus.status
                           )}`}
                         >
                           {relayStatus.readyStateText}

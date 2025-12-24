@@ -9,7 +9,7 @@ export function useLocalStorage<T>(
   serializer?: {
     serialize: (value: T) => string;
     deserialize: (value: string) => T;
-  },
+  }
 ) {
   const serialize = serializer?.serialize || JSON.stringify;
   const deserialize = serializer?.deserialize || JSON.parse;

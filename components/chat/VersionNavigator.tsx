@@ -127,7 +127,7 @@ const VersionNavigator = memo<VersionNavigatorProps>(
         </button>
       </nav>
     );
-  },
+  }
 );
 
 VersionNavigator.displayName = "VersionNavigator";

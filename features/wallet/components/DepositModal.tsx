@@ -29,11 +29,11 @@ import dynamic from "next/dynamic";
 
 const BCButton = dynamic(
   () => import("@getalby/bitcoin-connect-react").then((m) => m.Button),
-  { ssr: false },
+  { ssr: false }
 );
 const BCPayButton = dynamic(
   () => import("@getalby/bitcoin-connect-react").then((m) => m.PayButton),
-  { ssr: false },
+  { ssr: false }
 );
 
 // Helper function to generate unique IDs
@@ -143,7 +143,7 @@ const DepositModal: React.FC<DepositModalProps> = ({
   const handleCreateInvoice = async (quickMintAmount?: number) => {
     if (!cashuStore.activeMintUrl) {
       setError(
-        "No active mint selected. Please select a mint in your wallet settings.",
+        "No active mint selected. Please select a mint in your wallet settings."
       );
       return;
     }
@@ -162,7 +162,7 @@ const DepositModal: React.FC<DepositModalProps> = ({
 
       const invoiceData = await createLightningInvoice(
         cashuStore.activeMintUrl,
-        amount,
+        amount
       );
 
       setInvoice(invoiceData.paymentRequest);
@@ -200,13 +200,13 @@ const DepositModal: React.FC<DepositModalProps> = ({
         cashuStore.activeMintUrl,
         invoiceData.quoteId,
         amount,
-        pendingTxId,
+        pendingTxId
       );
     } catch (error) {
       console.error("Error creating invoice:", error);
       setError(
         "Failed to create Lightning invoice: " +
-          (error instanceof Error ? error.message : String(error)),
+          (error instanceof Error ? error.message : String(error))
       );
     } finally {
       setIsProcessing(false);
@@ -220,7 +220,7 @@ const DepositModal: React.FC<DepositModalProps> = ({
       const proofs = await mintTokensFromPaidInvoice(
         cashuStore.activeMintUrl,
         currentMeltQuoteId,
-        pendingAmount,
+        pendingAmount
       );
       if (proofs.length > 0) {
         await updateProofs({
@@ -234,7 +234,7 @@ const DepositModal: React.FC<DepositModalProps> = ({
         });
         if (pendingTransactionId)
           transactionHistoryStore.removePendingTransaction(
-            pendingTransactionId,
+            pendingTransactionId
           );
         setPendingTransactionId(null);
         setSuccessMessage(`Received ${formatBalance(pendingAmount, "sats")}!`);
@@ -257,7 +257,7 @@ const DepositModal: React.FC<DepositModalProps> = ({
     mintUrl: string,
     quoteId: string,
     amount: number,
-    pendingTxId: string,
+    pendingTxId: string
   ) => {
     try {
       const proofs = await mintTokensFromPaidInvoice(mintUrl, quoteId, amount);
@@ -297,7 +297,7 @@ const DepositModal: React.FC<DepositModalProps> = ({
         console.error("Error checking payment status:", error);
         setError(
           "Failed to check payment status: " +
-            (error instanceof Error ? error.message : String(error)),
+            (error instanceof Error ? error.message : String(error))
         );
       } else {
         setTimeout(() => {
@@ -339,7 +339,7 @@ const DepositModal: React.FC<DepositModalProps> = ({
       const totalAmount = proofs.reduce((sum, p) => sum + p.amount, 0);
 
       setSuccessMessage(
-        `Received ${formatBalance(totalAmount, "sats")} successfully!`,
+        `Received ${formatBalance(totalAmount, "sats")} successfully!`
       );
       setTokenToImport("");
     } catch (error) {

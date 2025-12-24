@@ -13,7 +13,7 @@ declare module "react-syntax-highlighter" {
 
   export const Prism: ComponentType<SyntaxHighlighterProps>;
   export default function SyntaxHighlighter(
-    props: SyntaxHighlighterProps,
+    props: SyntaxHighlighterProps
   ): JSX.Element;
 }
 

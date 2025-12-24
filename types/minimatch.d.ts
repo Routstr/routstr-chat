@@ -20,15 +20,15 @@ declare module "minimatch" {
   export function minimatch(
     path: string,
     pattern: string,
-    options?: IMinimatchOptions,
+    options?: IMinimatchOptions
   ): boolean;
   export function filter(
     pattern: string,
-    options?: IMinimatchOptions,
+    options?: IMinimatchOptions
   ): (path: string) => boolean;
   export function makeRe(
     pattern: string,
-    options?: IMinimatchOptions,
+    options?: IMinimatchOptions
   ): RegExp | null;
 
   export class Minimatch {

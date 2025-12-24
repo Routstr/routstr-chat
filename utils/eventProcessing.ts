@@ -37,7 +37,7 @@ export interface ConversationMetadata {
  */
 export function decryptPnsEventToInner(
   pnsEvent: Event,
-  pnsKeys: PnsKeys,
+  pnsKeys: PnsKeys
 ): InnerEvent | null {
   try {
     // Decrypt PNS Event -> Inner Event
@@ -77,7 +77,7 @@ export function decryptPnsEventToInner(
  * @returns Metadata including conversation ID, role, timestamps
  */
 export function extractConversationMetadata(
-  innerEvent: InnerEvent,
+  innerEvent: InnerEvent
 ): ConversationMetadata | null {
   const dTag = innerEvent.tags.find((t) => t[0] === "d");
   if (!dTag || !dTag[1]) {
@@ -185,18 +185,18 @@ function sortMessagesByPrevIdChain(messages: Message[]): Message[] {
 export function addMessageToConversation(
   conversation: Conversation,
   message: Message,
-  options: { sortMessages: boolean } = { sortMessages: true },
+  options: { sortMessages: boolean } = { sortMessages: true }
 ): Conversation {
   // Check if message already exists (by _eventId)
   const existingIndex = conversation.messages.findIndex(
-    (m) => m._eventId === message._eventId,
+    (m) => m._eventId === message._eventId
   );
 
   let updatedMessages: Message[];
   if (existingIndex !== -1) {
     // Update existing message
     updatedMessages = conversation.messages.map((m, idx) =>
-      idx === existingIndex ? message : m,
+      idx === existingIndex ? message : m
     );
   } else {
     // Add new message
@@ -221,7 +221,7 @@ export function addMessageToConversation(
  */
 export function generateTitleFromMessage(
   message: Message,
-  maxLength: number = 50,
+  maxLength: number = 50
 ): string {
   let text: string;
 
@@ -247,7 +247,7 @@ export function generateTitleFromMessage(
  * @returns Conversation with updated title
  */
 export function updateConversationTitle(
-  conversation: Conversation,
+  conversation: Conversation
 ): Conversation {
   // Messages are already sorted, use the first one
   if (conversation.messages.length === 0) {
@@ -271,7 +271,7 @@ export function updateConversationTitle(
  */
 export function createConversation(
   conversationId: string,
-  initialMessage?: Message,
+  initialMessage?: Message
 ): Conversation {
   const conversation: Conversation = {
     id: conversationId,
@@ -292,7 +292,7 @@ export function createConversation(
  */
 export function processInnerEvent(
   conversationsMap: Map<string, Conversation>,
-  innerEvent: InnerEvent,
+  innerEvent: InnerEvent
 ): Map<string, Conversation> {
   const metadata = extractConversationMetadata(innerEvent);
   if (!metadata) {

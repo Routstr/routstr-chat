@@ -97,7 +97,7 @@ const ModelsTab: React.FC<ModelsTabProps> = ({
         const sorted = filteredList
           .slice()
           .sort((a, b) =>
-            (a.name || a.endpoint_url).localeCompare(b.name || b.endpoint_url),
+            (a.name || a.endpoint_url).localeCompare(b.name || b.endpoint_url)
           );
         // Store all providers for Disable Providers section
         setAllProviders(sorted);
@@ -246,7 +246,7 @@ const ModelsTab: React.FC<ModelsTabProps> = ({
     if (fetchModels) {
       setTimeout(() => {
         fetchModels(0).catch((err) =>
-          console.error("Failed to refresh models:", err),
+          console.error("Failed to refresh models:", err)
         );
       }, 0);
     }
@@ -348,7 +348,7 @@ const ModelsTab: React.FC<ModelsTabProps> = ({
                     } else {
                       // Disable all providers
                       const allDisabled = allProviders.map((p) =>
-                        normalizeProviderUrl(p.endpoint_url),
+                        normalizeProviderUrl(p.endpoint_url)
                       );
                       setDisabledProviders(allDisabled);
                       saveDisabledProviders(allDisabled);
@@ -358,7 +358,7 @@ const ModelsTab: React.FC<ModelsTabProps> = ({
                     if (fetchModels) {
                       setTimeout(() => {
                         fetchModels(0).catch((err) =>
-                          console.error("Failed to refresh models:", err),
+                          console.error("Failed to refresh models:", err)
                         );
                       }, 0);
                     }
@@ -389,7 +389,7 @@ const ModelsTab: React.FC<ModelsTabProps> = ({
               ) : allProviders.length > 0 ? (
                 allProviders.map((provider) => {
                   const normalized = normalizeProviderUrl(
-                    provider.endpoint_url,
+                    provider.endpoint_url
                   );
                   const isDisabled = isProviderDisabled(provider.endpoint_url);
                   if (normalized.includes("http://")) return null;
@@ -492,7 +492,7 @@ const ModelsTab: React.FC<ModelsTabProps> = ({
                               const am = an.includes(q) ? 0 : 1;
                               const bm = bn.includes(q) ? 0 : 1;
                               return am - bm || an.localeCompare(bn);
-                            }),
+                            })
                           );
                         }}
                       />

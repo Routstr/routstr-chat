@@ -37,7 +37,7 @@ export interface MeltQuote {
  */
 export async function createLightningInvoice(
   mintUrl: string,
-  amount: number,
+  amount: number
 ): Promise<MintQuote> {
   try {
     const mint = new Mint(mintUrl);
@@ -74,13 +74,13 @@ export async function createLightningInvoice(
     if (
       error instanceof Error &&
       (error.message.includes(
-        "NetworkError when attempting to fetch resource",
+        "NetworkError when attempting to fetch resource"
       ) ||
         error.message.includes("Failed to fetch") ||
         error.message.includes("Load failed"))
     ) {
       throw new Error(
-        `Mint connection error ${mintUrl}. The mint is blocking your IP or is down.`,
+        `Mint connection error ${mintUrl}. The mint is blocking your IP or is down.`
       );
     }
     console.error("Error creating Lightning invoice:", error);
@@ -99,7 +99,7 @@ export async function mintTokensFromPaidInvoice(
   mintUrl: string,
   quoteId: string,
   amount: number,
-  maxAttempts: number = 40,
+  maxAttempts: number = 40
 ): Promise<Proof[]> {
   try {
     const mint = new Mint(mintUrl);
@@ -174,7 +174,7 @@ export async function mintTokensFromPaidInvoice(
  */
 export async function createMeltQuote(
   mintUrl: string,
-  paymentRequest: string,
+  paymentRequest: string
 ): Promise<MeltQuoteResponse> {
   try {
     const mint = new Mint(mintUrl);
@@ -216,7 +216,7 @@ export async function payMeltQuote(
   mintUrl: string,
   quoteId: string,
   proofs: Proof[],
-  cleanSpentProofs: (mintUrl: string) => Promise<Proof[]>,
+  cleanSpentProofs: (mintUrl: string) => Promise<Proof[]>
 ) {
   try {
     const mint = new Mint(mintUrl);
@@ -251,7 +251,7 @@ export async function payMeltQuote(
     }
     console.log(
       "rdlogs: proofs lfees",
-      calculateFees(proofs, activeKeysets as any),
+      calculateFees(proofs, activeKeysets as any)
     );
     const mintFees =
       calculateFees(proofs, activeKeysets as any) / proofs.length;
@@ -279,7 +279,7 @@ export async function payMeltQuote(
         const newProofsAmount = proofs.reduce((sum, p) => sum + p.amount, 0);
         if (newProofsAmount < amountToSend) {
           throw new Error(
-            `Not enough funds on mint ${mintUrl} after cleaning spent proofs`,
+            `Not enough funds on mint ${mintUrl} after cleaning spent proofs`
           );
         }
 
@@ -289,13 +289,13 @@ export async function payMeltQuote(
             acc[p.amount] = (acc[p.amount] || 0) + 1;
             return acc;
           },
-          {} as Record<number, number>,
+          {} as Record<number, number>
         );
 
         const exactChangeRetryResult = canMakeExactChange(
           amountToSend,
           freshDenominationCounts,
-          proofs,
+          proofs
         );
 
         if (
@@ -310,26 +310,26 @@ export async function payMeltQuote(
               acc[denom] = (acc[denom] || 0) + 1;
               return acc;
             },
-            {} as Record<number, number>,
+            {} as Record<number, number>
           );
 
           console.log(
-            "rdlogs: Can make exact change on retry, using selected proofs directly",
+            "rdlogs: Can make exact change on retry, using selected proofs directly"
           );
           console.log(
             "rdlogs: Selected denominations on retry:",
-            selectedDenominations,
+            selectedDenominations
           );
           console.log(
             "rdlogs: Denomination breakdown on retry:",
-            denominationCounts,
+            denominationCounts
           );
 
           send = exactChangeRetryResult.selectedProofs;
           keep = proofs.filter((p) => !keep.includes(p));
         } else {
           console.log(
-            "rdlogs: Cannot make exact change on retry, using wallet.send()",
+            "rdlogs: Cannot make exact change on retry, using wallet.send()"
           );
           const result = await wallet.send(amountToSend, proofs, {
             includeFees: true,
@@ -343,7 +343,7 @@ export async function payMeltQuote(
         error?.message?.includes("Not enough funds available for swap")
       ) {
         console.log(
-          "wallet.send() failed with insufficient funds, trying exact change methods",
+          "wallet.send() failed with insufficient funds, trying exact change methods"
         );
 
         // Get denomination counts for exact change attempts
@@ -352,7 +352,7 @@ export async function payMeltQuote(
             acc[p.amount] = (acc[p.amount] || 0) + 1;
             return acc;
           },
-          {} as Record<number, number>,
+          {} as Record<number, number>
         );
         console.log("rdlogs:", denominationCounts);
 
@@ -362,12 +362,12 @@ export async function payMeltQuote(
           denominationCounts,
           proofs,
           mintFees,
-          0,
+          0
         );
 
         if (!exactChangeResult.canMake || !exactChangeResult.selectedProofs) {
           console.log(
-            "Cannot make exact change with 0% tolerance, trying with 5% tolerance",
+            "Cannot make exact change with 0% tolerance, trying with 5% tolerance"
           );
           // Try with 5% error tolerance
           exactChangeResult = canMakeExactChange(
@@ -375,7 +375,7 @@ export async function payMeltQuote(
             denominationCounts,
             proofs,
             mintFees,
-            0.05,
+            0.05
           );
         }
 
@@ -388,7 +388,7 @@ export async function payMeltQuote(
               acc[denom] = (acc[denom] || 0) + 1;
               return acc;
             },
-            {} as Record<number, number>,
+            {} as Record<number, number>
           );
 
           const actualAmount = exactChangeResult.actualAmount || 0;
@@ -396,14 +396,14 @@ export async function payMeltQuote(
           const overpaymentPercent = (overpayment / amountToSend) * 100;
 
           console.log(
-            "rdlogs: Can make change within tolerance, using selected proofs directly",
+            "rdlogs: Can make change within tolerance, using selected proofs directly"
           );
           console.log("rdlogs: Target amount:", amountToSend);
           console.log("rdlogs: Actual amount:", actualAmount);
           console.log(
             "rdlogs: Overpayment:",
             overpayment,
-            `(${overpaymentPercent.toFixed(2)}%)`,
+            `(${overpaymentPercent.toFixed(2)}%)`
           );
           console.log("rdlogs: Selected denominations:", selectedDenominations);
           console.log("rdlogs: Denomination breakdown:", denominationBreakdown);
@@ -445,7 +445,7 @@ export async function payMeltQuote(
       .updateMeltQuote(
         mintUrl,
         meltQuote.quote,
-        meltQuoteUpdated as MeltQuoteResponse,
+        meltQuoteUpdated as MeltQuoteResponse
       );
 
     return {

@@ -25,7 +25,7 @@ export function useCurrentUser() {
           throw new Error(`Unsupported login type: ${login.type}`);
       }
     },
-    [nostr],
+    [nostr]
   );
 
   const users = useMemo(() => {

@@ -14,7 +14,7 @@ interface NostrProviderProps {
 class TimestampTrackingNPool extends NPool {
   async event(
     event: NostrEvent,
-    opts?: { signal?: AbortSignal; relays?: string[] },
+    opts?: { signal?: AbortSignal; relays?: string[] }
   ): Promise<void> {
     // Call the original event method
     await super.event(event, opts);

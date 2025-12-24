@@ -169,7 +169,7 @@ export const useEventDatabase = create<EventStoreState>()(
 
         // Find events that match the filters
         const eventsToRemove = allEvents.filter((event) =>
-          matchesAnyFilter(event, filterArray),
+          matchesAnyFilter(event, filterArray)
         );
 
         if (eventsToRemove.length === 0) {
@@ -206,7 +206,7 @@ export const useEventDatabase = create<EventStoreState>()(
       hasReplaceable(
         kind: number,
         pubkey: string,
-        identifier: string = "",
+        identifier: string = ""
       ): boolean {
         const key = getReplaceableKey(kind, pubkey, identifier);
         return key in get().replaceableIndex;
@@ -218,7 +218,7 @@ export const useEventDatabase = create<EventStoreState>()(
       getReplaceable(
         kind: number,
         pubkey: string,
-        identifier: string = "",
+        identifier: string = ""
       ): NostrEvent | undefined {
         const state = get();
         const key = getReplaceableKey(kind, pubkey, identifier);
@@ -232,7 +232,7 @@ export const useEventDatabase = create<EventStoreState>()(
       getReplaceableHistory(
         kind: number,
         pubkey: string,
-        identifier: string = "",
+        identifier: string = ""
       ): NostrEvent[] | undefined {
         const state = get();
         const key = getReplaceableKey(kind, pubkey, identifier);
@@ -298,8 +298,8 @@ export const useEventDatabase = create<EventStoreState>()(
         replaceableIndex: state.replaceableIndex,
         replaceableHistory: state.replaceableHistory,
       }),
-    },
-  ),
+    }
+  )
 );
 
 /**

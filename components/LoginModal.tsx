@@ -64,7 +64,7 @@ export default function LoginModal({
     try {
       if (!("nostr" in window)) {
         throw new Error(
-          "Nostr extension not found. Please install a NIP-07 extension.",
+          "Nostr extension not found. Please install a NIP-07 extension."
         );
       }
       if (hasCreatedEphemeralNsec()) {
@@ -146,7 +146,7 @@ export default function LoginModal({
       } catch (error) {
         console.error("Failed to login with generated key:", error);
         setError(
-          "Failed to login with the generated key: " + (error as Error).message,
+          "Failed to login with the generated key: " + (error as Error).message
         );
       }
     }

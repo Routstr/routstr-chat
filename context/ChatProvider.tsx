@@ -99,7 +99,7 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     cashuWithXYZ.balance,
     cashuWithXYZ.maxBalance,
     cashuWithXYZ.pendingCashuAmountState,
-    cashuWithXYZ.isWalletLoading,
+    cashuWithXYZ.isWalletLoading
   );
   const uiState = useUiState(isAuthenticated);
   const modelState = useModelState();

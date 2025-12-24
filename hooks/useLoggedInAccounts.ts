@@ -20,7 +20,7 @@ export function useLoggedInAccounts() {
     queryFn: async ({ signal }) => {
       const events = await nostr.query(
         [{ kinds: [KINDS.METADATA], authors: logins.map((l) => l.pubkey) }],
-        { signal: AbortSignal.any([signal, AbortSignal.timeout(1500)]) },
+        { signal: AbortSignal.any([signal, AbortSignal.timeout(1500)]) }
       );
 
       return logins.map(({ id, pubkey }): Account => {

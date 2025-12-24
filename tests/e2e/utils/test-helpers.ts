@@ -91,7 +91,7 @@ export async function waitForAuth(page: Page) {
         const loader = document.querySelector('svg[class*="animate-spin"]');
         return !loader || loader.closest("div")?.textContent !== "";
       },
-      { timeout: 10000 },
+      { timeout: 10000 }
     )
     .catch(() => {
       // Auth might already be complete
@@ -145,7 +145,7 @@ export async function ensureMintInitialized(page: Page) {
         }
 
         const mintExists = parsed.state.mints.some(
-          (m: any) => (typeof m === "string" ? m : m.url) === defaultMintUrl,
+          (m: any) => (typeof m === "string" ? m : m.url) === defaultMintUrl
         );
 
         if (!mintExists) {
@@ -165,7 +165,7 @@ export async function ensureMintInitialized(page: Page) {
               usingNip60: true,
             },
             version: 0,
-          }),
+          })
         );
       }
     } else {
@@ -180,7 +180,7 @@ export async function ensureMintInitialized(page: Page) {
             usingNip60: true,
           },
           version: 0,
-        }),
+        })
       );
     }
   });
@@ -308,7 +308,7 @@ export async function selectAvailableModel(page: Page): Promise<string | null> {
 export async function waitForUserMessage(
   page: Page,
   messageText: string,
-  timeout = 5000,
+  timeout = 5000
 ) {
   // User messages are displayed in a div with bg-white/10 rounded-2xl
   // They appear in a flex justify-end container
@@ -333,7 +333,7 @@ export async function waitForChatReady(page: Page) {
  */
 export async function receiveCashuToken(
   page: Page,
-  token: string,
+  token: string
 ): Promise<boolean> {
   // Wait for topup modal to appear
   await waitForTopupModal(page);

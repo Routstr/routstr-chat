@@ -24,7 +24,7 @@ export interface UseUiStateReturn {
   setIsSidebarOpen: (open: boolean) => void;
   setTextareaHeight: (height: number) => void;
   setInitialSettingsTab: (
-    tab: "settings" | "wallet" | "history" | "api-keys" | "models",
+    tab: "settings" | "wallet" | "history" | "api-keys" | "models"
   ) => void;
 }
 
@@ -38,7 +38,7 @@ export const useUiState = (isAuthenticated: boolean): UseUiStateReturn => {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isModelDrawerOpen, setIsModelDrawerOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() =>
-    loadSidebarCollapsed(),
+    loadSidebarCollapsed()
   );
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => loadSidebarOpen());
   const [textareaHeight, setTextareaHeight] = useState(48);

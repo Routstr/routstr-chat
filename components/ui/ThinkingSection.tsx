@@ -113,7 +113,7 @@ export default function ThinkingSection({
 
   const visibleText = useMemo(
     () => lines.slice(0, visibleLineCount).join("\n"),
-    [lines, visibleLineCount],
+    [lines, visibleLineCount]
   );
   const scrollRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {

@@ -34,7 +34,7 @@ export class MintService {
           const wallet = new Wallet(mint, unit === "sat" ? {} : { unit });
           await wallet.loadMint();
           return { unit, wallet };
-        }),
+        })
       );
 
       // Get mint info from the first wallet
@@ -42,7 +42,7 @@ export class MintService {
 
       // Collect all keysets from all wallets
       const allKeysets = wallets.map(({ wallet }) =>
-        wallet.keyChain.getKeyset(),
+        wallet.keyChain.getKeyset()
       );
 
       // Some mints or clients may return malformed keyset ids. Filter to valid hex ids to avoid downstream fromHex errors.
@@ -51,7 +51,7 @@ export class MintService {
         /^[0-9a-fA-F]+$/.test(id) &&
         id.length % 2 === 0;
       const filteredKeysets = allKeysets.filter(
-        (ks) => isValidHexId(ks.id) && ks.active,
+        (ks) => isValidHexId(ks.id) && ks.active
       );
 
       // Use wallets to fetch keys for each keyset
@@ -59,17 +59,17 @@ export class MintService {
         filteredKeysets.map(async (keyset) => {
           // Find the wallet that matches this keyset's unit
           const walletEntry = wallets.find(
-            ({ wallet }) => wallet.keyChain.getKeyset().id === keyset.id,
+            ({ wallet }) => wallet.keyChain.getKeyset().id === keyset.id
           );
           const walletToUse = walletEntry?.wallet || wallets[0].wallet;
           return { [keyset.id]: walletToUse.keyChain.getKeyset(keyset.id) };
-        }),
+        })
       );
 
       return { mintInfo, keysets: filteredKeysets, keys: keys };
     } catch (error) {
       throw new Error(
-        `Failed to activate mint ${mintUrl}: ${error instanceof Error ? error.message : String(error)}`,
+        `Failed to activate mint ${mintUrl}: ${error instanceof Error ? error.message : String(error)}`
       );
     }
   }
@@ -78,7 +78,7 @@ export class MintService {
    * Get preferred unit for a mint (prefer msat over sat)
    */
   async getPreferredUnit(
-    mintUrl: string,
+    mintUrl: string
   ): Promise<"sat" | "msat" | "not supported"> {
     const normalizedUrl = normalizeMintUrl(mintUrl);
     const mint = new CashuMint(normalizedUrl);

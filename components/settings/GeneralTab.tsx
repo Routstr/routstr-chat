@@ -60,7 +60,7 @@ const GeneralTab: React.FC<GeneralTabProps> = ({
   const handleCloseNsecWarning = () => {
     if (
       window.confirm(
-        "Are you sure you want to dismiss this warning? You will not be reminded again unless you clear your browser local storage.",
+        "Are you sure you want to dismiss this warning? You will not be reminded again unless you clear your browser local storage."
       )
     ) {
       localStorage.setItem("nsec_storing_skipped", "false");

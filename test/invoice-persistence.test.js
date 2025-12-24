@@ -133,7 +133,7 @@ async function testBackgroundService() {
     } else {
       fail(
         `${testName} - Interval`,
-        `Expected 60000ms, got ${checkInterval}ms`,
+        `Expected 60000ms, got ${checkInterval}ms`
       );
     }
 
@@ -195,13 +195,13 @@ async function testRecoveryMechanism() {
       JSON.stringify({
         invoices: pendingInvoices,
         lastSync: Date.now(),
-      }),
+      })
     );
 
     // Simulate recovery check
     const stored = JSON.parse(localStorage.getItem("lightning_invoices"));
     const needsRecovery = stored.invoices.filter(
-      (inv) => inv.state === "UNPAID" || inv.state === "PAID",
+      (inv) => inv.state === "UNPAID" || inv.state === "PAID"
     );
 
     if (needsRecovery.length === 2) {
@@ -213,7 +213,7 @@ async function testRecoveryMechanism() {
     // Verify toast would be shown
     log(
       "Recovery toast notification verified in InvoiceRecoveryProvider",
-      "yellow",
+      "yellow"
     );
     pass(`${testName} - Shows recovery toast`);
 
@@ -256,7 +256,7 @@ async function testExponentialBackoff() {
       } else {
         log(
           `  Retry ${test.retry}: ${result / 1000}s (expected ${test.expected / 1000}s) ✗`,
-          "red",
+          "red"
         );
         allPassed = false;
       }
@@ -307,7 +307,7 @@ async function testManualControls() {
       JSON.stringify({
         invoices,
         lastSync: Date.now(),
-      }),
+      })
     );
 
     // Simulate delete
@@ -388,14 +388,14 @@ async function testEdgeCases() {
     } else {
       fail(
         `${testName} - Cleanup`,
-        `Expected 0 invoices, got ${cleaned.length}`,
+        `Expected 0 invoices, got ${cleaned.length}`
       );
     }
 
     // Test network error handling
     log(
       "Network error retry logic verified with exponential backoff",
-      "yellow",
+      "yellow"
     );
     pass(`${testName} - Network error handling`);
 
@@ -464,12 +464,12 @@ async function testTransactionCleanup() {
     };
 
     const pendingTx = pendingTransactions.find(
-      (tx) => tx.quoteId === paidInvoice.quoteId,
+      (tx) => tx.quoteId === paidInvoice.quoteId
     );
     if (pendingTx) {
       // Simulate removal
       const remaining = pendingTransactions.filter(
-        (tx) => tx.id !== pendingTx.id,
+        (tx) => tx.id !== pendingTx.id
       );
       if (remaining.length === 0) {
         pass(`${testName} - Removes pending transaction`);
@@ -520,7 +520,7 @@ async function runTests() {
 
   // Acceptance criteria verification
   console.log(
-    "\n" + colors.magenta + "Acceptance Criteria Status:" + colors.reset,
+    "\n" + colors.magenta + "Acceptance Criteria Status:" + colors.reset
   );
   const criteria = [
     "✓ Lightning invoices stored persistently (NIP-44 + localStorage)",

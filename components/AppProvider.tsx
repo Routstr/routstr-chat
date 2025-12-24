@@ -22,7 +22,7 @@ export function AppProvider(props: AppProviderProps) {
   // App configuration state with localStorage persistence
   const [config, setConfig] = useLocalStorage<AppConfig>(
     storageKey,
-    defaultConfig,
+    defaultConfig
   );
 
   // Generic config updater with callback pattern

@@ -27,9 +27,7 @@ interface UseWalletOperationsProps {
   setTransactionHistory: (
     transactionHistory:
       | TransactionHistory[]
-      | ((
-          prevTransactionHistory: TransactionHistory[],
-        ) => TransactionHistory[]),
+      | ((prevTransactionHistory: TransactionHistory[]) => TransactionHistory[])
   ) => void;
   transactionHistory: TransactionHistory[];
 }
@@ -45,7 +43,7 @@ export function useWalletOperations({
   const mintQuoteRef = useRef<MintQuoteResponse | null>(null);
   const checkIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
-    null,
+    null
   );
   const { addInvoice, updateInvoice } = useInvoiceSync();
 
@@ -85,7 +83,7 @@ export function useWalletOperations({
       setMintQuote: (quote: MintQuoteResponse | null) => void,
       setMintInvoice: (invoice: string) => void,
       countdown: number,
-      setCountdown: (countdown: number) => void,
+      setCountdown: (countdown: number) => void
     ) => {
       if (!cashuWalletRef.current || !mintQuoteRef.current) return;
 
@@ -96,7 +94,7 @@ export function useWalletOperations({
 
       try {
         const checkedQuote = await cashuWalletRef.current.checkMintQuote(
-          mintQuoteRef.current.quote,
+          mintQuoteRef.current.quote
         );
         if (checkedQuote.state === MintQuoteState.PAID) {
           if (checkIntervalRef.current) {
@@ -113,7 +111,7 @@ export function useWalletOperations({
             const amount = parseInt(mintAmount, 10);
             const proofs = await cashuWalletRef.current.mintProofs(
               amount,
-              mintQuoteRef.current.quote,
+              mintQuoteRef.current.quote
             );
 
             const storedProofs = localStorage.getItem("cashu_proofs");
@@ -122,7 +120,7 @@ export function useWalletOperations({
               : [];
             localStorage.setItem(
               "cashu_proofs",
-              JSON.stringify([...existingProofs, ...proofs]),
+              JSON.stringify([...existingProofs, ...proofs])
             );
 
             const newBalance =
@@ -131,7 +129,7 @@ export function useWalletOperations({
 
             const { apiBalance, proofsBalance } = await fetchBalances(
               mintUrl,
-              baseUrl,
+              baseUrl
             );
             setBalance(apiBalance / 1000 + newBalance);
 
@@ -154,7 +152,7 @@ export function useWalletOperations({
             };
             localStorage.setItem(
               "transaction_history",
-              JSON.stringify([...transactionHistory, newTransaction]),
+              JSON.stringify([...transactionHistory, newTransaction])
             );
             setTransactionHistory((prev) => [...prev, newTransaction]);
 
@@ -178,7 +176,7 @@ export function useWalletOperations({
               const proofsBalance = balances.proofsBalance;
               setBalance(apiBalance / 1000 + proofsBalance / 1000); //balances returned in mSats
               setSuccessMessage(
-                "Payment already processed! Your balance has been updated.",
+                "Payment already processed! Your balance has been updated."
               );
               setShowInvoiceModal(false);
               setMintQuote(null);
@@ -187,7 +185,7 @@ export function useWalletOperations({
             } else {
               setError(
                 err?.message ||
-                  "Failed to process the payment. Please try again.",
+                  "Failed to process the payment. Please try again."
               );
             }
           }
@@ -197,7 +195,7 @@ export function useWalletOperations({
           setError(
             err instanceof Error
               ? err.message
-              : "Failed to check payment status",
+              : "Failed to check payment status"
           );
         }
       } finally {
@@ -213,7 +211,7 @@ export function useWalletOperations({
       transactionHistory,
       setTransactionHistory,
       updateInvoice,
-    ],
+    ]
   );
 
   // Create mint quote
@@ -226,7 +224,7 @@ export function useWalletOperations({
       mintAmount: string,
       setMintQuote: (quote: MintQuoteResponse | null) => void,
       setMintInvoice: (invoice: string) => void,
-      amountOverride?: number,
+      amountOverride?: number
     ) => {
       if (!cashuWalletRef.current) return;
 
@@ -260,13 +258,13 @@ export function useWalletOperations({
         setShowInvoiceModal(true);
       } catch (err) {
         setError(
-          err instanceof Error ? err.message : "Failed to create mint quote",
+          err instanceof Error ? err.message : "Failed to create mint quote"
         );
       } finally {
         setIsMinting(false);
       }
     },
-    [mintUrl, addInvoice],
+    [mintUrl, addInvoice]
   );
 
   // Import token
@@ -276,7 +274,7 @@ export function useWalletOperations({
       setError: (error: string) => void,
       setSuccessMessage: (message: string) => void,
       tokenToImport: string,
-      setTokenToImport: (token: string) => void,
+      setTokenToImport: (token: string) => void
     ) => {
       if (!cashuWalletRef.current || !tokenToImport.trim()) return;
 
@@ -299,12 +297,12 @@ export function useWalletOperations({
           : [];
         localStorage.setItem(
           "cashu_proofs",
-          JSON.stringify([...existingProofs, ...proofs]),
+          JSON.stringify([...existingProofs, ...proofs])
         );
 
         const importedAmount = proofs.reduce(
           (total: number, proof: CashuProof) => total + proof.amount,
-          0,
+          0
         );
 
         setBalance((prevBalance) => prevBalance + importedAmount);
@@ -313,7 +311,7 @@ export function useWalletOperations({
 
         const { apiBalance, proofsBalance } = await fetchBalances(
           mintUrl,
-          baseUrl,
+          baseUrl
         );
         const newTransaction: TransactionHistory = {
           type: "import",
@@ -325,7 +323,7 @@ export function useWalletOperations({
         };
         localStorage.setItem(
           "transaction_history",
-          JSON.stringify([...transactionHistory, newTransaction]),
+          JSON.stringify([...transactionHistory, newTransaction])
         );
         setTransactionHistory((prev) => [...prev, newTransaction]);
         setTokenToImport("");
@@ -338,14 +336,14 @@ export function useWalletOperations({
           setError("This token has already been spent.");
         } else {
           setError(
-            error?.message || "Failed to import token. Please try again.",
+            error?.message || "Failed to import token. Please try again."
           );
         }
       } finally {
         setIsImporting(false);
       }
     },
-    [mintUrl, baseUrl, setBalance, transactionHistory, setTransactionHistory],
+    [mintUrl, baseUrl, setBalance, transactionHistory, setTransactionHistory]
   );
 
   // Core token generation function (pure function without UI dependencies)
@@ -369,7 +367,7 @@ export function useWalletOperations({
 
         const sendResult = await cashuWalletRef.current.send(
           amount,
-          existingProofs,
+          existingProofs
         );
         const { send, keep } = sendResult;
 
@@ -390,7 +388,7 @@ export function useWalletOperations({
         return null;
       }
     },
-    [],
+    []
   );
 
   // Generate send token
@@ -402,7 +400,7 @@ export function useWalletOperations({
       sendAmount: string,
       balance: number,
       setSendAmount: (amount: string) => void,
-      setGeneratedToken: (token: string) => void,
+      setGeneratedToken: (token: string) => void
     ) => {
       if (!cashuWalletRef.current) return;
 
@@ -430,12 +428,12 @@ export function useWalletOperations({
         setBalance((prevBalance) => prevBalance - amount);
         setGeneratedToken(token);
         setSuccessMessage(
-          `Generated token for ${amount} sats. Share it with the recipient.`,
+          `Generated token for ${amount} sats. Share it with the recipient.`
         );
 
         const { apiBalance, proofsBalance } = await fetchBalances(
           mintUrl,
-          baseUrl,
+          baseUrl
         );
         const newTransaction: TransactionHistory = {
           type: "send",
@@ -447,19 +445,19 @@ export function useWalletOperations({
         };
         localStorage.setItem(
           "transaction_history",
-          JSON.stringify([...transactionHistory, newTransaction]),
+          JSON.stringify([...transactionHistory, newTransaction])
         );
         setTransactionHistory((prev) => [...prev, newTransaction]);
         setSendAmount("");
       } catch (err) {
         setError(
-          err instanceof Error ? err.message : "Failed to generate token",
+          err instanceof Error ? err.message : "Failed to generate token"
         );
       } finally {
         setIsGeneratingSendToken(false);
       }
     },
-    [mintUrl, baseUrl, setBalance, transactionHistory, setTransactionHistory],
+    [mintUrl, baseUrl, setBalance, transactionHistory, setTransactionHistory]
   );
 
   // Set up auto-refresh interval when invoice is generated
@@ -471,7 +469,7 @@ export function useWalletOperations({
       isAutoChecking: boolean,
       setIsAutoChecking: (checking: boolean) => void,
       countdown: number,
-      setCountdown: (countdown: number | ((prev: number) => number)) => void,
+      setCountdown: (countdown: number | ((prev: number) => number)) => void
     ) => {
       if (checkIntervalRef.current) {
         clearInterval(checkIntervalRef.current);
@@ -513,7 +511,7 @@ export function useWalletOperations({
         }
       };
     },
-    [checkMintQuote],
+    [checkMintQuote]
   );
 
   return {

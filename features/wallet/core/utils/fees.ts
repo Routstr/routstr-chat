@@ -9,7 +9,7 @@ import { Keyset, MintKeyset } from "@cashu/cashu-ts";
  */
 export function calculateFees(
   inputProofs: Proof[],
-  activeKeysets: MintKeyset[],
+  activeKeysets: MintKeyset[]
 ): number {
   let sumFees = 0;
 
@@ -28,7 +28,7 @@ export function calculateFees(
  */
 export function calculateAverageFeePerProof(
   proofs: Proof[],
-  activeKeysets: MintKeyset[],
+  activeKeysets: MintKeyset[]
 ): number {
   const totalFee = calculateFees(proofs, activeKeysets);
   return proofs.length > 0 ? totalFee / proofs.length : 0;

@@ -44,7 +44,7 @@ export function useInvoiceSync() {
     if (typeof window !== "undefined") {
       localStorage.setItem(
         "invoice_cloud_sync_enabled",
-        String(cloudSyncEnabled),
+        String(cloudSyncEnabled)
       );
     }
   }, [cloudSyncEnabled]);
@@ -80,18 +80,18 @@ export function useInvoiceSync() {
       updated.push(invoice);
       saveLocalInvoices(updated);
     },
-    [getLocalInvoices, saveLocalInvoices],
+    [getLocalInvoices, saveLocalInvoices]
   );
 
   const updateLocalInvoice = useCallback(
     (id: string, updates: Partial<StoredInvoice>) => {
       const existing = getLocalInvoices();
       const updated = existing.map((inv) =>
-        inv.id === id ? { ...inv, ...updates, checkedAt: Date.now() } : inv,
+        inv.id === id ? { ...inv, ...updates, checkedAt: Date.now() } : inv
       );
       saveLocalInvoices(updated);
     },
-    [getLocalInvoices, saveLocalInvoices],
+    [getLocalInvoices, saveLocalInvoices]
   );
 
   // Cloud sync mutations
@@ -118,7 +118,7 @@ export function useInvoiceSync() {
 
       const content = await user.signer.nip44.encrypt(
         user.pubkey,
-        JSON.stringify(relevantInvoices),
+        JSON.stringify(relevantInvoices)
       );
 
       const event = await user.signer.signEvent({
@@ -166,7 +166,7 @@ export function useInvoiceSync() {
         const latestEvent = events[0];
         const decrypted = await user.signer.nip44.decrypt(
           user.pubkey,
-          latestEvent.content,
+          latestEvent.content
         );
         const cloudInvoices: StoredInvoice[] = JSON.parse(decrypted);
 
@@ -225,7 +225,7 @@ export function useInvoiceSync() {
       user,
       cloudSyncEnabled,
       syncInvoicesMutation,
-    ],
+    ]
   );
 
   // Update invoice
@@ -244,7 +244,7 @@ export function useInvoiceSync() {
       user,
       cloudSyncEnabled,
       syncInvoicesMutation,
-    ],
+    ]
   );
 
   // Get pending invoices that need checking
@@ -284,7 +284,7 @@ export function useInvoiceSync() {
       const baseInterval = 30000; // 30 seconds
       const backoffInterval = Math.min(
         baseInterval * Math.pow(2, retryCount),
-        300000,
+        300000
       ); // Max 5 minutes
 
       return now - lastCheck > backoffInterval;
@@ -346,7 +346,7 @@ export function useInvoiceSync() {
       cloudSyncEnabled,
       syncInvoicesMutation,
       queryClient,
-    ],
+    ]
   );
 
   // Reset retry count for an invoice
@@ -358,7 +358,7 @@ export function useInvoiceSync() {
         checkedAt: undefined,
       });
     },
-    [updateInvoice],
+    [updateInvoice]
   );
 
   return {

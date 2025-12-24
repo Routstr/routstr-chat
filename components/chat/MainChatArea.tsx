@@ -47,7 +47,6 @@ const MainChatArea: React.FC = () => {
 
     // Conversation State
     activeConversationId,
-    createNewConversationHandler,
     getActiveConversationId,
 
     // API State
@@ -67,7 +66,6 @@ const MainChatArea: React.FC = () => {
       messages,
       setMessages,
       activeConversationId,
-      createNewConversationHandler,
       selectedModel,
       baseUrl,
       isAuthenticated,

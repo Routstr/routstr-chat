@@ -15,9 +15,7 @@ interface UnifiedWalletProps {
   setTransactionHistory: (
     transactionHistory:
       | TransactionHistory[]
-      | ((
-          prevTransactionHistory: TransactionHistory[],
-        ) => TransactionHistory[]),
+      | ((prevTransactionHistory: TransactionHistory[]) => TransactionHistory[])
   ) => void;
 }
 

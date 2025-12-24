@@ -34,7 +34,7 @@ export class TokenService {
   encodeToken(
     mintUrl: string,
     proofs: Proof[],
-    unit: string = "sat",
+    unit: string = "sat"
   ): EncodedToken {
     return getEncodedTokenV4({
       mint: mintUrl,

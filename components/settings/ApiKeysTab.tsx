@@ -113,10 +113,10 @@ const ApiKeysTab = ({
         setAvailableBaseUrls(list);
         // Initialize selections if not already set
         setSelectedNewApiKeyBaseUrl(
-          (prev) => prev || list[0] || normalizeBaseUrl(baseUrl),
+          (prev) => prev || list[0] || normalizeBaseUrl(baseUrl)
         );
         setSelectedManualApiKeyBaseUrl(
-          (prev) => prev || list[0] || normalizeBaseUrl(baseUrl),
+          (prev) => prev || list[0] || normalizeBaseUrl(baseUrl)
         );
       } catch {
         // On error, fall back to current baseUrl if any
@@ -242,7 +242,7 @@ const ApiKeysTab = ({
   // Helper function to deep compare API keys arrays
   const areApiKeysEqual = (
     keys1: StoredApiKey[],
-    keys2: StoredApiKey[],
+    keys2: StoredApiKey[]
   ): boolean => {
     if (keys1.length !== keys2.length) return false;
 
@@ -342,7 +342,7 @@ const ApiKeysTab = ({
           // Also check if any key was removed
           const keysRemoved = prevKeys.some(
             (prevKey) =>
-              !new Map(newLocalKeys.map((k) => [k.key, k])).has(prevKey.key),
+              !new Map(newLocalKeys.map((k) => [k.key, k])).has(prevKey.key)
           );
 
           if (hasChanged || keysRemoved) {
@@ -391,13 +391,12 @@ const ApiKeysTab = ({
       const result = await spendCashu(
         cashuStore.activeMintUrl,
         parseInt(apiKeyAmount),
-        selectedNewApiKeyBaseUrl,
+        selectedNewApiKeyBaseUrl
       );
 
       if (result.status === "failed" || !result.token) {
         toast.error(
-          result.error ||
-            "Failed to generate Cashu token for API key creation.",
+          result.error || "Failed to generate Cashu token for API key creation."
         );
         return;
       }
@@ -410,7 +409,7 @@ const ApiKeysTab = ({
           headers: {
             Authorization: `Bearer ${token}`,
           },
-        },
+        }
       );
 
       if (!response.ok) {
@@ -446,7 +445,7 @@ const ApiKeysTab = ({
       toast.error(
         `Error creating API key: ${
           error instanceof Error ? error.message : String(error)
-        }`,
+        }`
       ); // Use toast
     } finally {
       setIsLoading(false); // Set loading to false
@@ -456,7 +455,7 @@ const ApiKeysTab = ({
 
   // Helper: fetch wallet info for a single key and return the updated representation plus an error code
   const fetchUpdatedKey = async (
-    keyData: StoredApiKey,
+    keyData: StoredApiKey
   ): Promise<{
     updatedKey: StoredApiKey | null;
     error: "invalid_api_key" | "network" | "other" | null;
@@ -516,7 +515,7 @@ const ApiKeysTab = ({
         if (error === "network") {
           const urlToUse = keyData.baseUrl || baseUrl;
           toast.error(
-            `Base URL ${urlToUse} is not responding. Skipping key ${keyData.key}.`,
+            `Base URL ${urlToUse} is not responding. Skipping key ${keyData.key}.`
           );
           // In network errors we still mark invalid (helper already does), but updatedKey is null by contract here
           updatedKeys.push({ ...keyData, balance: null, isInvalid: true });
@@ -548,7 +547,7 @@ const ApiKeysTab = ({
       const { updatedKey, error } = await fetchUpdatedKey(keyData);
       if (updatedKey) {
         const newKeys = storedApiKeys.map((k) =>
-          k.key === keyData.key ? updatedKey : k,
+          k.key === keyData.key ? updatedKey : k
         );
         setStoredApiKeys(newKeys);
 
@@ -565,7 +564,7 @@ const ApiKeysTab = ({
       if (error === "network") {
         const urlToUse = keyData.baseUrl || baseUrl;
         toast.error(
-          `Base URL ${urlToUse} is not responding. Skipping refresh.`,
+          `Base URL ${urlToUse} is not responding. Skipping refresh.`
         );
       } else if (error === "other") {
         toast.error("Error refreshing key.");
@@ -574,7 +573,7 @@ const ApiKeysTab = ({
         const newKeys = storedApiKeys.map((k) =>
           k.key === keyData.key
             ? { ...keyData, balance: null, isInvalid: true }
-            : k,
+            : k
         );
         setStoredApiKeys(newKeys);
         if (cloudSyncEnabled) {
@@ -607,7 +606,7 @@ const ApiKeysTab = ({
     const trimmed = editingLabelValue.trim();
     const newLabel = trimmed.length > 0 ? trimmed : "Unnamed";
     const newKeys = storedApiKeys.map((k) =>
-      k.key === keyData.key ? { ...k, label: newLabel } : k,
+      k.key === keyData.key ? { ...k, label: newLabel } : k
     );
     setStoredApiKeys(newKeys);
     try {
@@ -645,7 +644,7 @@ const ApiKeysTab = ({
     try {
       // Find the key data to get its balance
       const keyDataToDelete = storedApiKeys.find(
-        (keyData) => keyData.key === keyToDeleteConfirmation,
+        (keyData) => keyData.key === keyToDeleteConfirmation
       );
 
       if (keyDataToDelete) {
@@ -659,12 +658,12 @@ const ApiKeysTab = ({
           urlToUse,
           usingNip60,
           receiveToken,
-          keyDataToDelete.key,
+          keyDataToDelete.key
         );
 
         if (refundResult.success) {
           toast.success(
-            refundResult.message || "API Key balance refunded successfully!",
+            refundResult.message || "API Key balance refunded successfully!"
           );
           // Proceed with deletion after successful refund
           proceedWithDeletion(keyToDeleteConfirmation);
@@ -682,7 +681,7 @@ const ApiKeysTab = ({
       toast.error(
         `Error deleting API key: ${
           error instanceof Error ? error.message : String(error)
-        }`,
+        }`
       );
       setIsDeletingKey(null);
       setKeyToDeleteConfirmation(null);
@@ -693,7 +692,7 @@ const ApiKeysTab = ({
     if (!keyToDelete) return;
 
     const updatedKeys = storedApiKeys.filter(
-      (keyData) => keyData.key !== keyToDelete,
+      (keyData) => keyData.key !== keyToDelete
     );
 
     if (cloudSyncEnabled) {
@@ -737,12 +736,12 @@ const ApiKeysTab = ({
       const result = await spendCashu(
         cashuStore.activeMintUrl,
         parseInt(topUpAmount),
-        urlToUse,
+        urlToUse
       );
 
       if (result.status === "failed" || !result.token) {
         toast.error(
-          result.error || "Failed to generate Cashu token for top up.",
+          result.error || "Failed to generate Cashu token for top up."
         );
         return;
       }
@@ -753,7 +752,7 @@ const ApiKeysTab = ({
       // Make the topup request to the backend
       const response = await fetch(
         `${urlToUse}v1/wallet/topup?cashu_token=${encodeURIComponent(
-          cashuToken,
+          cashuToken
         )}`,
         {
           method: "POST",
@@ -761,13 +760,13 @@ const ApiKeysTab = ({
             Authorization: `Bearer ${keyToTopUp.key}`,
             "Content-Type": "application/json",
           },
-        },
+        }
       );
 
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(
-          errorData.detail || `Top up failed with status ${response.status}`,
+          errorData.detail || `Top up failed with status ${response.status}`
         );
       }
 
@@ -784,7 +783,7 @@ const ApiKeysTab = ({
         toast.error(
           `Top up failed: ${
             error instanceof Error ? error.message : String(error)
-          }`,
+          }`
         );
       }
     } finally {
@@ -814,7 +813,7 @@ const ApiKeysTab = ({
           headers: {
             Authorization: `Bearer ${manualApiKey}`,
           },
-        },
+        }
       );
 
       if (!response.ok) {
@@ -855,7 +854,7 @@ const ApiKeysTab = ({
       toast.error(
         `Error adding API key: ${
           error instanceof Error ? error.message : String(error)
-        }`,
+        }`
       );
     } finally {
       setIsAddingApiKey(false);
@@ -1201,18 +1200,18 @@ const ApiKeysTab = ({
                               urlToUse,
                               usingNip60,
                               receiveToken,
-                              keyData.key,
+                              keyData.key
                             );
                             if (refundResult.success) {
                               toast.success(
                                 refundResult.message ||
-                                  "Refund completed successfully!",
+                                  "Refund completed successfully!"
                               );
                               refreshApiKeysBalances(); // Refresh balances after successful refund
                             } else {
                               toast.error(
                                 refundResult.message ||
-                                  "Failed to complete refund.",
+                                  "Failed to complete refund."
                               );
                             }
                           } catch (error) {
@@ -1222,7 +1221,7 @@ const ApiKeysTab = ({
                                 error instanceof Error
                                   ? error.message
                                   : String(error)
-                              }`,
+                              }`
                             );
                           } finally {
                             setIsRefundingKey(null); // Reset loading

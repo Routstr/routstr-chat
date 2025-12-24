@@ -132,7 +132,7 @@ export function NostrProvider({ children }: { children: ReactNode }) {
 
   const publishEvent = async (
     content: string,
-    kind = 1,
+    kind = 1
   ): Promise<Event | null> => {
     if (!pool) return null;
 

@@ -27,7 +27,7 @@ export function useApiKeysSync() {
     if (typeof window !== "undefined") {
       localStorage.setItem(
         "api_keys_cloud_sync_enabled",
-        String(cloudSyncEnabled),
+        String(cloudSyncEnabled)
       );
     }
   }, [cloudSyncEnabled]);
@@ -47,7 +47,7 @@ export function useApiKeysSync() {
       // Encrypt the content
       const content = await user.signer.nip44.encrypt(
         user.pubkey,
-        JSON.stringify(apiKeys),
+        JSON.stringify(apiKeys)
       );
 
       // Create the NIP-78 event
@@ -84,7 +84,7 @@ export function useApiKeysSync() {
           | StoredApiKey[]
           | undefined) || [];
       const updatedKeys = currentApiKeys.filter(
-        (k: StoredApiKey) => k.key !== keyToDelete,
+        (k: StoredApiKey) => k.key !== keyToDelete
       );
 
       // Publish a new event with the updated list
@@ -136,7 +136,7 @@ export function useApiKeysSync() {
         // Decrypt content
         const decrypted = await user.signer.nip44.decrypt(
           user.pubkey,
-          latestEvent.content,
+          latestEvent.content
         );
         const cloudApiKeys: StoredApiKey[] = JSON.parse(decrypted);
 
@@ -158,7 +158,7 @@ export function useApiKeysSync() {
       } catch (error) {
         if (error instanceof Error && error.message.includes("invalid MAC")) {
           toast.error(
-            "Nostr Extention: invalid MAC. Please switch to your previously connected account on the extension OR sign out and login. .",
+            "Nostr Extention: invalid MAC. Please switch to your previously connected account on the extension OR sign out and login. ."
           );
         }
         console.error("Failed to decrypt API key data:", error);
@@ -171,12 +171,12 @@ export function useApiKeysSync() {
   // Memoize the mutation functions to prevent infinite re-renders
   const createOrUpdateApiKeys = useCallback(
     (apiKeys: StoredApiKey[]) => createApiKeysMutation.mutateAsync(apiKeys),
-    [createApiKeysMutation],
+    [createApiKeysMutation]
   );
 
   const deleteApiKey = useCallback(
     (keyToDelete: string) => deleteApiKeyMutation.mutateAsync(keyToDelete),
-    [deleteApiKeyMutation],
+    [deleteApiKeyMutation]
   );
 
   return {

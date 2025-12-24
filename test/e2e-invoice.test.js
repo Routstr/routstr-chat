@@ -103,7 +103,7 @@ async function testMintIntegration() {
       // Store quote for later verification
       fs.writeFileSync(
         path.join(__dirname, "last-test-quote.json"),
-        JSON.stringify(quote),
+        JSON.stringify(quote)
       );
 
       return quote;
@@ -131,7 +131,7 @@ async function testPaymentFlow(invoice) {
     // Check mint status
     await sleep(2000);
     const statusCheck = exec(
-      `curl -s ${MINT_URL}/v1/mint/quote/bolt11/${invoice.quote}`,
+      `curl -s ${MINT_URL}/v1/mint/quote/bolt11/${invoice.quote}`
     );
     try {
       const status = JSON.parse(statusCheck);

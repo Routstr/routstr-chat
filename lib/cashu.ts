@@ -69,7 +69,7 @@ export function calculateBalance(proofs: Proof[]): {
       if (proofsForKeyset.length) {
         balances[mint.url] += proofsForKeyset.reduce(
           (acc, proof) => acc + proof.amount,
-          0,
+          0
         );
         units[mint.url] = keyset.unit;
       }
@@ -98,7 +98,7 @@ export function getTokenAmount(token: string): number {
   const tokenObj = getDecodedToken(token);
   return tokenObj.proofs.reduce(
     (acc: number, proof: Proof) => acc + proof.amount,
-    0,
+    0
   );
 }
 
@@ -115,7 +115,7 @@ export function canMakeExactChange(
   denomCounts: Record<number, number>,
   availableProofs: Proof[],
   fees?: number,
-  errorTolerance?: number,
+  errorTolerance?: number
 ): { canMake: boolean; selectedProofs?: Proof[]; actualAmount?: number } {
   // Default error tolerance to 0 (exact change) if not specified
   const tolerance = errorTolerance || 0;
@@ -138,7 +138,7 @@ export function canMakeExactChange(
         totalNeeded,
         maxAcceptableAmount,
         denomCounts,
-        availableProofs,
+        availableProofs
       );
 
       if (!result.canMake) {
@@ -154,7 +154,7 @@ export function canMakeExactChange(
       // Check if we've converged (total amount covers both target and fees)
       const currentTotal = result.selectedProofs!.reduce(
         (sum, p) => sum + p.amount,
-        0,
+        0
       );
       const minimumRequired = targetAmount + requiredFee;
       const maximumAcceptable = Math.ceil(minimumRequired * (1 + tolerance));
@@ -196,13 +196,13 @@ export function canMakeExactChange(
     targetAmount,
     maxAcceptableAmount,
     denomCounts,
-    availableProofs,
+    availableProofs
   );
 
   if (result.canMake && result.selectedProofs) {
     const actualAmount = result.selectedProofs.reduce(
       (sum, p) => sum + p.amount,
-      0,
+      0
     );
     return {
       canMake: true,
@@ -221,7 +221,7 @@ function findCombinationWithTolerance(
   targetAmount: number,
   maxAmount: number,
   denomCounts: Record<number, number>,
-  availableProofs: Proof[],
+  availableProofs: Proof[]
 ): { canMake: boolean; selectedProofs?: Proof[] } {
   // First try exact amount
   let result = findExactCombination(targetAmount, denomCounts, availableProofs);
@@ -246,7 +246,7 @@ function findCombinationWithTolerance(
 function findExactCombination(
   targetAmount: number,
   denomCounts: Record<number, number>,
-  availableProofs: Proof[],
+  availableProofs: Proof[]
 ): { canMake: boolean; selectedProofs?: Proof[] } {
   // Use dynamic programming with proper denomination counting
   const denominations = Object.keys(denomCounts)
@@ -295,7 +295,7 @@ function findExactCombination(
       // Make sure we have enough proofs of this denomination
       if (proofsOfDenom.length < count) {
         console.error(
-          `Not enough proofs of denomination ${denom}: need ${count}, have ${proofsOfDenom.length}`,
+          `Not enough proofs of denomination ${denom}: need ${count}, have ${proofsOfDenom.length}`
         );
         return { canMake: false };
       }
@@ -324,7 +324,7 @@ function findExactCombination(
  */
 export function calculateFees(
   inputProofs: Proof[],
-  activeKeysets: Keyset[],
+  activeKeysets: Keyset[]
 ): number {
   let sumFees = 0;
   for (const proof of inputProofs) {

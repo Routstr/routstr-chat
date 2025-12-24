@@ -43,14 +43,14 @@ export function useProviderBalancesSync() {
         ); // Default to true if not explicitly false
       }
       return true; // Default to true for SSR cases where window is undefined
-    },
+    }
   );
 
   useEffect(() => {
     if (typeof window !== "undefined") {
       localStorage.setItem(
         "provider_balances_sync_enabled",
-        String(balancesSyncEnabled),
+        String(balancesSyncEnabled)
       );
     }
   }, [balancesSyncEnabled]);
@@ -70,7 +70,7 @@ export function useProviderBalancesSync() {
       // Encrypt the content
       const content = await user.signer.nip44.encrypt(
         user.pubkey,
-        JSON.stringify(providerBalances),
+        JSON.stringify(providerBalances)
       );
 
       // Create the NIP-78 event
@@ -109,7 +109,7 @@ export function useProviderBalancesSync() {
           PROVIDER_BALANCES_D_TAG,
         ]) as ProviderBalance[] | undefined) || [];
       const updatedBalances = currentProviderBalances.filter(
-        (balance: ProviderBalance) => balance.provider !== providerToDelete,
+        (balance: ProviderBalance) => balance.provider !== providerToDelete
       );
 
       // Publish a new event with the updated list
@@ -161,7 +161,7 @@ export function useProviderBalancesSync() {
         // Decrypt content
         const decrypted = await user.signer.nip44.decrypt(
           user.pubkey,
-          latestEvent.content,
+          latestEvent.content
         );
         const cloudProviderBalances: ProviderBalance[] = JSON.parse(decrypted);
 
@@ -183,7 +183,7 @@ export function useProviderBalancesSync() {
       } catch (error) {
         if (error instanceof Error && error.message.includes("invalid MAC")) {
           toast.error(
-            "Nostr Extension: invalid MAC. Please switch to your previously connected account on the extension OR sign out and login.",
+            "Nostr Extension: invalid MAC. Please switch to your previously connected account on the extension OR sign out and login."
           );
         }
         console.error("Failed to decrypt provider balance data:", error);
@@ -197,13 +197,13 @@ export function useProviderBalancesSync() {
   const createOrUpdateProviderBalances = useCallback(
     (providerBalances: ProviderBalance[]) =>
       createProviderBalancesMutation.mutateAsync(providerBalances),
-    [createProviderBalancesMutation],
+    [createProviderBalancesMutation]
   );
 
   const deleteProviderBalance = useCallback(
     (providerToDelete: string) =>
       deleteProviderBalanceMutation.mutateAsync(providerToDelete),
-    [deleteProviderBalanceMutation],
+    [deleteProviderBalanceMutation]
   );
 
   return {

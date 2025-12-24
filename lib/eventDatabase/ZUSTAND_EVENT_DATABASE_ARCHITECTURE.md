@@ -66,17 +66,17 @@ interface EventStoreState {
   hasReplaceable: (
     kind: number,
     pubkey: string,
-    identifier?: string,
+    identifier?: string
   ) => boolean;
   getReplaceable: (
     kind: number,
     pubkey: string,
-    identifier?: string,
+    identifier?: string
   ) => NostrEvent | undefined;
   getReplaceableHistory: (
     kind: number,
     pubkey: string,
-    identifier?: string,
+    identifier?: string
   ) => NostrEvent[] | undefined;
   getByFilters: (filters: Filter | Filter[]) => NostrEvent[];
   getTimeline: (filters: Filter | Filter[]) => NostrEvent[];
@@ -112,7 +112,7 @@ function isParameterized(kind: number): boolean {
 function getReplaceableKey(
   kind: number,
   pubkey: string,
-  identifier: string = "",
+  identifier: string = ""
 ): string {
   return `${kind}:${pubkey}:${identifier}`;
 }
@@ -192,7 +192,7 @@ function getByFilters(filters: Filter | Filter[]): NostrEvent[] {
 
   // Union: event matches if it matches ANY filter
   const matchingEvents = allEvents.filter((event) =>
-    filterArray.some((filter) => matchesFilter(event, filter)),
+    filterArray.some((filter) => matchesFilter(event, filter))
   );
 
   // Apply limit if specified (use smallest limit across all filters)
@@ -238,8 +238,8 @@ const useEventStore = create<EventStoreState>()(
         ...currentState,
         ...persistedState,
       }),
-    },
-  ),
+    }
+  )
 );
 ```
 
@@ -516,7 +516,7 @@ const events = useEventStore.getState().getByFilters([
 const profile = useEventStore.getState().getReplaceable(
   0, // kind: metadata
   pubkey, // author
-  "", // no identifier for kind 0
+  "" // no identifier for kind 0
 );
 ```
 

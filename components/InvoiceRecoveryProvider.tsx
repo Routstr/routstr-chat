@@ -19,7 +19,7 @@ export const InvoiceRecoveryProvider: React.FC<
   const hasCheckedOnMount = useRef(false);
   const hasShownRecoveryToast = useRef(false);
   const [trackingInvoices, setTrackingInvoices] = useState<Set<string>>(
-    new Set(),
+    new Set()
   );
   const previousInvoiceStates = useRef<Map<string, string>>(new Map());
 
@@ -49,7 +49,7 @@ export const InvoiceRecoveryProvider: React.FC<
           `Found ${pending.length} pending invoice${
             pending.length > 1 ? "s" : ""
           } from previous session. Checking status...`,
-          { duration: 5000 },
+          { duration: 5000 }
         );
 
         // Trigger check
@@ -89,9 +89,9 @@ export const InvoiceRecoveryProvider: React.FC<
         toast.success(
           `${action} ${formatBalance(
             inv.amount,
-            "sats",
+            "sats"
           )} - Invoice recovered from previous session`,
-          { duration: 6000 },
+          { duration: 6000 }
         );
       });
     }
