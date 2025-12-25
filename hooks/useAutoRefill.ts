@@ -33,7 +33,6 @@ export interface AutoRefillStatus {
 
 interface UseAutoRefillProps {
   balance: number;
-  isWalletLoaded: boolean;
   onProofsReceived?: (proofs: Proof[]) => void;
 }
 
@@ -44,11 +43,9 @@ interface UseAutoRefillProps {
  * - Monitors Cashu wallet balance
  * - Triggers NWC payment when Cashu balance < threshold
  * - Implements cooldown to prevent rapid successive refills
- * - Only triggers when wallet is fully loaded
  */
 export function useAutoRefill({
   balance,
-  isWalletLoaded,
   onProofsReceived,
 }: UseAutoRefillProps): AutoRefillStatus {
   const cashuStore = useCashuStore();
@@ -209,11 +206,6 @@ export function useAutoRefill({
    */
   useEffect(() => {
     const checkAndRefill = async () => {
-      // Skip if wallet is not fully loaded yet
-      if (!isWalletLoaded) {
-        return;
-      }
-
       // Throttle checks
       const now = Date.now();
       const timeSinceLastCheck = now - lastCheckTimeRef.current;
@@ -269,16 +261,9 @@ export function useAutoRefill({
       }
     };
 
-    // Run check when balance or API keys change (only when wallet is loaded)
+    // Run check when balance or API keys change
     checkAndRefill();
-  }, [
-    balance,
-    isWalletLoaded,
-    syncedApiKeys,
-    isInCooldown,
-    executeNWCRefill,
-    executeAPITopup,
-  ]);
+  }, [balance, syncedApiKeys, isInCooldown, executeNWCRefill, executeAPITopup]);
 
   return {
     nwcAutoRefillEnabled: settingsRef.current.nwc.enabled,

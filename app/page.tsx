@@ -69,8 +69,7 @@ function ChatPageContent() {
   } = useCashuWallet();
 
   // Enable auto-refill functionality - monitors balance and triggers refills when enabled
-  // Only triggers when wallet is fully loaded to avoid false positives from initial zero balance
-  useAutoRefill({ balance, isWalletLoaded: !isWalletLoading });
+  useAutoRefill({ balance });
   const pendingUrlSyncRef = useRef(false);
   const searchParamsString = useMemo(
     () => searchParams.toString(),
