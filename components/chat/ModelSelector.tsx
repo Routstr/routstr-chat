@@ -63,7 +63,7 @@ export default function ModelSelector({
   isAuthenticated,
   setIsLoginModalOpen,
   isLoadingModels,
-  filteredModels: models,
+  filteredModels: dedupedModels,
   handleModelChange,
   balance,
   configuredModels,
@@ -117,9 +117,7 @@ export default function ModelSelector({
     } catch {
       // Keep existing map if loading fails
     }
-  }, [models]);
-
-  // Helpers to parse provider-qualified keys (moved to utils)
+  }, [dedupedModels]);
 
   // Current model helpers for top-of-list section
   const currentConfiguredKeyMemo: string | undefined = useMemo(() => {
@@ -147,62 +145,6 @@ export default function ModelSelector({
     }
     return null;
   }, [baseUrl, currentConfiguredKeyMemo, selectedModel, modelProviderMap]);
-
-  // Determine which provider bases we likely need and prefetch them
-  const neededProviderBases: readonly string[] = useMemo(() => {
-    const bases = new Set<string>();
-    try {
-      // From configured favorites (keys may include @@base)
-      for (const key of configuredModels) {
-        const { base } = parseModelKey(key);
-        const norm = normalizeBaseUrl(base);
-        if (norm) bases.add(norm);
-      }
-      // From best-priced mapping for models in view
-      for (const m of models) {
-        const mapped = normalizeBaseUrl(modelProviderMap[m.id]);
-        if (mapped) bases.add(mapped);
-      }
-      // From current selection key
-      if (currentConfiguredKeyMemo) {
-        const { base } = parseModelKey(currentConfiguredKeyMemo);
-        const norm = normalizeBaseUrl(base);
-        if (norm) bases.add(norm);
-      }
-      // From details panel selection
-      if (detailsBaseUrl) {
-        const norm = normalizeBaseUrl(detailsBaseUrl);
-        if (norm) bases.add(norm);
-      }
-    } catch {}
-    return Array.from(bases);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    configuredModels,
-    models,
-    modelProviderMap,
-    currentConfiguredKeyMemo,
-    detailsBaseUrl,
-  ]);
-
-  // Deduplicate models across providers by picking the best-priced variant per id
-  const dedupedModels = useMemo(() => {
-    const bestById = new Map<string, Model>();
-    for (const m of models) {
-      const existing = bestById.get(m.id);
-      if (!existing) {
-        bestById.set(m.id, m);
-        continue;
-      }
-      const currentCost = m?.sats_pricing?.completion ?? 0;
-      const existingCost = existing?.sats_pricing?.completion ?? 0;
-      if (currentCost < existingCost) {
-        bestById.set(m.id, m);
-      }
-    }
-    return Array.from(bestById.values());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [models]);
 
   // Normalize provider modality strings to canonical categories used for icons/filters
   const normalizeModality = (
