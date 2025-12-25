@@ -5,6 +5,8 @@ import {
   getPendingCashuTokenDistribution,
 } from "../../utils/cashuUtils";
 import { useTransactionHistoryStore } from "@/features/wallet/state/transactionHistoryStore";
+import { useAppContext } from "@/hooks/useAppContext";
+import { formatSats } from "@/features/wallet";
 
 type ViewMode = "combined" | "separate";
 
@@ -25,6 +27,8 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
   clearConversations,
   onClose,
 }) => {
+  const { config } = useAppContext();
+  const unit = config.unit || "₿";
   const [pendingCashuAmount, setPendingCashuAmount] = useState<number | null>(
     null
   );
@@ -213,7 +217,7 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
                             {item.baseUrl}
                           </span>
                           <span className="text-muted-foreground font-mono">
-                            +{item.amount} sats
+                            +{formatSats(item.amount, unit, 4)}
                           </span>
                         </div>
                       ))}
@@ -223,7 +227,7 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
               </div>
               <div className="text-right">
                 <div className="text-sm font-mono text-foreground">
-                  +{pendingCashuAmount} sats
+                  +{formatSats(pendingCashuAmount || 0, unit, 4)}
                 </div>
               </div>
             </div>
@@ -268,14 +272,18 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
                         <div className="text-sm font-mono text-foreground">
                           {entry.type === "received" ? "+" : "-"}
                           {entry.type === "spent" && entry.receivedAmount
-                            ? Number(entry.amount) -
-                              Number(entry.receivedAmount)
-                            : entry.amount}{" "}
-                          sats
+                            ? formatSats(
+                                Number(entry.amount) -
+                                  Number(entry.receivedAmount),
+                                unit,
+                                4
+                              )
+                            : formatSats(Number(entry.amount), unit, 4)}
                         </div>
                         {entry.type === "spent" && entry.receivedAmount && (
                           <div className="text-xs text-muted-foreground">
-                            Pair: {entry.receivedAmount} - {entry.amount} sats
+                            Pair: {formatSats(Number(entry.receivedAmount), unit, 4)} -{" "}
+                            {formatSats(Number(entry.amount), unit, 4)}
                           </div>
                         )}
                       </div>
@@ -324,7 +332,7 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
                       <div className="text-right">
                         <div className="text-sm font-mono text-foreground">
                           {entry.direction === "out" ? "-" : "+"}
-                          {entry.amount} sats
+                          {formatSats(Number(entry.amount), unit, 4)}
                         </div>
                       </div>
                     </div>

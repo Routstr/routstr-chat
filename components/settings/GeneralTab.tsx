@@ -10,6 +10,7 @@ import { useLoggedInAccounts } from "@/hooks/useLoggedInAccounts";
 import { useLoginActions } from "@/hooks/useLoginActions";
 import { useNostrLogin } from "@nostrify/react/login";
 import { useChatSync } from "@/hooks/useChatSync";
+import { useAppContext } from "@/hooks/useAppContext";
 import {
   loadAutoDeleteConversations,
   saveAutoDeleteConversations,
@@ -45,6 +46,7 @@ const GeneralTab: React.FC<GeneralTabProps> = ({
   const { logins } = useNostrLogin();
   const loginActions = useLoginActions();
   const { chatSyncEnabled, setChatSyncEnabled } = useChatSync();
+  const { config, updateConfig } = useAppContext();
   const [autoDeleteEnabled, setAutoDeleteEnabled] = useState<boolean>(false);
 
   useEffect(() => {
@@ -102,6 +104,41 @@ const GeneralTab: React.FC<GeneralTabProps> = ({
 
       {/* Theme Settings */}
       <ThemeSettings />
+
+      {/* Unit Settings */}
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-medium text-foreground/80">Display Unit</h3>
+          <div className="bg-muted/50 border border-border rounded-md p-1 flex gap-1 max-w-fit">
+            {[
+              { id: "₿", label: "₿" },
+              { id: "sats", label: "sats" },
+              { id: "usd", label: "$" },
+            ].map(({ id, label }) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() =>
+                  updateConfig((prev) => ({
+                    ...prev,
+                    unit: id as "sats" | "₿" | "usd",
+                  }))
+                }
+                className={`flex items-center justify-center px-3 py-1 rounded-md text-xs font-medium transition-all cursor-pointer min-w-[40px] ${
+                  (config.unit || "₿") === id
+                    ? "bg-muted text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Choose how to display Bitcoin amounts
+        </p>
+      </div>
 
       {/* Chat Sync Settings */}
       <div className="mb-6">

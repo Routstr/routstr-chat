@@ -1,7 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { Zap, Link2, Wifi, WifiOff, Loader, AlertCircle } from "lucide-react";
+import { useAppContext } from "@/hooks/useAppContext";
+import { formatSats } from "@/features/wallet";
 
 const NWCWalletManager: React.FC = () => {
+  const { config } = useAppContext();
+  const unit = config.unit || "₿";
   const [nwcStatus, setNwcStatus] = useState<
     "disconnected" | "connecting" | "connected"
   >("disconnected");
@@ -203,7 +207,7 @@ const NWCWalletManager: React.FC = () => {
                         </span>
                         {nwcBalance !== null && nwcStatus === "connected" && (
                           <span className="text-xs text-muted-foreground">
-                            {nwcBalance.toLocaleString()} sats
+                            {formatSats(nwcBalance, unit)}
                           </span>
                         )}
                       </div>

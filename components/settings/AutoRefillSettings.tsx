@@ -15,6 +15,8 @@ import {
 } from "@/utils/storageUtils";
 import { isNWCConnected, getNWCBalance } from "@/lib/nwcPayment";
 import { useApiKeysSync } from "@/hooks/useApiKeysSync";
+import { useAppContext } from "@/hooks/useAppContext";
+import { formatSats } from "@/features/wallet";
 
 interface StoredApiKey {
   key: string;
@@ -34,6 +36,8 @@ interface AutoRefillSettingsProps {
 const AutoRefillSettings: React.FC<AutoRefillSettingsProps> = ({
   apiKeys = [],
 }) => {
+  const { config } = useAppContext();
+  const unit = config.unit || "₿";
   // Get cloud-synced API keys
   const { syncedApiKeys, isLoadingApiKeys } = useApiKeysSync();
 
@@ -160,7 +164,7 @@ const AutoRefillSettings: React.FC<AutoRefillSettingsProps> = ({
               </span>
               {nwcBalance !== null && (
                 <span className="text-xs text-muted-foreground">
-                  ({nwcBalance.toLocaleString()} sats)
+                  ({formatSats(nwcBalance, unit)})
                 </span>
               )}
             </div>
@@ -208,7 +212,9 @@ const AutoRefillSettings: React.FC<AutoRefillSettingsProps> = ({
                       }
                       className="w-20 bg-muted/50 border border-border rounded px-2 py-1 text-xs text-foreground text-right focus:outline-none focus:ring-1 focus:ring-ring"
                     />
-                    <span className="text-xs text-muted-foreground">sats</span>
+                    <span className="text-xs text-muted-foreground">
+                      {unit === "₿" ? "bitcoin" : "sats"}
+                    </span>
                   </div>
                 </div>
 
@@ -229,7 +235,9 @@ const AutoRefillSettings: React.FC<AutoRefillSettingsProps> = ({
                       }
                       className="w-20 bg-muted/50 border border-border rounded px-2 py-1 text-xs text-foreground text-right focus:outline-none focus:ring-1 focus:ring-ring"
                     />
-                    <span className="text-xs text-muted-foreground">sats</span>
+                    <span className="text-xs text-muted-foreground">
+                      {unit === "₿" ? "bitcoin" : "sats"}
+                    </span>
                   </div>
                 </div>
               </>
@@ -298,7 +306,7 @@ const AutoRefillSettings: React.FC<AutoRefillSettingsProps> = ({
                       <option key={key.key} value={key.key}>
                         {key.label || "Unnamed"} (
                         {key.balance !== null
-                          ? `${(key.balance / 1000).toFixed(0)} sats`
+                          ? formatSats(key.balance / 1000, unit)
                           : "N/A"}
                         )
                       </option>
@@ -323,7 +331,9 @@ const AutoRefillSettings: React.FC<AutoRefillSettingsProps> = ({
                       }
                       className="w-20 bg-muted/50 border border-border rounded px-2 py-1 text-xs text-foreground text-right focus:outline-none focus:ring-1 focus:ring-ring"
                     />
-                    <span className="text-xs text-muted-foreground">sats</span>
+                    <span className="text-xs text-muted-foreground">
+                      {unit === "₿" ? "bitcoin" : "sats"}
+                    </span>
                   </div>
                 </div>
 
@@ -344,7 +354,9 @@ const AutoRefillSettings: React.FC<AutoRefillSettingsProps> = ({
                       }
                       className="w-20 bg-muted/50 border border-border rounded px-2 py-1 text-xs text-foreground text-right focus:outline-none focus:ring-1 focus:ring-ring"
                     />
-                    <span className="text-xs text-muted-foreground">sats</span>
+                    <span className="text-xs text-muted-foreground">
+                      {unit === "₿" ? "bitcoin" : "sats"}
+                    </span>
                   </div>
                 </div>
               </>
