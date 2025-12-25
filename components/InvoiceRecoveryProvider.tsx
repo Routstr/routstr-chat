@@ -5,7 +5,8 @@ import { useInvoiceChecker } from "@/hooks/useInvoiceChecker";
 import { useInvoiceSync, StoredInvoice } from "@/hooks/useInvoiceSync";
 import { toast } from "sonner";
 import { MintQuoteState, MeltQuoteState } from "@cashu/cashu-ts";
-import { formatBalance } from "@/features/wallet";
+import { formatBalance, formatSats } from "@/features/wallet";
+import { useAppContext } from "@/hooks/useAppContext";
 
 interface InvoiceRecoveryProviderProps {
   children: React.ReactNode;
@@ -14,6 +15,8 @@ interface InvoiceRecoveryProviderProps {
 export const InvoiceRecoveryProvider: React.FC<
   InvoiceRecoveryProviderProps
 > = ({ children }) => {
+  const { config } = useAppContext();
+  const unit = config.unit || "₿";
   const { invoices, getPendingInvoices } = useInvoiceSync();
   const { triggerCheck } = useInvoiceChecker();
   const hasCheckedOnMount = useRef(false);
@@ -84,12 +87,13 @@ export const InvoiceRecoveryProvider: React.FC<
     if (recoveredInvoices.length > 0) {
       setTrackingInvoices(new Set(trackingInvoices));
 
-      recoveredInvoices.forEach((inv) => {
+        recoveredInvoices.forEach((inv) => {
         const action = inv.type === "mint" ? "Received" : "Sent";
         toast.success(
           `${action} ${formatBalance(
             inv.amount,
-            "sats"
+            "sats",
+            unit
           )} - Invoice recovered from previous session`,
           { duration: 6000 }
         );
@@ -113,7 +117,9 @@ export const InvoiceRecoveryProvider: React.FC<
         if (recentlyPaid.length > 0) {
           recentlyPaid.forEach((inv) => {
             const type = inv.type === "mint" ? "received" : "sent";
-            toast.success(`Invoice ${type} successfully (${inv.amount} sats)`);
+            toast.success(
+              `Invoice ${type} successfully (${formatSats(inv.amount, unit)})`
+            );
           });
         }
       }

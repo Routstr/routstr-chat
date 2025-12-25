@@ -9,6 +9,7 @@ import {
   useCashuStore,
   useTransactionHistoryStore,
   formatBalance,
+  formatSats,
   useCashuToken,
 } from "@/features/wallet";
 import { useInvoiceSync } from "@/hooks/useInvoiceSync";
@@ -21,6 +22,7 @@ import { MintQuoteState, getDecodedToken } from "@cashu/cashu-ts";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useNostrLogin } from "@nostrify/react/login";
 import { useLoginActions } from "@/hooks/useLoginActions";
+import { useAppContext } from "@/hooks/useAppContext";
 import { generateSecretKey, nip19 } from "nostr-tools";
 import { useAuth } from "@/context/AuthProvider";
 import { markEphemeralNsecCreated } from "@/utils/storageUtils";
@@ -41,6 +43,8 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
   setIsLoginModalOpen,
   cashuToken: cashuTokenParam,
 }) => {
+  const { config } = useAppContext();
+  const unit = config.unit || "₿";
   const [customAmount, setCustomAmount] = useState("");
   const [invoice, setInvoice] = useState("");
   const [quoteId, setQuoteId] = useState("");
@@ -194,7 +198,9 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
             ? Math.floor(originalTotalAmount / 1000)
             : originalTotalAmount;
 
-        setSuccessMessage(`Received ${formatBalance(displayAmount, "sats")}!`);
+        setSuccessMessage(
+          `Received ${formatBalance(displayAmount, "sats", unit)}!`
+        );
         setCashuToken("");
         setTimeout(() => {
           setSuccessMessage(null);
@@ -282,7 +288,9 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
           ? Math.floor(originalTotalAmount / 1000)
           : originalTotalAmount;
 
-      setSuccessMessage(`Received ${formatBalance(displayAmount, "sats")}!`);
+      setSuccessMessage(
+        `Received ${formatBalance(displayAmount, "sats", unit)}!`
+      );
       setCashuToken("");
       setTimeout(() => {
         setSuccessMessage(null);
@@ -385,7 +393,9 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
             pendingTransactionId
           );
         setPendingTransactionId(null);
-        setSuccessMessage(`Received ${formatBalance(pendingAmount, "sats")}!`);
+        setSuccessMessage(
+          `Received ${formatBalance(pendingAmount, "sats", unit)}!`
+        );
         setInvoice("");
         setQuoteId("");
         setPendingAmount(null);
@@ -415,7 +425,9 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
         });
         transactionHistoryStore.removePendingTransaction(pendingId);
         setPendingTransactionId(null);
-        setSuccessMessage(`Received ${formatBalance(amt, "sats")}!`);
+        setSuccessMessage(
+          `Received ${formatBalance(amt, "sats", unit)}!`
+        );
         setTimeout(() => setSuccessMessage(null), 4000);
         return;
       }
@@ -514,7 +526,7 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
               paidAt: Date.now(),
             });
             transactionHistoryStore.removePendingTransaction(pendingId);
-            setSuccessMessage(`Received ${formatBalance(amt, "sats")}!`);
+            setSuccessMessage(`Received ${formatBalance(amt, "sats", unit)}!`);
             setNwcCustomAmount("");
             setTimeout(() => {
               setSuccessMessage(null);
@@ -640,7 +652,7 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
                   className="flex-1 bg-muted/50 hover:bg-muted border border-border hover:border-border text-foreground px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer"
                   type="button"
                 >
-                  {a} sats
+                  {formatSats(a, unit)}
                 </button>
               ))}
             </div>
@@ -649,7 +661,7 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
               <input
                 type="number"
                 inputMode="numeric"
-                placeholder="Custom amount (sats)"
+                placeholder={`Custom amount (${unit === "₿" ? "bitcoin" : "sats"})`}
                 value={customAmount}
                 onChange={(e) => setCustomAmount(e.target.value)}
                 onKeyDown={(e) => {
@@ -754,7 +766,7 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
                   </span>
                   {bcStatus === "connected" && bcBalance !== null && (
                     <span className="text-xs text-muted-foreground mt-1 block">
-                      {bcBalance.toLocaleString()} sats
+                      {formatSats(bcBalance, unit)}
                     </span>
                   )}
                 </div>
@@ -815,7 +827,7 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
                       className="flex-1 bg-muted/50 hover:bg-muted border border-border text-foreground px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                       type="button"
                     >
-                      {a} sats
+                      {formatSats(a, unit)}
                     </button>
                   ))}
                 </div>
@@ -824,7 +836,7 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
                   <input
                     type="number"
                     inputMode="numeric"
-                    placeholder="Custom amount (sats)"
+                    placeholder={`Custom amount (${unit === "₿" ? "bitcoin" : "sats"})`}
                     value={nwcCustomAmount}
                     onChange={(e) => setNwcCustomAmount(e.target.value)}
                     onKeyDown={(e) => {

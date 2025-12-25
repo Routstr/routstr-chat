@@ -37,6 +37,8 @@ import {
   isModelAvailable,
 } from "@/utils/modelUtils";
 import { recommendedModels, webSearchModels } from "@/lib/preconfiguredModels";
+import { useAppContext } from "@/hooks/useAppContext";
+import { formatSats } from "@/features/wallet";
 
 interface ModelSelectorProps {
   selectedModel: Model | null;
@@ -73,6 +75,8 @@ export default function ModelSelector({
   baseUrl,
   lowBalanceWarningForModel,
 }: ModelSelectorProps) {
+  const { config } = useAppContext();
+  const unit = config.unit || "₿";
   const modelDrawerRef = useRef<HTMLDivElement>(null);
   const toggleButtonRef = useRef<HTMLButtonElement>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -647,7 +651,7 @@ export default function ModelSelector({
               </span>
               {!isAvailable && requiredMin > 0 && (
                 <span className="text-yellow-600 dark:text-yellow-400 font-medium flex-shrink-0">
-                  • Min: {requiredMin.toFixed(0)} sats
+                  • Min: {formatSats(requiredMin, unit)}
                 </span>
               )}
             </div>
@@ -849,8 +853,7 @@ export default function ModelSelector({
           </div>
           {effectiveModel?.sats_pricing && (
             <div className="text-[11px] text-muted-foreground/80">
-              Est. min: {getRequiredSatsForModel(effectiveModel).toFixed(0)}{" "}
-              sats
+              Est. min: {formatSats(getRequiredSatsForModel(effectiveModel), unit)}
             </div>
           )}
         </div>
