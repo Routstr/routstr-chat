@@ -254,7 +254,7 @@ export const useApiState = (
               }
               const currentCost = estimateMinCost(m);
               const existingCost = estimateMinCost(existing.model);
-              if (currentCost < existingCost && m.sats_pricing) {
+              if (currentCost < existingCost) {
                 bestById.set(m.id, { model: m, base });
               }
             }
