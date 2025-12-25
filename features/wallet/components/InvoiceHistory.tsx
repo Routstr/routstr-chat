@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { useInvoiceSync, StoredInvoice } from "@/hooks/useInvoiceSync";
 import { MintQuoteState, MeltQuoteState } from "@cashu/cashu-ts";
-import { formatBalance } from "@/lib/cashu";
+import { formatBalance } from "@/features/wallet";
 import { useAppContext } from "@/hooks/useAppContext";
 import {
   Clock,

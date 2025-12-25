@@ -181,6 +181,11 @@ const WalletTab: React.FC<WalletTabProps> = ({
   // Popular amounts for quick minting
   const popularAmounts = unit === "usd" ? [1, 5, 10, 50] : [100, 500, 1000, 5000];
 
+  // Tab state
+  const [activeTab, setActiveTab] = useState<"deposit" | "send" | "history">(
+    "deposit"
+  );
+
   // Handle quick mint button click
   const handleQuickMint = async (amount: number) => {
     let sats: number;

@@ -83,30 +83,6 @@ function addThousandsSeparator(num: number): string {
   return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
 
-// Helper function to format balance with appropriate units
-export function formatBalance(
-  balance: number,
-  unit: string,
-  displayUnit: "sats" | "₿" = "₿"
-): string {
-  const isSats = unit === "sat" || unit === "sats";
-  let formatted = "";
-
-  if (balance >= 1000000) {
-    formatted = `${(balance / 1000000).toFixed(1)}M`;
-  } else if (balance >= 100000) {
-    formatted = `${(balance / 1000).toFixed(1)}k`;
-  } else {
-    formatted = addThousandsSeparator(balance);
-  }
-
-  if (isSats) {
-    return displayUnit === "₿" ? `₿${formatted}` : `${formatted} sats`;
-  }
-
-  return `${formatted} ${unit}`;
-}
-
 export function getTokenAmount(token: string): number {
   const tokenObj = getDecodedToken(token);
   return tokenObj.proofs.reduce(

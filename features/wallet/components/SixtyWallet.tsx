@@ -512,15 +512,15 @@ const SixtyWallet: React.FC<{
       setError(null);
       setSuccessMessage(null);
 
-      const unit = getDecodedToken(tokenToImport).unit;
+      const tokenUnit = getDecodedToken(tokenToImport).unit;
       const proofs = await receiveToken(tokenToImport);
       const totalAmount = proofs.reduce((sum, p) => sum + p.amount, 0);
 
       setSuccessMessage(
         `Received ${formatAmountWithPlural(
           totalAmount,
-          unit != undefined ? unit : "sat",
-          unit
+          tokenUnit != undefined ? tokenUnit : "sat",
+          unit as "sats" | "₿" | "usd"
         )} successfully!`
       );
       setTokenToImport("");
@@ -968,7 +968,7 @@ const SixtyWallet: React.FC<{
               {wallet.mints.map((mint) => {
                 const mintBalance = mintBalances[mint] || 0;
                 const isActive = cashuStore.activeMintUrl === mint;
-                const unit = mintUnits[mint] || "sat";
+                const mUnit = mintUnits[mint] || "sat";
                 return (
                   <div
                     key={mint}
@@ -1007,7 +1007,7 @@ const SixtyWallet: React.FC<{
                           isActive ? "text-foreground" : "text-muted-foreground"
                         )}
                       >
-                        {formatBalance(mintBalance, unit, unit)}
+                        {formatBalance(mintBalance, mUnit, unit as "sats" | "₿" | "usd")}
                       </span>
                       <div className="flex items-center gap-1.5 shrink-0">
                         <button
