@@ -14,6 +14,7 @@ import {
   useCashuToken,
   useCashuStore,
   formatBalance,
+  formatSats,
   calculateBalanceByMint,
   useTransactionHistoryStore,
 } from "@/features/wallet";
@@ -24,6 +25,7 @@ import {
 } from "@/lib/cashuLightning";
 import { useInvoiceSync } from "@/hooks/useInvoiceSync";
 import { useInvoiceChecker } from "@/hooks/useInvoiceChecker";
+import { useAppContext } from "@/hooks/useAppContext";
 import { MintQuoteState } from "@cashu/cashu-ts";
 import dynamic from "next/dynamic";
 
@@ -60,6 +62,8 @@ const DepositModal: React.FC<DepositModalProps> = ({
   initialAmount,
   autoCreate,
 }) => {
+  const { config } = useAppContext();
+  const unit = config.unit || "₿";
   const modalRef = useRef<HTMLDivElement>(null);
   const hasAutoCreatedRef = useRef(false);
 
@@ -237,7 +241,9 @@ const DepositModal: React.FC<DepositModalProps> = ({
             pendingTransactionId
           );
         setPendingTransactionId(null);
-        setSuccessMessage(`Received ${formatBalance(pendingAmount, "sats")}!`);
+        setSuccessMessage(
+          `Received ${formatBalance(pendingAmount, "sats", unit)}!`
+        );
         setInvoice("");
         setcurrentMeltQuoteId("");
         setReceiveAmount("");
@@ -278,7 +284,9 @@ const DepositModal: React.FC<DepositModalProps> = ({
         transactionHistoryStore.removePendingTransaction(pendingTxId);
         setPendingTransactionId(null);
 
-        setSuccessMessage(`Received ${formatBalance(amount, "sats")}!`);
+        setSuccessMessage(
+          `Received ${formatBalance(amount, "sats", unit)}!`
+        );
         setInvoice("");
         setcurrentMeltQuoteId("");
         setReceiveAmount("");
@@ -339,7 +347,11 @@ const DepositModal: React.FC<DepositModalProps> = ({
       const totalAmount = proofs.reduce((sum, p) => sum + p.amount, 0);
 
       setSuccessMessage(
-        `Received ${formatBalance(totalAmount, "sats")} successfully!`
+        `Received ${formatBalance(
+          totalAmount,
+          "sats",
+          unit
+        )} successfully!`
       );
       setTokenToImport("");
     } catch (error) {
@@ -376,7 +388,7 @@ const DepositModal: React.FC<DepositModalProps> = ({
         <h2 className="text-xl font-semibold text-white mb-4">Deposit Funds</h2>
         {initialAmount && initialAmount > 0 && (
           <div className="bg-white/5 border border-white/20 rounded-md p-2 text-white/70 text-xs mb-3">
-            Suggested amount: {initialAmount} sats
+            Suggested amount: {formatSats(initialAmount, unit)}
           </div>
         )}
 
@@ -434,7 +446,7 @@ const DepositModal: React.FC<DepositModalProps> = ({
                     className="flex-1 bg-white/5 border border-white/20 text-white px-3 py-2 rounded-md text-sm font-medium hover:bg-white/10 hover:border-white/30 transition-colors disabled:opacity-50 cursor-pointer"
                     type="button"
                   >
-                    {amount} sats
+                    {formatSats(amount, unit)}
                   </button>
                 ))}
               </div>
@@ -455,7 +467,7 @@ const DepositModal: React.FC<DepositModalProps> = ({
                   }}
                   disabled={isLoading || !cashuStore.activeMintUrl}
                   className="flex-1 bg-white/5 border border-white/10 rounded-md px-3 py-2 text-sm text-white focus:border-white/30 focus:outline-none disabled:opacity-50"
-                  placeholder="Amount in sats"
+                  placeholder={`Amount in ${unit === "₿" ? "bitcoin" : "sats"}`}
                 />
                 <button
                   onClick={() => handleCreateInvoice()}

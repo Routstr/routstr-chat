@@ -3,6 +3,8 @@ import React, { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import QRCode from "react-qr-code";
 import dynamic from "next/dynamic";
+import { useAppContext } from "@/hooks/useAppContext";
+import { formatSats, formatAmountWithPlural } from "@/features/wallet";
 
 interface InvoiceModalProps {
   showInvoiceModal: boolean;
@@ -45,6 +47,9 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({
   isPayingWithWallet,
   showWalletConnect,
 }) => {
+  const { config } = useAppContext();
+  const unit = config.unit || "₿";
+
   if (!showInvoiceModal || !mintInvoice) return null;
 
   const [bcStatus, setBcStatus] = useState<
@@ -163,7 +168,7 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({
                     </span>
                     {bcBalance !== null && (
                       <span className="text-muted-foreground">
-                        • {bcBalance.toLocaleString()} sats
+                        • {formatSats(bcBalance, unit)}
                       </span>
                     )}
                   </div>
@@ -204,7 +209,16 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({
             <div className="flex justify-between items-center">
               <span className="text-sm text-muted-foreground">Amount</span>
               <span className="text-sm font-medium text-foreground">
-                {mintAmount} {mintUnit}s
+                {formatAmountWithPlural(
+                  parseInt(mintAmount) || 0,
+                  mintUnit,
+                  unit
+                )}
+                {unit === "usd" && (
+                  <span className="text-xs text-muted-foreground ml-1">
+                    ({formatAmountWithPlural(parseInt(mintAmount) || 0, mintUnit, "sats")})
+                  </span>
+                )}
               </span>
             </div>
 

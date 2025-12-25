@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { useInvoiceSync, StoredInvoice } from "@/hooks/useInvoiceSync";
 import { MintQuoteState, MeltQuoteState } from "@cashu/cashu-ts";
 import { formatBalance } from "@/lib/cashu";
+import { useAppContext } from "@/hooks/useAppContext";
 import {
   Clock,
   CheckCircle,
@@ -21,6 +22,8 @@ interface InvoiceHistoryProps {
 }
 
 const InvoiceHistory: React.FC<InvoiceHistoryProps> = ({ mintUrl }) => {
+  const { config } = useAppContext();
+  const unit = config.unit || "₿";
   const { invoices, cloudSyncEnabled, deleteInvoice, resetInvoiceRetry } =
     useInvoiceSync();
   const { isChecking, pendingCount, triggerCheck } = useInvoiceChecker();
@@ -153,7 +156,7 @@ const InvoiceHistory: React.FC<InvoiceHistoryProps> = ({ mintUrl }) => {
                     {invoice.type === "mint" ? "Receive" : "Send"}
                   </span>
                   <span className="text-sm text-muted-foreground">
-                    {formatBalance(invoice.amount, "sats")}
+                    {formatBalance(invoice.amount, "sats", unit, 4)}
                   </span>
                   <span
                     className={`text-xs px-2 py-0.5 rounded-full ${
@@ -179,7 +182,9 @@ const InvoiceHistory: React.FC<InvoiceHistoryProps> = ({ mintUrl }) => {
                   {invoice.fee !== undefined && invoice.fee > 0 && (
                     <>
                       <span>•</span>
-                      <span>Fee: {formatBalance(invoice.fee, "sats")}</span>
+                      <span>
+                        Fee: {formatBalance(invoice.fee, "sats", unit, 4)}
+                      </span>
                     </>
                   )}
                 </div>

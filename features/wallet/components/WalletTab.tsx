@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { useWalletOperations } from "@/features/wallet";
+import { useWalletOperations, formatSats } from "@/features/wallet";
 import { TransactionHistory } from "@/types/chat";
 import { MintQuoteState } from "@cashu/cashu-ts";
 import InvoiceModal from "./InvoiceModal";
 import InvoiceHistory from "./InvoiceHistory";
+import { useAppContext } from "@/hooks/useAppContext";
+import { usdToSats } from "@/utils/priceUtils";
 
 // Types for Cashu
 interface MintQuoteResponse {
@@ -34,10 +36,13 @@ const WalletTab: React.FC<WalletTabProps> = ({
   transactionHistory,
   setTransactionHistory,
 }) => {
+  const { config } = useAppContext();
+  const unit = config.unit || "₿";
   // Local state for the component
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [mintAmount, setMintAmount] = useState("");
+  const [pendingSatAmount, setPendingSatAmount] = useState<number | null>(null);
   const [mintInvoice, setMintInvoice] = useState("");
   const [mintQuote, setMintQuote] = useState<MintQuoteResponse | null>(null);
   const [isMinting, setIsMinting] = useState(false);
@@ -85,6 +90,26 @@ const WalletTab: React.FC<WalletTabProps> = ({
   }, [hookCheckMintQuote, isAutoChecking, mintAmount]);
 
   const createMintQuote = async (amountOverride?: number) => {
+    let amount: number;
+    const inputVal = amountOverride ?? parseFloat(mintAmount);
+    if (isNaN(inputVal) || inputVal <= 0) {
+      setError("Please enter a valid amount");
+      return;
+    }
+
+    if (unit === "usd") {
+      const sats = usdToSats(inputVal);
+      if (sats === null) {
+        setError("Price feed not available");
+        return;
+      }
+      amount = sats;
+    } else {
+      amount = inputVal;
+    }
+
+    setPendingSatAmount(amount);
+
     await hookCreateMintQuote(
       setIsMinting,
       setError,
@@ -93,7 +118,7 @@ const WalletTab: React.FC<WalletTabProps> = ({
       mintAmount,
       setMintQuote,
       setMintInvoice,
-      amountOverride
+      amount
     );
   };
 
@@ -154,18 +179,34 @@ const WalletTab: React.FC<WalletTabProps> = ({
   ]);
 
   // Popular amounts for quick minting
-  const popularAmounts = [100, 500, 1000];
-
-  // Tab state
-  const [activeTab, setActiveTab] = useState<"deposit" | "send" | "history">(
-    "deposit"
-  );
+  const popularAmounts = unit === "usd" ? [1, 5, 10, 50] : [100, 500, 1000, 5000];
 
   // Handle quick mint button click
   const handleQuickMint = async (amount: number) => {
+    let sats: number;
+    if (unit === "usd") {
+      const converted = usdToSats(amount);
+      if (converted === null) {
+        setError("Price feed not available");
+        return;
+      }
+      sats = converted;
+    } else {
+      sats = amount;
+    }
+    setPendingSatAmount(sats);
     setMintAmount(amount.toString());
     // Pass amount directly to avoid state update race condition
-    await createMintQuote(amount);
+    await hookCreateMintQuote(
+      setIsMinting,
+      setError,
+      setSuccessMessage,
+      setShowInvoiceModal,
+      amount.toString(),
+      setMintQuote,
+      setMintInvoice,
+      sats
+    );
   };
 
   return (
@@ -178,7 +219,7 @@ const WalletTab: React.FC<WalletTabProps> = ({
           </span>
           <div className="flex flex-col items-end">
             <span className="text-lg font-semibold text-foreground">
-              {balance} sats
+              {formatSats(balance, unit)}
             </span>
           </div>
         </div>
@@ -256,7 +297,7 @@ const WalletTab: React.FC<WalletTabProps> = ({
                         className="flex-1 bg-muted/50 border border-border text-foreground px-3 py-2 rounded-md text-sm font-medium hover:bg-muted hover:border-border transition-colors disabled:opacity-50 cursor-pointer"
                         type="button"
                       >
-                        {amount} sats
+                        {unit === "usd" ? `$${amount}` : amount}
                       </button>
                     ))}
                   </div>
@@ -276,7 +317,11 @@ const WalletTab: React.FC<WalletTabProps> = ({
                         }
                       }}
                       className="flex-1 bg-muted/50 border border-border rounded-md px-3 py-2 text-sm text-foreground focus:border-ring focus:outline-none"
-                      placeholder="Amount in sats"
+                      placeholder={
+                        unit === "usd"
+                          ? "Amount in USD"
+                          : `Amount in ${unit === "₿" ? "bitcoin" : "sats"}`
+                      }
                     />
                     <button
                       onClick={() => void createMintQuote()}
@@ -370,7 +415,7 @@ const WalletTab: React.FC<WalletTabProps> = ({
                     value={sendAmount}
                     onChange={(e) => setSendAmount(e.target.value)}
                     className="flex-1 bg-muted/50 border border-border rounded-md px-3 py-2 text-sm text-foreground focus:border-ring focus:outline-none"
-                    placeholder="Amount in sats"
+                    placeholder={`Amount in ${unit === "₿" ? "bitcoin" : "sats"}`}
                   />
                   <button
                     onClick={generateSendToken}
@@ -437,7 +482,7 @@ const WalletTab: React.FC<WalletTabProps> = ({
       <InvoiceModal
         showInvoiceModal={showInvoiceModal}
         mintInvoice={mintInvoice}
-        mintAmount={mintAmount}
+        mintAmount={pendingSatAmount?.toString() || mintAmount}
         mintUnit="sat"
         isAutoChecking={isAutoChecking}
         countdown={countdown}

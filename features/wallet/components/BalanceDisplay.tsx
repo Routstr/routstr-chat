@@ -38,6 +38,8 @@ import {
   useCashuToken,
   useCashuStore,
   formatBalance,
+  formatSats,
+  formatAmountWithPlural,
   calculateBalanceByMint,
   useTransactionHistoryStore,
 } from "@/features/wallet";
@@ -57,7 +59,9 @@ import {
 import type { TransactionHistory } from "@/types/chat";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useCashuWithXYZ } from "@/hooks/useCashuWithXYZ";
+import { useAppContext } from "@/hooks/useAppContext";
 import { DEFAULT_MINT_URL } from "@/lib/utils";
+import { usdToSats } from "@/utils/priceUtils";
 import { getPendingCashuTokenAmount } from "@/utils/cashuUtils";
 
 /**
@@ -94,6 +98,8 @@ const BalanceDisplay: React.FC<BalanceDisplayProps> = ({
     setTransactionHistory,
     setBalance,
   } = useChat();
+  const { config } = useAppContext();
+  const unit = config.unit || "₿";
   const { publicKey } = useNostr();
   const { addInvoice, updateInvoice } = useInvoiceSync();
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
@@ -121,6 +127,7 @@ const BalanceDisplay: React.FC<BalanceDisplayProps> = ({
     "lightning"
   );
   const [mintAmount, setMintAmount] = useState("");
+  const [pendingSatAmount, setPendingSatAmount] = useState<number | null>(null);
   const [mintInvoice, setMintInvoice] = useState("");
   const [isMinting, setIsMinting] = useState(false);
   const [isAutoChecking, setIsAutoChecking] = useState(false);
@@ -608,7 +615,7 @@ const BalanceDisplay: React.FC<BalanceDisplayProps> = ({
           transactionHistoryStore.removePendingTransaction(pendingTxId);
           setNip60PendingTxId(null);
           setSuccessMessage(
-            `Received ${formatBalance(amount, currentMintUnit)}s!`
+            `Received ${formatBalance(amount, currentMintUnit, unit)}!`
           );
           setNip60Invoice("");
           setNip60QuoteId("");
@@ -743,11 +750,13 @@ const BalanceDisplay: React.FC<BalanceDisplayProps> = ({
         setError(
           `Insufficient balance: have ${formatBalance(
             totalProofsAmount,
-            currentMintUnit
-          )}s, need ${formatBalance(
+            currentMintUnit,
+            unit
+          )}, need ${formatBalance(
             invoiceAmount + (invoiceFeeReserve || 0),
-            currentMintUnit
-          )}s`
+            currentMintUnit,
+            unit
+          )}`
         );
         setIsNip60Processing(false);
         return;
@@ -770,7 +779,7 @@ const BalanceDisplay: React.FC<BalanceDisplayProps> = ({
         });
 
         setSuccessMessage(
-          `Paid ${formatBalance(invoiceAmount, currentMintUnit)}s!`
+          `Paid ${formatBalance(invoiceAmount, currentMintUnit, unit)}!`
         );
         // Update invoice status to paid
         await updateInvoice(nip60MeltQuoteId, {
@@ -779,7 +788,7 @@ const BalanceDisplay: React.FC<BalanceDisplayProps> = ({
         });
 
         setSuccessMessage(
-          `Paid ${formatBalance(invoiceAmount, currentMintUnit)}s!`
+          `Paid ${formatBalance(invoiceAmount, currentMintUnit, unit)}!`
         );
         handleNip60PaymentCancel();
         setTimeout(() => setSuccessMessage(""), 5000);
@@ -858,8 +867,27 @@ const BalanceDisplay: React.FC<BalanceDisplayProps> = ({
   ]);
 
   const handleCreateMintQuote = useCallback(async () => {
+    let amount: number;
+    const inputVal = parseFloat(mintAmount);
+    if (isNaN(inputVal) || inputVal <= 0) {
+      setError("Please enter a valid amount");
+      return;
+    }
+
+    if (unit === "usd") {
+      const sats = usdToSats(inputVal);
+      if (sats === null) {
+        setError("Price feed not available");
+        return;
+      }
+      amount = sats;
+    } else {
+      amount = inputVal;
+    }
+
+    setPendingSatAmount(amount);
+
     if (usingNip60) {
-      const amount = parseInt(mintAmount);
       if (isNaN(amount) || amount <= 0) {
         setError("Please enter a valid amount");
         return;
@@ -874,7 +902,7 @@ const BalanceDisplay: React.FC<BalanceDisplayProps> = ({
         setError,
         setSuccessMessage,
         () => {}, // setShowInvoiceModal
-        mintAmount,
+        amount.toString(),
         () => {}, // setMintQuote
         setMintInvoice
       );
@@ -896,6 +924,7 @@ const BalanceDisplay: React.FC<BalanceDisplayProps> = ({
     navigateToTab,
     usingNip60,
     createNip60Invoice,
+    unit,
   ]);
 
   const handleCheckMintQuote = useCallback(async () => {
@@ -932,7 +961,8 @@ const BalanceDisplay: React.FC<BalanceDisplayProps> = ({
         setSuccessMessage(
           `Received ${formatBalance(
             totalAmount,
-            unit ? `${unit}s` : "sats"
+            unit || "sat",
+            unit as "sats" | "₿" | "usd"
           )} successfully!`
         );
         setTokenToImport("");
@@ -978,7 +1008,9 @@ const BalanceDisplay: React.FC<BalanceDisplayProps> = ({
       await new Promise((resolve) => setTimeout(resolve, 2000));
 
       // Simulate successful payment
-      setSuccessMessage(`Successfully paid ${mockAmount} sats!`);
+      setSuccessMessage(
+        `Successfully paid ${formatSats(mockAmount, unit)}!`
+      );
       setLightningInvoice("");
       setInvoiceAmount(null);
       setInvoiceFeeReserve(null);
@@ -1123,7 +1155,9 @@ const BalanceDisplay: React.FC<BalanceDisplayProps> = ({
             <path d="M18 12a2 2 0 0 0 0 4h4v-4h-4z" />
           </svg>
           <span className={isMobile ? "text-xs" : "text-sm"}>
-            {isBalanceLoading ? "loading" : `${localBalance.toFixed(2)} sats`}
+            {isBalanceLoading
+              ? "loading"
+              : formatSats(localBalance, unit)}
           </span>
         </button>
       </PopoverTrigger>
@@ -1195,9 +1229,9 @@ const BalanceDisplay: React.FC<BalanceDisplayProps> = ({
                                 <div className="text-xs text-muted-foreground">
                                   {formatBalance(
                                     mintBalances[mintUrl] || 0,
-                                    mintUnits[mintUrl] || "sat"
+                                    mintUnits[mintUrl] || "sat",
+                                    unit
                                   )}
-                                  s
                                 </div>
                               </button>
                             ))}
@@ -1294,9 +1328,9 @@ const BalanceDisplay: React.FC<BalanceDisplayProps> = ({
                               <div className="text-xs text-muted-foreground">
                                 {formatBalance(
                                   mintBalances[mintUrl] || 0,
-                                  mintUnits[mintUrl] || "sat"
+                                  mintUnits[mintUrl] || "sat",
+                                  unit
                                 )}
-                                s
                               </div>
                             </button>
                           ))}
@@ -1324,7 +1358,7 @@ const BalanceDisplay: React.FC<BalanceDisplayProps> = ({
                 <div className="text-foreground text-2xl font-bold">
                   {isBalanceLoading
                     ? "loading"
-                    : `${localBalance.toFixed(2)} sats`}
+                    : formatSats(localBalance, unit)}
                 </div>
               </div>
 
@@ -1389,7 +1423,7 @@ const BalanceDisplay: React.FC<BalanceDisplayProps> = ({
                           {tx.type === "send" || tx.type === "spent"
                             ? "-"
                             : "+"}
-                          {tx.amount} sats
+                          {formatSats(tx.amount, unit, 4)}
                         </span>
                       </div>
                     ))}
@@ -1449,23 +1483,24 @@ const BalanceDisplay: React.FC<BalanceDisplayProps> = ({
                     <div className="text-foreground text-lg font-bold">
                       {usingNip60 ? (
                         <>
-                          {currentMintUnit === "msat"
-                            ? utilGetCurrentMintBalance(
-                                cashuStore.activeMintUrl,
-                                mintBalances
-                              )
-                            : utilGetCurrentMintBalance(
-                                cashuStore.activeMintUrl,
-                                mintBalances
-                              )}{" "}
-                          {currentMintUnit === "msat" ? "msats" : "sats"}
+                          {formatBalance(
+                            utilGetCurrentMintBalance(
+                              cashuStore.activeMintUrl,
+                              mintBalances
+                            ),
+                            currentMintUnit,
+                            unit
+                          )}
                         </>
                       ) : (
                         <>
-                          {currentMintUnit === "msat"
-                            ? balance * 1000
-                            : balance}{" "}
-                          {currentMintUnit === "msat" ? "msats" : "sats"}
+                          {formatBalance(
+                            currentMintUnit === "msat"
+                              ? balance * 1000
+                              : balance,
+                            currentMintUnit,
+                            unit
+                          )}
                         </>
                       )}
                     </div>
@@ -1488,7 +1523,7 @@ const BalanceDisplay: React.FC<BalanceDisplayProps> = ({
 
                   <div>
                     <label className="block text-muted-foreground text-xs font-medium mb-2">
-                      Amount ({currentMintUnit}s)
+                      Amount ({unit === "₿" ? "bitcoin" : "sats"})
                     </label>
                     <input
                       type="text"
@@ -1617,7 +1652,7 @@ const BalanceDisplay: React.FC<BalanceDisplayProps> = ({
                         </button>
                       </div>
                       <div className="text-muted-foreground text-xs text-center">
-                        Share this token to send {sendAmount} {currentMintUnit}s
+                        Share this token to send {formatSats(parseInt(sendAmount), unit)}
                       </div>
                     </div>
                   )}
@@ -1655,10 +1690,20 @@ const BalanceDisplay: React.FC<BalanceDisplayProps> = ({
                         Invoice Amount
                       </div>
                       <div className="text-foreground text-lg font-bold">
-                        {invoiceAmount} {currentMintUnit}s
+                        {formatAmountWithPlural(
+                          invoiceAmount,
+                          currentMintUnit,
+                          unit
+                        )}
                         {invoiceFeeReserve !== 0 && (
                           <span className="text-xs font-normal text-muted-foreground ml-2">
-                            + max {invoiceFeeReserve} fee
+                            + max{" "}
+                            {formatAmountWithPlural(
+                              invoiceFeeReserve || 0,
+                              currentMintUnit,
+                              unit
+                            )}{" "}
+                            fee
                           </span>
                         )}
                       </div>
@@ -1769,7 +1814,7 @@ const BalanceDisplay: React.FC<BalanceDisplayProps> = ({
                         </span>
                         {bcBalance !== null && (
                           <span className="text-muted-foreground">
-                            • {bcBalance.toLocaleString()} sats
+                            • {formatSats(bcBalance, unit)}
                           </span>
                         )}
                       </div>
@@ -1793,7 +1838,7 @@ const BalanceDisplay: React.FC<BalanceDisplayProps> = ({
                   </div>
                   <div>
                     <label className="block text-muted-foreground text-xs font-medium mb-2">
-                      Amount ({currentMintUnit}s)
+                      Amount ({unit === "usd" ? "USD" : unit === "₿" ? "bitcoin" : "sats"})
                     </label>
                     <input
                       type="text"
@@ -1806,19 +1851,19 @@ const BalanceDisplay: React.FC<BalanceDisplayProps> = ({
                         }
                       }}
                       className="w-full bg-muted/50 border border-border rounded-lg px-3 py-2 text-foreground text-lg font-mono focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/20"
-                      placeholder="0"
+                      placeholder={unit === "usd" ? "0.00" : "0"}
                       autoFocus
                     />
                   </div>
 
                   <div className="grid grid-cols-4 gap-1">
-                    {[100, 500, 1000, 5000].map((amount) => (
+                    {(unit === "usd" ? [1, 5, 10, 50] : [100, 500, 1000, 5000]).map((amount) => (
                       <button
                         key={amount}
                         onClick={() => setMintAmount(amount.toString())}
                         className="py-1.5 px-2 bg-muted/50 hover:bg-muted border border-border rounded-md text-muted-foreground text-xs transition-colors cursor-pointer"
                       >
-                        {amount}
+                        {unit === "usd" ? `$${amount}` : amount}
                       </button>
                     ))}
                   </div>
@@ -1877,7 +1922,9 @@ const BalanceDisplay: React.FC<BalanceDisplayProps> = ({
                   </button>
 
                   <div className="text-muted-foreground text-xs text-center">
-                    Import a Cashu token to add sats to your wallet
+                    Import a Cashu token to add{" "}
+                    {unit === "₿" ? "bitcoin" : "sats"} to your
+                    wallet
                   </div>
                 </div>
               )}
@@ -1940,10 +1987,10 @@ const BalanceDisplay: React.FC<BalanceDisplayProps> = ({
                             {tx.type === "send" || tx.type === "spent"
                               ? "-"
                               : "+"}
-                            {tx.amount} sats
+                            {formatSats(tx.amount, unit, 4)}
                           </div>
                           <div className="text-xs text-muted-foreground">
-                            Balance: {tx.balance}
+                            Balance: {formatSats(tx.balance || 0, unit, 4)}
                           </div>
                         </div>
                       </div>
@@ -1987,8 +2034,8 @@ const BalanceDisplay: React.FC<BalanceDisplayProps> = ({
                       Connected
                     </span>
                     {bcBalance !== null && (
-                      <span className="text-muted-foreground">
-                        • {bcBalance.toLocaleString()} sats
+                        <span className="text-muted-foreground">
+                        • {formatSats(bcBalance, unit)}
                       </span>
                     )}
                   </div>
@@ -2016,7 +2063,16 @@ const BalanceDisplay: React.FC<BalanceDisplayProps> = ({
                   {/* Amount Display */}
                   <div className="text-center">
                     <div className="text-muted-foreground text-sm">
-                      {mintAmount} {currentMintUnit}s
+                      {formatAmountWithPlural(
+                        pendingSatAmount || parseInt(mintAmount) || 0,
+                        currentMintUnit,
+                        unit
+                      )}
+                      {unit === "usd" && pendingSatAmount && (
+                        <span className="text-xs text-muted-foreground ml-1">
+                          ({formatAmountWithPlural(pendingSatAmount, currentMintUnit, "sats")})
+                        </span>
+                      )}
                     </div>
                   </div>
 

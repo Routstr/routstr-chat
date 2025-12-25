@@ -24,9 +24,12 @@ import {
   useCashuToken,
   useCashuStore,
   formatBalance,
+  formatSats,
+  formatAmountWithPlural,
   calculateBalanceByMint,
 } from "@/features/wallet";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useAppContext } from "@/hooks/useAppContext";
 import { cn } from "@/lib/utils";
 import {
   computeTotalBalanceSats,
@@ -49,6 +52,7 @@ import { MintQuoteState, MeltQuoteState } from "@cashu/cashu-ts";
 import InvoiceHistory from "./InvoiceHistory";
 import { useCashuWithXYZ } from "@/hooks/useCashuWithXYZ";
 import { DEFAULT_MINT_URL } from "@/lib/utils";
+import { usdToSats } from "@/utils/priceUtils";
 import dynamic from "next/dynamic";
 
 // Helper function to generate unique IDs
@@ -59,8 +63,10 @@ const SixtyWallet: React.FC<{
   usingNip60: boolean;
   setUsingNip60: (usingNip60: boolean) => void;
 }> = ({ mintUrl, usingNip60, setUsingNip60 }) => {
+  const { config } = useAppContext();
+  const unit = config.unit || "₿";
   // Popular amounts for quick minting
-  const popularAmounts = [100, 500, 1000];
+  const popularAmounts = unit === "usd" ? [1, 5, 10] : [100, 500, 1000];
 
   // Tab state
   const [activeTab, setActiveTab] = useState<"deposit" | "send" | "history">(
@@ -135,7 +141,9 @@ const SixtyWallet: React.FC<{
             pendingTransactionId
           );
         setPendingTransactionId(null);
-        setSuccessMessage(`Received ${formatBalance(pendingAmount, "sats")}!`);
+        setSuccessMessage(
+          `Received ${formatBalance(pendingAmount, "sats", unit)}!`
+        );
         setInvoice("");
         setcurrentMeltQuoteId("");
         setReceiveAmount("");
@@ -254,14 +262,35 @@ const SixtyWallet: React.FC<{
       return;
     }
 
-    const amount =
-      quickMintAmount !== undefined ? quickMintAmount : parseInt(receiveAmount);
+    let amount: number;
+    if (quickMintAmount !== undefined) {
+      if (unit === "usd") {
+        const sats = usdToSats(quickMintAmount);
+        if (sats === null) {
+          setError("Price feed not available");
+          return;
+        }
+        amount = sats;
+      } else {
+        amount = quickMintAmount;
+      }
+    } else {
+      const inputVal = parseFloat(receiveAmount);
+      if (isNaN(inputVal) || inputVal <= 0) {
+        setError("Please enter a valid amount");
+        return;
+      }
 
-    if (isNaN(amount) || amount <= 0) {
-      console.log("rdlogs: ", receiveAmount);
-      console.log("rdlogs: ", isNaN(parseInt(receiveAmount)));
-      setError("Please enter a valid amount");
-      return;
+      if (unit === "usd") {
+        const sats = usdToSats(inputVal);
+        if (sats === null) {
+          setError("Price feed not available");
+          return;
+        }
+        amount = sats;
+      } else {
+        amount = inputVal;
+      }
     }
 
     try {
@@ -488,9 +517,10 @@ const SixtyWallet: React.FC<{
       const totalAmount = proofs.reduce((sum, p) => sum + p.amount, 0);
 
       setSuccessMessage(
-        `Received ${formatBalance(
+        `Received ${formatAmountWithPlural(
           totalAmount,
-          unit != undefined ? unit + "s" : "sats"
+          unit != undefined ? unit : "sat",
+          unit
         )} successfully!`
       );
       setTokenToImport("");
@@ -521,7 +551,11 @@ const SixtyWallet: React.FC<{
       if (result.status === "success" && result.token) {
         setGeneratedToken(result.token);
         setSuccessMessage(
-          `Token generated for ${formatBalance(amountValue, currentMintUnit)}`
+          `Token generated for ${formatBalance(
+            amountValue,
+            currentMintUnit,
+            unit
+          )}`
         );
       } else {
         setError(result.error || "Failed to generate token");
@@ -611,14 +645,16 @@ const SixtyWallet: React.FC<{
         0
       );
 
-      if (totalProofsAmount < invoiceAmount + (invoiceFeeReserve || 0)) {
+        if (totalProofsAmount < invoiceAmount + (invoiceFeeReserve || 0)) {
         setError(
           `Insufficient balance: have ${formatBalance(
             totalProofsAmount,
-            "sats"
+            currentMintUnit,
+            unit
           )}, need ${formatBalance(
             invoiceAmount + (invoiceFeeReserve || 0),
-            "sats"
+            currentMintUnit,
+            unit
           )}`
         );
         setIsProcessing(false);
@@ -660,7 +696,11 @@ const SixtyWallet: React.FC<{
         });
 
         setSuccessMessage(
-          `Paid ${formatBalance(invoiceAmount, `${currentMintUnit}s`)}!`
+          `Paid ${formatBalance(
+            invoiceAmount,
+            currentMintUnit,
+            unit
+          )}!`
         );
         setSendInvoice("");
         setInvoiceAmount(null);
@@ -764,7 +804,8 @@ const SixtyWallet: React.FC<{
       setSuccessMessage(
         `Successfully migrated ${formatBalance(
           receivedAmount,
-          "sats"
+          "sats",
+          unit
         )} from local wallet to NIP-60 wallet!`
       );
     } catch (error) {
@@ -834,9 +875,11 @@ const SixtyWallet: React.FC<{
                   Local Wallet Found - Migrate to Cloud Wallet
                 </h3>
                 <p className="text-xs text-muted-foreground mb-3">
-                  You have {formatBalance(localWalletBalance, "sats")} in your
-                  local device wallet. Migrate to the new NIP-60 cloud-based
-                  wallet for better security and sync across devices.
+                  You have{" "}
+                  {formatBalance(localWalletBalance, "sats", unit)} in
+                  your local device wallet. Migrate to the new NIP-60
+                  cloud-based wallet for better security and sync across
+                  devices.
                 </p>
                 <div className="flex items-center space-x-2">
                   <button
@@ -854,7 +897,8 @@ const SixtyWallet: React.FC<{
                     ) : (
                       <>
                         <ArrowRight className="h-3 w-3 mr-1" />
-                        Migrate {formatBalance(localWalletBalance, "sats")}
+                        Migrate{" "}
+                        {formatBalance(localWalletBalance, "sats", unit)}
                       </>
                     )}
                   </button>
@@ -879,7 +923,7 @@ const SixtyWallet: React.FC<{
           </span>
           <div className="flex flex-col items-end">
             <span className="text-lg font-semibold text-foreground">
-              {balance} sats
+              {formatSats(balance, unit)}
             </span>
           </div>
         </div>
@@ -963,7 +1007,7 @@ const SixtyWallet: React.FC<{
                           isActive ? "text-foreground" : "text-muted-foreground"
                         )}
                       >
-                        {formatBalance(mintBalance, unit + "s")}
+                        {formatBalance(mintBalance, unit, unit)}
                       </span>
                       <div className="flex items-center gap-1.5 shrink-0">
                         <button
@@ -1107,7 +1151,7 @@ const SixtyWallet: React.FC<{
                         </span>
                         {bcBalance !== null && (
                           <span className="text-muted-foreground">
-                            • {bcBalance.toLocaleString()} sats
+                            • {formatSats(bcBalance, unit)}
                           </span>
                         )}
                       </div>
@@ -1142,7 +1186,7 @@ const SixtyWallet: React.FC<{
                         className="flex-1 bg-muted/50 border border-border text-foreground px-3 py-2 rounded-md text-sm font-medium hover:bg-muted hover:border-border transition-colors disabled:opacity-50 cursor-pointer"
                         type="button"
                       >
-                        {amount} {currentMintUnit}s
+                        {unit === "usd" ? `$${amount}` : formatSats(amount, unit)}
                       </button>
                     ))}
                   </div>
@@ -1162,7 +1206,11 @@ const SixtyWallet: React.FC<{
                         }
                       }}
                       className="flex-1 bg-muted/50 border border-border rounded-md px-3 py-2 text-sm text-foreground focus:border-ring focus:outline-none"
-                      placeholder={`Amount in ${currentMintUnit}s`}
+                      placeholder={
+                        unit === "usd"
+                          ? "Amount in USD"
+                          : `Amount in ${unit === "₿" ? "bitcoin" : "sats"}`
+                      }
                     />
                     <button
                       onClick={() => handleCreateInvoice()}
@@ -1300,12 +1348,16 @@ const SixtyWallet: React.FC<{
                       Invoice Amount
                     </p>
                     <p className="text-2xl font-bold text-foreground">
-                      {formatBalance(invoiceAmount, `${currentMintUnit}s `)}
+                      {formatBalance(
+                        invoiceAmount,
+                        currentMintUnit,
+                        unit
+                      )}
                       {invoiceFeeReserve !== null &&
                         invoiceFeeReserve !== 0 && (
                           <>
                             <span className="text-xs font-bold pl-2 text-muted-foreground">
-                              + max {formatBalance(invoiceFeeReserve, "sats")}{" "}
+                              + max {formatSats(invoiceFeeReserve, unit)}{" "}
                               fee
                             </span>
                           </>
@@ -1373,7 +1425,7 @@ const SixtyWallet: React.FC<{
                       }
                     }}
                     className="flex-1 bg-muted/50 border border-border rounded-md px-3 py-2 text-sm text-foreground focus:border-ring focus:outline-none"
-                    placeholder={`Amount in ${currentMintUnit}s`}
+                    placeholder={`Amount in ${unit === "₿" ? "bitcoin" : "sats"}`}
                   />
                   <button
                     onClick={handlesendToken}
@@ -1425,7 +1477,7 @@ const SixtyWallet: React.FC<{
       <InvoiceModal
         showInvoiceModal={showInvoiceModal}
         mintInvoice={invoice}
-        mintAmount={receiveAmount}
+        mintAmount={pendingAmount?.toString() || receiveAmount}
         mintUnit={currentMintUnit}
         isAutoChecking={false}
         countdown={0}
