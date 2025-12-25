@@ -63,7 +63,7 @@ export function matchesFilter(event: NostrEvent, filter: Filter): boolean {
  */
 export function matchesAnyFilter(
   event: NostrEvent,
-  filters: Filter[]
+  filters: Filter[],
 ): boolean {
   if (filters.length === 0) {
     return true; // No filters means match all
@@ -78,7 +78,7 @@ export function matchesAnyFilter(
  */
 export function filterEvents(
   events: NostrEvent[],
-  filters: Filter | Filter[]
+  filters: Filter | Filter[],
 ): NostrEvent[] {
   const filterArray = Array.isArray(filters) ? filters : [filters];
 
@@ -88,7 +88,7 @@ export function filterEvents(
 
   // Filter events that match any filter
   const matchingEvents = events.filter((event) =>
-    matchesAnyFilter(event, filterArray)
+    matchesAnyFilter(event, filterArray),
   );
 
   // Apply limit if specified (use smallest limit across all filters)
@@ -109,7 +109,7 @@ export function filterEvents(
  */
 export function getTimeline(
   events: NostrEvent[],
-  filters: Filter | Filter[]
+  filters: Filter | Filter[],
 ): NostrEvent[] {
   const filtered = filterEvents(events, filters);
 

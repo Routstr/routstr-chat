@@ -46,11 +46,15 @@ export interface UseChatActionsReturn {
     messages: Message[],
     setMessages: (messages: Message[]) => void,
     activeConversationId: string | null,
+    createNewConversation: (
+      initialMessages?: Message[],
+      timestamp?: string,
+    ) => string,
     selectedModel: any,
     baseUrl: string,
     isAuthenticated: boolean,
     setIsLoginModalOpen: (open: boolean) => void,
-    getActiveConversationId: () => string | null
+    getActiveConversationId: () => string | null,
   ) => Promise<void>;
   saveInlineEdit: (
     editingMessageIndex: number | null,
@@ -62,7 +66,7 @@ export interface UseChatActionsReturn {
     selectedModel: any,
     baseUrl: string,
     activeConversationId: string | null,
-    getActiveConversationId: () => string | null
+    getActiveConversationId: () => string | null,
   ) => Promise<void>;
   retryMessage: (
     index: number,
@@ -71,22 +75,22 @@ export interface UseChatActionsReturn {
     selectedModel: any,
     baseUrl: string,
     activeConversationId: string | null,
-    getActiveConversationId: () => string | null
+    getActiveConversationId: () => string | null,
   ) => void;
 }
 
 export interface UseChatActionsParams {
   createAndStoreChatEvent: (
     conversationId: string,
-    message: Message
+    message: Message,
   ) => Promise<string | null>;
   getLastNonSystemMessageEventId: (
     conversationId: string,
-    lastMessageRole?: string[]
+    lastMessageRole?: string[],
   ) => string;
   updateLastMessageSatsSpent: (
     conversationId: string,
-    satsSpent: number
+    satsSpent: number,
   ) => void;
 }
 
@@ -117,14 +121,14 @@ export const useChatActions = ({
       if (!conversationId) return "";
       return streamingContentByConversation[conversationId] ?? "";
     },
-    [streamingContentByConversation]
+    [streamingContentByConversation],
   );
   const getThinkingContentFor = useCallback(
     (conversationId: string | null) => {
       if (!conversationId) return "";
       return thinkingContentByConversation[conversationId] ?? "";
     },
-    [thinkingContentByConversation]
+    [thinkingContentByConversation],
   );
   const [uploadedAttachments, setUploadedAttachments] = useState<
     MessageAttachment[]
@@ -157,11 +161,15 @@ export const useChatActions = ({
       messages: Message[],
       setMessages: (messages: Message[]) => void,
       activeConversationId: string | null,
+      createNewConversationHandler: (
+        initialMessages?: Message[],
+        timestamp?: string,
+      ) => string,
       selectedModel: any,
       baseUrl: string,
       isAuthenticated: boolean,
       setIsLoginModalOpen: (open: boolean) => void,
-      getActiveConversationId: () => string | null
+      getActiveConversationId: () => string | null,
     ) => {
       if (!isAuthenticated) {
         setIsLoginModalOpen(true);
@@ -188,12 +196,14 @@ export const useChatActions = ({
         _createdAt: timestamp,
       };
 
-      const originConversationId = activeConversationId ?? timestamp.toString();
+      const originConversationId =
+        activeConversationId ??
+        createNewConversationHandler([], timestamp.toString());
       const updatedMessages = [...messages, updatedMessage];
 
       // The _prevId is already set in the userMessage from our getLastNonSystemMessagePrevId function
       createAndStoreChatEvent(originConversationId, updatedMessage).catch(
-        console.error
+        console.error,
       );
 
       setInputMessage("");
@@ -204,7 +214,7 @@ export const useChatActions = ({
         setMessages,
         selectedModel,
         baseUrl,
-        originConversationId
+        originConversationId,
       );
     },
     [
@@ -212,7 +222,7 @@ export const useChatActions = ({
       uploadedAttachments,
       getLastNonSystemMessageEventId,
       createAndStoreChatEvent,
-    ]
+    ],
   );
 
   const saveInlineEdit = useCallback(
@@ -226,7 +236,7 @@ export const useChatActions = ({
       selectedModel: any,
       baseUrl: string,
       activeConversationId: string | null,
-      getActiveConversationId: () => string | null
+      getActiveConversationId: () => string | null,
     ) => {
       if (editingMessageIndex !== null && editingContent.trim()) {
         const updatedMessages = [...messages];
@@ -267,7 +277,7 @@ export const useChatActions = ({
 
         const truncatedMessages = updatedMessages.slice(
           0,
-          editingMessageIndex + 1
+          editingMessageIndex + 1,
         );
 
         setMessages(truncatedMessages);
@@ -281,22 +291,22 @@ export const useChatActions = ({
         }
         console.log(
           truncatedMessages[truncatedMessages.length - 1],
-          truncatedMessages
+          truncatedMessages,
         );
         createAndStoreChatEvent(
           originConversationId,
-          truncatedMessages[truncatedMessages.length - 1]
+          truncatedMessages[truncatedMessages.length - 1],
         ).catch(console.error);
         await performAIRequest(
           truncatedMessages,
           setMessages,
           selectedModel,
           baseUrl,
-          originConversationId
+          originConversationId,
         );
       }
     },
-    []
+    [],
   );
 
   const retryMessage = useCallback(
@@ -307,7 +317,7 @@ export const useChatActions = ({
       selectedModel: any,
       baseUrl: string,
       activeConversationId: string | null,
-      getActiveConversationId: () => string | null
+      getActiveConversationId: () => string | null,
     ) => {
       const newMessages = messages.slice(0, index);
       setMessages(newMessages);
@@ -322,10 +332,10 @@ export const useChatActions = ({
         selectedModel,
         baseUrl,
         originConversationId,
-        true
+        true,
       );
     },
-    []
+    [],
   );
 
   const performAIRequest = useCallback(
@@ -335,7 +345,7 @@ export const useChatActions = ({
       selectedModel: any,
       baseUrl: string,
       originConversationId: string,
-      retryMessage?: boolean
+      retryMessage?: boolean,
     ) => {
       setIsLoading(true);
       setStreamingContent("");
@@ -413,7 +423,7 @@ export const useChatActions = ({
             if (originConversationId) {
               createAndStoreChatEvent(
                 originConversationId,
-                updatedMessage
+                updatedMessage,
               ).catch(console.error);
             }
           },
@@ -459,7 +469,7 @@ export const useChatActions = ({
       getLastNonSystemMessageEventId,
       createAndStoreChatEvent,
       cashuStore.activeMintUrl,
-    ]
+    ],
   );
 
   return {

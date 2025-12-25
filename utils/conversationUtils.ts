@@ -19,7 +19,7 @@ export const getConversationsUpdatedAt = (): number => {
 
 export const persistConversationsSnapshot = (
   conversations: Conversation[],
-  updatedAt?: number
+  updatedAt?: number,
 ): number => {
   if (!hasLocalStorage()) {
     return typeof updatedAt === "number" ? updatedAt : Date.now();
@@ -30,11 +30,11 @@ export const persistConversationsSnapshot = (
   try {
     window.localStorage.setItem(
       CONVERSATIONS_STORAGE_KEY,
-      JSON.stringify(conversations)
+      JSON.stringify(conversations),
     );
     window.localStorage.setItem(
       CONVERSATIONS_UPDATED_AT_KEY,
-      String(timestamp)
+      String(timestamp),
     );
   } catch (error) {
     console.error("Error persisting conversations to storage:", error);
@@ -49,7 +49,7 @@ const ensureUpdatedAtExists = () => {
   if (!window.localStorage.getItem(CONVERSATIONS_UPDATED_AT_KEY)) {
     window.localStorage.setItem(
       CONVERSATIONS_UPDATED_AT_KEY,
-      String(Date.now())
+      String(Date.now()),
     );
   }
 };
@@ -62,7 +62,7 @@ const ensureUpdatedAtExists = () => {
  */
 export const generateConversationTitle = (
   messages: Message[],
-  fallbackTitle: string
+  fallbackTitle: string,
 ): string => {
   const firstUserMessage = messages.find((m) => m.role === "user");
   if (firstUserMessage) {
@@ -84,7 +84,7 @@ export const generateConversationTitle = (
 export const saveConversationToStorage = (
   conversations: Conversation[],
   activeConversationId: string,
-  messages: Message[]
+  messages: Message[],
 ): Conversation[] => {
   if (!activeConversationId) return conversations;
 
@@ -125,7 +125,7 @@ export const loadConversationsFromStorage = (): Conversation[] => {
   if (!hasLocalStorage()) return [];
   try {
     const savedConversationsData = window.localStorage.getItem(
-      CONVERSATIONS_STORAGE_KEY
+      CONVERSATIONS_STORAGE_KEY,
     );
     if (!savedConversationsData) return [];
 
@@ -149,14 +149,14 @@ export const loadConversationsFromStorage = (): Conversation[] => {
 export const createAndStoreNewConversation = (
   existingConversations: Conversation[],
   initialMessages: Message[] = [],
-  timestamp?: string
+  timestamp?: string,
 ): {
   newConversation: Conversation;
   updatedConversations: Conversation[];
 } => {
   // First check if there's an existing conversation with no messages
   const emptyConversation = existingConversations.find(
-    (conv) => conv.messages.length === 0
+    (conv) => conv.messages.length === 0,
   );
 
   if (emptyConversation) {
@@ -196,7 +196,7 @@ export const createAndStoreNewConversation = (
 export const createNewConversationWithMap = (
   conversationsMap: Map<string, Conversation>,
   initialMessages: Message[] = [],
-  timestamp?: string
+  timestamp?: string,
 ): {
   newConversation: Conversation;
   updatedConversations: Conversation[];
@@ -206,7 +206,7 @@ export const createNewConversationWithMap = (
 
   // First check if there's an existing conversation with no messages
   const emptyConversation = existingConversations.find(
-    (conv) => conv.messages.length === 0
+    (conv) => conv.messages.length === 0,
   );
 
   if (emptyConversation) {
@@ -222,7 +222,7 @@ export const createNewConversationWithMap = (
   const messagesToStore = stripImageDataFromMessages(initialMessages);
   const newConversation: Conversation = createConversation(
     newId,
-    messagesToStore[0]
+    messagesToStore[0],
   );
 
   // Add the new conversation to the map
@@ -230,7 +230,7 @@ export const createNewConversationWithMap = (
 
   // Convert the updated map back to an array
   const updatedConversations = sortConversationsByRecentActivity(
-    Array.from(conversationsMap.values())
+    Array.from(conversationsMap.values()),
   );
   console.log("inside createNewConversationWithMap", updatedConversations);
 
@@ -248,10 +248,10 @@ export const createNewConversationWithMap = (
  */
 export const deleteConversationFromStorage = (
   conversations: Conversation[],
-  conversationId: string
+  conversationId: string,
 ): Conversation[] => {
   const updatedConversations = conversations.filter(
-    (c) => c.id !== conversationId
+    (c) => c.id !== conversationId,
   );
   console.log("insdie", updatedConversations);
   persistConversationsSnapshot(updatedConversations);
@@ -266,7 +266,7 @@ export const deleteConversationFromStorage = (
  */
 export const findConversationById = (
   conversations: Conversation[],
-  conversationId: string
+  conversationId: string,
 ): Conversation | undefined => {
   return conversations.find((c) => {
     if (c.id === conversationId) return c;
@@ -292,7 +292,7 @@ export const clearAllConversations = (): void => {
 export const updateConversation = (
   conversations: Conversation[],
   conversationId: string,
-  updates: Partial<Conversation>
+  updates: Partial<Conversation>,
 ): Conversation[] => {
   const updatedConversations = conversations.map((conversation) => {
     if (conversation.id === conversationId) {
@@ -312,7 +312,7 @@ export const updateConversation = (
  * @returns Sorted conversations array (most recent first)
  */
 export const sortConversationsByRecentActivity = (
-  conversations: Conversation[]
+  conversations: Conversation[],
 ): Conversation[] => {
   return conversations.sort((a, b) => {
     // Check if conversations have empty messages
@@ -341,7 +341,7 @@ export const sortConversationsByRecentActivity = (
 export const saveEventIdInStorage = (
   conversationId: string,
   message: Message,
-  eventId: string
+  eventId: string,
 ): Conversation[] | null => {
   // Load conversations from storage
   const conversations = loadConversationsFromStorage();
@@ -349,7 +349,7 @@ export const saveEventIdInStorage = (
   // Find the target conversation
   const targetConversation = findConversationById(
     conversations,
-    conversationId
+    conversationId,
   );
   if (!targetConversation) {
     console.error(`Conversation with ID ${conversationId} not found`);

@@ -246,7 +246,7 @@ test.describe("End-to-End Flow", () => {
         // Now check for actual QR code - it should have many rect elements (real QR codes have many squares)
         // The placeholder icon has only a few paths, while real QR codes have many rect elements
         const qrCodeContainer = page.locator(
-          '[role="button"][title="Click to copy invoice"]'
+          '[role="button"][title="Click to copy invoice"]',
         );
         const qrCodeVisible = await qrCodeContainer
           .isVisible()

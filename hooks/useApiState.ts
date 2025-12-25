@@ -54,7 +54,7 @@ export const useApiState = (
   balance: number,
   maxBalance: number,
   pendingCashuAmountState: number,
-  isWalletLoading: boolean
+  isWalletLoading: boolean,
 ): UseApiStateReturn => {
   const searchParams = useSearchParams();
   const [models, setModels] = useState<Model[]>([]);
@@ -84,7 +84,7 @@ export const useApiState = (
       const withProto = url.startsWith("http") ? url : `https://${url}`;
       return withProto.endsWith("/") ? withProto : `${withProto}/`;
     },
-    []
+    [],
   );
 
   // Bootstrap provider bases from the directory when none are configured
@@ -174,7 +174,7 @@ export const useApiState = (
       // Helper to update best models and UI state
       const updateBestModels = () => {
         const combinedModels = Array.from(bestById.values()).map(
-          (v) => v.model
+          (v) => v.model,
         );
         setModels(combinedModels);
 
@@ -205,7 +205,7 @@ export const useApiState = (
           // Load from storage first
           const cachedModels = getStorageItem<Record<string, Model[]>>(
             "modelsFromAllProviders",
-            {}
+            {},
           );
           const cachedList = cachedModels[base] || [];
 
@@ -295,7 +295,7 @@ export const useApiState = (
         modelToSelect = await modelSelectionStrategy(
           combinedModels,
           maxBalance,
-          pendingCashuAmountState
+          pendingCashuAmountState,
         );
       }
       setSelectedModel(modelToSelect);
@@ -403,7 +403,7 @@ export const useApiState = (
         const model = await modelSelectionStrategy(
           models,
           maxBalance,
-          pendingCashuAmountState
+          pendingCashuAmountState,
         );
         if (model) {
           handleModelChange(model.id);
@@ -413,8 +413,8 @@ export const useApiState = (
         setLowBalanceWarningForModel(
           !isModelAvailable(
             selectedModel,
-            balance + getPendingCashuTokenAmount()
-          )
+            balance + getPendingCashuTokenAmount(),
+          ),
         );
       }
     };
@@ -444,7 +444,7 @@ export const useApiState = (
             : `${fixedBase}/`;
           const allByProvider = getStorageItem<Record<string, Model[]>>(
             "modelsFromAllProviders",
-            {} as any
+            {} as any,
           );
           const list =
             allByProvider?.[normalized] ||
@@ -495,7 +495,7 @@ export const useApiState = (
         } catch (e) {
           console.error(
             "Failed to load provider-specific model from storage",
-            e
+            e,
           );
         }
       } else {
@@ -523,7 +523,7 @@ export const useApiState = (
         }
       }
     },
-    [models]
+    [models],
   );
 
   const setBaseUrl = useCallback((url: string) => {

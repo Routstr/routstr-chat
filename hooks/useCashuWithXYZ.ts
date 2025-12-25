@@ -217,11 +217,11 @@ export function useCashuWithXYZ() {
 
     // Find mint with highest non-zero balance
     const candidates = Object.entries(mintBalances).filter(
-      ([, balance]) => (balance ?? 0) > 0
+      ([, balance]) => (balance ?? 0) > 0,
     );
     if (candidates.length === 0) return;
     const [bestMint] = candidates.sort(
-      (a, b) => (b[1] as number) - (a[1] as number)
+      (a, b) => (b[1] as number) - (a[1] as number),
     )[0];
 
     if (bestMint && bestMint !== activeUrl) {
@@ -237,7 +237,7 @@ export function useCashuWithXYZ() {
         return newHistory;
       });
     },
-    []
+    [],
   );
 
   const { generateTokenCore, initWallet } = useWalletOperations({
@@ -281,7 +281,7 @@ export function useCashuWithXYZ() {
     mintBalances: Record<string, number>,
     mintUnits: Record<string, string>,
     adjustedAmount: number,
-    excludeMints: string[] = []
+    excludeMints: string[] = [],
   ): { selectedMintUrl: string | null; selectedMintBalance: number } => {
     let selectedMintUrl: string | null = null;
     let selectedMintBalance = 0;
@@ -325,7 +325,7 @@ export function useCashuWithXYZ() {
     reuseToken: boolean = false,
     p2pkPubkey?: string,
     excludeMints: string[] = [],
-    retryCount: number = 0
+    retryCount: number = 0,
   ): Promise<SpendCashuResult> => {
     // Read latest balances/units from store to avoid stale closure
     let latestMintBalances = mintBalances;
@@ -366,7 +366,7 @@ export function useCashuWithXYZ() {
           baseUrl,
           usingNip60,
           receiveToken,
-          storedToken
+          storedToken,
         );
         if (refundResult.success) {
           console.log(refundResult.message || "Refund completed successfully!");
@@ -383,7 +383,7 @@ export function useCashuWithXYZ() {
       const proofs = await cashuStore.getAllProofs();
       latestMintBalances = calculateBalanceByMint(
         proofs,
-        cashuStore.mints
+        cashuStore.mints,
       ).balances;
       latestMintUnits = calculateBalanceByMint(proofs, cashuStore.mints).units;
     }
@@ -402,7 +402,7 @@ export function useCashuWithXYZ() {
 
     const totalPendingBalance = pendingBalances.reduce(
       (total, item) => total + item.amount,
-      0
+      0,
     );
     let totalBalance = nip60Balance + localBalance + totalPendingBalance;
 
@@ -412,7 +412,7 @@ export function useCashuWithXYZ() {
       console.log(proofs);
       latestMintBalances = calculateBalanceByMint(
         proofs,
-        cashuStore.mints
+        cashuStore.mints,
       ).balances;
       latestMintUnits = calculateBalanceByMint(proofs, cashuStore.mints).units;
       console.log("Lat", latestMintBalances);
@@ -460,12 +460,12 @@ export function useCashuWithXYZ() {
         latestMintBalances,
         latestMintUnits,
         adjustedAmount,
-        excludeMints
+        excludeMints,
       );
       console.log(
         "rdlogs: selectedMintUrl",
         selectedMintUrl,
-        selectedMintBalance
+        selectedMintBalance,
       );
       let providerMints = loadMintsFromAllProviders()[baseUrl];
       console.log("rdlogs: providerMints", providerMints, baseUrl);
@@ -503,7 +503,7 @@ export function useCashuWithXYZ() {
             latestMintBalances,
             latestMintUnits,
             adjustedAmount,
-            excludeMints
+            excludeMints,
           );
           if (newMintUrl) {
             alternateMintUrl = newMintUrl;
@@ -512,7 +512,7 @@ export function useCashuWithXYZ() {
           console.log(
             "rdlogs: alternateMintUrl",
             alternateMintUrl,
-            excludeMints
+            excludeMints,
           );
         }
         if (alternateMintUrl && alternateMintUrl === selectedMintUrl) {
@@ -527,7 +527,7 @@ export function useCashuWithXYZ() {
         "activeMintBlance",
         activeMintBalanceInSats >= adjustedAmount,
         providerMints?.includes(mintUrl),
-        baseUrl === ""
+        baseUrl === "",
       );
 
       if (
@@ -546,7 +546,7 @@ export function useCashuWithXYZ() {
           if (
             error instanceof Error &&
             (error.message.includes(
-              "NetworkError when attempting to fetch resource"
+              "NetworkError when attempting to fetch resource",
             ) ||
               error.message.includes("Failed to fetch") ||
               error.message.includes("Load failed"))
@@ -555,7 +555,7 @@ export function useCashuWithXYZ() {
               latestMintBalances,
               latestMintUnits,
               adjustedAmount,
-              [...(excludeMints || []), ...(mintUrl ? [mintUrl] : [])]
+              [...(excludeMints || []), ...(mintUrl ? [mintUrl] : [])],
             );
 
             if (
@@ -563,7 +563,7 @@ export function useCashuWithXYZ() {
               retryCount < Object.keys(latestMintBalances).length
             ) {
               console.log(
-                `NetworkError on active mint. Retrying with alternate mint ${alternateMintUrl}`
+                `NetworkError on active mint. Retrying with alternate mint ${alternateMintUrl}`,
               );
               return spendCashu(
                 alternateMintUrl as string,
@@ -572,7 +572,7 @@ export function useCashuWithXYZ() {
                 false,
                 p2pkPubkey,
                 [...(excludeMints || []), ...(mintUrl ? [mintUrl] : [])],
-                retryCount + 1
+                retryCount + 1,
               );
             }
           }
@@ -589,7 +589,7 @@ export function useCashuWithXYZ() {
         selectedMintBalance >= adjustedAmount
       ) {
         console.log(
-          `Active mint insufficient. Using mint ${selectedMintUrl} with balance ${selectedMintBalance} sats instead`
+          `Active mint insufficient. Using mint ${selectedMintUrl} with balance ${selectedMintBalance} sats instead`,
         );
         try {
           token = await sendToken(selectedMintUrl, adjustedAmount, p2pkPubkey);
@@ -603,7 +603,7 @@ export function useCashuWithXYZ() {
           } else if (
             error instanceof Error &&
             (error.message.includes(
-              "NetworkError when attempting to fetch resource"
+              "NetworkError when attempting to fetch resource",
             ) ||
               error.message.includes("Failed to fetch") ||
               error.message.includes("Load failed"))
@@ -612,7 +612,7 @@ export function useCashuWithXYZ() {
               latestMintBalances,
               latestMintUnits,
               adjustedAmount,
-              [...(excludeMints || []), ...(mintUrl ? [mintUrl] : [])]
+              [...(excludeMints || []), ...(mintUrl ? [mintUrl] : [])],
             );
 
             if (
@@ -620,7 +620,7 @@ export function useCashuWithXYZ() {
               retryCount < Object.keys(latestMintBalances).length
             ) {
               console.log(
-                `NetworkError on active mint. Retrying with alternate mint ${alternateMintUrl}`
+                `NetworkError on active mint. Retrying with alternate mint ${alternateMintUrl}`,
               );
               return spendCashu(
                 alternateMintUrl as string,
@@ -629,7 +629,7 @@ export function useCashuWithXYZ() {
                 false,
                 p2pkPubkey,
                 [...(excludeMints || []), ...(mintUrl ? [mintUrl] : [])],
-                retryCount + 1
+                retryCount + 1,
               );
             }
           }
@@ -659,18 +659,18 @@ export function useCashuWithXYZ() {
           const storedToken = getLocalCashuToken(pendingBalance.baseUrl);
           if (storedToken) {
             console.log(
-              `Refunding pending token for ${pendingBalance.baseUrl}: ${pendingBalance.amount} sats`
+              `Refunding pending token for ${pendingBalance.baseUrl}: ${pendingBalance.amount} sats`,
             );
             const refundResult = await unifiedRefund(
               mintUrl,
               pendingBalance.baseUrl,
               usingNip60,
               receiveToken,
-              storedToken
+              storedToken,
             );
             if (!refundResult.success) {
               console.error(
-                `Failed to refund ${pendingBalance.baseUrl}: ${refundResult.message}`
+                `Failed to refund ${pendingBalance.baseUrl}: ${refundResult.message}`,
               );
               refundSuccessful = false;
             } else {
@@ -691,7 +691,7 @@ export function useCashuWithXYZ() {
             false,
             p2pkPubkey,
             excludeMints,
-            retryCount + 1
+            retryCount + 1,
           );
         } else {
           console.error("Some refunds failed, still gonna retry");
@@ -703,14 +703,14 @@ export function useCashuWithXYZ() {
             false,
             p2pkPubkey,
             excludeMints,
-            retryCount + 1
+            retryCount + 1,
           );
         }
       } else {
         console.error("=== Insufficient Balance Error ===");
         console.error(`Required amount: ${adjustedAmount} sats`);
         console.error(
-          `Active mint (${mintUrl}): ${activeMintBalanceInSats} sats`
+          `Active mint (${mintUrl}): ${activeMintBalanceInSats} sats`,
         );
         console.error("\nAll mint balances:");
         let maxMintBalance = 0;

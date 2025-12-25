@@ -89,7 +89,7 @@ async function testInvoiceStatus(quoteId) {
   const testName = "Check invoice status";
   try {
     const response = exec(
-      `curl -s ${MINT_URL}/v1/mint/quote/bolt11/${quoteId}`
+      `curl -s ${MINT_URL}/v1/mint/quote/bolt11/${quoteId}`,
     );
     const status = JSON.parse(response);
     if (status.state) {
@@ -146,7 +146,7 @@ async function testPaymentDetection(quoteId) {
   while (attempts < maxAttempts) {
     try {
       const response = exec(
-        `curl -s ${MINT_URL}/v1/mint/quote/bolt11/${quoteId}`
+        `curl -s ${MINT_URL}/v1/mint/quote/bolt11/${quoteId}`,
       );
       const status = JSON.parse(response);
 
@@ -189,7 +189,7 @@ async function runTests() {
   const mintOk = await testMintConnection();
   if (!mintOk) {
     console.error(
-      "\nMint not accessible. Start with: ./test/setup-regtest-mint.sh"
+      "\nMint not accessible. Start with: ./test/setup-regtest-mint.sh",
     );
     process.exit(1);
   }

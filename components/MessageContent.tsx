@@ -43,7 +43,7 @@ function processCitations(text: string, citations?: string[]): string {
  */
 function processAnnotations(
   text: string,
-  annotations?: import("@/types/chat").AnnotationData[]
+  annotations?: import("@/types/chat").AnnotationData[],
 ): string {
   if (!annotations || annotations.length === 0) {
     return text;
@@ -52,7 +52,7 @@ function processAnnotations(
   // Sort annotations by start_index in descending order to process from end to start
   // This prevents index shifting issues when replacing text
   const sortedAnnotations = [...annotations].sort(
-    (a, b) => b.start_index - a.start_index
+    (a, b) => b.start_index - a.start_index,
   );
 
   let result = text;
@@ -134,7 +134,7 @@ export default function MessageContentRenderer({
             setImageStatus(`error-${storageId}`, "error");
             console.warn(
               `Failed to load file from storage (ID: ${storageId}):`,
-              error instanceof Error ? error.message : "Unknown error"
+              error instanceof Error ? error.message : "Unknown error",
             );
           }
         }
@@ -177,7 +177,7 @@ export default function MessageContentRenderer({
 
   // Separate text, image, and file content
   const textContent = content.filter(
-    (item) => item.type === "text" && !item.hidden
+    (item) => item.type === "text" && !item.hidden,
   );
   const fileContent = content.filter((item) => item.type === "file");
 
@@ -190,7 +190,7 @@ export default function MessageContentRenderer({
         const itemAnnotations = item.annotations || annotations;
         let processedText = processAnnotations(
           item.text || "",
-          itemAnnotations
+          itemAnnotations,
         );
         processedText = processCitations(processedText, itemCitations);
         return (

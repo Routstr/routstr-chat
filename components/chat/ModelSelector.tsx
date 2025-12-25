@@ -89,7 +89,7 @@ export default function ModelSelector({
     Record<string, Record<string, Model>>
   >({});
   const [loadingProviderBases, setLoadingProviderBases] = useState<Set<string>>(
-    new Set()
+    new Set(),
   );
   const [detailsBaseUrl, setDetailsBaseUrl] = useState<string | null>(null);
   const [pairFilters, setPairFilters] = useState<Set<string>>(new Set());
@@ -125,7 +125,7 @@ export default function ModelSelector({
   const currentConfiguredKeyMemo: string | undefined = useMemo(() => {
     if (!selectedModel) return undefined;
     const preferred = configuredModels.find((k) =>
-      k.startsWith(`${selectedModel.id}@@`)
+      k.startsWith(`${selectedModel.id}@@`),
     );
     if (preferred) return preferred;
     const anyKey = configuredModels.find((k) => k === selectedModel.id);
@@ -206,7 +206,7 @@ export default function ModelSelector({
 
   // Normalize provider modality strings to canonical categories used for icons/filters
   const normalizeModality = (
-    value: unknown
+    value: unknown,
   ): "text" | "image" | "audio" | "video" => {
     const k = String(value ?? "").toLowerCase();
     if (
@@ -238,10 +238,12 @@ export default function ModelSelector({
     for (const m of dedupedModels) {
       try {
         const inputs = new Set(
-          (m.architecture?.input_modalities ?? ["text"]).map(normalizeModality)
+          (m.architecture?.input_modalities ?? ["text"]).map(normalizeModality),
         );
         const outputs = new Set(
-          (m.architecture?.output_modalities ?? ["text"]).map(normalizeModality)
+          (m.architecture?.output_modalities ?? ["text"]).map(
+            normalizeModality,
+          ),
         );
         for (const i of inputs) {
           for (const o of outputs) {
@@ -252,7 +254,7 @@ export default function ModelSelector({
       } catch {}
     }
     return Array.from(found.values()).sort((a, b) =>
-      a.key.localeCompare(b.key)
+      a.key.localeCompare(b.key),
     );
   }, [dedupedModels]);
 
@@ -270,10 +272,12 @@ export default function ModelSelector({
 
     if (pairFilters.size === 0) return true;
     const inputs = new Set(
-      (model.architecture?.input_modalities ?? ["text"]).map(normalizeModality)
+      (model.architecture?.input_modalities ?? ["text"]).map(normalizeModality),
     );
     const outputs = new Set(
-      (model.architecture?.output_modalities ?? ["text"]).map(normalizeModality)
+      (model.architecture?.output_modalities ?? ["text"]).map(
+        normalizeModality,
+      ),
     );
     for (const i of inputs) {
       for (const o of outputs) {
@@ -313,7 +317,7 @@ export default function ModelSelector({
 
   const formatProviderLabel = (
     baseUrl: string | null | undefined,
-    model: Model
+    model: Model,
   ): string => {
     try {
       if (baseUrl) {
@@ -327,16 +331,16 @@ export default function ModelSelector({
   // Treat a model as configured if any configured key matches its id or `${id}@@...`
   const isConfiguredModel = (modelId: string) => {
     return configuredModels.some(
-      (key) => key === modelId || key.startsWith(`${modelId}@@`)
+      (key) => key === modelId || key.startsWith(`${modelId}@@`),
     );
   };
 
   // Split into configured and all (remaining) models
   const configuredModelsList = filteredModels.filter((model) =>
-    isConfiguredModel(model.id)
+    isConfiguredModel(model.id),
   );
   const remainingModelsList = filteredModels.filter(
-    (model) => !isConfiguredModel(model.id)
+    (model) => !isConfiguredModel(model.id),
   );
   const recommendedModelsList = recommendedModels
     .map((modelId) => filteredModels.find((model) => model.id === modelId))
@@ -391,7 +395,7 @@ export default function ModelSelector({
         };
       })
       .filter(
-        (e): e is { key: string; model: Model; providerLabel: string } => !!e
+        (e): e is { key: string; model: Model; providerLabel: string } => !!e,
       );
   }, [configuredModels, filteredModels, modelProviderMap]);
 
@@ -600,7 +604,7 @@ export default function ModelSelector({
     model: Model,
     isFavorite: boolean = false,
     providerLabel?: string,
-    configuredKeyOverride?: string
+    configuredKeyOverride?: string,
   ) => {
     // Resolve provider base for this item (fixed provider wins; otherwise use best-priced mapping)
     const isFixedProvider =
@@ -631,7 +635,7 @@ export default function ModelSelector({
       ? Boolean(
           currentSelectedBaseUrl &&
           itemBaseForSelection &&
-          currentSelectedBaseUrl === itemBaseForSelection
+          currentSelectedBaseUrl === itemBaseForSelection,
         )
       : true;
     const isSelectedItem = Boolean(idMatches && providerMatches);
@@ -700,7 +704,7 @@ export default function ModelSelector({
               </span>
               <span className="mx-2 flex-shrink-0">
                 {formatTokensPerSat(
-                  effectiveModelForPricing?.sats_pricing?.completion
+                  effectiveModelForPricing?.sats_pricing?.completion,
                 )}
               </span>
               {!isAvailable && requiredMin > 0 && (
@@ -775,13 +779,13 @@ export default function ModelSelector({
     // Build input->output modality pairs for icon display
     const inputs = new Set(
       (effectiveModel?.architecture?.input_modalities ?? ["text"]).map(
-        normalizeModality
-      )
+        normalizeModality,
+      ),
     );
     const outputs = new Set(
       (effectiveModel?.architecture?.output_modalities ?? ["text"]).map(
-        normalizeModality
-      )
+        normalizeModality,
+      ),
     );
     const ioPairs: { key: string; input: string; output: string }[] = (() => {
       const pairs: { key: string; input: string; output: string }[] = [];
@@ -1050,7 +1054,7 @@ export default function ModelSelector({
                             selectedModel,
                             isConfiguredModel(selectedModel.id),
                             currentProviderLabel,
-                            currentConfiguredKey
+                            currentConfiguredKey,
                           )}
                         </div>
                       </div>
@@ -1068,8 +1072,8 @@ export default function ModelSelector({
                               entry.model,
                               true,
                               entry.providerLabel,
-                              entry.key
-                            )
+                              entry.key,
+                            ),
                           )}
                         </div>
                       </div>
@@ -1089,7 +1093,7 @@ export default function ModelSelector({
                       {recommendedModelsList.length > 0 ? (
                         <div className="space-y-1">
                           {recommendedModelsList.map((model) =>
-                            renderModelItem(model, false)
+                            renderModelItem(model, false),
                           )}
                         </div>
                       ) : (
@@ -1215,7 +1219,7 @@ export default function ModelSelector({
                           selectedModel,
                           isConfiguredModel(selectedModel.id),
                           currentProviderLabel,
-                          currentConfiguredKey
+                          currentConfiguredKey,
                         )}
                       </div>
                     </div>
@@ -1233,8 +1237,8 @@ export default function ModelSelector({
                             entry.model,
                             true,
                             entry.providerLabel,
-                            entry.key
-                          )
+                            entry.key,
+                          ),
                         )}
                       </div>
                     </div>
@@ -1254,7 +1258,7 @@ export default function ModelSelector({
                     {recommendedModelsList.length > 0 ? (
                       <div className="space-y-1">
                         {recommendedModelsList.map((model) =>
-                          renderModelItem(model, false)
+                          renderModelItem(model, false),
                         )}
                       </div>
                     ) : (

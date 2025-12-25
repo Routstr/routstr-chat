@@ -72,7 +72,7 @@ export const extractTextFromPdf = async (file: File): Promise<string> => {
     if (fullText.length > MAX_PDF_TEXT_LENGTH) {
       return `${fullText.slice(
         0,
-        MAX_PDF_TEXT_LENGTH
+        MAX_PDF_TEXT_LENGTH,
       )}\n\n[Truncated after ${MAX_PDF_TEXT_LENGTH} characters]`;
     }
     return fullText;

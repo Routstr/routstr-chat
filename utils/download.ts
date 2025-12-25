@@ -1,6 +1,6 @@
 export async function downloadImageFromSrc(
   src: string | Blob,
-  suggestedName?: string
+  suggestedName?: string,
 ) {
   try {
     if (typeof src !== "string") {

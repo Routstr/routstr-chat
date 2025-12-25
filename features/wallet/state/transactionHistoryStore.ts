@@ -32,7 +32,7 @@ interface TransactionHistoryStore {
 
   // Get history entries, optionally filtered by direction
   getHistoryEntries: (
-    direction?: "in" | "out"
+    direction?: "in" | "out",
   ) => (SpendingHistoryEntry & { id: string })[];
 
   // Get combined history - both confirmed and pending
@@ -64,7 +64,7 @@ export const useTransactionHistoryStore = create<TransactionHistoryStore>()(
       addPendingTransaction(transaction) {
         // Check if transaction already exists
         const exists = get().pendingTransactions.some(
-          (item) => item.id === transaction.id
+          (item) => item.id === transaction.id,
         );
         if (!exists) {
           set((state) => ({
@@ -76,7 +76,7 @@ export const useTransactionHistoryStore = create<TransactionHistoryStore>()(
       removePendingTransaction(id) {
         set((state) => ({
           pendingTransactions: state.pendingTransactions.filter(
-            (tx) => tx.id !== id
+            (tx) => tx.id !== id,
           ),
         }));
       },
@@ -91,7 +91,7 @@ export const useTransactionHistoryStore = create<TransactionHistoryStore>()(
         if (!direction) {
           // Return all entries sorted by timestamp (newest first)
           return [...history].sort(
-            (a, b) => (b.timestamp || 0) - (a.timestamp || 0)
+            (a, b) => (b.timestamp || 0) - (a.timestamp || 0),
           );
         }
 
@@ -107,7 +107,7 @@ export const useTransactionHistoryStore = create<TransactionHistoryStore>()(
 
         // Combine and sort by timestamp (newest first)
         return [...history, ...pending].sort(
-          (a, b) => (b.timestamp || 0) - (a.timestamp || 0)
+          (a, b) => (b.timestamp || 0) - (a.timestamp || 0),
         );
       },
 
@@ -117,6 +117,6 @@ export const useTransactionHistoryStore = create<TransactionHistoryStore>()(
         set({ history: [], pendingTransactions: [] });
       },
     }),
-    { name: "cashu-history" }
-  )
+    { name: "cashu-history" },
+  ),
 );

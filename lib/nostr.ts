@@ -93,7 +93,7 @@ export const signEventWithPrivateKey = (
     tags: string[][];
     content: string;
   },
-  privateKey: Uint8Array
+  privateKey: Uint8Array,
 ): Event => {
   // Create an unsigned event with the given details
   const unsignedEvent = {
@@ -123,7 +123,7 @@ export const validateNsec = (nsec: string): boolean => {
 // Sign an event with the user's Nostr extension
 export const signEvent = async (
   content: string,
-  kind = 1
+  kind = 1,
 ): Promise<Event | null> => {
   if (!isNostrExtensionAvailable()) {
     console.error("Nostr extension not available");

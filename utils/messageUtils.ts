@@ -7,13 +7,13 @@ import { getFile } from "@/utils/indexedDb";
  * @returns The text content as a string
  */
 export const getTextFromContent = (
-  content: string | MessageContent[]
+  content: string | MessageContent[],
 ): string => {
   if (typeof content === "string") return content;
 
   try {
     const textContent = content.find(
-      (item) => item.type === "text" && !item.hidden
+      (item) => item.type === "text" && !item.hidden,
     );
     return textContent?.text || "";
   } catch (error) {
@@ -35,7 +35,7 @@ export const getTextFromContent = (
 
     // Only log if it's an unexpected error format
     console.error(
-      "Error in getTextFromContent - content.find is not a function"
+      "Error in getTextFromContent - content.find is not a function",
     );
     console.error("Content type:", typeof content);
     console.error("Content value:", content);
@@ -74,7 +74,7 @@ const fileToBase64 = (file: File): Promise<string> => {
  * @returns Promise resolving to object with role and content for API consumption
  */
 export const convertMessageForAPI = async (
-  message: Message
+  message: Message,
 ): Promise<{ role: string; content: string | MessageContent[] }> => {
   // If content is a string, return as-is
   if (typeof message.content === "string") {
@@ -120,7 +120,7 @@ export const convertMessageForAPI = async (
       }
 
       return item;
-    })
+    }),
   );
 
   return {
@@ -138,7 +138,7 @@ export const convertMessageForAPI = async (
 export const createTextMessage = (
   role: string,
   text: string,
-  prevId?: string
+  prevId?: string,
 ): Message => {
   return {
     role,
@@ -156,7 +156,7 @@ export const createTextMessage = (
 export const createMultimodalMessage = (
   role: string,
   text: string,
-  attachments: MessageAttachment[]
+  attachments: MessageAttachment[],
 ): Message => {
   const content: MessageContent[] = [];
 
@@ -221,12 +221,12 @@ export const stripImageDataFromSingleMessage = (msg: Message): Message => {
   if (Array.isArray(msg.content)) {
     // Check if we have storageIds for all media
     const mediaItems = msg.content.filter(
-      (item) => item.type === "image_url" || item.type === "file"
+      (item) => item.type === "image_url" || item.type === "file",
     );
     const allHaveStorage = mediaItems.every(
       (item) =>
         (item.type === "image_url" && item.image_url?.storageId) ||
-        (item.type === "file" && item.file?.storageId)
+        (item.type === "file" && item.file?.storageId),
     );
 
     if (allHaveStorage) {
@@ -259,11 +259,11 @@ export const stripImageDataFromSingleMessage = (msg: Message): Message => {
     }
 
     const textContent = msg.content.filter(
-      (item) => item.type === "text" && !item.hidden
+      (item) => item.type === "text" && !item.hidden,
     );
     if (textContent.length === 0) {
       const hasMedia = msg.content.some(
-        (item) => item.type === "image_url" || item.type === "file"
+        (item) => item.type === "image_url" || item.type === "file",
       );
       if (hasMedia) {
         return {
@@ -299,7 +299,7 @@ export const stripImageDataFromMessages = (messages: Message[]): Message[] => {
  */
 export const extractThinkingFromStream = (
   chunk: string,
-  accumulatedThinking: string = ""
+  accumulatedThinking: string = "",
 ): {
   thinking: string;
   content: string;

@@ -66,13 +66,13 @@ const lightningService = new LightningService();
 
 // Activate a mint
 const { mintInfo, keysets } = await mintService.activateMint(
-  "https://mint.example.com"
+  "https://mint.example.com",
 );
 
 // Create a Lightning invoice
 const quote = await lightningService.createMintQuote(
   "https://mint.example.com",
-  1000
+  1000,
 );
 console.log("Pay this invoice:", quote.paymentRequest);
 
@@ -101,7 +101,7 @@ const balance = calculateProofsBalance(proofs);
 const { canMake, selectedProofs } = canMakeExactChange(
   1000,
   denomCounts,
-  proofs
+  proofs,
 );
 ```
 
@@ -161,7 +161,7 @@ const quote = await lightningService.createMintQuote(mintUrl, 1000);
 const proofs = await lightningService.mintTokensFromPaidInvoice(
   mintUrl,
   quote.quoteId,
-  1000
+  1000,
 );
 
 // Create a melt quote (send)

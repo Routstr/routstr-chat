@@ -52,6 +52,6 @@ export const useNutzapStore = create<NutzapStore>()(
         });
       },
     }),
-    { name: "nutzap" }
-  )
+    { name: "nutzap" },
+  ),
 );

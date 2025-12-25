@@ -55,7 +55,7 @@ export function createPnsEvent(innerEvent: any, pnsKeys: PnsKeys): Event {
   const ciphertext = nip44.v2.encrypt(
     innerEventJson,
     pnsKeys.pnsKeypair.privKey,
-    nonce
+    nonce,
   );
   const pnsEvent = {
     kind: KIND_PNS,
@@ -76,7 +76,7 @@ export function decryptPnsEvent(pnsEvent: Event, pnsKeys: PnsKeys): any | null {
     // Attempt NIP-44 decryption using pns_nip44_key
     const plaintext = nip44.v2.decrypt(
       pnsEvent.content,
-      pnsKeys.pnsKeypair.privKey
+      pnsKeys.pnsKeypair.privKey,
     );
 
     // Parse the decrypted contents as JSON
@@ -90,7 +90,7 @@ export function decryptPnsEvent(pnsEvent: Event, pnsKeys: PnsKeys): any | null {
           {
             eventId: pnsEvent.id,
             pubkey: pnsEvent.pubkey,
-          }
+          },
         );
         return null;
       }
@@ -125,7 +125,7 @@ export function decryptPnsEvent(pnsEvent: Event, pnsKeys: PnsKeys): any | null {
 export function createPnsDeletionEvent(
   eventIds: string[],
   pnsKeys: PnsKeys,
-  reason?: string
+  reason?: string,
 ): Event {
   // Validate input
   if (!eventIds || eventIds.length === 0) {

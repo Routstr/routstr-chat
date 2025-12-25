@@ -44,7 +44,7 @@ export function useInvoiceChecker() {
             try {
               const proofs = await wallet.mintProofs(
                 invoice.amount,
-                invoice.quoteId
+                invoice.quoteId,
               );
 
               if (proofs.length > 0) {
@@ -59,11 +59,11 @@ export function useInvoiceChecker() {
                 // Remove any pending transaction for this invoice
                 const pendingTx =
                   transactionHistoryStore.pendingTransactions.find(
-                    (tx) => tx.quoteId === invoice.quoteId
+                    (tx) => tx.quoteId === invoice.quoteId,
                   );
                 if (pendingTx) {
                   transactionHistoryStore.removePendingTransaction(
-                    pendingTx.id
+                    pendingTx.id,
                   );
                 }
 
@@ -71,9 +71,9 @@ export function useInvoiceChecker() {
                 toast.success(
                   `Lightning invoice paid! Received ${formatBalance(
                     invoice.amount,
-                    "sats"
+                    "sats",
                   )}`,
-                  { duration: 5000 }
+                  { duration: 5000 },
                 );
 
                 return true;
@@ -81,19 +81,19 @@ export function useInvoiceChecker() {
             } catch (mintError) {
               console.error(
                 "Error minting tokens for paid invoice:",
-                mintError
+                mintError,
               );
 
               // Check if tokens were already issued (in case of race condition)
               try {
                 const recheckStatus = await wallet.checkMintQuote(
-                  invoice.quoteId
+                  invoice.quoteId,
                 );
                 if (recheckStatus.state === MintQuoteState.ISSUED) {
                   // Tokens were already issued, try to recover them
                   const proofs = await wallet.mintProofs(
                     invoice.amount,
-                    invoice.quoteId
+                    invoice.quoteId,
                   );
                   if (proofs.length > 0) {
                     cashuStore.addProofs(proofs, `invoice-${invoice.id}`);
@@ -104,20 +104,20 @@ export function useInvoiceChecker() {
                     // Remove any pending transaction for this invoice
                     const pendingTx =
                       transactionHistoryStore.pendingTransactions.find(
-                        (tx) => tx.quoteId === invoice.quoteId
+                        (tx) => tx.quoteId === invoice.quoteId,
                       );
                     if (pendingTx) {
                       transactionHistoryStore.removePendingTransaction(
-                        pendingTx.id
+                        pendingTx.id,
                       );
                     }
 
                     toast.success(
                       `Lightning invoice paid! Recovered ${formatBalance(
                         invoice.amount,
-                        "sats"
+                        "sats",
                       )}`,
-                      { duration: 5000 }
+                      { duration: 5000 },
                     );
                     return true;
                   }
@@ -127,7 +127,7 @@ export function useInvoiceChecker() {
               }
 
               toast.error(
-                "Invoice paid but failed to mint tokens. Will retry automatically."
+                "Invoice paid but failed to mint tokens. Will retry automatically.",
               );
             }
           } else if (quoteStatus.state === MintQuoteState.ISSUED) {
@@ -136,13 +136,13 @@ export function useInvoiceChecker() {
             const proofsBefore = cashuStore.proofs;
             const balanceBefore = proofsBefore.reduce(
               (sum, p) => sum + p.amount,
-              0
+              0,
             );
 
             try {
               const proofs = await wallet.mintProofs(
                 invoice.amount,
-                invoice.quoteId
+                invoice.quoteId,
               );
               if (proofs.length > 0) {
                 cashuStore.addProofs(proofs, `invoice-${invoice.id}`);
@@ -151,26 +151,26 @@ export function useInvoiceChecker() {
                 const proofsAfter = cashuStore.proofs;
                 const balanceAfter = proofsAfter.reduce(
                   (sum, p) => sum + p.amount,
-                  0
+                  0,
                 );
                 if (balanceAfter > balanceBefore) {
                   // Remove any pending transaction for this invoice
                   const pendingTx =
                     transactionHistoryStore.pendingTransactions.find(
-                      (tx) => tx.quoteId === invoice.quoteId
+                      (tx) => tx.quoteId === invoice.quoteId,
                     );
                   if (pendingTx) {
                     transactionHistoryStore.removePendingTransaction(
-                      pendingTx.id
+                      pendingTx.id,
                     );
                   }
 
                   toast.success(
                     `Lightning invoice paid! Recovered ${formatBalance(
                       invoice.amount,
-                      "sats"
+                      "sats",
                     )}`,
-                    { duration: 5000 }
+                    { duration: 5000 },
                   );
                 }
                 return true;
@@ -180,11 +180,11 @@ export function useInvoiceChecker() {
               if (!recoveryError?.message?.includes("already issued")) {
                 console.error(
                   "Failed to recover issued tokens:",
-                  recoveryError
+                  recoveryError,
                 );
                 // Only show warning for actual recovery failures, not for already-claimed tokens
                 toast.warning(
-                  "Invoice was paid but tokens need manual recovery."
+                  "Invoice was paid but tokens need manual recovery.",
                 );
               }
             }
@@ -203,7 +203,7 @@ export function useInvoiceChecker() {
         const baseInterval = 30000; // 30 seconds
         const nextRetryDelay = Math.min(
           baseInterval * Math.pow(2, retryCount),
-          300000
+          300000,
         ); // Max 5 minutes
 
         await updateInvoice(invoice.id, {
@@ -214,7 +214,7 @@ export function useInvoiceChecker() {
         return false;
       }
     },
-    [cashuStore, updateInvoice]
+    [cashuStore, updateInvoice],
   );
 
   // Check a single melt invoice
@@ -241,9 +241,9 @@ export function useInvoiceChecker() {
           toast.success(
             `Lightning payment sent successfully! Amount: ${formatBalance(
               invoice.amount,
-              "sats"
+              "sats",
             )}`,
-            { duration: 5000 }
+            { duration: 5000 },
           );
 
           return true;
@@ -261,7 +261,7 @@ export function useInvoiceChecker() {
         const baseInterval = 30000; // 30 seconds
         const nextRetryDelay = Math.min(
           baseInterval * Math.pow(2, retryCount),
-          300000
+          300000,
         ); // Max 5 minutes
 
         await updateInvoice(invoice.id, {
@@ -272,7 +272,7 @@ export function useInvoiceChecker() {
         return false;
       }
     },
-    [updateInvoice]
+    [updateInvoice],
   );
 
   // Check all pending invoices
@@ -300,7 +300,7 @@ export function useInvoiceChecker() {
 
       const results = await Promise.allSettled(checkPromises);
       const successCount = results.filter(
-        (r) => r.status === "fulfilled" && r.value
+        (r) => r.status === "fulfilled" && r.value,
       ).length;
 
       if (successCount > 0) {

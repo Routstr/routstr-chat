@@ -209,7 +209,7 @@ const events = await nostr.query(
       "#d": [naddr.identifier],
     },
   ],
-  { signal }
+  { signal },
 );
 ```
 
@@ -271,7 +271,7 @@ const { user } = useCurrentUser();
 // Optional guard to check that nip44 is available
 if (!user.signer.nip44) {
   throw new Error(
-    "Please upgrade your signer extension to a version that supports NIP-44 encryption"
+    "Please upgrade your signer extension to a version that supports NIP-44 encryption",
   );
 }
 

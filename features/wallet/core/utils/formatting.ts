@@ -50,7 +50,7 @@ export function formatSatsVerbose(amount: number): string {
 export function truncateMintUrl(
   url: string,
   maxDomainLen = 20,
-  shortLen = 15
+  shortLen = 15,
 ): string {
   try {
     const urlObj = new URL(url);

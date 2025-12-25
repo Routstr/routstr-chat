@@ -24,7 +24,7 @@ export function storeEventTimestamp(pubkey: string, kind: number): void {
  */
 export function getLastEventTimestamp(
   pubkey: string,
-  kind: number
+  kind: number,
 ): number | undefined {
   const key = getStorageKey(pubkey, kind);
   const storedValue = localStorage.getItem(key);

@@ -57,7 +57,7 @@ export const useModelState = (): UseModelStateReturn => {
         return updated;
       });
     },
-    []
+    [],
   );
 
   return {

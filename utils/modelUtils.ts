@@ -48,14 +48,14 @@ export function getModelNameWithoutProvider(modelName: string): string {
 
 export function upsertCachedProviderModels(
   baseUrl: string,
-  models: Model[]
+  models: Model[],
 ): void {
   try {
     const normalized = normalizeBaseUrl(baseUrl);
     if (!normalized) return;
     const existing = getStorageItem<Record<string, Model[]>>(
       "modelsFromAllProviders",
-      {} as any
+      {} as any,
     );
     setStorageItem("modelsFromAllProviders", {
       ...existing,
@@ -70,7 +70,7 @@ export function getCachedProviderModels(baseUrl: string): Model[] | undefined {
     if (!normalized) return undefined;
     const all = getStorageItem<Record<string, Model[]>>(
       "modelsFromAllProviders",
-      {} as any
+      {} as any,
     );
     return all[normalized];
   } catch {
@@ -85,7 +85,7 @@ export function getCachedProviderModels(baseUrl: string): Model[] | undefined {
  */
 export async function getModelForBase(
   baseUrl: string,
-  modelId: string
+  modelId: string,
 ): Promise<Model | null> {
   try {
     const normalized = normalizeBaseUrl(baseUrl);
@@ -128,7 +128,7 @@ export async function getModelForBase(
  * Supports PNG and JPEG. Returns null if format unsupported or parsing fails.
  */
 function getImageResolutionFromDataUrl(
-  dataUrl: string
+  dataUrl: string,
 ): { width: number; height: number } | null {
   try {
     if (typeof dataUrl !== "string" || !dataUrl.startsWith("data:"))
@@ -163,7 +163,7 @@ function getImageResolutionFromDataUrl(
       const view = new DataView(
         bytes.buffer,
         bytes.byteOffset,
-        bytes.byteLength
+        bytes.byteLength,
       );
       const width = view.getUint32(16, false);
       const height = view.getUint32(20, false);
@@ -226,7 +226,7 @@ function getImageResolutionFromDataUrl(
 export function calculateImageTokens(
   width: number,
   height: number,
-  detail: "low" | "high" | "auto" = "auto"
+  detail: "low" | "high" | "auto" = "auto",
 ): number {
   if (detail === "low") return 85;
 
@@ -268,7 +268,7 @@ export function calculateImageTokens(
 // Determine required minimum sats to run a request for a model
 export const getRequiredSatsForModel = (
   model: Model,
-  apiMessages?: any[]
+  apiMessages?: any[],
 ): number => {
   try {
     let imageTokens = 0;
@@ -291,7 +291,7 @@ export const getRequiredSatsForModel = (
               if (res) {
                 const tokensFromImage = calculateImageTokens(
                   res.width,
-                  res.height
+                  res.height,
                 );
                 // const patchSize = 32;
                 // const patchesW = Math.floor((res.width + patchSize - 1) / patchSize);
@@ -306,7 +306,7 @@ export const getRequiredSatsForModel = (
               } else {
                 console.log(
                   "IMAGE INPUT RESOLUTION",
-                  "unknown (unsupported format or parse failure)"
+                  "unknown (unsupported format or parse failure)",
                 );
               }
             }
@@ -320,7 +320,7 @@ export const getRequiredSatsForModel = (
           if (Array.isArray(m?.content)) {
             const filtered = m.content.filter(
               (p: any) =>
-                !(p && typeof p === "object" && p.type === "image_url")
+                !(p && typeof p === "object" && p.type === "image_url"),
             );
             return { ...m, content: filtered };
           }
@@ -340,7 +340,7 @@ export const getRequiredSatsForModel = (
         "IMAGE TOKENS",
         imageTokens,
         "TOTAL INPUT TOKENS",
-        totalInputTokens
+        totalInputTokens,
       );
     }
     const sp: any = model?.sats_pricing as any;
@@ -379,7 +379,7 @@ export const isModelAvailable = (model: Model, balance: number) => {
 export const modelSelectionStrategy = async (
   models: Model[],
   maxBalance: number,
-  pendingCashuAmountState: number
+  pendingCashuAmountState: number,
 ): Promise<Model | null> => {
   let modelToSelect: Model | null = null;
   const lastUsedModelId = loadLastUsedModel();
@@ -391,7 +391,7 @@ export const modelSelectionStrategy = async (
       const normalized = fixedBase.endsWith("/") ? fixedBase : `${fixedBase}/`;
       const allByProvider = getStorageItem<Record<string, Model[]>>(
         "modelsFromAllProviders",
-        {} as any
+        {} as any,
       );
       const list =
         allByProvider?.[normalized] || allByProvider?.[lastUsedModelId] || [];
@@ -430,10 +430,10 @@ export const modelSelectionStrategy = async (
       .filter((m: Model) => recommendedModels.includes(m.id))
       .sort(
         (a, b) =>
-          recommendedModels.indexOf(a.id) - recommendedModels.indexOf(b.id)
+          recommendedModels.indexOf(a.id) - recommendedModels.indexOf(b.id),
       );
     const compatible = recommended.filter((m: Model) =>
-      isModelAvailable(m, maxBalance + pendingCashuAmountState)
+      isModelAvailable(m, maxBalance + pendingCashuAmountState),
     );
     if (compatible.length > 0) modelToSelect = compatible[0];
   }
@@ -441,7 +441,7 @@ export const modelSelectionStrategy = async (
   if (!modelToSelect) {
     const compatible = models
       .filter((m: Model) =>
-        isModelAvailable(m, maxBalance + pendingCashuAmountState)
+        isModelAvailable(m, maxBalance + pendingCashuAmountState),
       )
       .sort((a, b) => {
         const aMaxCost = getRequiredSatsForModel(a);

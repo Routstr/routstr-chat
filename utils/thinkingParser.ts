@@ -11,7 +11,7 @@ interface ParsedThinking {
 
 export const parseThinkingContent = (
   rawContent: string,
-  modelId?: string
+  modelId?: string,
 ): ParsedThinking => {
   const provider = modelId ? getProviderFromModel(modelId) : "unknown";
   const patterns = getThinkingPatternsForProvider(provider);
@@ -40,7 +40,7 @@ export const parseThinkingContent = (
 
 export const extractThinkingFromStream = (
   chunk: string,
-  accumulatedThinking: string = ""
+  accumulatedThinking: string = "",
 ): {
   thinking: string;
   content: string;

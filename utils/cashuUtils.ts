@@ -24,7 +24,7 @@ export const MSATS_PER_SAT = 1000;
 
 export const fetchBalances = async (
   mintUrl: string,
-  baseUrl: string
+  baseUrl: string,
 ): Promise<{ apiBalance: number; proofsBalance: number }> => {
   let apiBalance = 0;
   let proofsBalance = 0;
@@ -44,11 +44,11 @@ export const fetchBalances = async (
           // Invalidate current token since it's out of balance
           removeLocalCashuToken(baseUrl);
           console.warn(
-            "rdlogs: API token invalidated due to insufficient balance."
+            "rdlogs: API token invalidated due to insufficient balance.",
           );
         } else {
           console.error(
-            `Failed to fetch wallet balance: ${response.status} ${response.statusText}`
+            `Failed to fetch wallet balance: ${response.status} ${response.statusText}`,
           );
         }
       } else {
@@ -84,7 +84,7 @@ export const getBalanceFromStoredProofs = (): number => {
     const proofs = JSON.parse(storedProofs);
     return proofs.reduce(
       (total: number, proof: any) => total + proof.amount,
-      0
+      0,
     );
   } catch (error) {
     console.error("Error getting balance:", error);
@@ -123,7 +123,7 @@ export const removeWrappedToken = (tokenId: string): void => {
 
 export const fetchRefundToken = async (
   baseUrl: string,
-  storedToken: string
+  storedToken: string,
 ): Promise<{
   success: boolean;
   token?: string;
@@ -211,7 +211,7 @@ export const fetchRefundToken = async (
 
 export const storeCashuToken = async (
   mintUrl: string,
-  token: string
+  token: string,
 ): Promise<void> => {
   const mint = new Mint(mintUrl);
   const keysets = await mint.getKeySets();
@@ -236,7 +236,7 @@ export const storeCashuToken = async (
     const existingProofs = storedProofs ? JSON.parse(storedProofs) : [];
     localStorage.setItem(
       "cashu_proofs",
-      JSON.stringify([...existingProofs, ...proofs])
+      JSON.stringify([...existingProofs, ...proofs]),
     );
   }
 };
@@ -244,7 +244,7 @@ export const storeCashuToken = async (
 export const refundRemainingBalance = async (
   mintUrl: string,
   baseUrl: string,
-  apiKey?: string
+  apiKey?: string,
 ): Promise<{ success: boolean; message?: string }> => {
   try {
     const storedToken = apiKey || getLocalCashuToken(baseUrl); // Use getLocalCashuToken
@@ -293,7 +293,7 @@ export const unifiedRefund = async (
   baseUrl: string,
   usingNip60: boolean,
   receiveTokenFn: (token: string) => Promise<any[]>,
-  apiKey?: string
+  apiKey?: string,
 ): Promise<UnifiedRefundResult> => {
   if (usingNip60) {
     const storedToken = apiKey || getLocalCashuToken(baseUrl); // Use getLocalCashuToken
@@ -323,7 +323,7 @@ export const unifiedRefund = async (
       const proofs = await receiveTokenFn(refundResult.token);
       const totalAmount = proofs.reduce(
         (sum: number, p: any) => sum + p.amount,
-        0
+        0,
       );
       if (!apiKey) {
         removeLocalCashuToken(baseUrl);
@@ -339,7 +339,7 @@ export const unifiedRefund = async (
         if (
           error instanceof Error &&
           (error.message.includes(
-            "NetworkError when attempting to fetch resource."
+            "NetworkError when attempting to fetch resource.",
           ) ||
             error.message.includes("Failed to fetch") ||
             error.message.includes("Load failed"))
@@ -375,7 +375,7 @@ export const unifiedRefund = async (
 export const getPendingCashuTokenAmount = (): number => {
   const distribution = getPendingCashuTokenDistribution();
   const tempKeys = Object.keys(localStorage).filter((key) =>
-    key.startsWith("pending_send_proofs_")
+    key.startsWith("pending_send_proofs_"),
   );
   const tempAmount = tempKeys.reduce((total, key) => {
     const data = JSON.parse(localStorage.getItem(key) || "{}");

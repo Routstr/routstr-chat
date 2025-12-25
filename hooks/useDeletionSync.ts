@@ -23,7 +23,7 @@ export function useDeletionSync() {
         "[useDeletionSync] Synced deleted PNS event:",
         event.id,
         "from:",
-        event.pubkey.slice(0, 8)
+        event.pubkey.slice(0, 8),
       );
       console.log("[useDeletionSync] Publish responses:", responses);
     } catch (err: any) {
@@ -33,7 +33,7 @@ export function useDeletionSync() {
         err?.message === "no elements in sequence"
       ) {
         console.log(
-          "[useDeletionSync] Deletion sync complete - no events to sync"
+          "[useDeletionSync] Deletion sync complete - no events to sync",
         );
       } else {
         console.error("[useDeletionSync] Deletion sync error:", err);

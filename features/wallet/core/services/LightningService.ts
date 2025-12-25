@@ -53,7 +53,7 @@ export class LightningService {
     mintUrl: string,
     quoteId: string,
     amount: number,
-    maxAttempts: number = 40
+    maxAttempts: number = 40,
   ): Promise<Proof[]> {
     const normalizedUrl = normalizeMintUrl(mintUrl);
     const mint = new Mint(normalizedUrl);
@@ -109,7 +109,7 @@ export class LightningService {
    */
   async createMeltQuote(
     mintUrl: string,
-    paymentRequest: string
+    paymentRequest: string,
   ): Promise<MeltQuoteResponse> {
     const normalizedUrl = normalizeMintUrl(mintUrl);
     const mint = new Mint(normalizedUrl);

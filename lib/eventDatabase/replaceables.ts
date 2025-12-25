@@ -42,7 +42,7 @@ export function getIdentifier(event: NostrEvent): string {
 export function getReplaceableKey(
   kind: number,
   pubkey: string,
-  identifier: string = ""
+  identifier: string = "",
 ): string {
   return `${kind}:${pubkey}:${identifier}`;
 }

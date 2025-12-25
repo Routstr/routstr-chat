@@ -36,13 +36,13 @@ export interface IEventDatabase {
   getReplaceable(
     kind: number,
     pubkey: string,
-    identifier?: string
+    identifier?: string,
   ): NostrEvent | undefined;
   /** Get the history of a replaceable event */
   getReplaceableHistory(
     kind: number,
     pubkey: string,
-    identifier?: string
+    identifier?: string,
   ): NostrEvent[] | undefined;
   /** Get all events that match the filters */
   getByFilters(filters: Filter | Filter[]): NostrEvent[];

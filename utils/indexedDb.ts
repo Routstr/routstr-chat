@@ -51,7 +51,7 @@ export const initDB = async (): Promise<IDBPDatabase<RoutstrFilesDB>> => {
       throw new Error(
         `Failed to initialize IndexedDB: ${
           error instanceof Error ? error.message : "Unknown error"
-        }`
+        }`,
       );
     }
   }
@@ -64,7 +64,7 @@ export const initDB = async (): Promise<IDBPDatabase<RoutstrFilesDB>> => {
  * @returns Promise resolving to true if enough quota is available
  */
 export const checkStorageQuota = async (
-  requiredBytes: number
+  requiredBytes: number,
 ): Promise<boolean> => {
   if (!navigator.storage || !navigator.storage.estimate) {
     // If Storage API is not available, assume we have space
@@ -96,10 +96,10 @@ export const saveFile = async (file: File): Promise<string> => {
   if (file.size > MAX_FILE_SIZE_BYTES) {
     throw new Error(
       `File size (${(file.size / 1024 / 1024).toFixed(
-        1
+        1,
       )}MB) exceeds maximum allowed size (${
         MAX_FILE_SIZE_BYTES / 1024 / 1024
-      }MB)`
+      }MB)`,
     );
   }
 
@@ -107,7 +107,7 @@ export const saveFile = async (file: File): Promise<string> => {
   const hasQuota = await checkStorageQuota(file.size);
   if (!hasQuota) {
     throw new Error(
-      "Storage quota exceeded. Please clear some space or delete old files."
+      "Storage quota exceeded. Please clear some space or delete old files.",
     );
   }
 
@@ -123,13 +123,13 @@ export const saveFile = async (file: File): Promise<string> => {
   } catch (error) {
     if (error instanceof Error && error.message.includes("quota")) {
       throw new Error(
-        "Storage quota exceeded. Please clear some space or delete old files."
+        "Storage quota exceeded. Please clear some space or delete old files.",
       );
     }
     throw new Error(
       `Failed to save file: ${
         error instanceof Error ? error.message : "Unknown error"
-      }`
+      }`,
     );
   }
 };
@@ -149,7 +149,7 @@ export const getFile = async (id: string): Promise<File | undefined> => {
     throw new Error(
       `Failed to retrieve file: ${
         error instanceof Error ? error.message : "Unknown error"
-      }`
+      }`,
     );
   }
 };
@@ -167,7 +167,7 @@ export const deleteFile = async (id: string): Promise<void> => {
     throw new Error(
       `Failed to delete file: ${
         error instanceof Error ? error.message : "Unknown error"
-      }`
+      }`,
     );
   }
 };
@@ -179,7 +179,7 @@ export const deleteFile = async (id: string): Promise<void> => {
  * @throws Error if cleanup fails
  */
 export const clearOldFiles = async (
-  maxAgeMs: number = MAX_FILE_AGE_MS
+  maxAgeMs: number = MAX_FILE_AGE_MS,
 ): Promise<number> => {
   try {
     const db = await initDB();
@@ -202,7 +202,7 @@ export const clearOldFiles = async (
     throw new Error(
       `Failed to clear old files: ${
         error instanceof Error ? error.message : "Unknown error"
-      }`
+      }`,
     );
   }
 };

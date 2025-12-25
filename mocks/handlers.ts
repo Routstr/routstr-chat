@@ -36,7 +36,7 @@ export const handlers = [
             "Content-Type": "application/json",
             "x-routstr-request-id": "7ee5gg8b-9d41-5cbe-c2aa-50d0555eg07d",
           },
-        }
+        },
       );
     }
 
@@ -67,7 +67,7 @@ export const handlers = [
             "Content-Type": "application/json",
             "x-routstr-request-id": "8ff6hh9c-0e52-6dcf-d3bb-61e1666fh18e",
           },
-        }
+        },
       );
     }
 
@@ -98,7 +98,7 @@ export const handlers = [
             "Content-Type": "application/json",
             "x-routstr-request-id": "9gg7ii0d-1f63-7edg-e4cc-72f2777gi29f",
           },
-        }
+        },
       );
     }
 
@@ -156,7 +156,7 @@ export const handlers = [
           headers: {
             "Content-Type": "application/json",
           },
-        }
+        },
       );
     }
 
@@ -187,7 +187,7 @@ export const handlers = [
             "Content-Type": "application/json",
             "x-routstr-request-id": "6dd4ff7a-8c30-4bad-b199-49c9444df96c",
           },
-        }
+        },
       );
     }
 
@@ -222,7 +222,7 @@ export const handlers = [
             "Content-Type": "application/json",
             "x-routstr-request-id": "0hh8jj1e-2g74-8feh-f5dd-83g3888hj30g",
           },
-        }
+        },
       );
     }
 
@@ -253,7 +253,7 @@ export const handlers = [
             "Content-Type": "application/json",
             "x-routstr-request-id": "1ii9kk2f-3h85-9gfi-g6ee-94h4999ik41h",
           },
-        }
+        },
       );
     }
 
@@ -293,7 +293,7 @@ export const handlers = [
           { id: "ctv28hTYzQwr", unit: "sat", active: false, input_fee_ppk: 0 },
         ],
       });
-    }
+    },
   ),
 
   http.get(
@@ -389,7 +389,7 @@ export const handlers = [
           },
         },
       });
-    }
+    },
   ),
   http.get(
     "https://mint.minibits.cash/Bitcoin/v1/keys/00500550f0494146",
@@ -536,6 +536,6 @@ export const handlers = [
           },
         ],
       });
-    }
+    },
   ),
 ];

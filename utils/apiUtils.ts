@@ -38,7 +38,7 @@ export interface FetchAIResponseParams {
     amount: number,
     baseUrl: string,
     reuseToken?: boolean,
-    p2pkPubkey?: string
+    p2pkPubkey?: string,
   ) => Promise<SpendCashuResult>;
   storeCashu: (token: string) => Promise<any[]>;
   activeMintUrl?: string | null;
@@ -68,13 +68,13 @@ interface APIErrorVerdict {
 function findNextBestProvider(
   modelId: string,
   currentBaseUrl: string,
-  failedProviders: Set<string>
+  failedProviders: Set<string>,
 ): string | null {
   try {
     // Load all cached provider models from storage
     const modelsFromAllProviders = getStorageItem<Record<string, Model[]>>(
       "modelsFromAllProviders",
-      {}
+      {},
     );
 
     // Find all providers that offer this model
@@ -136,7 +136,7 @@ async function routstrRequest(params: {
     amount: number,
     baseUrl: string,
     reuseToken?: boolean,
-    p2pkPubkey?: string
+    p2pkPubkey?: string,
   ) => Promise<SpendCashuResult>;
   storeCashu: (token: string) => Promise<any[]>;
   activeMintUrl?: string | null;
@@ -164,8 +164,8 @@ async function routstrRequest(params: {
   if (!token) {
     throw new Error(
       `Insufficient balance. Please add more funds to continue. You need at least ${Number(
-        tokenAmount
-      ).toFixed(0)} sats to use ${selectedModel?.id}`
+        tokenAmount,
+      ).toFixed(0)} sats to use ${selectedModel?.id}`,
     );
   }
 
@@ -194,7 +194,7 @@ async function routstrRequest(params: {
   if (/^0\.1\./.test(providerVersion)) {
     const newModelInfo = await backwardCompatibleModel(
       selectedModel.id,
-      baseUrl
+      baseUrl,
     );
     modelIdForRequest = newModelInfo?.id ?? selectedModel.id;
   }
@@ -232,7 +232,7 @@ async function routstrRequest(params: {
         mintUrl,
         baseUrl,
         usingNip60,
-        storeCashu
+        storeCashu,
       );
       if (!refundStatus.success) {
         await logApiErrorForRefund(refundStatus, baseUrl, onMessageAppend);
@@ -243,15 +243,15 @@ async function routstrRequest(params: {
       const nextProvider = findNextBestProvider(
         selectedModel?.id,
         baseUrl,
-        failedProviders
+        failedProviders,
       );
 
       if (nextProvider) {
         onMessageAppend(
           createTextMessage(
             "system",
-            `Provider ${baseUrl} is unreachable. Retrying with ${nextProvider}...`
-          )
+            `Provider ${baseUrl} is unreachable. Retrying with ${nextProvider}...`,
+          ),
         );
 
         const newBaseModel =
@@ -259,7 +259,7 @@ async function routstrRequest(params: {
           selectedModel;
         const tokenAmountNew = getRequiredSatsForModel(
           newBaseModel,
-          apiMessages
+          apiMessages,
         );
 
         // Acquire a new token for the next provider and retry recursively
@@ -267,14 +267,14 @@ async function routstrRequest(params: {
           mintUrl,
           tokenAmountNew,
           nextProvider,
-          true
+          true,
         );
         if (newTokenResult.status === "failed" || !newTokenResult.token) {
           throw new Error(
             newTokenResult.error ||
               `Insufficient balance. Please add more funds to continue. You need at least ${Number(
-                tokenAmount
-              ).toFixed(0)} sats to use ${selectedModel?.id}`
+                tokenAmount,
+              ).toFixed(0)} sats to use ${selectedModel?.id}`,
           );
         }
 
@@ -331,21 +331,21 @@ async function routstrRequest(params: {
       newSelectedModel = await getModelForBase(retryBaseUrl, selectedModel?.id);
       const tokenAmountNew = getRequiredSatsForModel(
         newSelectedModel,
-        apiMessages
+        apiMessages,
       );
 
       const newTokenResult = await spendCashu(
         mintUrl,
         tokenAmountNew,
         retryBaseUrl,
-        true
+        true,
       ); // reuse token is true here but the two scenarios where we're retrying remove locally stored token anyway.
       if (newTokenResult.status === "failed" || !newTokenResult.token) {
         throw new Error(
           newTokenResult.error ||
             `Insufficient balance. Please add more funds to continue. You need at least ${Number(
-              tokenAmount
-            ).toFixed(0)} sats to use ${selectedModel?.id}`
+              tokenAmount,
+            ).toFixed(0)} sats to use ${selectedModel?.id}`,
         );
       }
       const newToken = newTokenResult.token;
@@ -380,7 +380,7 @@ async function routstrRequest(params: {
  */
 
 export const fetchAIResponse = async (
-  params: FetchAIResponseParams
+  params: FetchAIResponseParams,
 ): Promise<void> => {
   const {
     messageHistory,
@@ -409,7 +409,7 @@ export const fetchAIResponse = async (
   const apiMessages = await Promise.all(
     messageHistory
       .filter((message) => message.role !== "system")
-      .map(convertMessageForAPI)
+      .map(convertMessageForAPI),
   );
 
   const tokenAmount = getRequiredSatsForModel(selectedModel, apiMessages);
@@ -424,22 +424,22 @@ export const fetchAIResponse = async (
       const errorMessage =
         result.error ||
         `Insufficient balance. Please add more funds to continue. You need at least ${Number(
-          tokenAmount
+          tokenAmount,
         ).toFixed(0)} sats to use ${selectedModel?.id}`;
 
       // Check for specific network/unreachable mint errors
       if (
         errorMessage.includes(
-          'can\'t access property "filter", keysets.keysets is undefined'
+          'can\'t access property "filter", keysets.keysets is undefined',
         ) ||
         errorMessage.includes(
-          "NetworkError when attempting to fetch resource"
+          "NetworkError when attempting to fetch resource",
         ) ||
         errorMessage.includes("Failed to fetch") ||
         errorMessage.includes("Load failed")
       ) {
         throw new Error(
-          `Your mint ${mintUrl} is unreachable or is blocking your IP. Please try again later or switch mints`
+          `Your mint ${mintUrl} is unreachable or is blocking your IP. Please try again later or switch mints`,
         );
       }
 
@@ -504,15 +504,15 @@ export const fetchAIResponse = async (
         response,
         onStreamingUpdate,
         onThinkingUpdate,
-        selectedModel?.id
+        selectedModel?.id,
       );
       console.log("STREMING RESULTS", streamingResult);
       if (streamingResult.finish_reason === "content_filter") {
         onMessageAppend(
           createTextMessage(
             "assistant",
-            "Your request was denied due to content filtering. "
-          )
+            "Your request was denied due to content filtering. ",
+          ),
         );
       } else if (streamingResult.content || streamingResult.images) {
         const hasImages =
@@ -521,8 +521,8 @@ export const fetchAIResponse = async (
           onMessageAppend(
             createTextMessage(
               "assistant",
-              "This model has issues when using through OpenRouter. We're working on finding alternatives. "
-            )
+              "This model has issues when using through OpenRouter. We're working on finding alternatives. ",
+            ),
           );
         } else {
           onMessageAppend(await createAssistantMessage(streamingResult));
@@ -530,7 +530,7 @@ export const fetchAIResponse = async (
       } else {
         logApiError(
           "The provider did not respond to this request. ",
-          onMessageAppend
+          onMessageAppend,
         );
       }
 
@@ -599,7 +599,7 @@ export const fetchAIResponse = async (
     } else {
       logApiError(
         "Unknown Error: Please tag Routstr on Nostr and/or retry. ",
-        onMessageAppend
+        onMessageAppend,
       );
     }
   }
@@ -622,13 +622,13 @@ async function handleApiError(
       amount: number,
       baseUrl: string,
       reuseToken?: boolean,
-      p2pkPubkey?: string
+      p2pkPubkey?: string,
     ) => Promise<SpendCashuResult>;
     activeMintUrl?: string | null;
     retryOnInsufficientBalance?: boolean;
     onMessageAppend: (message: Message) => void;
     failedProviders?: Set<string>;
-  }
+  },
 ): Promise<APIErrorVerdict> {
   const {
     mintUrl,
@@ -678,7 +678,7 @@ async function handleApiError(
         mintUrl,
         baseUrl,
         usingNip60,
-        storeCashu
+        storeCashu,
       );
       if (!refundStatus.success) {
         await logApiErrorForRefund(refundStatus, baseUrl, onMessageAppend);
@@ -693,19 +693,19 @@ async function handleApiError(
     const nextProvider = findNextBestProvider(
       selectedModel?.id,
       baseUrl,
-      failedProviders
+      failedProviders,
     );
     console.log("Fidning next probi", nextProvider);
 
     if (nextProvider) {
       console.log(
-        `Provider ${baseUrl} returned ${response.status}, switching to ${nextProvider}`
+        `Provider ${baseUrl} returned ${response.status}, switching to ${nextProvider}`,
       );
       onMessageAppend(
         createTextMessage(
           "system",
-          `Provider ${baseUrl} is experiencing issues. Retrying with ${nextProvider}...`
-        )
+          `Provider ${baseUrl} is experiencing issues. Retrying with ${nextProvider}...`,
+        ),
       );
       return {
         retry: true,
@@ -731,7 +731,7 @@ async function handleApiError(
         mintUrl,
         baseUrl,
         usingNip60,
-        storeCashu
+        storeCashu,
       );
       if (!refundStatus.success) {
         await logApiErrorForRefund(refundStatus, baseUrl, onMessageAppend);
@@ -744,18 +744,18 @@ async function handleApiError(
       const nextProvider = findNextBestProvider(
         selectedModel?.id,
         baseUrl,
-        failedProviders
+        failedProviders,
       );
 
       if (nextProvider) {
         console.log(
-          `Provider ${baseUrl} returned ${response.status}, switching to ${nextProvider}`
+          `Provider ${baseUrl} returned ${response.status}, switching to ${nextProvider}`,
         );
         onMessageAppend(
           createTextMessage(
             "system",
-            `Provider ${baseUrl} is experiencing issues. Retrying with ${nextProvider}...`
-          )
+            `Provider ${baseUrl} is experiencing issues. Retrying with ${nextProvider}...`,
+          ),
         );
         return {
           retry: true,
@@ -769,7 +769,7 @@ async function handleApiError(
       response,
       baseUrl,
       onMessageAppend,
-      errorMessage
+      errorMessage,
     );
     return { retry: false, reason: response.status.toString() };
   } else if (response.status === 500 || response.status === 502) {
@@ -778,7 +778,7 @@ async function handleApiError(
       mintUrl,
       baseUrl,
       usingNip60,
-      storeCashu
+      storeCashu,
     );
     if (!refundStatus.success) {
       await logApiErrorForRefund(refundStatus, baseUrl, onMessageAppend);
@@ -791,18 +791,18 @@ async function handleApiError(
     const nextProvider = findNextBestProvider(
       selectedModel?.id,
       baseUrl,
-      failedProviders
+      failedProviders,
     );
 
     if (nextProvider) {
       console.log(
-        `Provider ${baseUrl} returned ${response.status}, switching to ${nextProvider}`
+        `Provider ${baseUrl} returned ${response.status}, switching to ${nextProvider}`,
       );
       onMessageAppend(
         createTextMessage(
           "system",
-          `Provider ${baseUrl} is experiencing issues. Retrying with ${nextProvider}...`
-        )
+          `Provider ${baseUrl} is experiencing issues. Retrying with ${nextProvider}...`,
+        ),
       );
       return {
         retry: true,
@@ -849,11 +849,11 @@ interface AnnotationData {
  */
 function mergeImages(
   accumulatedImages: ImageData[],
-  newImages: ImageData[]
+  newImages: ImageData[],
 ): void {
   newImages.forEach((img) => {
     const existingIndex = accumulatedImages.findIndex(
-      (existing) => existing.index === img.index
+      (existing) => existing.index === img.index,
     );
     if (existingIndex === -1) {
       accumulatedImages.push(img);
@@ -888,7 +888,7 @@ function dataUrlToFile(dataUrl: string, filename: string): File {
  * @returns Assistant message with text, images, and optional thinking
  */
 async function createAssistantMessage(
-  streamingResult: StreamingResult
+  streamingResult: StreamingResult,
 ): Promise<Message> {
   const hasImages = streamingResult.images && streamingResult.images.length > 0;
   const hasThinking = streamingResult.thinking !== undefined;
@@ -931,7 +931,7 @@ async function createAssistantMessage(
           // Convert base64 URL to File and save to IndexedDB
           const file = dataUrlToFile(
             img.image_url.url,
-            `ai-image-${Date.now()}-${i}.png`
+            `ai-image-${Date.now()}-${i}.png`,
           );
           storageId = await saveFile(file);
         } catch (error) {
@@ -939,7 +939,7 @@ async function createAssistantMessage(
             error instanceof Error ? error.message : "Unknown error";
           if (errorMessage.includes("quota")) {
             console.warn(
-              "Storage is full. Image will be available in this session but may not be saved in history."
+              "Storage is full. Image will be available in this session but may not be saved in history.",
             );
           } else {
             console.warn("Failed to save image to storage:", errorMessage);
@@ -1002,7 +1002,7 @@ async function processNonStreamingResponse(
   response: Response,
   onStreamingUpdate: (content: string) => void,
   onThinkingUpdate: (content: string) => void,
-  modelId?: string
+  modelId?: string,
 ): Promise<StreamingResult> {
   const data = await response.json();
 
@@ -1071,7 +1071,7 @@ async function processStreamingResponse(
   response: Response,
   onStreamingUpdate: (content: string) => void,
   onThinkingUpdate: (content: string) => void,
-  modelId?: string
+  modelId?: string,
 ): Promise<StreamingResult> {
   const reader = response.body!.getReader();
   const decoder = new TextDecoder("utf-8");
@@ -1135,7 +1135,7 @@ async function processStreamingResponse(
               }
               const thinkingResult = extractThinkingFromStream(
                 newContent,
-                accumulatedThinking
+                accumulatedThinking,
               );
               accumulatedThinking = thinkingResult.thinking;
               onThinkingUpdate(accumulatedThinking);
@@ -1152,7 +1152,7 @@ async function processStreamingResponse(
                 const newContent = "</thinking>";
                 const thinkingResult = extractThinkingFromStream(
                   newContent,
-                  accumulatedThinking
+                  accumulatedThinking,
                 );
                 accumulatedThinking = thinkingResult.thinking;
                 onThinkingUpdate(accumulatedThinking);
@@ -1170,7 +1170,7 @@ async function processStreamingResponse(
               if (modelId && isThinkingCapableModel(modelId)) {
                 const thinkingResult = extractThinkingFromStream(
                   newContent,
-                  accumulatedThinking
+                  accumulatedThinking,
                 );
                 accumulatedThinking = thinkingResult.thinking;
                 isInThinking = thinkingResult.isInThinking;
@@ -1225,7 +1225,7 @@ async function processStreamingResponse(
             ) {
               mergeImages(
                 accumulatedImages,
-                parsedData.choices[0].message.images
+                parsedData.choices[0].message.images,
               );
             }
 
@@ -1237,7 +1237,7 @@ async function processStreamingResponse(
             ) {
               mergeImages(
                 accumulatedImages,
-                parsedData.choices[0].delta.images
+                parsedData.choices[0].delta.images,
               );
             }
           } catch {
@@ -1309,7 +1309,7 @@ async function handlePostResponseRefund(params: {
     mintUrl,
     baseUrl,
     usingNip60,
-    storeCashu
+    storeCashu,
   );
   if (refundStatus.success) {
     if (
@@ -1329,10 +1329,10 @@ async function handlePostResponseRefund(params: {
       } else {
         const { apiBalance, proofsBalance } = await fetchBalances(
           mintUrl,
-          baseUrl
+          baseUrl,
         );
         onBalanceUpdate(
-          Math.floor(apiBalance / 1000) + Math.floor(proofsBalance / 1000)
+          Math.floor(apiBalance / 1000) + Math.floor(proofsBalance / 1000),
         );
         satsSpent = initialBalance - getBalanceFromStoredProofs();
       }
@@ -1345,7 +1345,7 @@ async function handlePostResponseRefund(params: {
       refundStatus,
       refundStatus,
       refundStatus,
-      refundStatus
+      refundStatus,
     );
     if (
       refundStatus.message &&
@@ -1389,7 +1389,7 @@ async function handlePostResponseRefund(params: {
         estimatedDisplay +
         ". Actual Costs: " +
         actualDisplay,
-      onMessageAppend
+      onMessageAppend,
     );
   }
 
@@ -1405,7 +1405,7 @@ async function handlePostResponseRefund(params: {
 
   localStorage.setItem(
     "transaction_history",
-    JSON.stringify([...transactionHistory, newTransaction])
+    JSON.stringify([...transactionHistory, newTransaction]),
   );
   onTransactionUpdate(newTransaction);
   return satsSpent;
@@ -1440,7 +1440,7 @@ async function logApiErrorForResponse(
   response: Response,
   baseUrl: string,
   onMessageAppend: (message: Message) => void,
-  errorMessage?: string
+  errorMessage?: string,
 ): Promise<void> {
   const responseBodyText =
     errorMessage || (await readResponseBodyText(response));
@@ -1457,7 +1457,7 @@ async function logApiErrorForResponse(
 async function logApiErrorForRefund(
   refundStatus: UnifiedRefundResult,
   baseUrl: string,
-  onMessageAppend: (message: Message) => void
+  onMessageAppend: (message: Message) => void,
 ): Promise<void> {
   const mainMessage = `Refund failed: ${refundStatus.message}.`;
   const requestIdText = refundStatus.requestId
@@ -1475,7 +1475,7 @@ async function logApiErrorForRefund(
  */
 function logApiError(
   error: unknown,
-  onMessageAppend: (message: Message) => void
+  onMessageAppend: (message: Message) => void,
 ): void {
   let errorMessage = "Failed to process your request";
 
@@ -1499,7 +1499,7 @@ function logApiError(
 
 async function backwardCompatibleModel(
   selectedModel: string,
-  baseUrl: string
+  baseUrl: string,
 ): Promise<Model | null> {
   try {
     const response = await fetch(`${baseUrl}v1/models`);

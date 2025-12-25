@@ -38,7 +38,7 @@ export function useCashuWallet() {
   const [didRelaysTimeout, setDidRelaysTimeout] = useState(false);
   const [deletedEvents, setDeletedEvents] = useLocalStorage<DeletedEvents[]>(
     "nip60-deleted-events",
-    []
+    [],
   );
 
   // Fetch wallet information (kind 17375)
@@ -63,7 +63,7 @@ export function useCashuWallet() {
               limit: 1,
             },
           ],
-          { signal }
+          { signal },
         );
 
         const timeoutPromise = new Promise<never>((_, reject) => {
@@ -75,7 +75,7 @@ export function useCashuWallet() {
           "rdlogs: Wallet Event Found: ",
           events,
           queryPromise,
-          nostr.relays
+          nostr.relays,
         );
 
         if ((events as any[]).length === 0) {
@@ -102,7 +102,7 @@ export function useCashuWallet() {
         }
         const decrypted = await user.signer.nip44.decrypt(
           user.pubkey,
-          event.content
+          event.content,
         );
         const data = n.json().pipe(z.string().array().array()).parse(decrypted);
 
@@ -126,7 +126,7 @@ export function useCashuWallet() {
 
         // remove trailing slashes from mints
         walletData.mints = walletData.mints.map((mint) =>
-          mint.replace(/\/$/, "")
+          mint.replace(/\/$/, ""),
         );
         // reduce mints to unique values
         walletData.mints = [...new Set(walletData.mints)];
@@ -152,11 +152,11 @@ export function useCashuWallet() {
             } catch (error) {
               console.error(
                 `Failed to activate or update mint ${mint}:`,
-                error
+                error,
               );
               // Skip this mint and continue with others
             }
-          })
+          }),
         );
 
         cashuStore.setPrivkey(walletData.privkey);
@@ -192,7 +192,7 @@ export function useCashuWallet() {
             ([url, relay]: [string, any]) => {
               const readyState = relay.socket?._underlyingWebsocket?.readyState;
               return readyState !== 1; // 1 = connected, 3 = closed/failed
-            }
+            },
           );
           console.log("rdlogs: wallet query timed out", {
             totalRelays: nostr.relays?.size || 0,
@@ -251,7 +251,7 @@ export function useCashuWallet() {
 
       // remove trailing slashes from mints
       walletData.mints = walletData.mints.map((mint) =>
-        mint.replace(/\/$/, "")
+        mint.replace(/\/$/, ""),
       );
       // reduce mints to unique values
       walletData.mints = [...new Set(walletData.mints)];
@@ -264,7 +264,7 @@ export function useCashuWallet() {
       // Encrypt wallet data
       const content = await user.signer.nip44.encrypt(
         user.pubkey,
-        JSON.stringify(tags)
+        JSON.stringify(tags),
       );
 
       // Create wallet event
@@ -341,7 +341,7 @@ export function useCashuWallet() {
         const timeoutPromise = new Promise<never>((_, reject) => {
           setTimeout(
             () => reject(new Error("Cashu events query timeout")),
-            15000
+            15000,
           );
         });
 
@@ -377,7 +377,7 @@ export function useCashuWallet() {
             try {
               decrypted = await user.signer.nip44.decrypt(
                 user.pubkey,
-                event.content
+                event.content,
               );
             } catch (error) {
               if (
@@ -385,7 +385,7 @@ export function useCashuWallet() {
                 error.message.includes("invalid MAC")
               ) {
                 toast.error(
-                  "Nostr Extention: invalid MAC. Please switch to your previously connected account on the extension OR sign out and login. ."
+                  "Nostr Extention: invalid MAC. Please switch to your previously connected account on the extension OR sign out and login. .",
                 );
               }
               throw error;
@@ -398,7 +398,7 @@ export function useCashuWallet() {
                 deletedEventsTemp.add({
                   eventId: id,
                   timestamp: event.created_at,
-                })
+                }),
               );
             }
 
@@ -424,7 +424,7 @@ export function useCashuWallet() {
         // Remove deleted events older than 30 days
         const thirtyDaysAgo = Math.floor(Date.now() / 1000) - 7 * 24 * 60 * 60;
         allDeletedEvents = allDeletedEvents.filter(
-          (e) => e.timestamp > thirtyDaysAgo
+          (e) => e.timestamp > thirtyDaysAgo,
         );
 
         // Update local storage with combined events (existing + new)
@@ -437,10 +437,10 @@ export function useCashuWallet() {
 
         // Second pass: filter out deleted events and add proofs to store
         const deletedEventIds = new Set(
-          allDeletedEvents.map((deletedEvent) => deletedEvent.eventId)
+          allDeletedEvents.map((deletedEvent) => deletedEvent.eventId),
         );
         const filteredEvents = nip60TokenEvents.filter(
-          (event) => !deletedEventIds.has(event.id)
+          (event) => !deletedEventIds.has(event.id),
         );
 
         // Add proofs to store only for non-deleted events
@@ -488,13 +488,13 @@ export function useCashuWallet() {
 
       // get all event IDs of proofsToRemove
       const eventIdsToRemoveUnfiltered = proofsToRemove.map((proof) =>
-        cashuStore.getProofEventId(proof)
+        cashuStore.getProofEventId(proof),
       );
       const eventIdsToRemove = [
         ...new Set(
           eventIdsToRemoveUnfiltered.filter(
-            (id) => id !== undefined
-          ) as string[]
+            (id) => id !== undefined,
+          ) as string[],
         ),
       ];
 
@@ -505,7 +505,7 @@ export function useCashuWallet() {
 
       // and filter out those that we want to keep to roll them over to a new event
       const proofsToKeepWithEventIds = allProofsWithEventIds.filter(
-        (proof) => !proofsToRemove.includes(proof)
+        (proof) => !proofsToRemove.includes(proof),
       );
 
       // combine proofsToAdd and proofsToKeepWithEventIds
@@ -524,7 +524,7 @@ export function useCashuWallet() {
         // encrypt token event
         const newTokenEventContent = await user.signer.nip44.encrypt(
           user.pubkey,
-          JSON.stringify(newToken)
+          JSON.stringify(newToken),
         );
 
         // create token event
@@ -565,7 +565,7 @@ export function useCashuWallet() {
 
         // remove proofs from store
         const proofsToRemoveFiltered = proofsToRemove.filter(
-          (proof) => !newProofs.map((p) => p.secret).includes(proof.secret)
+          (proof) => !newProofs.map((p) => p.secret).includes(proof.secret),
         );
         cashuStore.removeProofs(proofsToRemoveFiltered);
 
