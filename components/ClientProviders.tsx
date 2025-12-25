@@ -68,6 +68,7 @@ export default function ClientProviders({ children }: { children: ReactNode }) {
 
   const defaultConfig: AppConfig = {
     relayUrls: relayUrls,
+    unit: "₿",
   };
 
   function AutoLogin() {

@@ -3,6 +3,8 @@ import { createContext } from "react";
 export interface AppConfig {
   /** Selected relay URL */
   relayUrls: string[];
+  /** Display unit preference */
+  unit?: "sats" | "₿" | "usd";
 }
 
 export interface AppContextType {

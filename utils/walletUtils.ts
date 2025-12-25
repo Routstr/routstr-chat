@@ -1,6 +1,7 @@
 // Shared wallet utilities for balance display and settings wallet views
 
 import { formatBalance } from "@/features/wallet";
+import { satsToUsd } from "./priceUtils";
 
 export type MintBalances = Record<string, number> | undefined;
 export type MintUnits = Record<string, string> | undefined;
@@ -71,10 +72,12 @@ export function computeTotalBalanceSats(
 /**
  * Format an amount with pluralized units (e.g., "sats" or "msats")
  */
-export function formatAmountWithPlural(amount: number, unit: string): string {
-  // formatBalance returns strings like "1.2k sat"; convert to plural form
-  const formatted = formatBalance(amount, unit);
-  if (formatted.endsWith(" sat")) return formatted.replace(/ sat$/, " sats");
+export function formatAmountWithPlural(
+  amount: number,
+  unit: string,
+  displayUnit: "sats" | "₿" | "usd" = "₿"
+): string {
+  const formatted = formatBalance(amount, unit, displayUnit);
   if (formatted.endsWith(" msat")) return formatted.replace(/ msat$/, " msats");
   return formatted;
 }
@@ -82,12 +85,28 @@ export function formatAmountWithPlural(amount: number, unit: string): string {
 /**
  * Format sats without abbreviation, with thousands separators (e.g., 12,345 sats)
  */
-export function formatSatsVerbose(amount: number): string {
+export function formatSatsVerbose(
+  amount: number,
+  displayUnit: "sats" | "₿" | "usd" = "₿"
+): string {
+  if (displayUnit === "usd") {
+    const usdAmount = satsToUsd(amount);
+    if (usdAmount !== null) {
+      return new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: "USD",
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(usdAmount);
+    }
+  }
+
   try {
     const whole = Math.round(amount);
-    return `${new Intl.NumberFormat("en-US").format(whole)} sats`;
+    const formatted = new Intl.NumberFormat("en-US").format(whole);
+    return displayUnit === "₿" ? `₿${formatted}` : `${formatted} sats`;
   } catch {
-    return `${amount} sats`;
+    return displayUnit === "₿" ? `₿${amount}` : `${amount} sats`;
   }
 }
 

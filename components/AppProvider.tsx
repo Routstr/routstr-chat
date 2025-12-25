@@ -1,10 +1,11 @@
-import { ReactNode } from "react";
+import { ReactNode, useEffect } from "react";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import {
   AppContext,
   type AppConfig,
   type AppContextType,
 } from "@/context/AppContext";
+import { fetchBtcPrice } from "@/utils/priceUtils";
 
 interface AppProviderProps {
   children: ReactNode;
@@ -24,6 +25,17 @@ export function AppProvider(props: AppProviderProps) {
     storageKey,
     defaultConfig
   );
+
+  // Periodic BTC price fetch
+  useEffect(() => {
+    const fetchPrice = async () => {
+      await fetchBtcPrice();
+    };
+
+    fetchPrice();
+    const interval = setInterval(fetchPrice, 60000); // Fetch every minute
+    return () => clearInterval(interval);
+  }, []);
 
   // Generic config updater with callback pattern
   const updateConfig = (updater: (currentConfig: AppConfig) => AppConfig) => {

@@ -84,14 +84,27 @@ function addThousandsSeparator(num: number): string {
 }
 
 // Helper function to format balance with appropriate units
-export function formatBalance(balance: number, unit: string): string {
+export function formatBalance(
+  balance: number,
+  unit: string,
+  displayUnit: "sats" | "₿" = "₿"
+): string {
+  const isSats = unit === "sat" || unit === "sats";
+  let formatted = "";
+
   if (balance >= 1000000) {
-    return `${(balance / 1000000).toFixed(1)}M ${unit}`;
+    formatted = `${(balance / 1000000).toFixed(1)}M`;
   } else if (balance >= 100000) {
-    return `${(balance / 1000).toFixed(1)}k ${unit}`;
+    formatted = `${(balance / 1000).toFixed(1)}k`;
   } else {
-    return `${addThousandsSeparator(balance)} ${unit}`;
+    formatted = addThousandsSeparator(balance);
   }
+
+  if (isSats) {
+    return displayUnit === "₿" ? `₿${formatted}` : `${formatted} sats`;
+  }
+
+  return `${formatted} ${unit}`;
 }
 
 export function getTokenAmount(token: string): number {
