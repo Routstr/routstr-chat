@@ -53,8 +53,6 @@ const MainChatArea: React.FC = () => {
     // API State
     selectedModel,
     baseUrl,
-    isLoadingModels,
-    isWalletLoading,
 
     // Actions
     sendMessage,
@@ -72,7 +70,7 @@ const MainChatArea: React.FC = () => {
       baseUrl,
       isAuthenticated,
       setIsLoginModalOpen,
-      getActiveConversationId
+      getActiveConversationId,
     );
   };
 
@@ -87,7 +85,7 @@ const MainChatArea: React.FC = () => {
       selectedModel,
       baseUrl,
       activeConversationId,
-      getActiveConversationId
+      getActiveConversationId,
     );
   };
 
@@ -99,7 +97,7 @@ const MainChatArea: React.FC = () => {
       selectedModel,
       baseUrl,
       activeConversationId,
-      getActiveConversationId
+      getActiveConversationId,
     );
   };
 
@@ -138,8 +136,6 @@ const MainChatArea: React.FC = () => {
         isSidebarCollapsed={isSidebarCollapsed}
         isMobile={isMobile}
         hasMessages={messages.length > 0}
-        isLoadingModels={isLoadingModels}
-        isWalletLoading={isWalletLoading}
       />
     </>
   );
