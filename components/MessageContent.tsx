@@ -6,6 +6,7 @@ import { downloadImageFromSrc } from "../utils/download";
 import { FileText } from "lucide-react";
 import type { MessageContent as ChatMessageContent } from "@/types/chat";
 import { getFile } from "@/utils/indexedDb";
+import SourcesDropdown from "./SourcesDropdown";
 
 interface MessageContentProps {
   content: string | ChatMessageContent[];
@@ -161,7 +162,12 @@ export default function MessageContentRenderer({
   if (typeof content === "string") {
     let processedContent = processAnnotations(content, annotations);
     processedContent = processCitations(processedContent, citations);
-    return <MarkdownRenderer content={processedContent} />;
+    return (
+      <>
+        <MarkdownRenderer content={processedContent} />
+        <SourcesDropdown citations={citations} annotations={annotations} />
+      </>
+    );
   }
 
   const getAttachmentLabel = (mimeType?: string): string | null => {
@@ -180,6 +186,18 @@ export default function MessageContentRenderer({
     (item) => item.type === "text" && !item.hidden
   );
   const fileContent = content.filter((item) => item.type === "file");
+
+  // Collect all citations and annotations from items
+  const allCitations = citations || [];
+  const allAnnotations = annotations || [];
+  textContent.forEach((item) => {
+    if (item.citations) {
+      allCitations.push(...item.citations);
+    }
+    if (item.annotations) {
+      allAnnotations.push(...item.annotations);
+    }
+  });
 
   return (
     <div className="space-y-2">
@@ -298,6 +316,9 @@ export default function MessageContentRenderer({
           })}
         </div>
       )}
+
+      {/* Sources dropdown */}
+      <SourcesDropdown citations={allCitations} annotations={allAnnotations} />
     </div>
   );
 }
