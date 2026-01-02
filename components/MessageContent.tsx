@@ -187,17 +187,30 @@ export default function MessageContentRenderer({
   );
   const fileContent = content.filter((item) => item.type === "file");
 
-  // Collect all citations and annotations from items
-  const allCitations = citations || [];
-  const allAnnotations = annotations || [];
-  textContent.forEach((item) => {
-    if (item.citations) {
-      allCitations.push(...item.citations);
+  // Collect all citations and annotations from items using concat to avoid argument limit issues
+  let allCitations: string[] = citations ? citations.slice() : [];
+  let allAnnotations: import("@/types/chat").AnnotationData[] = annotations ? annotations.slice() : [];
+  for (const item of textContent) {
+    if (item.citations && item.citations.length > 0) {
+      allCitations = allCitations.concat(item.citations);
     }
-    if (item.annotations) {
-      allAnnotations.push(...item.annotations);
+    if (item.annotations && item.annotations.length > 0) {
+      allAnnotations = allAnnotations.concat(item.annotations);
     }
-  });
+  }
+  
+  // Deduplicate citations (simple string deduplication)
+  allCitations = Array.from(new Set(allCitations));
+  
+  // Deduplicate annotations based on unique combination of properties
+  const annotationMap = new Map<string, import("@/types/chat").AnnotationData>();
+  for (const annotation of allAnnotations) {
+    const key = `${annotation.start_index}-${annotation.end_index}-${annotation.url}-${annotation.title}`;
+    if (!annotationMap.has(key)) {
+      annotationMap.set(key, annotation);
+    }
+  }
+  allAnnotations = Array.from(annotationMap.values());
 
   return (
     <div className="space-y-2">

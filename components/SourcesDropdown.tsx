@@ -2,12 +2,6 @@
 
 import { useState } from "react";
 import { ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/Popover";
-import { cn } from "@/lib/utils";
 
 interface SourcesDropdownProps {
   citations?: string[];
@@ -18,7 +12,7 @@ export default function SourcesDropdown({
   citations,
   annotations,
 }: SourcesDropdownProps) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
   const hasCitations = citations && citations.length > 0;
   const hasAnnotations = annotations && annotations.length > 0;
 
@@ -27,26 +21,22 @@ export default function SourcesDropdown({
   }
 
   return (
-    <Popover open={isOpen} onOpenChange={setIsOpen}>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mt-2"
-        >
-          <span>Sources</span>
-          {isOpen ? (
-            <ChevronUp className="h-3.5 w-3.5" />
-          ) : (
-            <ChevronDown className="h-3.5 w-3.5" />
-          )}
-        </button>
-      </PopoverTrigger>
-      <PopoverContent
-        align="start"
-        side="bottom"
-        className="w-80 max-h-96 overflow-y-auto"
+    <div className="mt-2">
+      <button
+        type="button"
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
       >
-        <div className="space-y-3">
+        <span>Sources</span>
+        {isExpanded ? (
+          <ChevronUp className="h-3.5 w-3.5" />
+        ) : (
+          <ChevronDown className="h-3.5 w-3.5" />
+        )}
+      </button>
+      
+      {isExpanded && (
+        <div className="mt-2 space-y-3 pl-4 border-l-2 border-border">
           {hasCitations && (
             <div>
               <h4 className="text-sm font-semibold mb-2">Citations</h4>
@@ -95,7 +85,7 @@ export default function SourcesDropdown({
             </div>
           )}
         </div>
-      </PopoverContent>
-    </Popover>
+      )}
+    </div>
   );
 }
