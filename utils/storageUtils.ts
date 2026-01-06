@@ -618,14 +618,7 @@ export const migrateCurrentCashuToken = (baseUrl: string): void => {
  * @returns Array of disabled provider base URLs
  */
 export const loadDisabledProviders = (): string[] => {
-  const providers = getStorageItem<string[]>(
-    STORAGE_KEYS.DISABLED_PROVIDERS,
-    []
-  );
-  if (!providers.includes("https://api.nonkycai.com/")) {
-    providers.push("https://api.nonkycai.com/");
-  }
-  return providers;
+  return getStorageItem<string[]>(STORAGE_KEYS.DISABLED_PROVIDERS, []);
 };
 
 /**

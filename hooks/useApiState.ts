@@ -195,8 +195,8 @@ export const useApiState = (
           // Check if we need to fetch or can use cached data
           const lastUpdate = getProviderLastUpdate(base);
           const TWENTY_ONE = 21 * 60 * 1000; // 21 mins in milliseconds
-          const cacheExpired =
-            !lastUpdate || Date.now() - lastUpdate > TWENTY_ONE;
+          const cacheExpired = true; // foricng for now.
+          // !lastUpdate || Date.now() - lastUpdate > TWENTY_ONE;
 
           // Load from storage first
           const cachedModels = getStorageItem<Record<string, Model[]>>(
