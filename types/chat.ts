@@ -14,6 +14,8 @@ export interface MessageContent {
   image_url?: {
     url: string;
     storageId?: string;
+    blossomHash?: string; // SHA-256 of encrypted blob for cross-device sync
+    blossomServers?: string[]; // Blossom servers where blob is stored
   };
   file?: {
     url: string;
@@ -21,6 +23,8 @@ export interface MessageContent {
     mimeType?: string;
     size?: number;
     storageId?: string;
+    blossomHash?: string; // SHA-256 of encrypted blob for cross-device sync
+    blossomServers?: string[]; // Blossom servers where blob is stored
   };
   hidden?: boolean;
   thinking?: string;
@@ -49,6 +53,9 @@ export interface MessageAttachment {
   type: AttachmentType;
   textContent?: string;
   storageId?: string;
+  blossomHash?: string; // SHA-256 of encrypted blob for cross-device sync
+  blossomServers?: string[]; // Blossom servers where blob is stored
+  blossomUploadStatus?: "pending" | "uploading" | "success" | "failed";
 }
 
 export interface Conversation {

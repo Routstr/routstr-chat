@@ -171,6 +171,8 @@ export const createMultimodalMessage = (
         image_url: {
           url: attachment.dataUrl,
           storageId: attachment.storageId,
+          blossomHash: attachment.blossomHash,
+          blossomServers: attachment.blossomServers,
         },
       });
     } else {
@@ -182,6 +184,8 @@ export const createMultimodalMessage = (
           mimeType: attachment.mimeType,
           size: attachment.size,
           storageId: attachment.storageId,
+          blossomHash: attachment.blossomHash,
+          blossomServers: attachment.blossomServers,
         },
       });
 
@@ -219,37 +223,45 @@ export const createMultimodalMessage = (
  */
 export const stripImageDataFromSingleMessage = (msg: Message): Message => {
   if (Array.isArray(msg.content)) {
-    // Check if we have storageIds for all media
+    // Check if we have storageIds or blossomHash for all media
     const mediaItems = msg.content.filter(
       (item) => item.type === "image_url" || item.type === "file"
     );
     const allHaveStorage = mediaItems.every(
       (item) =>
-        (item.type === "image_url" && item.image_url?.storageId) ||
-        (item.type === "file" && item.file?.storageId)
+        (item.type === "image_url" &&
+          (item.image_url?.storageId || item.image_url?.blossomHash)) ||
+        (item.type === "file" &&
+          (item.file?.storageId || item.file?.blossomHash))
     );
 
     if (allHaveStorage) {
-      // If we have storage IDs, we can safely remove the base64 dataUrl to save space
-      // but keep the message structure with storageId
+      // If we have storage IDs or blossomHash, we can safely remove the base64 dataUrl to save space
+      // but keep the message structure with storageId and blossom data
       return {
         ...msg,
         content: msg.content.map((item) => {
-          if (item.type === "image_url" && item.image_url?.storageId) {
+          if (
+            item.type === "image_url" &&
+            (item.image_url?.storageId || item.image_url?.blossomHash)
+          ) {
             return {
               ...item,
               image_url: {
                 ...item.image_url,
-                url: "", // Clear base64, keep storageId
+                url: "", // Clear base64, keep storageId and blossom data
               },
             };
           }
-          if (item.type === "file" && item.file?.storageId) {
+          if (
+            item.type === "file" &&
+            (item.file?.storageId || item.file?.blossomHash)
+          ) {
             return {
               ...item,
               file: {
                 ...item.file,
-                url: "", // Clear base64, keep storageId
+                url: "", // Clear base64, keep storageId and blossom data
               },
             };
           }
