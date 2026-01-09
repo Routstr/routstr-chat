@@ -50,6 +50,9 @@ export interface FetchAIResponseParams {
   transactionHistory: TransactionHistory[];
   onTokenCreated: (amount: number) => void;
   onLastMessageSatsUpdate?: (satsSpent: number) => void;
+  onBlossomUpload?: (
+    file: File
+  ) => Promise<{ hash: string; servers: string[] } | null>;
 }
 
 interface APIErrorVerdict {
@@ -400,6 +403,7 @@ export const fetchAIResponse = async (
     transactionHistory,
     onTokenCreated,
     onLastMessageSatsUpdate,
+    onBlossomUpload,
   } = params;
 
   const initialBalance = usingNip60 ? balance : getBalanceFromStoredProofs();
@@ -525,7 +529,9 @@ export const fetchAIResponse = async (
             )
           );
         } else {
-          onMessageAppend(await createAssistantMessage(streamingResult));
+          onMessageAppend(
+            await createAssistantMessage(streamingResult, onBlossomUpload)
+          );
         }
       } else {
         logApiError(
@@ -885,10 +891,14 @@ function dataUrlToFile(dataUrl: string, filename: string): File {
 /**
  * Creates an assistant message from streaming result
  * @param streamingResult The result from streaming response
+ * @param onBlossomUpload Optional callback to upload images to Blossom for cross-device sync
  * @returns Assistant message with text, images, and optional thinking
  */
 async function createAssistantMessage(
-  streamingResult: StreamingResult
+  streamingResult: StreamingResult,
+  onBlossomUpload?: (
+    file: File
+  ) => Promise<{ hash: string; servers: string[] } | null>
 ): Promise<Message> {
   const hasImages = streamingResult.images && streamingResult.images.length > 0;
   const hasThinking = streamingResult.thinking !== undefined;
@@ -926,13 +936,17 @@ async function createAssistantMessage(
       for (let i = 0; i < streamingResult.images.length; i++) {
         const img = streamingResult.images[i];
         let storageId: string | undefined;
+        let blossomHash: string | undefined;
+        let blossomServers: string[] | undefined;
+
+        // Convert base64 URL to File
+        const file = dataUrlToFile(
+          img.image_url.url,
+          `ai-image-${Date.now()}-${i}.png`
+        );
 
         try {
-          // Convert base64 URL to File and save to IndexedDB
-          const file = dataUrlToFile(
-            img.image_url.url,
-            `ai-image-${Date.now()}-${i}.png`
-          );
+          // Save to IndexedDB
           storageId = await saveFile(file);
         } catch (error) {
           const errorMessage =
@@ -947,11 +961,26 @@ async function createAssistantMessage(
           // Continue without storageId (will rely on base64 in memory)
         }
 
+        // Upload to Blossom for cross-device sync (await to get hash)
+        if (onBlossomUpload) {
+          try {
+            const result = await onBlossomUpload(file);
+            if (result) {
+              blossomHash = result.hash;
+              blossomServers = result.servers;
+            }
+          } catch {
+            // Ignore Blossom upload errors, continue without sync
+          }
+        }
+
         content.push({
           type: "image_url",
           image_url: {
             url: img.image_url.url,
             storageId,
+            blossomHash,
+            blossomServers,
           },
         });
       }

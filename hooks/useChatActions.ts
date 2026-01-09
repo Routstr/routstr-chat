@@ -92,6 +92,10 @@ export interface UseChatActionsParams {
   onInferenceStart?: () => void;
   /** Called when inference/streaming ends (for keep-alive) */
   onInferenceEnd?: () => void;
+  /** Called to upload generated images to Blossom for cross-device sync */
+  onBlossomUpload?: (
+    file: File
+  ) => Promise<{ hash: string; servers: string[] } | null>;
 }
 
 /**
@@ -105,6 +109,7 @@ export const useChatActions = ({
   updateLastMessageSatsSpent,
   onInferenceStart,
   onInferenceEnd,
+  onBlossomUpload,
 }: UseChatActionsParams): UseChatActionsReturn => {
   const [inputMessage, setInputMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -437,6 +442,7 @@ export const useChatActions = ({
           onLastMessageSatsUpdate: (satsSpent) => {
             updateLastMessageSatsSpent(originConversationId, satsSpent);
           },
+          onBlossomUpload,
         });
         setPendingCashuAmountState(getPendingCashuTokenAmount());
       } finally {
@@ -471,6 +477,7 @@ export const useChatActions = ({
       getLastNonSystemMessageEventId,
       createAndStoreChatEvent,
       cashuStore.activeMintUrl,
+      onBlossomUpload,
     ]
   );
 

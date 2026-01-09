@@ -15,6 +15,8 @@ import { useUiState, UseUiStateReturn } from "@/hooks/useUiState";
 import { useModelState, UseModelStateReturn } from "@/hooks/useModelState";
 import { useChatActions, UseChatActionsReturn } from "@/hooks/useChatActions";
 import { useCashuWithXYZ } from "@/hooks/useCashuWithXYZ";
+import { useBlossomSync } from "@/hooks/useBlossomSync";
+import { usePnsKeys } from "@/hooks/usePnsKeys";
 import { useAuth } from "./AuthProvider";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useNostrLogin } from "@nostrify/react/login";
@@ -88,11 +90,32 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
 
   const conversationState = useConversationState();
   const cashuWithXYZ = useCashuWithXYZ();
+
+  // Blossom sync for AI-generated images
+  const { uploadToBlossomAsync, blossomSyncEnabled } = useBlossomSync();
+  const { pnsKeys } = usePnsKeys();
+
+  // Create a stable callback for uploading generated images to Blossom
+  const handleBlossomUpload = useCallback(
+    async (file: File): Promise<{ hash: string; servers: string[] } | null> => {
+      if (blossomSyncEnabled && pnsKeys) {
+        try {
+          return await uploadToBlossomAsync(file, pnsKeys);
+        } catch {
+          return null;
+        }
+      }
+      return null;
+    },
+    [blossomSyncEnabled, pnsKeys, uploadToBlossomAsync]
+  );
+
   const chatActions = useChatActions({
     createAndStoreChatEvent: conversationState.createAndStoreChatEvent,
     getLastNonSystemMessageEventId:
       conversationState.getLastNonSystemMessageEventId,
     updateLastMessageSatsSpent: conversationState.updateLastMessageSatsSpent,
+    onBlossomUpload: handleBlossomUpload,
   });
   const apiState = useApiState(
     isAuthenticated,
