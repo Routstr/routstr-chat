@@ -363,10 +363,10 @@ export function useCashuWithXYZ() {
     let pendingBalances = getPendingCashuTokenDistribution();
 
     // TODO: Implement useProviderBalancesSync instead of local storage once the nodes are all stable with the refunds. Too early.
-    if (storedToken) {
+    if (storedToken && reuseToken) {
       const balanceForBaseUrl =
         pendingBalances.find((b) => b.baseUrl === baseUrl)?.amount || 0;
-      if (balanceForBaseUrl > amount && reuseToken) {
+      if (balanceForBaseUrl > amount) {
         return {
           token: storedToken,
           status: "success",
