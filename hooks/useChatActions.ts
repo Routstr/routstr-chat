@@ -17,6 +17,7 @@ import { DEFAULT_MINT_URL } from "@/lib/utils";
 export interface UseChatActionsReturn {
   inputMessage: string;
   isLoading: boolean;
+  isPaymentProcessing: boolean;
   streamingContent: string; // legacy, not used by UI after per-conv streaming
   thinkingContent: string; // legacy, not used by UI after per-conv streaming
   streamingConversationId: string | null;
@@ -113,6 +114,7 @@ export const useChatActions = ({
 }: UseChatActionsParams): UseChatActionsReturn => {
   const [inputMessage, setInputMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isPaymentProcessing, setIsPaymentProcessing] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
   const [thinkingContent, setThinkingContent] = useState("");
   const [streamingConversationId, setStreamingConversationId] = useState<
@@ -379,7 +381,11 @@ export const useChatActions = ({
           spendCashu: spendCashu,
           storeCashu: storeCashu,
           activeMintUrl: cashuStore.activeMintUrl,
+          onPaymentProcessing: setIsPaymentProcessing,
           onStreamingUpdate: (content) => {
+            // Clear payment processing state when content starts streaming
+            setIsPaymentProcessing(false);
+            
             // Ignore stale updates from previous streams
             if (
               streamingConversationIdRef.current !==
@@ -394,6 +400,9 @@ export const useChatActions = ({
             }
           },
           onThinkingUpdate: (content) => {
+            // Clear payment processing state when thinking starts
+            setIsPaymentProcessing(false);
+
             if (
               streamingConversationIdRef.current !==
               (originConversationId ?? null)
@@ -447,6 +456,7 @@ export const useChatActions = ({
         setPendingCashuAmountState(getPendingCashuTokenAmount());
       } finally {
         setIsLoading(false);
+        setIsPaymentProcessing(false);
         setStreamingContent("");
         setThinkingContent("");
         setStreamingConversationId(null);
@@ -484,6 +494,7 @@ export const useChatActions = ({
   return {
     inputMessage,
     isLoading,
+    isPaymentProcessing,
     streamingContent,
     thinkingContent,
     streamingConversationId,

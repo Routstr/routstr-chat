@@ -67,6 +67,7 @@ interface ChatMessagesProps {
   isMobile: boolean;
   textareaHeight?: number;
   isLoading: boolean;
+  isPaymentProcessing: boolean;
 }
 
 export default function ChatMessages({
@@ -85,6 +86,7 @@ export default function ChatMessages({
   isMobile,
   textareaHeight,
   isLoading,
+  isPaymentProcessing,
 }: ChatMessagesProps) {
   const [copiedMessageIndex, setCopiedMessageIndex] = useState<number | null>(
     null
@@ -1092,6 +1094,15 @@ export default function ChatMessages({
                 </div>
               );
             })
+          )}
+
+          {isPaymentProcessing && !streamingContent && !thinkingContent && (
+            <div className="flex flex-col items-start mb-6">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground animate-pulse">
+                <div className="h-4 w-4 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                Handling payment...
+              </div>
+            </div>
           )}
 
           {thinkingContent && (

@@ -37,6 +37,7 @@ const MainChatArea: React.FC = () => {
     uploadedAttachments,
     setUploadedAttachments,
     isLoading,
+    isPaymentProcessing,
     textareaHeight,
     setTextareaHeight,
 
@@ -120,6 +121,7 @@ const MainChatArea: React.FC = () => {
         isMobile={isMobile}
         textareaHeight={textareaHeight}
         isLoading={isLoading}
+        isPaymentProcessing={isPaymentProcessing}
       />
 
       {/* Chat Input */}

@@ -49,6 +49,7 @@ export interface FetchAIResponseParams {
   onTransactionUpdate: (transaction: TransactionHistory) => void;
   transactionHistory: TransactionHistory[];
   onTokenCreated: (amount: number) => void;
+  onPaymentProcessing?: (isProcessing: boolean) => void;
   onLastMessageSatsUpdate?: (satsSpent: number) => void;
   onBlossomUpload?: (
     file: File
@@ -402,6 +403,7 @@ export const fetchAIResponse = async (
     onTransactionUpdate,
     transactionHistory,
     onTokenCreated,
+    onPaymentProcessing,
     onLastMessageSatsUpdate,
     onBlossomUpload,
   } = params;
@@ -422,8 +424,9 @@ export const fetchAIResponse = async (
   try {
     const storedToken = getLocalCashuToken(baseUrl);
 
+    onPaymentProcessing?.(true);
     const result = await spendCashu(mintUrl, tokenAmount, baseUrl, true);
-
+    
     if (result.status === "failed" || !result.token) {
       const errorMessage =
         result.error ||
