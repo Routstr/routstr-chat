@@ -1100,7 +1100,7 @@ export default function ChatMessages({
             <div className="flex flex-col items-start mb-6">
               <div className="flex items-center gap-2 text-sm text-muted-foreground animate-pulse">
                 <div className="h-4 w-4 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-                Handling payment...
+                Processing payment...
               </div>
             </div>
           )}
