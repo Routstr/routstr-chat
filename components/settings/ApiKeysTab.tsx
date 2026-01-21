@@ -441,6 +441,7 @@ const ApiKeysTab = ({
       setStoredApiKeys(updatedKeys);
       setApiKeyAmount("");
       setNewApiKeyLabel(""); // Clear label input
+      removeLocalCashuToken(selectedNewApiKeyBaseUrl); // Remove cached Cashu token after successful creation
     } catch (error) {
       console.error("Error creating API key:", error);
       toast.error(
