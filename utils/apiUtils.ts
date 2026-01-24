@@ -1209,50 +1209,8 @@ async function processStreamingResponse(
               onThinkingUpdate(accumulatedThinking);
             }
 
-            // Handle tool calls in delta
-            if (
-              parsedData.choices &&
-              parsedData.choices[0] &&
-              parsedData.choices[0].delta &&
-              parsedData.choices[0].delta.tool_calls
-            ) {
-              const toolCalls = parsedData.choices[0].delta.tool_calls;
-              
-              for (const toolCall of toolCalls) {
-                // Check for web_search function
-                if (toolCall.function && toolCall.function.name === "web_search") {
-                   const args = toolCall.function.arguments || "";
-                   // Only start a thinking block if we aren't in one (or if we want to inject it into current thinking)
-                   // If not in thinking, wrap it.
-                   if (!isInThinking) {
-                       isInThinking = true;
-                       accumulatedThinking += "<thinking>";
-                   }
-                   
-                   // Check if we already started a search step for this specific call?
-                   // Since arguments stream, we might get multiple chunks.
-                   // We want to construct: "\n\nTitle: Searching Web\nBody: Searching for 'query'..."
-                   
-                   // Simplification: Just append a marker that ThinkingSection can parse if it's not there.
-                   // But since it streams, we need to be careful not to duplicate headers.
-                   // Let's assume we just want to signal "Searching..."
-                   
-                   // We'll append a special block only when the function name first appears
-                   // Arguments come later. 
-                   
-                   // For robust handling, we might need to buffer the tool call.
-                   // But given the request is simple visualization:
-                   
-                   if (!accumulatedThinking.includes("Title: Searching the web")) {
-                       accumulatedThinking += "\n\nTitle: Searching the web\nBody: Performing search...";
-                       onThinkingUpdate(accumulatedThinking);
-                   }
-                }
-              }
-            }
-
             // Handle content delta
-            else if (
+            if (
               parsedData.choices &&
               parsedData.choices[0] &&
               parsedData.choices[0].delta &&
