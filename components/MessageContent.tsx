@@ -32,7 +32,7 @@ function processCitations(text: string, citations?: string[]): string {
     const index = parseInt(num, 10) - 1;
     if (index >= 0 && index < citations.length) {
       const url = citations[index];
-      return `[[${num}]](${url})`;
+      return `[${num}](${url})`;
     }
     return match; // Return original if citation not found
   });
