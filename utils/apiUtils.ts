@@ -1210,7 +1210,7 @@ async function processStreamingResponse(
             }
 
             // Handle content delta
-            if (
+            else if (
               parsedData.choices &&
               parsedData.choices[0] &&
               parsedData.choices[0].delta &&
