@@ -157,18 +157,8 @@ export default function ThinkingSection({
   isStreaming = false,
 }: ThinkingSectionProps) {
   const [expandedSteps, setExpandedSteps] = useState<Set<number>>(new Set());
-
-  const toggleStep = (index: number) => {
-    setExpandedSteps((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(index)) {
-        newSet.delete(index);
-      } else {
-        newSet.add(index);
-      }
-      return newSet;
-    });
-  };
+  const [collapsedSteps, setCollapsedSteps] = useState<Set<number>>(new Set());
+  const [isCompletedExpanded, setIsCompletedExpanded] = useState(false);
 
   // Determine content source
   const content = useMemo(() => {
@@ -181,6 +171,44 @@ export default function ThinkingSection({
   const steps = useMemo(() => {
     return parseThinkingSteps(content, isStreaming);
   }, [content, isStreaming]);
+
+  const activeStepIndex = steps.length - 1;
+
+  const toggleStep = (index: number) => {
+    const isActive = isStreaming && index === activeStepIndex;
+    if (isActive) {
+      setCollapsedSteps((prev) => {
+        const newSet = new Set(prev);
+        if (newSet.has(index)) {
+          newSet.delete(index);
+        } else {
+          newSet.add(index);
+        }
+        return newSet;
+      });
+      return;
+    }
+
+    setExpandedSteps((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(index)) {
+        newSet.delete(index);
+      } else {
+        newSet.add(index);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleCompleted = () => {
+    setIsCompletedExpanded((prev) => {
+      const next = !prev;
+      if (next) {
+        setExpandedSteps(new Set(steps.map((_, index) => index)));
+      }
+      return next;
+    });
+  };
 
   // Track streaming duration
   const [startTime, setStartTime] = useState<number | null>(null);
@@ -239,107 +267,115 @@ export default function ThinkingSection({
   // Auto-scroll to the bottom of the active step when streaming
   useEffect(() => {
     const activeIndex = steps.length - 1;
-    if (isStreaming && expandedSteps.has(activeIndex) && activeStepRef.current) {
+    if (
+      isStreaming &&
+      !collapsedSteps.has(activeIndex) &&
+      activeStepRef.current
+    ) {
       // Auto-scroll disabled for now as it can be jumpy
       // activeStepRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }
-  }, [content, isStreaming, expandedSteps, steps.length]);
+  }, [content, isStreaming, collapsedSteps, steps.length]);
 
   // Collapse all when streaming ends
   useEffect(() => {
     if (!isStreaming) {
       setExpandedSteps(new Set());
+      setCollapsedSteps(new Set());
+      setIsCompletedExpanded(false);
     }
   }, [isStreaming]);
 
   if (!thinking && !isStreaming && !thinkingContent) return null;
 
-  const activeStepIndex = steps.length - 1;
   const containerClass = "py-2";
 
   // Completed State: Single "Thinking" group
   if (!isStreaming) {
-      const isAllExpanded = expandedSteps.has(-1); // Use -1 for the main container toggle
-      
-      return (
-        <div className="mb-4">
-          <div className={containerClass}>
-             <div className="flex gap-3 relative z-10 items-center">
-                <div className="flex-1 min-w-0">
-                    <button 
-                        onClick={() => toggleStep(-1)}
-                        className="flex items-center gap-1.5 w-full text-left cursor-pointer hover:opacity-80"
-                    >
-                        <h4 className="text-xs font-medium text-muted-foreground">
-                            {durationLabel || "Thinking"}
-                        </h4>
-                        <ChevronDown
-                             className={`w-3 h-3 text-muted-foreground transition-transform duration-200 ${
-                               isAllExpanded ? "rotate-180" : ""
-                             }`}
-                        />
-                    </button>
-                    
-                    <AnimatePresence>
-                        {isAllExpanded && (
-                            <motion.div
-                                initial={{ height: 0, opacity: 0 }}
-                                animate={{ height: "auto", opacity: 1 }}
-                                exit={{ height: 0, opacity: 0 }}
-                                className="overflow-hidden"
+    return (
+      <div className="mb-4">
+        <div className={containerClass}>
+          <div className="flex gap-3 relative z-10 items-center">
+            <div className="flex-1 min-w-0">
+              <button
+                onClick={toggleCompleted}
+                className="flex items-center gap-1.5 w-full text-left cursor-pointer hover:opacity-80"
+              >
+                <h4 className="text-xs font-medium text-muted-foreground">
+                  {durationLabel || "Thinking"}
+                </h4>
+                <ChevronDown
+                  className={`w-3 h-3 text-muted-foreground transition-transform duration-200 ${
+                    isCompletedExpanded ? "rotate-180" : ""
+                  }`}
+                />
+              </button>
+
+              <AnimatePresence>
+                {isCompletedExpanded && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="mt-2 flex flex-col relative">
+                      {!steps[0]?.isFallback && (
+                        <div className="absolute left-[11.5px] top-[22px] bottom-[10px] w-px bg-border z-0" />
+                      )}
+                      <div className="pt-2 flex flex-col gap-2">
+                        {steps.map((step, index) => {
+                          const title = step.title?.trim() || `Step ${index + 1}`;
+
+                          return (
+                            <div
+                              key={index}
+                              className="flex gap-3 relative z-10 group items-start"
                             >
-                                <div className="mt-2 flex flex-col relative">
-                                    {!steps[0]?.isFallback && (
-                                        <div className="absolute left-[11.5px] top-[22px] bottom-[10px] w-px bg-border z-0" />
-                                    )}
-                                    <div className="pt-2 flex flex-col gap-2">
-                                        {steps.map((step, index) => (
-                                            <div key={index} className="flex gap-3 relative z-10 group items-start">
-                                                <div className="shrink-0 mt-1.5 flex flex-col items-center">
-                                                    <div className="w-6 h-3 flex items-center justify-center relative z-10 bg-background/50">
-                                                        <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 group-hover:bg-muted-foreground/60 transition-colors" />
-                                                    </div>
-                                                </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <button 
-                                                        onClick={() => toggleStep(index)}
-                                                        className="flex items-center gap-2 w-full text-left cursor-pointer hover:opacity-80 group/btn"
-                                                    >
-                                                        {step.title && (
-                                                            <h4 className="text-sm text-muted-foreground group-hover/btn:text-foreground transition-colors">
-                                                                {step.title}
-                                                            </h4>
-                                                        )}
-                                                    </button>
-                                                    <AnimatePresence>
-                                                        {expandedSteps.has(index) && (
-                                                            <motion.div
-                                                                initial={{ height: 0, opacity: 0 }}
-                                                                animate={{ height: "auto", opacity: 1 }}
-                                                                exit={{ height: 0, opacity: 0 }}
-                                                                className="mt-1 overflow-hidden pl-0"
-                                                            >
-                                                                {step.body && (
-                                                                    <p className="text-xs text-muted-foreground/60 italic whitespace-pre-wrap leading-relaxed">
-                                                                        {step.body}
-                                                                    </p>
-                                                                )}
-                                                            </motion.div>
-                                                        )}
-                                                    </AnimatePresence>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
+                              <div className="shrink-0 mt-1.5 flex flex-col items-center">
+                                <div className="w-6 h-3 flex items-center justify-center relative z-10 bg-background/50">
+                                  <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 group-hover:bg-muted-foreground/60 transition-colors" />
                                 </div>
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
-                </div>
-             </div>
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <button
+                                  onClick={() => toggleStep(index)}
+                                  className="flex items-center gap-2 w-full text-left cursor-pointer hover:opacity-80 group/btn"
+                                >
+                                  <h4 className="text-sm text-muted-foreground group-hover/btn:text-foreground transition-colors">
+                                    {title}
+                                  </h4>
+                                </button>
+                                <AnimatePresence>
+                                  {expandedSteps.has(index) && (
+                                    <motion.div
+                                      initial={{ height: 0, opacity: 0 }}
+                                      animate={{ height: "auto", opacity: 1 }}
+                                      exit={{ height: 0, opacity: 0 }}
+                                      className="mt-1 overflow-hidden pl-0"
+                                    >
+                                      {step.body && (
+                                        <p className="text-xs text-muted-foreground/60 italic whitespace-pre-wrap leading-relaxed">
+                                          {step.body}
+                                        </p>
+                                      )}
+                                    </motion.div>
+                                  )}
+                                </AnimatePresence>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
         </div>
-      );
+      </div>
+    );
   }
 
   // Streaming View
@@ -356,7 +392,10 @@ export default function ThinkingSection({
           {steps.map((step, index) => {
              const isActive = index === activeStepIndex;
              // Only auto-expand the active step, keep others collapsed unless manually opened
-             const isExpanded = expandedSteps.has(index) || (isActive && isStreaming && !expandedSteps.has(index));
+             const isExpanded =
+               expandedSteps.has(index) ||
+               (isActive && isStreaming && !collapsedSteps.has(index));
+             const title = step.title?.trim() || `Step ${index + 1}`;
              
              return (
                <div key={index} className="flex gap-3 mb-3 last:mb-0 relative z-10 group items-start">
@@ -377,11 +416,13 @@ export default function ThinkingSection({
                        onClick={() => toggleStep(index)}
                        className="flex items-center gap-2 w-full text-left cursor-pointer hover:opacity-80"
                     >
-                       {step.title ? (
-                          <h4 className={`text-sm font-medium ${isActive ? "text-foreground" : "text-muted-foreground"}`}>
-                            {step.title}
-                          </h4>
-                       ) : null}
+                       <h4
+                         className={`text-sm font-medium ${
+                           isActive ? "text-foreground" : "text-muted-foreground"
+                         }`}
+                       >
+                         {title}
+                       </h4>
                     </button>
 
                     <AnimatePresence>
