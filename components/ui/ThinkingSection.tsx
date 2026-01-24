@@ -92,7 +92,7 @@ const parseThinkingSteps = (text: string, isStreaming: boolean): ThinkingStep[] 
     const steps = chunks.map((chunk, index) => {
         // Try to extract a title from the first line of the chunk if it looks like one
         const lines = chunk.trim().split('\n');
-        let title = `Step ${index + 1}`;
+        let title = ""; // No default title
         let body = chunk.trim();
 
         // Heuristic: if first line is short and bold or looks like a header, use it as title
@@ -289,6 +289,24 @@ export default function ThinkingSection({
         />
       </button>
 
+      {/* Collapsed state: Ghost text preview of the active step */}
+      {!isExpanded && isStreaming && (
+        <motion.div
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: "auto" }}
+          exit={{ opacity: 0, height: 0 }}
+          className="mt-2 pl-7 text-xs text-muted-foreground/60 overflow-hidden"
+        >
+          <div className="line-clamp-2">
+            {steps[steps.length - 1]?.body ? (
+               steps[steps.length - 1].body
+            ) : (
+               <span className="animate-pulse">Thinking...</span>
+            )}
+          </div>
+        </motion.div>
+      )}
+
       <AnimatePresence>
         {isExpanded && (
           <motion.div
@@ -349,13 +367,15 @@ export default function ThinkingSection({
 
                       {/* Content */}
                       <div className="flex-1 min-w-0">
-                        <h4 
-                          className={`text-sm font-medium leading-6 ${
-                            step.isComplete ? "text-muted-foreground" : "text-foreground"
-                          }`}
-                        >
-                          {step.title}
-                        </h4>
+                        {step.title && (
+                          <h4 
+                            className={`text-sm font-medium leading-6 ${
+                              step.isComplete ? "text-muted-foreground" : "text-foreground"
+                            }`}
+                          >
+                            {step.title}
+                          </h4>
+                        )}
                         
                         {/* Only show body for the active step or if there's only one step (fallback mode) */}
                         {!step.isComplete && (
