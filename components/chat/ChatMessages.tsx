@@ -84,6 +84,7 @@ interface ChatMessagesProps {
   textareaHeight?: number;
   isLoading: boolean;
   isPaymentProcessing: boolean;
+  isLoadingChatFromUrl?: boolean;
 }
 
 export default function ChatMessages({
@@ -103,6 +104,7 @@ export default function ChatMessages({
   textareaHeight,
   isLoading,
   isPaymentProcessing,
+  isLoadingChatFromUrl,
 }: ChatMessagesProps) {
   const [copiedMessageIndex, setCopiedMessageIndex] = useState<number | null>(
     null
@@ -600,9 +602,18 @@ export default function ChatMessages({
         {/* Messages container - doesn't grow, just takes natural height */}
         <div className="shrink-0">
           {messageVersions.size === 0 ? (
-            <div className="flex-1 flex flex-col items-center justify-center text-center text-gray-400 min-h-[calc(100vh-200px)]">
-              {/* Greeting message will be handled by the input component when centered */}
-            </div>
+            isLoadingChatFromUrl ? (
+              <div className="flex-1 flex flex-col items-center justify-center text-center min-h-[calc(100vh-200px)]">
+                <div className="flex flex-col items-center gap-3">
+                  <div className="h-6 w-6 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                  <span className="text-muted-foreground text-sm">Loading chat...</span>
+                </div>
+              </div>
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center text-center text-gray-400 min-h-[calc(100vh-200px)]">
+                {/* Greeting message will be handled by the input component when centered */}
+              </div>
+            )
           ) : (
             Array.from({ length: messageVersions.size }, (_, index) => {
               const versions = messageVersions.get(index);

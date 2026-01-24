@@ -127,6 +127,7 @@ interface ChatInputProps {
   hasMessages: boolean;
   isLoadingModels: boolean;
   isWalletLoading: boolean;
+  isLoadingChatFromUrl?: boolean;
 }
 
 export default function ChatInput({
@@ -143,6 +144,7 @@ export default function ChatInput({
   hasMessages,
   isLoadingModels,
   isWalletLoading,
+  isLoadingChatFromUrl,
 }: ChatInputProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -152,7 +154,7 @@ export default function ChatInput({
   const layoutLockTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   );
-  const [isCentered, setIsCentered] = useState(!hasMessages);
+  const [isCentered, setIsCentered] = useState(!hasMessages && !isLoadingChatFromUrl);
   const [hasMounted, setHasMounted] = useState(false);
   const [initialIsMobile] = useState(() => {
     if (typeof window === "undefined") return false;
@@ -417,9 +419,9 @@ export default function ChatInput({
 
   // Handle centering when messages change from external updates
   useEffect(() => {
-    // Center when no messages, bottom when messages exist (both mobile and desktop)
-    setIsCentered(!hasMessages);
-  }, [hasMessages]);
+    // Center when no messages and not loading from URL, bottom otherwise
+    setIsCentered(!hasMessages && !isLoadingChatFromUrl);
+  }, [hasMessages, isLoadingChatFromUrl]);
 
   // Keep textarea height in sync with content and clamp to max height
   // Also account for attachment preview height (if any)
@@ -627,7 +629,7 @@ export default function ChatInput({
   return (
     <>
       {/* Greeting message when centered */}
-      {isCentered && (
+      {isCentered && !isLoadingChatFromUrl && (
         <div
           className={`fixed z-20 flex flex-col items-center pointer-events-none ${
             isMobileLayout || !isAuthenticated
