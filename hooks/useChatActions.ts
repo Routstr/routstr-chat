@@ -320,10 +320,22 @@ export const useChatActions = ({
       selectedModel: any,
       baseUrl: string,
       activeConversationId: string | null,
-      getActiveConversationId: () => string | null
-    ) => {
-      const newMessages = messages.slice(0, index);
-      setMessages(newMessages);
+        getActiveConversationId: () => string | null
+      ) => {
+        let sliceIndex = index;
+        const messageAtIndex = messages[index];
+
+        // When retrying from a system/error message, also remove the preceding
+        // assistant message since we're regenerating the response
+        if (messageAtIndex?.role === "system" && index > 0) {
+          const prevMessage = messages[index - 1];
+          if (prevMessage?.role === "assistant") {
+            sliceIndex = index - 1;
+          }
+        }
+
+        const newMessages = messages.slice(0, sliceIndex);
+        setMessages(newMessages);
       const originConversationId =
         activeConversationId ?? getActiveConversationId();
       if (!originConversationId) {

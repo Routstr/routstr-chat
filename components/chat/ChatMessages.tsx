@@ -297,63 +297,120 @@ export default function ChatMessages({
     return groups;
   }, [messages, systemGroupsMap]);
 
-  const getMessageToDisplay = (message: Message, index: number) => {
-    const versions = messageVersions.get(index);
+  // Find the index of the last user message slot (used for hiding stale responses during loading)
+  const lastUserMessageSlotIndex = useMemo(() => {
+    for (let i = messageVersions.size - 1; i >= 0; i--) {
+      const versionsAtI = messageVersions.get(i);
+      if (versionsAtI && versionsAtI.length > 0) {
+        const msgAtI = versionsAtI[versionsAtI.length - 1];
+        if (msgAtI.role === "user") {
+          return i;
+        }
+      }
+    }
+    return -1;
+  }, [messageVersions]);
 
-    if (!versions || versions.length <= 1) {
-      return { msg: message, currentVersion: 1, totalVersions: 1 };
+  // Get the currently selected/displayed message's eventId at a given depth
+  const getSelectedEventIdAtDepth = useCallback(
+    (depth: number): string | undefined => {
+      const versions = messageVersions.get(depth);
+      if (!versions || versions.length === 0) return undefined;
+
+      const selectedId = selectedVersions.get(depth);
+      if (selectedId) {
+        const found = versions.find((v) => v._eventId === selectedId);
+        if (found) return found._eventId;
+      }
+
+      // Default to the last version (most recent)
+      return versions[versions.length - 1]._eventId;
+    },
+    [messageVersions, selectedVersions]
+  );
+
+  // Filter versions at a given depth to only those that descend from the selected parent
+  const getFilteredVersions = useCallback(
+    (index: number): Message[] => {
+      const versions = messageVersions.get(index);
+      if (!versions || versions.length === 0) return [];
+
+      // For root messages (depth 0), return all versions
+      if (index === 0) return versions;
+
+      // Get the selected parent's eventId at the previous depth
+      const parentEventId = getSelectedEventIdAtDepth(index - 1);
+      if (!parentEventId) return versions;
+
+      // Filter to only messages whose _prevId matches the parent's eventId
+      const filtered = versions.filter((v) => v._prevId === parentEventId);
+
+      // If no matches (shouldn't happen in normal cases), return all versions
+      return filtered.length > 0 ? filtered : versions;
+    },
+    [messageVersions, getSelectedEventIdAtDepth]
+  );
+
+  const getMessageToDisplay = (message: Message, index: number) => {
+    const filteredVersions = getFilteredVersions(index);
+
+    if (!filteredVersions || filteredVersions.length <= 1) {
+      // If only one version in the filtered list, show it without version navigation
+      const msgToShow =
+        filteredVersions.length === 1 ? filteredVersions[0] : message;
+      return { msg: msgToShow, currentVersion: 1, totalVersions: 1 };
     }
 
     // Check if a specific version is selected for this "slot" (identified by index)
     const selectedId = selectedVersions.get(index);
 
     if (selectedId) {
-      const selectedMsg = versions.find((v) => v._eventId === selectedId);
+      const selectedMsg = filteredVersions.find(
+        (v) => v._eventId === selectedId
+      );
       if (selectedMsg) {
-        const versionIndex = versions.findIndex(
+        const versionIndex = filteredVersions.findIndex(
           (v) => v._eventId === selectedId
         );
         return {
           msg: selectedMsg,
           currentVersion: versionIndex + 1,
-          totalVersions: versions.length,
+          totalVersions: filteredVersions.length,
         };
       }
     }
 
     // Default to the message passed in (which comes from the main thread)
     // We need to find its index in the sorted versions array
-    const currentIndex = versions.findIndex(
+    const currentIndex = filteredVersions.findIndex(
       (v) => v._eventId === message._eventId
     );
 
-    // If for some reason the message isn't in the group (shouldn't happen), default to last
+    // If for some reason the message isn't in the filtered group, default to last
     if (currentIndex === -1) {
       return {
-        msg: versions[versions.length - 1],
-        currentVersion: versions.length,
-        totalVersions: versions.length,
+        msg: filteredVersions[filteredVersions.length - 1],
+        currentVersion: filteredVersions.length,
+        totalVersions: filteredVersions.length,
       };
     }
 
     return {
       msg: message,
       currentVersion: currentIndex + 1,
-      totalVersions: versions.length,
+      totalVersions: filteredVersions.length,
     };
   };
 
   const handleVersionChange = useCallback(
     (index: number, direction: "prev" | "next", currentMessageId: string) => {
-      const versions = messageVersions.get(index);
-      console.log("ed", versions, index, messageVersions);
-      if (!versions) return;
+      const filteredVersions = getFilteredVersions(index);
+      if (!filteredVersions || filteredVersions.length === 0) return;
 
       const currentSelectedId = selectedVersions.get(index) || currentMessageId;
-      const currentIndex = versions.findIndex(
+      const currentIndex = filteredVersions.findIndex(
         (v) => v._eventId === currentSelectedId
       );
-      console.log(currentIndex, currentSelectedId, selectedVersions);
 
       if (currentIndex === -1) return;
 
@@ -361,14 +418,27 @@ export default function ChatMessages({
 
       // Clamp index
       if (newIndex < 0) newIndex = 0;
-      if (newIndex >= versions.length) newIndex = versions.length - 1;
+      if (newIndex >= filteredVersions.length)
+        newIndex = filteredVersions.length - 1;
 
-      const newVersionId = versions[newIndex]._eventId;
+      const newVersionId = filteredVersions[newIndex]._eventId;
       if (newVersionId) {
-        setSelectedVersions((prev) => new Map(prev).set(index, newVersionId));
+        // When changing a parent's version, clear all child selections
+        // so they automatically follow the new branch
+        setSelectedVersions((prev) => {
+          const newMap = new Map(prev);
+          newMap.set(index, newVersionId);
+          // Clear selections for all deeper depths
+          Array.from(newMap.keys()).forEach((key) => {
+            if (key > index) {
+              newMap.delete(key);
+            }
+          });
+          return newMap;
+        });
       }
     },
-    [messageVersions, selectedVersions]
+    [getFilteredVersions, selectedVersions]
   );
 
   // Toggle a specific system message group
@@ -617,6 +687,17 @@ export default function ChatMessages({
                 currentVersion,
                 totalVersions,
               } = getMessageToDisplay(originalMessage, index);
+
+              // When loading a new response, hide all messages after the last user message
+              // This prevents showing stale assistant responses while streaming
+              if (
+                isLoading &&
+                (thinkingContent || streamingContent) &&
+                lastUserMessageSlotIndex >= 0 &&
+                index > lastUserMessageSlotIndex
+              ) {
+                return null;
+              }
 
               // Check if this message represents a system message group
               // We need to match by the message itself, not by index
