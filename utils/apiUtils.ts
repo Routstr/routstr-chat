@@ -1185,7 +1185,6 @@ async function processStreamingResponse(
 
           try {
             const parsedData = JSON.parse(jsonData);
-            console.log("RDLOG chunk:", JSON.stringify(parsedData));
 
             // Handle reasoning delta. OpenRouter does this.
             if (
