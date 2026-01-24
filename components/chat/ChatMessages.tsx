@@ -690,9 +690,10 @@ export default function ChatMessages({
 
               // When loading a new response, hide all messages after the last user message
               // This prevents showing stale assistant responses while streaming
+              // Also hide during payment processing (before streaming starts)
               if (
                 isLoading &&
-                (thinkingContent || streamingContent) &&
+                (thinkingContent || streamingContent || isPaymentProcessing) &&
                 lastUserMessageSlotIndex >= 0 &&
                 index > lastUserMessageSlotIndex
               ) {

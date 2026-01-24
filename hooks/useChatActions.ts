@@ -320,29 +320,33 @@ export const useChatActions = ({
       selectedModel: any,
       baseUrl: string,
       activeConversationId: string | null,
-        getActiveConversationId: () => string | null
-      ) => {
-        let sliceIndex = index;
-        const messageAtIndex = messages[index];
-
-        // When retrying from a system/error message, also remove the preceding
-        // assistant message since we're regenerating the response
-        if (messageAtIndex?.role === "system" && index > 0) {
-          const prevMessage = messages[index - 1];
-          if (prevMessage?.role === "assistant") {
-            sliceIndex = index - 1;
-          }
+      getActiveConversationId: () => string | null
+    ) => {
+      // Find the last user message before the retry point to use as context
+      // This creates a new branch instead of replacing the old response
+      let lastUserMessageIndex = -1;
+      for (let i = index - 1; i >= 0; i--) {
+        if (messages[i].role === "user") {
+          lastUserMessageIndex = i;
+          break;
         }
+      }
 
-        const newMessages = messages.slice(0, sliceIndex);
-        setMessages(newMessages);
+      // If no user message found, use index 0
+      const contextEndIndex =
+        lastUserMessageIndex >= 0 ? lastUserMessageIndex + 1 : index;
+      const contextMessages = messages.slice(0, contextEndIndex);
+
+      // Don't modify the UI messages - keep the old response visible
+      // The new response will be added as a sibling (new version) via appendMessageToConversation
+
       const originConversationId =
         activeConversationId ?? getActiveConversationId();
       if (!originConversationId) {
         throw new Error("No active conversation ID found");
       }
       performAIRequest(
-        newMessages,
+        contextMessages,
         setMessages,
         selectedModel,
         baseUrl,
@@ -430,9 +434,10 @@ export const useChatActions = ({
           onMessageAppend: (message) => {
             let prevId;
             if (retryMessage && message.role !== "system")
+              // For retry, link to the last USER message so the new response
+              // becomes a sibling of the old response (same parent = branching)
               prevId = getLastNonSystemMessageEventId(originConversationId, [
                 "user",
-                "assistant",
               ]);
             else prevId = getLastNonSystemMessageEventId(originConversationId);
 
