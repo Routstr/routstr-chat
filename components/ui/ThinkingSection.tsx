@@ -69,16 +69,18 @@ interface ThinkingStep {
 }
 
 const parseThinkingSteps = (text: string, isStreaming: boolean): ThinkingStep[] => {
-  // Regex to detect "Title: ... Body: ..." format
-  // Also supports "### Title" and "**Title**" if followed by content
-  const titleRegex = /(?:^|\n)(?:Title:\s*|###\s+|(?:\*\*(.*?)\*\*))/i;
+  // Regex for titles:
+  // 1. Explicit "Title: ..." or "### ..." at start of line
+  // 2. Bold text "**...**" that looks like a header (preceded by newline or sentence ending)
+  //    This handles cases like "...search!**Planning...**" where the model forgets spacing.
+  const titleRegex = /(?:^|\n)(?:Title:\s*(.+?)|###\s+(.+?))(?:\n|$)|(?:^|\n|[.!?])\s*\*\*(.+?)\*\*/g;
   
-  const hasStructure = text.match(titleRegex);
-
-  // If no structure detected, try splitting by double newlines for chunks
-  if (!hasStructure) {
+  const matches = Array.from(text.matchAll(titleRegex));
+  
+  // If no titles found at all, fall back to simple chunking
+  if (matches.length === 0) {
+    // ... existing fallback logic ...
     const chunks = text.split(/\n\n+/).filter(chunk => chunk.trim());
-    
     if (chunks.length <= 1) {
       return [{
         title: "Reasoning Process",
@@ -87,115 +89,120 @@ const parseThinkingSteps = (text: string, isStreaming: boolean): ThinkingStep[] 
         isFallback: true
       }];
     }
-
-    // Convert chunks to steps
+    // ... chunks mapping ...
     const steps = chunks.map((chunk, index) => {
-        // Try to extract a title from the first line of the chunk if it looks like one
         const lines = chunk.trim().split('\n');
-        let title = ""; // No default title
+        let title = ""; 
         let body = chunk.trim();
-
-        // Heuristic: if first line is short and bold or looks like a header, use it as title
         const firstLine = lines[0].trim();
         if (firstLine.length < 50 && (firstLine.startsWith('**') || firstLine.endsWith(':'))) {
             title = firstLine.replace(/\*\*/g, '').replace(/:$/, '');
             body = lines.slice(1).join('\n').trim();
         }
-
-        return {
-            title,
-            body,
-            isComplete: true // Will be adjusted below
-        };
+        return { title, body, isComplete: true };
     });
-
-    // Adjust completion status
-    steps.forEach((step, i) => {
-        if (i < steps.length - 1) {
-            step.isComplete = true;
-        } else {
-            step.isComplete = !isStreaming;
-        }
-    });
-
+    // Adjust completion
+    steps.forEach((step, i) => { step.isComplete = (i < steps.length - 1) || !isStreaming; });
     return steps;
   }
 
-  // Split by potential titles
-  // This is a simplified parser. For robust parsing we might need a state machine
-  // but let's try splitting by the markers we identified.
-  
-  // We'll normalize the text first to make splitting easier? 
-  // No, let's just find the indices.
-  
   const steps: ThinkingStep[] = [];
-  const lines = text.split('\n');
-  
-  let currentTitle = "Reasoning Start";
-  let currentBodyLines: string[] = [];
-  
-  // Regexes for titles
-  const strictTitleRegex = /^(?:Title:\s*|###\s+)(.*)/i;
-  const boldTitleRegex = /^\*\*(.*?)\*\*$/; // Only if line is just bold text
-  
-  lines.forEach((line, index) => {
-    const strictMatch = line.match(strictTitleRegex);
-    const boldMatch = line.match(boldTitleRegex);
-    
-    // Check for double newline separator in accumulated body (for large blocks)
-    // This is a bit tricky while iterating line by line. 
-    // Instead, let's treat explicit titles as primary separators.
-    
-    if (strictMatch || (boldMatch && currentBodyLines.length > 0)) {
-        // If we have accumulated body, push previous step
-        if (currentBodyLines.length > 0 || index > 0) {
-             steps.push({
-                 title: currentTitle,
-                 body: currentBodyLines.join('\n').trim(),
-                 isComplete: true
-             });
-        }
-        
-        currentTitle = (strictMatch ? strictMatch[1] : boldMatch ? boldMatch[1] : line).trim();
-        currentBodyLines = [];
-    } else {
-        // Clean up "Body:" prefix if present at start of body
-        if (currentBodyLines.length === 0 && line.match(/^Body:\s*/i)) {
-            const cleanLine = line.replace(/^Body:\s*/i, '');
-            if (cleanLine.trim()) currentBodyLines.push(cleanLine);
-        } else {
-            currentBodyLines.push(line);
-        }
-    }
-  });
-  
-  // Push last step
-  steps.push({
-      title: currentTitle,
-      body: currentBodyLines.join('\n').trim(),
-      isComplete: !isStreaming
-  });
-  
-  // If first step title is "Reasoning Start" and body is empty/short, maybe merge?
-  // But let's leave it simple.
-  
-  // Handle case where we detected structure but parsing failed (shouldn't happen with above logic)
-  if (steps.length === 0) {
-       return [{
-      title: "Reasoning Process",
-      body: text.trim(),
-      isComplete: !isStreaming,
-      isFallback: true
-    }];
-  }
+  let lastIndex = 0;
 
-  // Adjust completion status
-  steps.forEach((step, i) => {
-    if (i < steps.length - 1) {
-      step.isComplete = true;
-    } else {
-      step.isComplete = !isStreaming;
+  matches.forEach((match, index) => {
+    // Identify the content of the title
+    // match[1] -> Title: ...
+    // match[2] -> ### ...
+    // match[3] -> **...**
+    const titleText = (match[1] || match[2] || match[3])?.trim();
+    
+    // Ignore bold matches that are likely just emphasis (too short or just one word inside sentence?)
+    // But our regex requires sentence boundary, so "I **love** it" is excluded (unless "I. **Love** it").
+    if (!titleText) return;
+
+    // Everything before this match (since last match) is the body of the PREVIOUS step
+    // But we need to handle the start index carefully.
+    // match.index is the start of the pattern.
+    // The pattern might include the preceding punctuation/newline.
+    // We want to slice up to the actual title start? 
+    // No, we want to slice up to match.index, effectively leaving the punctuation with the previous step.
+    
+    // Correction: If the regex matched `! **Title**`, the `!` is part of the match.
+    // We want `!` to stay in the previous body.
+    // We can use a capturing group for the prefix?
+    // Or just look at the full match[0].
+    
+    // Let's refine the regex to NOT consume the punctuation if possible (lookbehind not fully supported everywhere?)
+    // Actually we can just manually adjust.
+    
+    let stepStart = match.index!;
+    let titleContentStart = stepStart; // will adjust
+    
+    // Find where the actual title formatting starts
+    const fullMatch = match[0];
+    const boldStart = fullMatch.indexOf("**");
+    const headerStart = fullMatch.search(/Title:|###/);
+    
+    if (boldStart !== -1) {
+        // It's a bold title. 
+        // The text before '**' within the match belongs to the previous step.
+        titleContentStart = stepStart + boldStart;
+    } else if (headerStart !== -1) {
+        // It's a structured title.
+        // The text before it (newline) belongs to separation.
+        titleContentStart = stepStart + headerStart;
     }
+
+    const prevBody = text.slice(lastIndex, titleContentStart).trim();
+    
+    if (steps.length > 0) {
+        // Update the previous step's body to include everything up to this new title
+        // But wait, we pushed the previous step when we found ITS title.
+        // So we just need to finalize its body.
+        steps[steps.length - 1].body = prevBody;
+        steps[steps.length - 1].isComplete = true;
+    } else if (prevBody) {
+        // Text before the first title -> Initialization step
+        steps.push({
+            title: "Initialization",
+            body: prevBody,
+            isComplete: true
+        });
+    }
+
+    // Now start the NEW step
+    steps.push({
+        title: titleText,
+        body: "", // Body will be filled by the next iteration or at the end
+        isComplete: false
+    });
+
+    // Update lastIndex to point to the end of this title match
+    lastIndex = stepStart + fullMatch.length;
+  });
+
+  // Handle the remaining text after the last title
+  const remainingText = text.slice(lastIndex).trim();
+  if (steps.length > 0) {
+      steps[steps.length - 1].body = remainingText;
+      steps[steps.length - 1].isComplete = !isStreaming;
+  } else if (remainingText) {
+      // Should be covered by fallback check, but just in case
+      steps.push({
+          title: "Reasoning Process",
+          body: remainingText,
+          isComplete: !isStreaming,
+          isFallback: true
+      });
+  }
+  
+  // Clean up: Remove steps with empty body AND complete? 
+  // No, keep them as they might be milestones.
+  // But strip "Body:" prefix if present
+  steps.forEach(step => {
+      if (step.body.match(/^\s*Body:\s*/i)) {
+          step.body = step.body.replace(/^\s*Body:\s*/i, '').trim();
+      }
   });
 
   return steps;
@@ -297,7 +304,7 @@ export default function ThinkingSection({
           exit={{ opacity: 0, height: 0 }}
           className="mt-2 pl-7 text-xs text-muted-foreground/60 overflow-hidden"
         >
-          <div className="line-clamp-2">
+          <div className="">
             {steps[steps.length - 1]?.body ? (
                steps[steps.length - 1].body
             ) : (
@@ -347,7 +354,7 @@ export default function ThinkingSection({
                           className={`
                             w-6 h-6 rounded-full flex items-center justify-center border-2 
                             ${step.isComplete 
-                              ? "bg-green-500/10 border-green-500 text-green-500" 
+                              ? "bg-muted border-border text-muted-foreground" 
                               : isActive
                                 ? "bg-primary/10 border-primary text-primary"
                                 : "bg-muted border-muted-foreground/30 text-muted-foreground"
@@ -356,7 +363,7 @@ export default function ThinkingSection({
                           `}
                         >
                           {step.isComplete ? (
-                            <Check className="w-3.5 h-3.5" />
+                            <div className="w-1.5 h-1.5 rounded-full bg-foreground/60" />
                           ) : isActive ? (
                             <Loader2 className="w-3.5 h-3.5 animate-spin" />
                           ) : (
@@ -377,29 +384,27 @@ export default function ThinkingSection({
                           </h4>
                         )}
                         
-                        {/* Only show body for the active step or if there's only one step (fallback mode) */}
-                        {!step.isComplete && (
-                          <motion.div
-                            initial={{ opacity: 0, height: 0 }}
-                            animate={{ opacity: 1, height: "auto" }}
-                            className="mt-2 text-sm text-muted-foreground/90 overflow-hidden"
-                            ref={isActive ? activeStepRef : null}
-                          >
-                            {step.body ? (
-                              <MarkdownRenderer 
-                                content={step.body} 
-                                className="text-xs prose-sm dark:prose-invert max-w-none" 
-                              />
-                            ) : (
-                              // Loading placeholder for empty body
-                              <div className="flex items-center gap-1.5 h-6">
-                                <span className="w-1 h-1 rounded-full bg-muted-foreground/40 animate-pulse" />
-                                <span className="w-1 h-1 rounded-full bg-muted-foreground/40 animate-pulse delay-150" />
-                                <span className="w-1 h-1 rounded-full bg-muted-foreground/40 animate-pulse delay-300" />
-                              </div>
-                            )}
-                          </motion.div>
-                        )}
+                        {/* Show body for all steps */}
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          className="mt-2 text-sm text-muted-foreground/90 overflow-hidden"
+                          ref={isActive ? activeStepRef : null}
+                        >
+                          {step.body ? (
+                            <MarkdownRenderer 
+                              content={step.body} 
+                              className="text-xs prose-sm dark:prose-invert max-w-none" 
+                            />
+                          ) : (
+                            // Loading placeholder for empty body
+                            <div className="flex items-center gap-1.5 h-6">
+                              <span className="w-1 h-1 rounded-full bg-muted-foreground/40 animate-pulse" />
+                              <span className="w-1 h-1 rounded-full bg-muted-foreground/40 animate-pulse delay-150" />
+                              <span className="w-1 h-1 rounded-full bg-muted-foreground/40 animate-pulse delay-300" />
+                            </div>
+                          )}
+                        </motion.div>
                       </div>
                     </div>
                   );
