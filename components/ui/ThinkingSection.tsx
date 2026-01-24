@@ -65,62 +65,91 @@ interface ThinkingStep {
   title: string;
   body: string;
   isComplete: boolean;
+  isFallback?: boolean; // Added to distinguish single blob fallback
 }
 
 const parseThinkingSteps = (text: string, isStreaming: boolean): ThinkingStep[] => {
-  const parts = text.split(/(?:^|\n)Title:\s*/);
-  const steps: ThinkingStep[] = [];
+  // Regex to detect "Title: ... Body: ..." format
+  // Also supports "### Title" and "**Title**" if followed by content
+  const titleRegex = /(?:^|\n)(?:Title:\s*|###\s+|(?:\*\*(.*?)\*\*))/i;
+  
+  const hasStructure = text.match(titleRegex);
 
-  // Handle case where text doesn't start with Title (intro text)
-  // or if there are no titles at all (fallback to single step)
-  if (parts.length === 1) {
+  // If no structure detected, return single fallback step
+  if (!hasStructure) {
     return [{
       title: "Reasoning Process",
-      body: parts[0].trim(),
-      isComplete: !isStreaming
+      body: text.trim(),
+      isComplete: !isStreaming,
+      isFallback: true
     }];
   }
 
-  parts.forEach((part, index) => {
-    // Skip empty first part if it's just due to the split at start
-    if (index === 0 && !part.trim()) return;
-
-    // If index 0 has content but wasn't a title split (e.g. text before first title)
-    // we add it as an "Initialization" step
-    if (index === 0 && part.trim()) {
-      steps.push({
-        title: "Initialization",
-        body: part.trim(),
-        isComplete: true
-      });
-      return;
-    }
-
-    const newlineIndex = part.indexOf('\n');
-    let title = "";
-    let body = "";
-
-    if (newlineIndex === -1) {
-      title = part.trim();
+  // Split by potential titles
+  // This is a simplified parser. For robust parsing we might need a state machine
+  // but let's try splitting by the markers we identified.
+  
+  // We'll normalize the text first to make splitting easier? 
+  // No, let's just find the indices.
+  
+  const steps: ThinkingStep[] = [];
+  const lines = text.split('\n');
+  
+  let currentTitle = "Reasoning Start";
+  let currentBodyLines: string[] = [];
+  
+  // Regexes for titles
+  const strictTitleRegex = /^(?:Title:\s*|###\s+)(.*)/i;
+  const boldTitleRegex = /^\*\*(.*?)\*\*$/; // Only if line is just bold text
+  
+  lines.forEach((line, index) => {
+    const strictMatch = line.match(strictTitleRegex);
+    const boldMatch = line.match(boldTitleRegex);
+    
+    if (strictMatch || (boldMatch && currentBodyLines.length > 0)) {
+        // If we have accumulated body, push previous step
+        if (currentBodyLines.length > 0 || index > 0) {
+             steps.push({
+                 title: currentTitle,
+                 body: currentBodyLines.join('\n').trim(),
+                 isComplete: true
+             });
+        }
+        
+        currentTitle = (strictMatch ? strictMatch[1] : boldMatch ? boldMatch[1] : line).trim();
+        currentBodyLines = [];
     } else {
-      title = part.substring(0, newlineIndex).trim();
-      body = part.substring(newlineIndex).trim();
+        // Clean up "Body:" prefix if present at start of body
+        if (currentBodyLines.length === 0 && line.match(/^Body:\s*/i)) {
+            const cleanLine = line.replace(/^Body:\s*/i, '');
+            if (cleanLine.trim()) currentBodyLines.push(cleanLine);
+        } else {
+            currentBodyLines.push(line);
+        }
     }
-
-    // Clean up "Body:" prefix if present
-    if (body.match(/^\s*Body:\s*/i)) {
-      body = body.replace(/^\s*Body:\s*/i, '');
-    }
-
-    steps.push({
-      title,
-      body: body.trim(),
-      isComplete: false // will set below
-    });
   });
+  
+  // Push last step
+  steps.push({
+      title: currentTitle,
+      body: currentBodyLines.join('\n').trim(),
+      isComplete: !isStreaming
+  });
+  
+  // If first step title is "Reasoning Start" and body is empty/short, maybe merge?
+  // But let's leave it simple.
+  
+  // Handle case where we detected structure but parsing failed (shouldn't happen with above logic)
+  if (steps.length === 0) {
+       return [{
+      title: "Reasoning Process",
+      body: text.trim(),
+      isComplete: !isStreaming,
+      isFallback: true
+    }];
+  }
 
-  // Mark all but the last step as complete
-  // If not streaming, the last step is also complete
+  // Adjust completion status
   steps.forEach((step, i) => {
     if (i < steps.length - 1) {
       step.isComplete = true;
@@ -148,15 +177,6 @@ export default function ThinkingSection({
 
   // Parse steps
   const steps = useMemo(() => {
-    const hasTitles = content.match(/(?:^|\n)Title:\s*/);
-    if (!hasTitles && content.trim()) {
-      // Fallback for non-structured thinking
-      return [{
-        title: "Reasoning",
-        body: content,
-        isComplete: !isStreaming
-      }];
-    }
     return parseThinkingSteps(content, isStreaming);
   }, [content, isStreaming]);
 
@@ -241,11 +261,25 @@ export default function ThinkingSection({
             <div className="bg-muted/30 border border-border/50 rounded-xl p-4">
               <div className="flex flex-col relative">
                 {/* Vertical connecting line background */}
-                <div className="absolute left-[11px] top-2 bottom-4 w-[2px] bg-border/40 z-0" />
+                {!steps[0]?.isFallback && (
+                  <div className="absolute left-[11px] top-2 bottom-4 w-[2px] bg-border/40 z-0" />
+                )}
                 
                 {steps.map((step, index) => {
                   const isLast = index === steps.length - 1;
                   const isActive = !step.isComplete && isStreaming;
+                  
+                  if (step.isFallback) {
+                    // Fallback rendering for unstructured content (single block)
+                    return (
+                        <div key="fallback" className="text-sm text-muted-foreground/90 overflow-hidden">
+                            <MarkdownRenderer 
+                                content={step.body} 
+                                className="text-xs prose-sm dark:prose-invert max-w-none" 
+                            />
+                        </div>
+                    );
+                  }
 
                   return (
                     <div key={index} className="flex gap-3 mb-4 last:mb-0 relative z-10 group">
@@ -284,7 +318,7 @@ export default function ThinkingSection({
                         </h4>
                         
                         {/* Only show body for the active step or if there's only one step (fallback mode) */}
-                        {(!step.isComplete || steps.length === 1) && (
+                        {!step.isComplete && (
                           <motion.div
                             initial={{ opacity: 0, height: 0 }}
                             animate={{ opacity: 1, height: "auto" }}
