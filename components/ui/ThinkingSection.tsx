@@ -2,45 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { ChevronDown, Check, Loader2, Circle } from "lucide-react";
-import MarkdownRenderer from "@/components/MarkdownRenderer";
-
-const BrainIcon = ({ className }: { className?: string }) => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth={1.5}
-    className={className}
-  >
-    <path
-      d="M12 2a5 5 0 0 0-5 5v1a5 5 0 0 0-2 4v2a5 5 0 0 0 5 5h4a5 5 0 0 0 5-5v-2a5 5 0 0 0-2-4V7a5 5 0 0 0-5-5z"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-    <path d="M9 12h6" strokeLinecap="round" strokeLinejoin="round" />
-    <path d="M9 16h6" strokeLinecap="round" strokeLinejoin="round" />
-    <path d="M9 8h6" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-);
-
-const BulbIcon = ({ className }: { className?: string }) => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    fill="none"
-    viewBox="0 0 24 24"
-    strokeWidth={1.5}
-    stroke="currentColor"
-    className={className}
-  >
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      d="M12 18v-5.25m0 0a6.01 6.01 0 0 0 1.5-.189m-1.5.189a6.01 6.01 0 0 1-1.5-.189m3.75 7.478a12.06 12.06 0 0 1-4.5 0m3.75 2.383a14.406 14.406 0 0 1-3 0M14.25 18v-.192c0-.983.658-1.823 1.508-2.316a7.5 7.5 0 1 0-7.517 0c.85.493 1.509 1.333 1.509 2.316V18"
-    />
-  </svg>
-);
+import { ChevronDown, Loader2 } from "lucide-react";
 
 // Ephemeral in-memory cache for thought durations keyed by content fingerprint
 const thoughtDurationCache = new Map<string, number>();
@@ -119,21 +81,6 @@ const parseThinkingSteps = (text: string, isStreaming: boolean): ThinkingStep[] 
     // Ignore bold matches that are likely just emphasis (too short or just one word inside sentence?)
     // But our regex requires sentence boundary, so "I **love** it" is excluded (unless "I. **Love** it").
     if (!titleText) return;
-
-    // Everything before this match (since last match) is the body of the PREVIOUS step
-    // But we need to handle the start index carefully.
-    // match.index is the start of the pattern.
-    // The pattern might include the preceding punctuation/newline.
-    // We want to slice up to the actual title start? 
-    // No, we want to slice up to match.index, effectively leaving the punctuation with the previous step.
-    
-    // Correction: If the regex matched `! **Title**`, the `!` is part of the match.
-    // We want `!` to stay in the previous body.
-    // We can use a capturing group for the prefix?
-    // Or just look at the full match[0].
-    
-    // Let's refine the regex to NOT consume the punctuation if possible (lookbehind not fully supported everywhere?)
-    // Actually we can just manually adjust.
     
     let stepStart = match.index!;
     let titleContentStart = stepStart; // will adjust
@@ -157,8 +104,6 @@ const parseThinkingSteps = (text: string, isStreaming: boolean): ThinkingStep[] 
     
     if (steps.length > 0) {
         // Update the previous step's body to include everything up to this new title
-        // But wait, we pushed the previous step when we found ITS title.
-        // So we just need to finalize its body.
         steps[steps.length - 1].body = prevBody;
         steps[steps.length - 1].isComplete = true;
     } else if (prevBody) {
@@ -196,9 +141,7 @@ const parseThinkingSteps = (text: string, isStreaming: boolean): ThinkingStep[] 
       });
   }
   
-  // Clean up: Remove steps with empty body AND complete? 
-  // No, keep them as they might be milestones.
-  // But strip "Body:" prefix if present
+  // Clean up: Strip "Body:" prefix if present
   steps.forEach(step => {
       if (step.body.match(/^\s*Body:\s*/i)) {
           step.body = step.body.replace(/^\s*Body:\s*/i, '').trim();
@@ -213,7 +156,19 @@ export default function ThinkingSection({
   thinkingContent,
   isStreaming = false,
 }: ThinkingSectionProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [expandedSteps, setExpandedSteps] = useState<Set<number>>(new Set());
+
+  const toggleStep = (index: number) => {
+    setExpandedSteps((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(index)) {
+        newSet.delete(index);
+      } else {
+        newSet.add(index);
+      }
+      return newSet;
+    });
+  };
 
   // Determine content source
   const content = useMemo(() => {
@@ -266,138 +221,183 @@ export default function ThinkingSection({
 
   const activeStepRef = useRef<HTMLDivElement>(null);
 
+  // Auto-expand new steps during streaming - REMOVED to allow auto-collapse of previous steps
+  // useEffect(() => {
+  //   if (isStreaming) {
+  //     const activeIndex = steps.length - 1;
+  //     setExpandedSteps(prev => {
+  //       if (!prev.has(activeIndex)) {
+  //           const newSet = new Set(prev);
+  //           newSet.add(activeIndex);
+  //           return newSet;
+  //       }
+  //       return prev;
+  //     });
+  //   }
+  // }, [steps.length, isStreaming]);
+
   // Auto-scroll to the bottom of the active step when streaming
   useEffect(() => {
-    if (isStreaming && isExpanded && activeStepRef.current) {
-      // Only scroll if we are near the bottom or it's a new step?
-      // Actually simple auto-scroll for now
+    const activeIndex = steps.length - 1;
+    if (isStreaming && expandedSteps.has(activeIndex) && activeStepRef.current) {
+      // Auto-scroll disabled for now as it can be jumpy
       // activeStepRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }
-  }, [content, isStreaming, isExpanded]);
+  }, [content, isStreaming, expandedSteps, steps.length]);
+
+  // Collapse all when streaming ends
+  useEffect(() => {
+    if (!isStreaming) {
+      setExpandedSteps(new Set());
+    }
+  }, [isStreaming]);
 
   if (!thinking && !isStreaming && !thinkingContent) return null;
 
+  const activeStepIndex = steps.length - 1;
+  const containerClass = "py-2";
+
+  // Completed State: Single "Thinking" group
+  if (!isStreaming) {
+      const isAllExpanded = expandedSteps.has(-1); // Use -1 for the main container toggle
+      
+      return (
+        <div className="mb-4">
+          <div className={containerClass}>
+             <div className="flex gap-3 relative z-10 items-center">
+                <div className="flex-1 min-w-0">
+                    <button 
+                        onClick={() => toggleStep(-1)}
+                        className="flex items-center gap-1.5 w-full text-left cursor-pointer hover:opacity-80"
+                    >
+                        <h4 className="text-xs font-medium text-muted-foreground">
+                            {durationLabel || "Thinking"}
+                        </h4>
+                        <ChevronDown
+                             className={`w-3 h-3 text-muted-foreground transition-transform duration-200 ${
+                               isAllExpanded ? "rotate-180" : ""
+                             }`}
+                        />
+                    </button>
+                    
+                    <AnimatePresence>
+                        {isAllExpanded && (
+                            <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: "auto", opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                className="overflow-hidden"
+                            >
+                                <div className="mt-2 flex flex-col relative">
+                                    {!steps[0]?.isFallback && (
+                                        <div className="absolute left-[11.5px] top-[22px] bottom-[10px] w-px bg-border z-0" />
+                                    )}
+                                    <div className="pt-2 flex flex-col gap-2">
+                                        {steps.map((step, index) => (
+                                            <div key={index} className="flex gap-3 relative z-10 group items-start">
+                                                <div className="shrink-0 mt-1.5 flex flex-col items-center">
+                                                    <div className="w-6 h-3 flex items-center justify-center relative z-10 bg-background/50">
+                                                        <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 group-hover:bg-muted-foreground/60 transition-colors" />
+                                                    </div>
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <button 
+                                                        onClick={() => toggleStep(index)}
+                                                        className="flex items-center gap-2 w-full text-left cursor-pointer hover:opacity-80 group/btn"
+                                                    >
+                                                        {step.title && (
+                                                            <h4 className="text-sm text-muted-foreground group-hover/btn:text-foreground transition-colors">
+                                                                {step.title}
+                                                            </h4>
+                                                        )}
+                                                    </button>
+                                                    <AnimatePresence>
+                                                        {expandedSteps.has(index) && (
+                                                            <motion.div
+                                                                initial={{ height: 0, opacity: 0 }}
+                                                                animate={{ height: "auto", opacity: 1 }}
+                                                                exit={{ height: 0, opacity: 0 }}
+                                                                className="mt-1 overflow-hidden pl-0"
+                                                            >
+                                                                {step.body && (
+                                                                    <p className="text-xs text-muted-foreground/60 italic whitespace-pre-wrap leading-relaxed">
+                                                                        {step.body}
+                                                                    </p>
+                                                                )}
+                                                            </motion.div>
+                                                        )}
+                                                    </AnimatePresence>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                </div>
+             </div>
+          </div>
+        </div>
+      );
+  }
+
+  // Streaming View
   return (
     <div className="mb-4">
-      <button
-        onClick={() => setIsExpanded(!isExpanded)}
-        className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-2"
-      >
-        {isStreaming ? (
-          <BrainIcon className="w-3 h-3" />
-        ) : (
-          <BulbIcon className="w-3 h-3" />
-        )}
-        <span>{isStreaming ? "Thinking..." : durationLabel || "Thought"}</span>
-        <ChevronDown
-          className={`w-3 h-3 transition-transform duration-200 ${
-            isExpanded ? "rotate-180" : ""
-          }`}
-        />
-      </button>
+      <div className={containerClass}>
+        <div className="flex flex-col relative">
+          {/* Vertical connecting line background */}
+          {!steps[0]?.isFallback && (
+             <div className="absolute left-[11.5px] top-[12px] bottom-[8px] w-px bg-border z-0" />
+          )}
 
-      {/* Collapsed state: Ghost text preview of the active step */}
-      {!isExpanded && isStreaming && (
-        <motion.div
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: "auto" }}
-          exit={{ opacity: 0, height: 0 }}
-          className="mt-2 pl-7 text-xs text-muted-foreground/60 overflow-hidden"
-        >
-          <div className="">
-            {steps[steps.length - 1]?.body ? (
-               steps[steps.length - 1].body
-            ) : (
-               <span className="animate-pulse">Thinking...</span>
-            )}
-          </div>
-        </motion.div>
-      )}
+          {/* All Steps */}
+          {steps.map((step, index) => {
+             const isActive = index === activeStepIndex;
+             // Only auto-expand the active step, keep others collapsed unless manually opened
+             const isExpanded = expandedSteps.has(index) || (isActive && isStreaming && !expandedSteps.has(index));
+             
+             return (
+               <div key={index} className="flex gap-3 mb-3 last:mb-0 relative z-10 group items-start">
+                  {/* Icon */}
+                  <div className="shrink-0 mt-1">
+                    <div className="w-6 h-4 flex items-center justify-center bg-background/50 backdrop-blur-[1px] rounded-full">
+                        {isActive && isStreaming ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
+                        ) : (
+                            <div className={`w-1.5 h-1.5 rounded-full ${step.isComplete ? "bg-muted-foreground/40" : "bg-primary"}`} />
+                        )}
+                    </div>
+                  </div>
 
-      <AnimatePresence>
-        {isExpanded && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2, ease: "easeInOut" }}
-            className="overflow-hidden"
-          >
-            <div className="bg-muted/30 border border-border/50 rounded-xl p-4">
-              <div className="flex flex-col relative">
-                {/* Vertical connecting line background */}
-                {!steps[0]?.isFallback && (
-                  <div className="absolute left-[11px] top-2 bottom-4 w-[2px] bg-border/40 z-0" />
-                )}
-                
-                {steps.map((step, index) => {
-                  const isLast = index === steps.length - 1;
-                  const isActive = !step.isComplete && isStreaming;
-                  
-                  if (step.isFallback) {
-                    // Fallback rendering for unstructured content (single block)
-                    return (
-                        <div key="fallback" className="text-sm text-muted-foreground/90 overflow-hidden">
-                            <MarkdownRenderer 
-                                content={step.body} 
-                                className="text-xs prose-sm dark:prose-invert max-w-none" 
-                            />
-                        </div>
-                    );
-                  }
-
-                  return (
-                    <div key={index} className="flex gap-3 mb-4 last:mb-0 relative z-10 group">
-                      {/* Icon */}
-                      <div className="shrink-0 mt-0.5">
-                        <div
-                          className={`
-                            w-6 h-6 rounded-full flex items-center justify-center border-2 
-                            ${step.isComplete 
-                              ? "bg-muted border-border text-muted-foreground" 
-                              : isActive
-                                ? "bg-primary/10 border-primary text-primary"
-                                : "bg-muted border-muted-foreground/30 text-muted-foreground"
-                            }
-                            transition-colors duration-300
-                          `}
-                        >
-                          {step.isComplete ? (
-                            <div className="w-1.5 h-1.5 rounded-full bg-foreground/60" />
-                          ) : isActive ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          ) : (
-                            <Circle className="w-2 h-2 fill-current" />
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Content */}
-                      <div className="flex-1 min-w-0">
-                        {step.title && (
-                          <h4 
-                            className={`text-sm font-medium leading-6 ${
-                              step.isComplete ? "text-muted-foreground" : "text-foreground"
-                            }`}
-                          >
+                  {/* Content */}
+                  <div className="flex-1 min-w-0">
+                    <button 
+                       onClick={() => toggleStep(index)}
+                       className="flex items-center gap-2 w-full text-left cursor-pointer hover:opacity-80"
+                    >
+                       {step.title ? (
+                          <h4 className={`text-sm font-medium ${isActive ? "text-foreground" : "text-muted-foreground"}`}>
                             {step.title}
                           </h4>
-                        )}
-                        
-                        {/* Show body for all steps */}
+                       ) : null}
+                    </button>
+
+                    <AnimatePresence>
+                      {isExpanded && (
                         <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: "auto" }}
-                          className="mt-2 text-sm text-muted-foreground/90 overflow-hidden"
-                          ref={isActive ? activeStepRef : null}
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: "auto", opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          className="mt-1 overflow-hidden"
+                          ref={(isActive && isStreaming) ? activeStepRef : null}
                         >
                           {step.body ? (
-                            <MarkdownRenderer 
-                              content={step.body} 
-                              className="text-xs prose-sm dark:prose-invert max-w-none" 
-                            />
+                            <p className="text-xs text-muted-foreground/60 italic whitespace-pre-wrap leading-relaxed">
+                              {step.body}
+                            </p>
                           ) : (
-                            // Loading placeholder for empty body
                             <div className="flex items-center gap-1.5 h-6">
                               <span className="w-1 h-1 rounded-full bg-muted-foreground/40 animate-pulse" />
                               <span className="w-1 h-1 rounded-full bg-muted-foreground/40 animate-pulse delay-150" />
@@ -405,15 +405,14 @@ export default function ThinkingSection({
                             </div>
                           )}
                         </motion.div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+                      )}
+                    </AnimatePresence>
+                  </div>
+               </div>
+             );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
