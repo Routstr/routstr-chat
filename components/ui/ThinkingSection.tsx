@@ -75,14 +75,50 @@ const parseThinkingSteps = (text: string, isStreaming: boolean): ThinkingStep[] 
   
   const hasStructure = text.match(titleRegex);
 
-  // If no structure detected, return single fallback step
+  // If no structure detected, try splitting by double newlines for chunks
   if (!hasStructure) {
-    return [{
-      title: "Reasoning Process",
-      body: text.trim(),
-      isComplete: !isStreaming,
-      isFallback: true
-    }];
+    const chunks = text.split(/\n\n+/).filter(chunk => chunk.trim());
+    
+    if (chunks.length <= 1) {
+      return [{
+        title: "Reasoning Process",
+        body: text.trim(),
+        isComplete: !isStreaming,
+        isFallback: true
+      }];
+    }
+
+    // Convert chunks to steps
+    const steps = chunks.map((chunk, index) => {
+        // Try to extract a title from the first line of the chunk if it looks like one
+        const lines = chunk.trim().split('\n');
+        let title = `Step ${index + 1}`;
+        let body = chunk.trim();
+
+        // Heuristic: if first line is short and bold or looks like a header, use it as title
+        const firstLine = lines[0].trim();
+        if (firstLine.length < 50 && (firstLine.startsWith('**') || firstLine.endsWith(':'))) {
+            title = firstLine.replace(/\*\*/g, '').replace(/:$/, '');
+            body = lines.slice(1).join('\n').trim();
+        }
+
+        return {
+            title,
+            body,
+            isComplete: true // Will be adjusted below
+        };
+    });
+
+    // Adjust completion status
+    steps.forEach((step, i) => {
+        if (i < steps.length - 1) {
+            step.isComplete = true;
+        } else {
+            step.isComplete = !isStreaming;
+        }
+    });
+
+    return steps;
   }
 
   // Split by potential titles
@@ -105,6 +141,10 @@ const parseThinkingSteps = (text: string, isStreaming: boolean): ThinkingStep[] 
   lines.forEach((line, index) => {
     const strictMatch = line.match(strictTitleRegex);
     const boldMatch = line.match(boldTitleRegex);
+    
+    // Check for double newline separator in accumulated body (for large blocks)
+    // This is a bit tricky while iterating line by line. 
+    // Instead, let's treat explicit titles as primary separators.
     
     if (strictMatch || (boldMatch && currentBodyLines.length > 0)) {
         // If we have accumulated body, push previous step
