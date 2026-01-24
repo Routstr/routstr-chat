@@ -499,12 +499,18 @@ export const useConversationState = (): UseConversationStateReturn => {
       const strippedMessage = stripImageDataFromSingleMessage(message);
       if (loadActiveConversationId())
         setActiveConversationIdWithStorage(conversationId);
+
+      // Add message to local state IMMEDIATELY (synchronously) before async Nostr publishing
+      // This prevents UI flash between loading end and message appearing
+      appendMessageToConversation(conversationId, strippedMessage);
+
       if (currentPnsKeys) {
+        // Pass a no-op for appendMessageToConversation since we already added the message
         return publishMessage(
           conversationId,
           strippedMessage,
           currentPnsKeys,
-          appendMessageToConversation
+          () => {} // Already appended above
         );
       } else {
         console.log(
@@ -528,11 +534,12 @@ export const useConversationState = (): UseConversationStateReturn => {
           );
 
           if (keys) {
+            // Pass a no-op since we already appended the message above
             return publishMessage(
               conversationId,
               strippedMessage,
               keys,
-              appendMessageToConversation
+              () => {} // Already appended above
             );
           }
         } catch (err) {
