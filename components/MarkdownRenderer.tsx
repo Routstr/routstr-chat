@@ -163,6 +163,24 @@ export default function MarkdownRenderer({
               );
             }
             const cleanedHref = cleanUrl(safeHref);
+            const childText = typeof children === 'string' ? children : '';
+            const isCitationNumber = /^\d+$/.test(childText.trim());
+
+            if (isCitationNumber) {
+              return (
+                <a
+                  href={cleanedHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1 ml-0.5 align-super text-[0.65rem] font-medium rounded bg-slate-500/15 text-slate-400 hover:bg-slate-500/25 hover:text-slate-300 transition-colors no-underline border border-slate-500/20"
+                  title={cleanedHref}
+                >
+                  {childText.trim()}
+                  <ExternalLink className="h-2.5 w-2.5 ml-0.5 opacity-50" />
+                </a>
+              );
+            }
+
             // Clean the display text if it's a URL
             let displayContent = children;
             if (typeof children === 'string' && children.startsWith('http')) {
