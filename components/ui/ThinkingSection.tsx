@@ -182,11 +182,22 @@ const parseThinkingSteps = (text: string, isStreaming: boolean): ThinkingStep[] 
       });
   }
   
-  // Clean up: Strip "Body:" prefix if present
+  // Clean up: Strip "Body:" prefix or leading colons if present
   steps.forEach(step => {
-      if (step.body.match(/^\s*Body:\s*/i)) {
-          step.body = step.body.replace(/^\s*Body:\s*/i, '').trim();
+      let body = step.body.trim();
+      
+      // Remove "Body:" prefix if present
+      if (body.match(/^Body:\s*/i)) {
+          body = body.replace(/^Body:\s*/i, '');
       }
+      
+      // Remove leading colons which can happen if the model outputs "Title\n:\nContent"
+      // or "**Title**\n:\nContent"
+      if (body.match(/^\s*:\s*/)) {
+          body = body.replace(/^\s*:\s*/, '');
+      }
+
+      step.body = body.trim();
   });
 
   return steps;
