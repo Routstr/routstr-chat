@@ -32,37 +32,78 @@ interface ThinkingStep {
 
 const parseThinkingSteps = (text: string, isStreaming: boolean): ThinkingStep[] => {
   // Regex for titles:
-  // 1. Explicit "Title: ..." or "### ..." at start of line
+  // 1. Explicit "Title: ..." or markdown headers "# ...", "## ...", "### ..." at start of line
   // 2. Bold text "**...**" that looks like a header (preceded by newline or sentence ending)
-  //    This handles cases like "...search!**Planning...**" where the model forgets spacing.
-  const titleRegex = /(?:^|\n)(?:Title:\s*(.+?)|###\s+(.+?))(?:\n|$)|(?:^|\n|[.!?])\s*\*\*(.+?)\*\*/g;
+  const titleRegex = /(?:^|\n)(?:Title:\s*(.+?)|#{1,6}\s+(.+?))(?:\n|$)|(?:^|\n|[.!?])\s*\*\*(.+?)\*\*/g;
   
   const matches = Array.from(text.matchAll(titleRegex));
   
   // If no titles found at all, fall back to simple chunking
   if (matches.length === 0) {
-    // ... existing fallback logic ...
+    // If the text is short enough to be a single thought, just return it
     const chunks = text.split(/\n\n+/).filter(chunk => chunk.trim());
     if (chunks.length <= 1) {
+      const content = text.trim();
+      // Try to extract a title from the first sentence if it's not too long
+      let title = "Reasoning Process";
+      let body = content;
+      
+      const firstLine = content.split('\n')[0].trim();
+      if (firstLine.length > 0 && firstLine.length < 80) {
+          // If first line is short, use it as title
+          title = firstLine.replace(/\*\*/g, '').replace(/:$/, '');
+          // If there's more text, the rest is body. If not, body is same as title or empty?
+          // Let's keep body as full text if it's just one line, or remove first line if multiple.
+          if (content.indexOf('\n') !== -1) {
+             body = content.slice(firstLine.length).trim();
+          }
+      } else {
+          // Use first sentence or chunk as title
+          const firstSentenceMatch = content.match(/^.*?[.!?](?:\s|$)/);
+          if (firstSentenceMatch && firstSentenceMatch[0].length < 80) {
+              title = firstSentenceMatch[0].trim().replace(/\*\*/g, '');
+          } else {
+              // Fallback to truncated text
+              title = content.slice(0, 50).replace(/\n/g, ' ') + (content.length > 50 ? "..." : "");
+          }
+      }
+
       return [{
-        title: "Reasoning Process",
-        body: text.trim(),
+        title,
+        body,
         isComplete: !isStreaming,
         isFallback: true
       }];
     }
-    // ... chunks mapping ...
+
+    // Map chunks to steps
     const steps = chunks.map((chunk, index) => {
         const lines = chunk.trim().split('\n');
         let title = ""; 
         let body = chunk.trim();
         const firstLine = lines[0].trim();
-        if (firstLine.length < 50 && (firstLine.startsWith('**') || firstLine.endsWith(':'))) {
+        
+        // Try to detect a header-like first line
+        if (firstLine.length < 80 && (firstLine.startsWith('**') || firstLine.endsWith(':') || /^[A-Z][a-zA-Z0-9\s]+$/.test(firstLine))) {
             title = firstLine.replace(/\*\*/g, '').replace(/:$/, '');
             body = lines.slice(1).join('\n').trim();
+        } else {
+            // Fallback: Use first sentence or truncated text as title
+            const firstSentenceMatch = chunk.match(/^.*?[.!?](?:\s|$)/);
+            if (firstSentenceMatch && firstSentenceMatch[0].length < 80) {
+                title = firstSentenceMatch[0].trim().replace(/\*\*/g, '');
+                // We keep the body as is because we just extracted a title from the prose
+            } else {
+                title = chunk.slice(0, 50).replace(/\n/g, ' ') + (chunk.length > 50 ? "..." : "");
+            }
         }
+        
+        // Ensure we always have a title
+        if (!title) title = "Step " + (index + 1);
+
         return { title, body, isComplete: true };
     });
+    
     // Adjust completion
     steps.forEach((step, i) => { step.isComplete = (i < steps.length - 1) || !isStreaming; });
     return steps;
