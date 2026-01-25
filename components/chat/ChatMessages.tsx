@@ -688,16 +688,99 @@ export default function ChatMessages({
                 totalVersions,
               } = getMessageToDisplay(originalMessage, index);
 
+              // Determine if we are currently generating a response at this specific index
+              // This happens when we are at the slot immediately following the last user message
+              const isGeneratingAtThisIndex =
+                isLoading &&
+                (thinkingContent || streamingContent || isPaymentProcessing) &&
+                lastUserMessageSlotIndex >= 0 &&
+                index === lastUserMessageSlotIndex + 1;
+
               // When loading a new response, hide all messages after the last user message
-              // This prevents showing stale assistant responses while streaming
-              // Also hide during payment processing (before streaming starts)
+              // UNLESS it is the slot where we are currently generating (which we will handle specially)
               if (
                 isLoading &&
                 (thinkingContent || streamingContent || isPaymentProcessing) &&
                 lastUserMessageSlotIndex >= 0 &&
-                index > lastUserMessageSlotIndex
+                index > lastUserMessageSlotIndex + 1
               ) {
                 return null;
+              }
+
+              // Special handling for the slot where generation is happening
+              // We want to show the streaming content as a "new version"
+              if (isGeneratingAtThisIndex) {
+                // Get existing versions at this slot
+                const versions = messageVersions.get(index) || [];
+                const effectiveTotalVersions = versions.length + 1;
+
+                // Check if user has explicitly selected a previous version
+                const selectedId = selectedVersions.get(index);
+                const showingHistory =
+                  selectedId &&
+                  versions.some((v) => v._eventId === selectedId);
+
+                // If we are NOT showing history (i.e. showing the stream), render the streaming UI
+                if (!showingHistory) {
+                  return (
+                    <div
+                      key={`streaming-${index}`}
+                      className="mb-8 last:mb-0"
+                      ref={messagesEndRef} // Ensure we scroll to this
+                    >
+                      <div className="flex justify-start mb-2">
+                        <VersionNavigator
+                          currentVersion={effectiveTotalVersions}
+                          totalVersions={effectiveTotalVersions}
+                          onNavigate={(direction) => {
+                            if (direction === "prev") {
+                              // Switch to the last existing version
+                              const lastExisting =
+                                versions[versions.length - 1];
+                              if (lastExisting && lastExisting._eventId) {
+                                setSelectedVersions((prev) => {
+                                  const newMap = new Map(prev);
+                                  newMap.set(index, lastExisting._eventId!);
+                                  return newMap;
+                                });
+                              }
+                            }
+                          }}
+                          className="ml-2"
+                        />
+                      </div>
+
+                      <div className="flex flex-col items-start mb-6 group">
+                        {isPaymentProcessing &&
+                          !streamingContent &&
+                          !thinkingContent && (
+                            <div className="flex flex-col items-start mb-6">
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground animate-pulse">
+                                <div className="h-4 w-4 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                                Processing payment...
+                              </div>
+                            </div>
+                          )}
+
+                        {thinkingContent && (
+                          <ThinkingSection
+                            thinkingContent={thinkingContent}
+                            isStreaming={streamingContent == ""}
+                          />
+                        )}
+
+                        {streamingContent && (
+                          <div className="w-full text-foreground py-2 px-0 text-[18px]">
+                            <MarkdownRenderer content={streamingContent} />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                }
+
+                // If we ARE showing history, we fall through to the standard rendering below
+                // BUT we need to override the totalVersions and onNavigate to allow returning to the stream
               }
 
               // Check if this message represents a system message group
@@ -711,6 +794,32 @@ export default function ChatMessages({
                 systemGroup &&
                 message.role === "system" &&
                 !shouldAlwaysShowSystemMessage(message.content);
+
+              // If we are showing history at the generating index, we need to adjust props
+              const displayTotalVersions = isGeneratingAtThisIndex
+                ? (messageVersions.get(index)?.length || 0) + 1
+                : totalVersions;
+
+              const handleCustomNavigate = (direction: "prev" | "next") => {
+                if (
+                  isGeneratingAtThisIndex &&
+                  direction === "next" &&
+                  currentVersion === displayTotalVersions - 1
+                ) {
+                  // Switch to streaming (clear selection)
+                  setSelectedVersions((prev) => {
+                    const newMap = new Map(prev);
+                    newMap.delete(index);
+                    return newMap;
+                  });
+                } else {
+                  handleVersionChange(
+                    index,
+                    direction,
+                    originalMessage._eventId!
+                  );
+                }
+              };
 
               return (
                 <div
@@ -1068,14 +1177,8 @@ export default function ChatMessages({
                         <div className="flex justify-start mb-2">
                           <VersionNavigator
                             currentVersion={currentVersion}
-                            totalVersions={totalVersions}
-                            onNavigate={(direction) =>
-                              handleVersionChange(
-                                index,
-                                direction,
-                                originalMessage._eventId!
-                              )
-                            }
+                            totalVersions={displayTotalVersions}
+                            onNavigate={handleCustomNavigate}
                             className="ml-2"
                           />
                         </div>
@@ -1190,32 +1293,33 @@ export default function ChatMessages({
             })
           )}
 
-          {isPaymentProcessing &&
-            !streamingContent &&
-            !thinkingContent &&
-            messages.length > 0 && (
+          {(streamingContent ||
+            thinkingContent ||
+            (isPaymentProcessing && !thinkingContent)) &&
+            (!messageVersions.size ||
+              messageVersions.size <= lastUserMessageSlotIndex + 1) && (
               <div className="flex flex-col items-start mb-6">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground animate-pulse">
-                  <div className="h-4 w-4 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-                  Processing payment...
-                </div>
+                {isPaymentProcessing && !streamingContent && !thinkingContent && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground animate-pulse mb-2">
+                    <div className="h-4 w-4 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                    Processing payment...
+                  </div>
+                )}
+
+                {thinkingContent && (
+                  <ThinkingSection
+                    thinkingContent={thinkingContent}
+                    isStreaming={streamingContent == ""}
+                  />
+                )}
+
+                {streamingContent && (
+                  <div className="w-full text-foreground py-2 px-0 text-[18px]">
+                    <MarkdownRenderer content={streamingContent} />
+                  </div>
+                )}
               </div>
             )}
-
-          {thinkingContent && (
-            <ThinkingSection
-              thinkingContent={thinkingContent}
-              isStreaming={streamingContent == ""}
-            />
-          )}
-
-          {streamingContent && (
-            <div className="flex flex-col items-start mb-6">
-              <div className="w-full text-foreground py-2 px-0 text-[18px]">
-                <MarkdownRenderer content={streamingContent} />
-              </div>
-            </div>
-          )}
 
           <div ref={messagesEndRef} />
         </div>
