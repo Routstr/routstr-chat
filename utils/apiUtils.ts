@@ -310,7 +310,12 @@ async function routstrRequest(params: {
     }
 
     if (ranOutOfProviders)
-      throw new Error("No more providers left: " + error.message);
+      throw new Error(
+        "No more providers left: " +
+          error.message +
+          ". Failed providers: " +
+          Array.from(failedProviders).join(", ")
+      );
 
     // If not a recognized network error or no alternate provider available, rethrow
     throw error;
