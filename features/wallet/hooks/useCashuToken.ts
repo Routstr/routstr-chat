@@ -10,12 +10,9 @@ import {
   CheckStateEnum,
   getEncodedTokenV4,
 } from "@cashu/cashu-ts";
-import { selectProofsAdvanced } from "../core/utils/change-making";
 import { calculateInactiveKeysetBalances } from "../core/utils/balance";
-import { calculateFees } from "../core/utils/fees";
 import { MintService } from "../core/services/MintService";
 import { hashToCurve } from "@cashu/crypto/modules/common";
-import { hexToBytes } from "@noble/hashes/utils";
 
 // Global flag to track if recovery has been initiated in this session
 let recoveryInitiated = false;
@@ -163,13 +160,7 @@ export function useCashuToken() {
       let proofs = await cashuStore.getMintProofs(normalizedMintUrl);
 
       const proofsAmount = proofs.reduce((sum, p) => sum + p.amount, 0);
-      const denominationCounts = proofs.reduce(
-        (acc, p) => {
-          acc[p.amount] = (acc[p.amount] || 0) + 1;
-          return acc;
-        },
-        {} as Record<number, number>
-      );
+
       // console.log('rdlogs: Proof denomination groups:', denominationCounts);
       amount = preferredUnit == "msat" ? amount * 1000 : amount;
       console.log("amount being sent", amount);
@@ -183,6 +174,7 @@ export function useCashuToken() {
         // Pass keysetId to force swap and skip offline send functionality
         const result = await wallet.send(amount, proofs, {
           keysetId: activeKeysets[0]?.id,
+          includeFees: true,
         });
         proofsToKeep = result.keep;
         proofsToSend = result.send;
@@ -213,31 +205,16 @@ export function useCashuToken() {
           }
 
           try {
-            const result = selectProofsAdvanced(
-              amount,
-              proofs,
-              activeKeysets,
-              normalizedMintUrl
+            // Pass keysetId to force swap and skip offline send functionality
+            const result = await wallet.send(amount, proofs, {
+              keysetId: activeKeysets[0]?.id,
+            });
+            proofsToKeep = result.keep;
+            proofsToSend = result.send;
+          } catch (error2) {
+            throw new Error(
+              `Having issues with the mint ${normalizedMintUrl}, please refresh your app try again. `
             );
-            // Use advanced proof selection with tolerance fallback
-            proofsToKeep = result.proofsToKeep;
-            proofsToSend = result.proofsToSend;
-            console.log("rdlogs: proofsToSend", proofsToSend);
-          } catch (error) {
-            try {
-              // Pass keysetId to force swap and skip offline send functionality
-              const result = await wallet.send(amount, proofs, {
-                keysetId: activeKeysets[0]?.id,
-              });
-              proofsToKeep = result.keep;
-              proofsToSend = result.send;
-            } catch (error2) {
-              const message =
-                error2 instanceof Error ? error2.message : String(error2);
-              throw new Error(
-                `Having issues with the mint ${normalizedMintUrl}, please refresh your app try again. `
-              );
-            }
           }
         } else {
           // Re-throw the error if it's not a "Token already spent" error
@@ -261,9 +238,6 @@ export function useCashuToken() {
           tokenAmount: amount,
         })
       );
-      const sendFees = calculateFees(proofsToSend, activeKeysets);
-      // console.log('rdlogs: fees to send ', amount, ' is ', sendFees)
-
       // Create new token for the proofs we're keeping
       if (proofsToKeep.length > 0) {
         // update proofs
@@ -503,6 +477,7 @@ export function useCashuToken() {
         let keysets = mintDetails?.keysets;
 
         const activeKeysets = keysets?.filter((k) => k.active);
+        console.log("ACTIVE ", activeKeysets);
         const units = [...new Set(activeKeysets?.map((k) => k.unit))];
         const preferredUnit = units?.includes("msat")
           ? "msat"

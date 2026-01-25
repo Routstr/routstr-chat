@@ -8,8 +8,8 @@ import {
   MintQuoteState,
   Proof,
 } from "@cashu/cashu-ts";
-import { calculateFees, canMakeExactChange } from "@/features/wallet";
-import { CashuToken } from "@/features/wallet/core/domain/Token";
+import { calculateFees } from "@/features/wallet";
+import { canMakeExactChange } from "./cashu";
 
 export interface MintQuote {
   mintUrl: string;

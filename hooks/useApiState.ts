@@ -8,7 +8,6 @@ import {
   saveLastUsedModel,
   loadBaseUrlsList,
   saveBaseUrlsList,
-  migrateCurrentCashuToken,
   loadModelProviderMap,
   saveModelProviderMap,
   setStorageItem,
@@ -31,6 +30,13 @@ import {
   getPendingCashuTokenAmount,
   getPendingCashuTokenDistribution,
 } from "@/utils/cashuUtils";
+import {
+  filterBaseUrlsForTor,
+  getProviderEndpoints,
+  isOnionUrl,
+  isTorContext,
+  normalizeProviderUrl,
+} from "@/utils/torUtils";
 
 export interface UseApiStateReturn {
   models: Model[];
@@ -69,23 +75,24 @@ export const useApiState = (
   // Initialize URLs from storage
   useEffect(() => {
     if (isAuthenticated) {
+      const torMode = isTorContext();
       const loadedBaseUrls = loadBaseUrlsList();
-      setBaseUrlsList(loadedBaseUrls);
+      const filteredBaseUrls = filterBaseUrlsForTor(loadedBaseUrls, torMode);
+      if (filteredBaseUrls.length !== loadedBaseUrls.length) {
+        saveBaseUrlsList(filteredBaseUrls);
+      }
+      setBaseUrlsList(filteredBaseUrls);
 
       const currentBaseUrl = loadBaseUrl("");
-      setBaseUrlState(currentBaseUrl);
+      if (!torMode && currentBaseUrl && isOnionUrl(currentBaseUrl)) {
+        const fallbackBaseUrl = filteredBaseUrls[0] || "";
+        setBaseUrlState(fallbackBaseUrl);
+        saveBaseUrl(fallbackBaseUrl);
+      } else {
+        setBaseUrlState(currentBaseUrl);
+      }
     }
   }, [isAuthenticated]);
-
-  // Helper: normalize a provider base URL
-  const normalizeBase = useCallback(
-    (url: string | undefined | null): string | null => {
-      if (!url || typeof url !== "string" || url.length === 0) return null;
-      const withProto = url.startsWith("http") ? url : `https://${url}`;
-      return withProto.endsWith("/") ? withProto : `${withProto}/`;
-    },
-    []
-  );
 
   // Bootstrap provider bases from the directory when none are configured
   const bootstrapProviders = useCallback(async (): Promise<string[]> => {
@@ -97,21 +104,12 @@ export const useApiState = (
       if (process.env.NODE_ENV === "development") {
         providers.push({ endpoint_url: "http://localhost:8000/" });
       }
+      const torMode = isTorContext();
       const bases = new Set<string>();
       for (const p of providers) {
-        const primary = normalizeBase(p?.endpoint_url);
-        if (
-          primary &&
-          (!primary.startsWith("http://") || primary.includes("localhost"))
-        )
-          bases.add(primary);
-        const alts: string[] = Array.isArray(p?.endpoint_urls)
-          ? p.endpoint_urls
-          : [];
-        for (const alt of alts) {
-          const n = normalizeBase(alt);
-          if (n && (!n.startsWith("http://") || n.includes("localhost")))
-            bases.add(n);
+        const endpoints = getProviderEndpoints(p, torMode);
+        for (const endpoint of endpoints) {
+          bases.add(endpoint);
         }
       }
       // Filter out staging providers on production (disabled providers are filtered at fetch time)
@@ -132,14 +130,7 @@ export const useApiState = (
       console.error("Failed to bootstrap providers", e);
       return [];
     }
-  }, [normalizeBase]);
-
-  // Migrate old cashu token format on load
-  useEffect(() => {
-    if (baseUrl) {
-      migrateCurrentCashuToken(baseUrl);
-    }
-  }, [baseUrl]);
+  }, []);
 
   // Fetch available models from API and handle URL model selection
   const fetchModels = useCallback(async () => {
@@ -173,6 +164,11 @@ export const useApiState = (
           (v) => v.model
         );
         setModels(combinedModels);
+
+        // Stop loading if we have enough models
+        if (combinedModels.length > 5) {
+          setIsLoadingModels(false);
+        }
 
         // Persist provider mapping for best-priced winners
         const newMap = loadModelProviderMap();
@@ -398,12 +394,15 @@ export const useApiState = (
     const selectModel = async () => {
       // Only auto-select if no model is selected or current model is not available
       if (!selectedModel && !isWalletLoading) {
+        const lastUsedModel = loadLastUsedModel();
         const model = await modelSelectionStrategy(
           models,
           maxBalance,
           pendingCashuAmountState
         );
-        if (model) {
+        if (model && lastUsedModel && lastUsedModel === model.id) {
+          handleModelChange(model.id);
+        } else if (model && !lastUsedModel) {
           handleModelChange(model.id);
         }
       }
@@ -525,10 +524,17 @@ export const useApiState = (
   );
 
   const setBaseUrl = useCallback((url: string) => {
-    const normalizedUrl = url.endsWith("/") ? url : `${url}/`;
+    const torMode = isTorContext();
+    const normalizedUrl = normalizeProviderUrl(url, torMode) || "";
+    if (!torMode && normalizedUrl && isOnionUrl(normalizedUrl)) {
+      return;
+    }
     setBaseUrlState(normalizedUrl);
     saveBaseUrl(normalizedUrl);
-    const updatedBaseUrlsList = loadBaseUrlsList();
+    const updatedBaseUrlsList = filterBaseUrlsForTor(
+      loadBaseUrlsList(),
+      torMode
+    );
     setBaseUrlsList(updatedBaseUrlsList);
   }, []);
 

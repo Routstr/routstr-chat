@@ -1,7 +1,8 @@
 "use client";
 
 import React from "react";
-import { Drawer } from "vaul";
+import { Drawer, DrawerContent, DrawerTitle } from "@/components/ui/drawer";
+import { Drawer as DrawerPrimitive } from "vaul";
 import { Dialog, DialogContent, DialogTitle } from "@radix-ui/react-dialog";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 
@@ -27,24 +28,17 @@ const SettingsDialog = ({
   const isMobile = propIsMobile ?? useMediaQuery("(max-width: 640px)");
 
   if (isMobile) {
-    const Root: any = nested ? Drawer.NestedRoot : Drawer.Root;
+    const Root: any = nested ? DrawerPrimitive.NestedRoot : Drawer;
     return (
       <Root open={open} onOpenChange={onOpenChange}>
-        <Drawer.Portal>
-          <Drawer.Overlay className="fixed inset-0 bg-black/40 z-[60]" />
-          <Drawer.Content className="bg-card flex flex-col rounded-t-[10px] mt-24 h-[80%] lg:h-fit max-h-[96%] fixed bottom-0 left-0 right-0 outline-none z-60">
-            <div className="pt-4 pb-4 bg-card rounded-t-[10px] flex-1 overflow-y-auto">
-              <div
-                className="mx-auto w-12 h-1.5 flex-shrink-0 rounded-full bg-white/20 mb-8"
-                aria-hidden
-              />
-              <div className="max-w-2xl mx-auto flex flex-col h-full">
-                <DialogTitle className="sr-only">{title}</DialogTitle>
-                {children}
-              </div>
+        <DrawerContent className="bg-card flex flex-col rounded-t-[10px] mt-24 h-[80%] lg:h-fit max-h-[96%] outline-none z-[60]">
+          <div className="pt-4 pb-4 bg-card rounded-t-[10px] flex-1 overflow-y-auto">
+            <div className="max-w-2xl mx-auto flex flex-col h-full">
+              <DrawerTitle className="sr-only">{title}</DrawerTitle>
+              {children}
             </div>
-          </Drawer.Content>
-        </Drawer.Portal>
+          </div>
+        </DrawerContent>
       </Root>
     );
   }

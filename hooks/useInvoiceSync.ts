@@ -1,10 +1,32 @@
-import { useNostr } from "@/hooks/useNostr";
-import { toast } from "sonner";
-import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { KINDS } from "@/lib/nostr-kinds";
-import { useState, useEffect, useCallback } from "react";
+/**
+ * Hook to fetch and manage user's invoices synced with the cloud
+ *
+ * Uses the generic config sync system with applesauce relayPool.
+ *
+ * Features:
+ * - Cloud sync via Nostr (NIP-78)
+ * - Local storage fallback/merge
+ * - Automatic invoice cleanup
+ * - Exponential backoff for retries
+ */
+
+import { useAccountManager } from "@/components/ClientProviders";
+import { useObservableState } from "applesauce-react/hooks";
+import { useAppContext } from "@/hooks/useAppContext";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { MintQuoteState, MeltQuoteState } from "@cashu/cashu-ts";
+import {
+  invoices$,
+  configSyncLoading$,
+  genericConfigSync$,
+  publishConfig,
+  CONFIG_TYPES,
+  relayUrls$,
+  userPubkey$,
+  userSigner$,
+  configSyncEose$,
+  type UserSignerInfo,
+} from "@/hooks/sync";
 
 export interface StoredInvoice {
   id: string;
@@ -29,10 +51,22 @@ interface InvoiceStore {
 }
 
 export function useInvoiceSync() {
-  const { nostr } = useNostr();
-  const { user } = useCurrentUser();
-  const queryClient = useQueryClient();
+  const { config } = useAppContext();
+  const { manager } = useAccountManager();
+  const activeAccount = useObservableState(manager.active$);
 
+  // Subscribe to the generic config sync
+  const cloudInvoices = useObservableState(invoices$, []);
+  const isLoading = useObservableState(configSyncLoading$, true);
+  const syncEose = useObservableState(configSyncEose$, false);
+
+  // Pending state for mutations
+  const [isPending, setIsPending] = useState(false);
+
+  // Track whether we've done initial merge
+  const hasMergedRef = useRef(false);
+
+  // Cloud sync enabled state (persisted to localStorage)
   const [cloudSyncEnabled, setCloudSyncEnabled] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("invoice_cloud_sync_enabled") !== "false";
@@ -40,6 +74,7 @@ export function useInvoiceSync() {
     return true;
   });
 
+  // Persist cloud sync enabled to localStorage
   useEffect(() => {
     if (typeof window !== "undefined") {
       localStorage.setItem(
@@ -49,7 +84,51 @@ export function useInvoiceSync() {
     }
   }, [cloudSyncEnabled]);
 
-  const INVOICES_D_TAG = "routstr-chat-invoices-v1";
+  // Update reactive inputs when account/config changes
+  useEffect(() => {
+    if (config.relayUrls.length > 0) {
+      relayUrls$.next(config.relayUrls);
+    }
+  }, [config.relayUrls]);
+
+  useEffect(() => {
+    if (activeAccount?.pubkey) {
+      userPubkey$.next(activeAccount.pubkey);
+    } else {
+      userPubkey$.next(null);
+    }
+  }, [activeAccount?.pubkey]);
+
+  useEffect(() => {
+    if (activeAccount && activeAccount.nip44 && activeAccount.signEvent) {
+      const signerInfo: UserSignerInfo = {
+        signer: {
+          nip44: {
+            encrypt: activeAccount.nip44.encrypt.bind(activeAccount.nip44),
+            decrypt: activeAccount.nip44.decrypt.bind(activeAccount.nip44),
+          },
+          signEvent: activeAccount.signEvent.bind(activeAccount),
+        },
+        pubkey: activeAccount.pubkey,
+      };
+      userSigner$.next(signerInfo);
+    } else {
+      userSigner$.next(null);
+    }
+  }, [activeAccount]);
+
+  // Subscribe to generic config sync to keep it active
+  useEffect(() => {
+    if (!cloudSyncEnabled || !activeAccount) return;
+
+    const subscription = genericConfigSync$.subscribe({
+      error: (err) => {
+        console.error("[useInvoiceSync] Sync error:", err);
+      },
+    });
+
+    return () => subscription.unsubscribe();
+  }, [cloudSyncEnabled, activeAccount]);
 
   // Local storage operations
   const getLocalInvoices = useCallback((): StoredInvoice[] => {
@@ -73,36 +152,67 @@ export function useInvoiceSync() {
     localStorage.setItem("lightning_invoices", JSON.stringify(store));
   }, []);
 
-  const addLocalInvoice = useCallback(
-    (invoice: StoredInvoice) => {
-      const existing = getLocalInvoices();
-      const updated = existing.filter((inv) => inv.id !== invoice.id);
-      updated.push(invoice);
-      saveLocalInvoices(updated);
-    },
-    [getLocalInvoices, saveLocalInvoices]
-  );
+  // Merge cloud and local invoices
+  const mergedInvoices = useMemo(() => {
+    const localInvoices = getLocalInvoices();
 
-  const updateLocalInvoice = useCallback(
-    (id: string, updates: Partial<StoredInvoice>) => {
-      const existing = getLocalInvoices();
-      const updated = existing.map((inv) =>
-        inv.id === id ? { ...inv, ...updates, checkedAt: Date.now() } : inv
-      );
-      saveLocalInvoices(updated);
-    },
-    [getLocalInvoices, saveLocalInvoices]
-  );
+    if (!cloudSyncEnabled || !activeAccount) {
+      return localInvoices;
+    }
 
-  // Cloud sync mutations
-  const syncInvoicesMutation = useMutation({
-    mutationFn: async (invoices: StoredInvoice[]) => {
-      if (!user || !cloudSyncEnabled) {
-        return null;
+    // Merge cloud and local invoices
+    const mergedMap = new Map<string, StoredInvoice>();
+
+    // Add all cloud invoices
+    cloudInvoices.forEach((inv) => mergedMap.set(inv.id, inv));
+
+    // Add/update with local invoices (local takes precedence for newer data)
+    localInvoices.forEach((inv) => {
+      const existing = mergedMap.get(inv.id);
+      if (!existing || (inv.checkedAt || 0) > (existing.checkedAt || 0)) {
+        mergedMap.set(inv.id, inv);
       }
-      if (!user.signer.nip44) {
-        throw new Error("NIP-44 encryption not supported");
-      }
+    });
+
+    return Array.from(mergedMap.values());
+  }, [cloudInvoices, cloudSyncEnabled, activeAccount, getLocalInvoices]);
+
+  // Save merged invoices to local storage after initial sync
+  useEffect(() => {
+    if (
+      syncEose &&
+      !hasMergedRef.current &&
+      cloudSyncEnabled &&
+      activeAccount
+    ) {
+      hasMergedRef.current = true;
+      saveLocalInvoices(mergedInvoices);
+    }
+  }, [
+    syncEose,
+    cloudSyncEnabled,
+    activeAccount,
+    mergedInvoices,
+    saveLocalInvoices,
+  ]);
+
+  // Reset merge flag when account changes
+  useEffect(() => {
+    hasMergedRef.current = false;
+  }, [activeAccount?.pubkey]);
+
+  // Get current signer info for publishing
+  const getSignerInfo = useCallback((): UserSignerInfo | null => {
+    return userSigner$.getValue();
+  }, []);
+
+  // Internal sync helper
+  const syncToCloud = useCallback(
+    async (invoices: StoredInvoice[]): Promise<void> => {
+      if (!activeAccount || !cloudSyncEnabled) return;
+
+      const signerInfo = getSignerInfo();
+      if (!signerInfo) return;
 
       // Filter out expired invoices older than 7 days
       const cutoffTime = Date.now() - 7 * 24 * 60 * 60 * 1000;
@@ -111,91 +221,25 @@ export function useInvoiceSync() {
           (inv.state as string) === "PAID" ||
           (inv.state as string) === "ISSUED"
         ) {
-          return true; // Keep all paid/issued invoices
+          return true;
         }
         return inv.createdAt > cutoffTime;
       });
 
-      const content = await user.signer.nip44.encrypt(
-        user.pubkey,
-        JSON.stringify(relevantInvoices)
-      );
-
-      const event = await user.signer.signEvent({
-        kind: KINDS.ARBITRARY_APP_DATA,
-        content,
-        tags: [["d", INVOICES_D_TAG]],
-        created_at: Math.floor(Date.now() / 1000),
-      });
-
-      await nostr.event(event);
-      return event;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["invoices", user?.pubkey, INVOICES_D_TAG],
-      });
-    },
-  });
-
-  // Query to fetch invoices from Nostr
-  const invoicesQuery = useQuery({
-    queryKey: ["invoices", user?.pubkey, INVOICES_D_TAG],
-    queryFn: async ({ signal }) => {
-      if (!user || !cloudSyncEnabled) {
-        return getLocalInvoices();
-      }
-      if (!user.signer.nip44) {
-        return getLocalInvoices();
-      }
-
+      setIsPending(true);
       try {
-        const filter = {
-          kinds: [KINDS.ARBITRARY_APP_DATA],
-          authors: [user.pubkey],
-          "#d": [INVOICES_D_TAG],
-          limit: 1,
-        };
-
-        const events = await nostr.query([filter], { signal });
-
-        if (events.length === 0) {
-          return getLocalInvoices();
-        }
-
-        const latestEvent = events[0];
-        const decrypted = await user.signer.nip44.decrypt(
-          user.pubkey,
-          latestEvent.content
+        await publishConfig(
+          CONFIG_TYPES.INVOICES,
+          relevantInvoices,
+          signerInfo,
+          config.relayUrls
         );
-        const cloudInvoices: StoredInvoice[] = JSON.parse(decrypted);
-
-        // Merge cloud and local invoices
-        const localInvoices = getLocalInvoices();
-        const mergedMap = new Map<string, StoredInvoice>();
-
-        // Add all cloud invoices
-        cloudInvoices.forEach((inv) => mergedMap.set(inv.id, inv));
-
-        // Add/update with local invoices (local takes precedence for newer data)
-        localInvoices.forEach((inv) => {
-          const existing = mergedMap.get(inv.id);
-          if (!existing || (inv.checkedAt || 0) > (existing.checkedAt || 0)) {
-            mergedMap.set(inv.id, inv);
-          }
-        });
-
-        const merged = Array.from(mergedMap.values());
-        saveLocalInvoices(merged);
-        return merged;
-      } catch (error) {
-        console.error("Failed to fetch cloud invoices:", error);
-        return getLocalInvoices();
+      } finally {
+        setIsPending(false);
       }
     },
-    enabled: true,
-    refetchInterval: 60000, // Refetch every minute
-  });
+    [activeAccount, cloudSyncEnabled, config.relayUrls, getSignerInfo]
+  );
 
   // Add new invoice
   const addInvoice = useCallback(
@@ -207,53 +251,43 @@ export function useInvoiceSync() {
         checkedAt: Date.now(),
       };
 
-      addLocalInvoice(newInvoice);
+      // Update local storage
+      const existing = getLocalInvoices();
+      const updated = [
+        ...existing.filter((inv) => inv.id !== newInvoice.id),
+        newInvoice,
+      ];
+      saveLocalInvoices(updated);
 
-      if (user && cloudSyncEnabled) {
-        const allInvoices = [
-          ...getLocalInvoices().filter((inv) => inv.id !== newInvoice.id),
-          newInvoice,
-        ];
-        await syncInvoicesMutation.mutateAsync(allInvoices);
-      }
+      // Sync to cloud
+      await syncToCloud(updated);
 
       return newInvoice;
     },
-    [
-      addLocalInvoice,
-      getLocalInvoices,
-      user,
-      cloudSyncEnabled,
-      syncInvoicesMutation,
-    ]
+    [getLocalInvoices, saveLocalInvoices, syncToCloud]
   );
 
   // Update invoice
   const updateInvoice = useCallback(
     async (id: string, updates: Partial<StoredInvoice>) => {
-      updateLocalInvoice(id, updates);
+      const existing = getLocalInvoices();
+      const updated = existing.map((inv) =>
+        inv.id === id ? { ...inv, ...updates, checkedAt: Date.now() } : inv
+      );
+      saveLocalInvoices(updated);
 
-      if (user && cloudSyncEnabled) {
-        const allInvoices = getLocalInvoices();
-        await syncInvoicesMutation.mutateAsync(allInvoices);
-      }
+      // Sync to cloud
+      await syncToCloud(updated);
     },
-    [
-      updateLocalInvoice,
-      getLocalInvoices,
-      user,
-      cloudSyncEnabled,
-      syncInvoicesMutation,
-    ]
+    [getLocalInvoices, saveLocalInvoices, syncToCloud]
   );
 
   // Get pending invoices that need checking
   const getPendingInvoices = useCallback((): StoredInvoice[] => {
-    const invoices = invoicesQuery.data || getLocalInvoices();
     const now = Date.now();
     const MAX_RETRIES = 10;
 
-    return invoices.filter((inv) => {
+    return mergedInvoices.filter((inv) => {
       // Skip if already successfully issued (tokens minted)
       if ((inv.state as string) === "ISSUED") {
         return false;
@@ -263,9 +297,6 @@ export function useInvoiceSync() {
       if ((inv.retryCount || 0) >= MAX_RETRIES) {
         return false;
       }
-
-      // Include PAID invoices for retry (in case minting failed)
-      // They will be checked to see if they can be converted to ISSUED
 
       // Skip if expired (assuming 1 hour expiry if not specified)
       const expiryTime = inv.expiresAt || inv.createdAt + 3600000;
@@ -289,7 +320,7 @@ export function useInvoiceSync() {
 
       return now - lastCheck > backoffInterval;
     });
-  }, [invoicesQuery.data, getLocalInvoices]);
+  }, [mergedInvoices]);
 
   // Clean up old invoices
   const cleanupOldInvoices = useCallback(async () => {
@@ -312,17 +343,9 @@ export function useInvoiceSync() {
 
     if (cleaned.length !== invoices.length) {
       saveLocalInvoices(cleaned);
-      if (user && cloudSyncEnabled) {
-        await syncInvoicesMutation.mutateAsync(cleaned);
-      }
+      await syncToCloud(cleaned);
     }
-  }, [
-    getLocalInvoices,
-    saveLocalInvoices,
-    user,
-    cloudSyncEnabled,
-    syncInvoicesMutation,
-  ]);
+  }, [getLocalInvoices, saveLocalInvoices, syncToCloud]);
 
   // Delete invoice
   const deleteInvoice = useCallback(
@@ -330,23 +353,9 @@ export function useInvoiceSync() {
       const invoices = getLocalInvoices();
       const filtered = invoices.filter((inv) => inv.id !== id);
       saveLocalInvoices(filtered);
-
-      if (user && cloudSyncEnabled) {
-        await syncInvoicesMutation.mutateAsync(filtered);
-      }
-
-      queryClient.invalidateQueries({
-        queryKey: ["invoices", user?.pubkey, INVOICES_D_TAG],
-      });
+      await syncToCloud(filtered);
     },
-    [
-      getLocalInvoices,
-      saveLocalInvoices,
-      user,
-      cloudSyncEnabled,
-      syncInvoicesMutation,
-      queryClient,
-    ]
+    [getLocalInvoices, saveLocalInvoices, syncToCloud]
   );
 
   // Reset retry count for an invoice
@@ -361,10 +370,17 @@ export function useInvoiceSync() {
     [updateInvoice]
   );
 
+  // Manual refetch (triggers sync re-subscription)
+  const refetch = useCallback(() => {
+    // Reset EOSE to trigger new sync
+    configSyncEose$.next(false);
+    hasMergedRef.current = false;
+  }, []);
+
   return {
-    invoices: invoicesQuery.data || [],
-    isLoading: invoicesQuery.isLoading,
-    isSyncing: syncInvoicesMutation.isPending,
+    invoices: mergedInvoices,
+    isLoading,
+    isSyncing: isPending,
     addInvoice,
     updateInvoice,
     deleteInvoice,
@@ -373,6 +389,6 @@ export function useInvoiceSync() {
     cleanupOldInvoices,
     cloudSyncEnabled,
     setCloudSyncEnabled,
-    refetch: invoicesQuery.refetch,
+    refetch,
   };
 }

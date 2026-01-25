@@ -84,11 +84,10 @@ console.log("Token amount:", tokenService.getTokenAmount(token));
 
 ### Using Utilities
 
-```typescript
+````typescript
 import {
   formatBalance,
   calculateProofsBalance,
-  canMakeExactChange,
 } from "@/features/wallet";
 
 // Format balance
@@ -97,13 +96,6 @@ const formatted = formatBalance(100000, "sat"); // "100k sat"
 // Calculate balance from proofs
 const balance = calculateProofsBalance(proofs);
 
-// Check if exact change is possible
-const { canMake, selectedProofs } = canMakeExactChange(
-  1000,
-  denomCounts,
-  proofs
-);
-```
 
 ## Core Services
 
@@ -125,7 +117,7 @@ const unit = await mintService.getPreferredUnit(mintUrl); // 'sat' | 'msat'
 
 // Validate mint URL
 const isValid = mintService.validateMintUrl(url);
-```
+````
 
 ### TokenService
 

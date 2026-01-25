@@ -383,46 +383,43 @@ export const modelSelectionStrategy = async (
 ): Promise<Model | null> => {
   let modelToSelect: Model | null = null;
   const lastUsedModelId = loadLastUsedModel();
-  if (!modelToSelect) {
-    if (lastUsedModelId && lastUsedModelId.includes("@@")) {
-      const { id, base } = parseModelKey(lastUsedModelId);
-      const fixedBase = normalizeBaseUrl(base);
-      if (!fixedBase) return null;
-      const normalized = fixedBase.endsWith("/") ? fixedBase : `${fixedBase}/`;
-      const allByProvider = getStorageItem<Record<string, Model[]>>(
-        "modelsFromAllProviders",
-        {} as any
-      );
-      const list =
-        allByProvider?.[normalized] || allByProvider?.[lastUsedModelId] || [];
-      modelToSelect = Array.isArray(list)
-        ? (list.find((m: Model) => m.id === id) ?? null)
-        : null;
-      if (!modelToSelect) {
-        const res = await fetch(`${normalized}v1/models`);
-        if (res.ok) {
-          const json = await res.json();
-          const providerList: Model[] = Array.isArray(json?.data)
-            ? json.data.map((m: Model) => ({
-                ...m,
-                id: m.id.split("/").pop() || m.id,
-              }))
-            : [];
-          const transformedId = id.split("/").pop() || id;
-          const found =
-            providerList.find((m: Model) => m.id === transformedId) ?? null;
-          console.log("SMG", providerList);
-          if (found) {
-            // cache to storage for future
-            upsertCachedProviderModels(normalized, providerList);
-            modelToSelect = found;
-          }
+  if (lastUsedModelId && lastUsedModelId.includes("@@")) {
+    const { id, base } = parseModelKey(lastUsedModelId);
+    const fixedBase = normalizeBaseUrl(base);
+    if (!fixedBase) return null;
+    const normalized = fixedBase.endsWith("/") ? fixedBase : `${fixedBase}/`;
+    const allByProvider = getStorageItem<Record<string, Model[]>>(
+      "modelsFromAllProviders",
+      {} as any
+    );
+    const list =
+      allByProvider?.[normalized] || allByProvider?.[lastUsedModelId] || [];
+    modelToSelect = Array.isArray(list)
+      ? (list.find((m: Model) => m.id === id) ?? null)
+      : null;
+    if (!modelToSelect) {
+      const res = await fetch(`${normalized}v1/models`);
+      if (res.ok) {
+        const json = await res.json();
+        const providerList: Model[] = Array.isArray(json?.data)
+          ? json.data.map((m: Model) => ({
+              ...m,
+              id: m.id.split("/").pop() || m.id,
+            }))
+          : [];
+        const transformedId = id.split("/").pop() || id;
+        const found =
+          providerList.find((m: Model) => m.id === transformedId) ?? null;
+        console.log("SMG", providerList);
+        if (found) {
+          // cache to storage for future
+          upsertCachedProviderModels(normalized, providerList);
+          modelToSelect = found;
         }
       }
-    } else if (lastUsedModelId) {
-      modelToSelect =
-        models.find((m: Model) => m.id === lastUsedModelId) ?? null;
     }
+  } else if (lastUsedModelId) {
+    modelToSelect = models.find((m: Model) => m.id === lastUsedModelId) ?? null;
   }
 
   if (!modelToSelect) {

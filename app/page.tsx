@@ -6,7 +6,6 @@ import { AuthProvider } from "@/context/AuthProvider";
 import { ChatProvider } from "@/context/ChatProvider";
 import ChatContainer from "@/components/chat/ChatContainer";
 import SettingsModal from "@/components/SettingsModal";
-import LoginModal from "@/components/LoginModal";
 import TopUpPromptModal from "@/components/TopUpPromptModal";
 import { QueryTimeoutModal } from "@/components/QueryTimeoutModal";
 import QRCodeModal from "@/components/QRCodeModal";
@@ -14,12 +13,17 @@ import { useAuth } from "@/context/AuthProvider";
 import { useChat } from "@/context/ChatProvider";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCashuWallet } from "@/features/wallet";
-import { hasSeenTopUpPrompt, markTopUpPromptSeen } from "@/utils/storageUtils";
 import { useAutoRefill } from "@/hooks/useAutoRefill";
 import {
   KeepAliveProvider,
   useKeepAliveContext,
 } from "@/components/pwa/KeepAliveProvider";
+
+const FullPageLoader = () => (
+  <div className="flex items-center justify-center h-dvh w-full bg-background">
+    <Loader2 className="h-8 w-8 text-white/50 animate-spin" />
+  </div>
+);
 
 function ChatPageContent() {
   const router = useRouter();
@@ -33,6 +37,7 @@ function ChatPageContent() {
     isLoginModalOpen,
     setIsLoginModalOpen,
     initialSettingsTab,
+    setInitialSettingsTab,
 
     // API State
     baseUrl,
@@ -95,6 +100,7 @@ function ChatPageContent() {
   // Only triggers when wallet is fully loaded to avoid false positives from initial zero balance
   useAutoRefill({ balance, isWalletLoaded: !isWalletLoading });
   const pendingUrlSyncRef = useRef(false);
+  const previousActiveConversationIdRef = useRef<string | null>(null);
   const searchParamsString = useMemo(
     () => searchParams.toString(),
     [searchParams]
@@ -107,6 +113,29 @@ function ChatPageContent() {
     () => searchParams.get("cashu"),
     [searchParams]
   );
+  const tabFromUrl = useMemo(() => searchParams.get("tab"), [searchParams]);
+
+  useEffect(() => {
+    if (tabFromUrl === "apikeys" && isAuthenticated) {
+      setIsSettingsOpen(true);
+      setInitialSettingsTab("api-keys");
+
+      const params = new URLSearchParams(searchParamsString);
+      params.delete("tab");
+      const queryString = params.toString();
+      router.replace(`${pathname}${queryString ? `?${queryString}` : ""}`, {
+        scroll: false,
+      });
+    }
+  }, [
+    tabFromUrl,
+    isAuthenticated,
+    setIsSettingsOpen,
+    setInitialSettingsTab,
+    router,
+    pathname,
+    searchParamsString,
+  ]);
 
   // QR Code Modal State
   const [qrModalData, setQrModalData] = useState<{
@@ -118,32 +147,62 @@ function ChatPageContent() {
   useEffect(() => {
     let topUpTimer: NodeJS.Timeout | null = null;
 
-    if (!isBalanceLoading && balance === 0 && !isSettingsOpen) {
-      if (!hasSeenTopUpPrompt() && !topUpPromptDismissed) {
-        setIsTopUpPromptOpen(false);
-        topUpTimer = setTimeout(() => {
-          markTopUpPromptSeen();
-          setIsTopUpPromptOpen(true);
-        }, 500);
-      }
+    const shouldPrompt =
+      balance === 0 &&
+      !isSettingsOpen &&
+      !topUpPromptDismissed &&
+      (!isBalanceLoading || !isAuthenticated);
+
+    if (shouldPrompt && !isTopUpPromptOpen && !isLoginModalOpen) {
+      topUpTimer = setTimeout(() => {
+        setIsTopUpPromptOpen(true);
+      }, 500);
     }
 
     return () => {
       if (topUpTimer) clearTimeout(topUpTimer);
     };
-  }, [balance, isBalanceLoading, isSettingsOpen, topUpPromptDismissed]);
+  }, [
+    balance,
+    isBalanceLoading,
+    isSettingsOpen,
+    topUpPromptDismissed,
+    isAuthenticated,
+    isTopUpPromptOpen,
+    isLoginModalOpen,
+  ]);
 
-  const handleTopUp = (_amount?: number) => {};
+  useEffect(() => {
+    if (isTopUpPromptOpen && balance > 0) {
+      setIsTopUpPromptOpen(false);
+    }
+  }, [balance, isTopUpPromptOpen]);
+
+  const isAuthModalOpen = isLoginModalOpen || isTopUpPromptOpen;
+  const authModalDefaultPage = isLoginModalOpen ? "login" : "topup";
+
+  const handleAuthModalClose = () => {
+    if (isLoginModalOpen) {
+      setIsLoginModalOpen(false);
+    }
+    if (isTopUpPromptOpen) {
+      setIsTopUpPromptOpen(false);
+      setTopUpPromptDismissed(true);
+    }
+  };
 
   // Sync URL with activeConversationId
   // When activeConversationId is null (new chat), remove chatId from URL
   // When activeConversationId has a value, set chatId in URL
   useEffect(() => {
+    const previousActiveConversationId =
+      previousActiveConversationIdRef.current;
+    previousActiveConversationIdRef.current = activeConversationId;
     const params = new URLSearchParams(searchParamsString);
 
     if (!activeConversationId) {
       // New chat state - remove chatId from URL if present
-      if (chatIdFromUrl) {
+      if (chatIdFromUrl && previousActiveConversationId) {
         pendingUrlSyncRef.current = true;
         params.delete("chatId");
         const queryString = params.toString();
@@ -222,11 +281,7 @@ function ChatPageContent() {
   }, [chatIdFromUrl, activeConversationId]);
 
   if (!authChecked) {
-    return (
-      <div className="flex items-center justify-center h-dvh w-full bg-background">
-        <Loader2 className="h-8 w-8 text-white/50 animate-spin" />
-      </div>
-    );
+    return <FullPageLoader />;
   }
 
   return (
@@ -260,28 +315,13 @@ function ChatPageContent() {
         />
       )}
 
-      <LoginModal
-        isOpen={isLoginModalOpen}
-        onClose={() => setIsLoginModalOpen(false)}
-        onLogin={() => setIsLoginModalOpen(false)}
-        logout={logout}
-      />
-
-      {/* Top-up Prompt */}
-      {isTopUpPromptOpen && (
+      {isAuthModalOpen && (
         <TopUpPromptModal
-          isOpen={isTopUpPromptOpen}
-          onClose={() => {
-            setIsTopUpPromptOpen(false);
-            setTopUpPromptDismissed(true);
-          }}
-          onTopUp={handleTopUp}
-          onDontShowAgain={() => {
-            setTopUpPromptDismissed(true);
-            markTopUpPromptSeen();
-          }}
-          setIsLoginModalOpen={setIsLoginModalOpen}
+          isOpen={isAuthModalOpen}
+          onClose={handleAuthModalClose}
           cashuToken={cashuTokenFromUrl || undefined}
+          defaultPage={authModalDefaultPage}
+          onShowQRCode={setQrModalData}
         />
       )}
 
@@ -313,13 +353,7 @@ function ChatPageContent() {
 
 export default function ChatPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="flex items-center justify-center h-dvh w-full bg-background">
-          <Loader2 className="h-8 w-8 text-white/50 animate-spin" />
-        </div>
-      }
-    >
+    <Suspense fallback={<FullPageLoader />}>
       <AuthProvider>
         <ChatProvider>
           <KeepAliveProvider>

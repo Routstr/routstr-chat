@@ -1,20 +1,115 @@
-import { useRef, useEffect, useState } from "react";
+import {
+  useRef,
+  useEffect,
+  useState,
+  useCallback,
+  useLayoutEffect,
+} from "react";
 import { ArrowRight, FileText, Loader2, Paperclip, X } from "lucide-react";
-import { useChat } from "@/context/ChatProvider";
+import { motion } from "motion/react";
 import { MessageAttachment } from "@/types/chat";
 import { extractTextFromPdf } from "@/utils/pdfUtils";
 import { saveFile } from "@/utils/indexedDb";
+import { useBlossomSync } from "@/hooks/useBlossomSync";
+import { usePnsKeys } from "@/hooks/usePnsKeys";
 
 // File upload constants
 const MAX_FILE_SIZE_MB = 10;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
-const ACCEPTED_FILE_TYPES = ["application/pdf"];
-const ACCEPTED_IMAGE_TYPES = [
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/gif",
-];
+const BASE_TEXTAREA_HEIGHT = 48;
+const ATTACHMENT_ROW_HEIGHT = 88;
+const TOOLBAR_ROW_HEIGHT = 40;
+const LAYOUT_TRANSITION_MS = 200;
+// Character count thresholds for layout switching - provides hysteresis
+const ENTER_STACK_CHAR_COUNT = 65; // Switch to stack when exceeding this
+const EXIT_STACK_CHAR_COUNT = 50; // Only exit stack below this (hysteresis gap)
+
+type FileKind = {
+  isImage: boolean;
+  isPdf: boolean;
+};
+
+type FileValidationOptions = {
+  allowImages: boolean;
+  allowPdf: boolean;
+  rejectSvg?: boolean;
+  onTypeError: (file: File) => void;
+  onSizeError: (file: File) => void;
+  onSvgError?: () => void;
+};
+
+type AttachmentWorkItem = {
+  attachment: MessageAttachment;
+  file: File;
+  shouldExtractPdfText: boolean;
+};
+
+type AttachmentBuildOptions = {
+  isImage: boolean;
+  isPdf: boolean;
+  nameOverride?: string;
+  storageLabel: "file" | "image";
+  logOnStorageError?: boolean;
+};
+
+const validateFile = (
+  file: File,
+  {
+    allowImages,
+    allowPdf,
+    rejectSvg,
+    onTypeError,
+    onSizeError,
+    onSvgError,
+  }: FileValidationOptions
+): FileKind | null => {
+  const isImage = file.type.startsWith("image/");
+  const isPdf = file.type === "application/pdf";
+
+  if (rejectSvg && file.type === "image/svg+xml") {
+    onSvgError?.();
+    return null;
+  }
+
+  const isAllowed = (isImage && allowImages) || (isPdf && allowPdf);
+  if (!isAllowed) {
+    onTypeError(file);
+    return null;
+  }
+
+  if (file.size > MAX_FILE_SIZE_BYTES) {
+    onSizeError(file);
+    return null;
+  }
+
+  return { isImage, isPdf };
+};
+
+const createAttachmentId = () => {
+  if (
+    typeof crypto !== "undefined" &&
+    typeof crypto.randomUUID === "function"
+  ) {
+    return crypto.randomUUID();
+  }
+  return `attachment-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+};
+
+const convertFileToBase64 = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = (error) => reject(error);
+  });
+
+const getAttachmentLabel = (mimeType: string) => {
+  if (mimeType === "application/pdf") return "PDF";
+  if (mimeType.startsWith("image/")) {
+    return mimeType.replace("image/", "").toUpperCase();
+  }
+  return mimeType.toUpperCase();
+};
 
 interface ChatInputProps {
   inputMessage: string;
@@ -26,7 +121,6 @@ interface ChatInputProps {
   sendMessage: () => void;
   isLoading: boolean;
   isAuthenticated: boolean;
-  textareaHeight: number;
   setTextareaHeight: (height: number) => void;
   isSidebarCollapsed: boolean;
   isMobile: boolean;
@@ -43,7 +137,6 @@ export default function ChatInput({
   sendMessage,
   isLoading,
   isAuthenticated,
-  textareaHeight,
   setTextareaHeight,
   isSidebarCollapsed,
   isMobile,
@@ -53,168 +146,260 @@ export default function ChatInput({
 }: ChatInputProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const minTextareaHeightRef = useRef(BASE_TEXTAREA_HEIGHT);
+  const prevInputLengthRef = useRef(inputMessage.length);
+  const layoutLockRef = useRef(false);
+  const layoutLockTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
   const [isCentered, setIsCentered] = useState(!hasMessages);
+  const [hasMounted, setHasMounted] = useState(false);
+  const [initialIsMobile] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.matchMedia("(max-width: 768px)").matches;
+  });
   const [showRedButton, setShowRedButton] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const dragCounterRef = useRef(0);
-  const { isSidebarOpen } = useChat();
+  const { uploadToBlossomAsync, blossomSyncEnabled } = useBlossomSync();
+  const { pnsKeys } = usePnsKeys();
   const unifiedBgClass = "bg-background";
-  const maxTextareaHeight = isMobile ? 176 : 240;
+  const isMobileLayout = hasMounted ? isMobile : initialIsMobile;
+  const maxTextareaHeight = isMobileLayout ? 176 : 240;
 
-  // Handle centering when messages change from external updates
+  // State for layout mode
+  const [isStackLayout, setIsStackLayout] = useState(false);
+
+  const useIsomorphicLayoutEffect =
+    typeof window !== "undefined" ? useLayoutEffect : useEffect;
+
   useEffect(() => {
-    // Center when no messages, bottom when messages exist (both mobile and desktop)
-    if (hasMessages && isCentered) {
-      setIsCentered(false);
-    } else if (!hasMessages && !isCentered) {
-      setIsCentered(true);
+    setHasMounted(true);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (layoutLockTimeoutRef.current) {
+        clearTimeout(layoutLockTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const lockMinHeight = useCallback(() => {
+    layoutLockRef.current = true;
+    if (layoutLockTimeoutRef.current) {
+      clearTimeout(layoutLockTimeoutRef.current);
     }
-  }, [hasMessages, isCentered]);
+    layoutLockTimeoutRef.current = setTimeout(() => {
+      layoutLockRef.current = false;
+    }, LAYOUT_TRANSITION_MS);
+  }, []);
 
-  // Keep textarea height in sync with content and clamp to max height
-  // Also account for attachment preview height (if any)
-  useEffect(() => {
-    if (!textareaRef.current) return;
+  // Ref to track previous stack layout for comparison without causing re-renders
+  const prevIsStackLayoutRef = useRef(isStackLayout);
+
+  // Update layout mode based on content - uses character count for stability
+  useIsomorphicLayoutEffect(() => {
     const textarea = textareaRef.current;
-    let textareaOnlyHeight = 48;
+    if (!textarea) return;
 
-    if (inputMessage === "") {
-      textarea.style.height = "48px";
-      textareaOnlyHeight = 48;
+    // Check for explicit line breaks
+    const hasLineBreak = inputMessage.includes("\n");
+
+    // Use character count with hysteresis to prevent jitter
+    // The different thresholds create a "dead zone" where layout doesn't change
+    const currentlyStacked = prevIsStackLayoutRef.current;
+    let shouldStack: boolean;
+
+    if (currentlyStacked) {
+      // When in stack mode, only exit if BELOW the exit threshold AND no line breaks
+      shouldStack =
+        inputMessage.length > EXIT_STACK_CHAR_COUNT ||
+        hasLineBreak ||
+        uploadedAttachments.length > 0;
     } else {
-      textarea.style.height = "auto";
-      textareaOnlyHeight = Math.min(textarea.scrollHeight, maxTextareaHeight);
-      textarea.style.height = textareaOnlyHeight + "px";
+      // When in single-line mode, enter stack if ABOVE the enter threshold OR has line breaks
+      shouldStack =
+        inputMessage.length > ENTER_STACK_CHAR_COUNT ||
+        hasLineBreak ||
+        uploadedAttachments.length > 0;
     }
 
-    // Calculate total input container height including attachments
-    // Attachment row adds ~88px (64px height + 12px top padding + 8px bottom padding + 4px bottom margin)
-    const attachmentHeight = uploadedAttachments.length > 0 ? 88 : 0;
-    const totalHeight = textareaOnlyHeight + attachmentHeight;
-    setTextareaHeight(totalHeight);
+    // Only update if the state is actually changing
+    if (shouldStack !== prevIsStackLayoutRef.current) {
+      lockMinHeight();
+      prevIsStackLayoutRef.current = shouldStack;
+      setIsStackLayout(shouldStack);
+    }
+
+    // Still need to measure for height calculation (but not for layout decision)
+    const originalHeight = textarea.style.height;
+    textarea.style.height = "auto";
+    const scrollHeight = textarea.scrollHeight;
+    textarea.style.height = originalHeight;
+
+    const clampedHeight = Math.min(scrollHeight, maxTextareaHeight);
+    const nextMinHeight = Math.max(clampedHeight, BASE_TEXTAREA_HEIGHT);
+    const allowDecrease =
+      inputMessage.length < prevInputLengthRef.current ||
+      (prevIsStackLayoutRef.current && !layoutLockRef.current);
+    if (allowDecrease || nextMinHeight > minTextareaHeightRef.current) {
+      minTextareaHeightRef.current = nextMinHeight;
+    }
+    prevInputLengthRef.current = inputMessage.length;
   }, [
     inputMessage,
-    maxTextareaHeight,
-    setTextareaHeight,
     uploadedAttachments.length,
+    maxTextareaHeight,
+    lockMinHeight,
   ]);
 
-  const handleSendMessage = () => {
-    if (isLoading) {
-      return;
-    }
+  const getExtraHeight = useCallback(() => {
+    const attachmentHeight =
+      uploadedAttachments.length > 0 ? ATTACHMENT_ROW_HEIGHT : 0;
+    const toolbarHeight = isStackLayout ? TOOLBAR_ROW_HEIGHT : 0;
+    return attachmentHeight + toolbarHeight;
+  }, [uploadedAttachments.length, isStackLayout]);
 
-    if (isCentered) {
-      // Don't trigger multiple animations - let the useEffect handle it
-      sendMessage();
-    } else {
-      sendMessage();
-    }
-  };
+  const getTextareaOnlyHeight = useCallback(
+    (scrollHeight: number) => {
+      const clampedHeight = Math.min(scrollHeight, maxTextareaHeight);
+      const minHeight = Math.min(
+        minTextareaHeightRef.current,
+        maxTextareaHeight
+      );
+      return Math.max(clampedHeight, minHeight);
+    },
+    [maxTextareaHeight]
+  );
 
-  const createAttachmentId = () => {
-    if (
-      typeof crypto !== "undefined" &&
-      typeof crypto.randomUUID === "function"
-    ) {
-      return crypto.randomUUID();
-    }
-    return `attachment-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  };
+  const updateAttachment = useCallback(
+    (
+      attachmentId: string,
+      updater: (attachment: MessageAttachment) => MessageAttachment
+    ) => {
+      setUploadedAttachments((prev) =>
+        prev.map((item) => (item.id === attachmentId ? updater(item) : item))
+      );
+    },
+    [setUploadedAttachments]
+  );
 
-  const getAttachmentLabel = (mimeType: string) => {
-    if (mimeType === "application/pdf") return "PDF";
-    if (mimeType.startsWith("image/")) {
-      return mimeType.replace("image/", "").toUpperCase();
-    }
-    return mimeType.toUpperCase();
-  };
-
-  const handleFileUpload = async (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const files = event.target.files;
-    if (!files) return;
-
-    const attachmentsToAdd: { attachment: MessageAttachment; file: File }[] =
-      [];
-
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      const isImage = file.type.startsWith("image/");
-      const isAcceptedFile = ACCEPTED_FILE_TYPES.includes(file.type);
-
-      // Validate file type
-      if (!isImage && !isAcceptedFile) {
-        alert(
-          `File type "${file.type}" is not supported. Please upload images or PDF files.`
-        );
-        continue;
-      }
-
-      // Validate file size
-      if (file.size > MAX_FILE_SIZE_BYTES) {
-        alert(
-          `File "${file.name}" is too large. Maximum size is ${MAX_FILE_SIZE_MB}MB.`
-        );
-        continue;
-      }
-
+  const persistFile = useCallback(
+    async (
+      file: File,
+      label: "file" | "image",
+      logOnStorageError?: boolean
+    ): Promise<string | undefined> => {
       try {
-        const dataUrl = await convertFileToBase64(file);
-
-        // Save to IndexedDB
-        let storageId: string | undefined;
-        try {
-          storageId = await saveFile(file);
-        } catch (error) {
-          const errorMessage =
-            error instanceof Error ? error.message : "Unknown error";
-          if (errorMessage.includes("quota")) {
-            alert(
-              "Storage is full. Your file will be available in this session but may not be saved in history."
-            );
-          } else {
-            console.warn("Failed to save file to storage:", errorMessage);
-          }
-          // Continue without storageId (will rely on base64 in memory)
-        }
-
-        const attachment: MessageAttachment = {
-          id: createAttachmentId(),
-          name: file.name,
-          mimeType: file.type,
-          size: file.size,
-          dataUrl,
-          type: isImage ? "image" : "file",
-          storageId,
-        };
-
-        attachmentsToAdd.push({ attachment, file });
+        return await saveFile(file);
       } catch (error) {
-        console.error("Error converting file to base64:", error);
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        if (errorMessage.includes("quota")) {
+          alert(
+            `Storage is full. Your ${label} will be available in this session but may not be saved in history.`
+          );
+        } else if (logOnStorageError) {
+          console.warn("Failed to save file to storage:", errorMessage);
+        }
+        return undefined;
       }
-    }
+    },
+    []
+  );
 
-    if (attachmentsToAdd.length > 0) {
-      console.log(attachmentsToAdd);
+  const buildAttachmentWorkItem = useCallback(
+    async ({
+      file,
+      isImage,
+      isPdf,
+      nameOverride,
+      storageLabel,
+      logOnStorageError,
+    }: AttachmentBuildOptions & {
+      file: File;
+    }): Promise<AttachmentWorkItem> => {
+      const dataUrl = await convertFileToBase64(file);
+      const storageId = await persistFile(
+        file,
+        storageLabel,
+        logOnStorageError
+      );
+      const attachmentId = createAttachmentId();
+      const attachment: MessageAttachment = {
+        id: attachmentId,
+        name: nameOverride || file.name,
+        mimeType: file.type,
+        size: file.size,
+        dataUrl,
+        type: isImage ? "image" : "file",
+        storageId,
+        blossomUploadStatus:
+          blossomSyncEnabled && pnsKeys ? "uploading" : undefined,
+      };
+
+      return {
+        attachment,
+        file,
+        shouldExtractPdfText: isPdf,
+      };
+    },
+    [blossomSyncEnabled, pnsKeys, persistFile]
+  );
+
+  /**
+   * Helper to handle Blossom upload for an attachment
+   * Updates the attachment state with hash/servers on success or failed status on error
+   */
+  const handleBlossomUpload = useCallback(
+    (attachmentId: string, file: File) => {
+      if (!blossomSyncEnabled || !pnsKeys) return;
+
+      uploadToBlossomAsync(file, pnsKeys)
+        .then((result) => {
+          if (result) {
+            updateAttachment(attachmentId, (item) => ({
+              ...item,
+              blossomHash: result.hash,
+              blossomServers: result.servers,
+              blossomUploadStatus: "success",
+            }));
+          } else {
+            updateAttachment(attachmentId, (item) => ({
+              ...item,
+              blossomUploadStatus: "failed",
+            }));
+          }
+        })
+        .catch(() => {
+          updateAttachment(attachmentId, (item) => ({
+            ...item,
+            blossomUploadStatus: "failed",
+          }));
+        });
+    },
+    [blossomSyncEnabled, pnsKeys, updateAttachment, uploadToBlossomAsync]
+  );
+
+  const addAttachmentsWithProcessing = useCallback(
+    (workItems: AttachmentWorkItem[]) => {
+      if (workItems.length === 0) return;
+
       setUploadedAttachments((prev) => [
         ...prev,
-        ...attachmentsToAdd.map((item) => item.attachment),
+        ...workItems.map((item) => item.attachment),
       ]);
 
-      attachmentsToAdd.forEach(({ attachment, file }) => {
-        if (attachment.mimeType === "application/pdf") {
+      workItems.forEach(({ attachment, file, shouldExtractPdfText }) => {
+        if (shouldExtractPdfText) {
           extractTextFromPdf(file)
             .then((text) => {
               if (!text.trim()) return;
-              setUploadedAttachments((prev) =>
-                prev.map((item) =>
-                  item.id === attachment.id
-                    ? { ...item, textContent: text }
-                    : item
-                )
-              );
+              updateAttachment(attachment.id, (item) => ({
+                ...item,
+                textContent: text,
+              }));
             })
             .catch((error) => {
               console.warn(
@@ -223,21 +408,88 @@ export default function ChatInput({
               );
             });
         }
+
+        handleBlossomUpload(attachment.id, file);
       });
+    },
+    [handleBlossomUpload, setUploadedAttachments, updateAttachment]
+  );
+
+  // Handle centering when messages change from external updates
+  useEffect(() => {
+    // Center when no messages, bottom when messages exist (both mobile and desktop)
+    setIsCentered(!hasMessages);
+  }, [hasMessages]);
+
+  // Keep textarea height in sync with content and clamp to max height
+  // Also account for attachment preview height (if any)
+  useEffect(() => {
+    if (!textareaRef.current) return;
+    const textarea = textareaRef.current;
+    let textareaOnlyHeight = BASE_TEXTAREA_HEIGHT;
+
+    if (inputMessage === "") {
+      textarea.style.height = `${BASE_TEXTAREA_HEIGHT}px`;
+      textareaOnlyHeight = BASE_TEXTAREA_HEIGHT;
+    } else {
+      textarea.style.height = "auto";
+      textareaOnlyHeight = getTextareaOnlyHeight(textarea.scrollHeight);
+      textarea.style.height = `${textareaOnlyHeight}px`;
     }
+
+    setTextareaHeight(textareaOnlyHeight + getExtraHeight());
+  }, [inputMessage, setTextareaHeight, getExtraHeight, getTextareaOnlyHeight]);
+
+  const handleSendMessage = () => {
+    if (isLoading) {
+      return;
+    }
+    sendMessage();
+  };
+
+  const handleFileUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const files = event.target.files;
+    if (!files) return;
+
+    const workItems: AttachmentWorkItem[] = [];
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const validation = validateFile(file, {
+        allowImages: true,
+        allowPdf: true,
+        onTypeError: () =>
+          alert(
+            `File type "${file.type}" is not supported. Please upload images or PDF files.`
+          ),
+        onSizeError: () =>
+          alert(
+            `File "${file.name}" is too large. Maximum size is ${MAX_FILE_SIZE_MB}MB.`
+          ),
+      });
+
+      if (!validation) continue;
+
+      try {
+        const workItem = await buildAttachmentWorkItem({
+          file,
+          ...validation,
+          storageLabel: "file",
+          logOnStorageError: true,
+        });
+        workItems.push(workItem);
+      } catch (error) {
+        console.error("Error converting file to base64:", error);
+      }
+    }
+
+    addAttachmentsWithProcessing(workItems);
 
     if (event.target) {
       event.target.value = "";
     }
-  };
-
-  const convertFileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = (error) => reject(error);
-    });
   };
 
   const removeAttachment = (id: string) => {
@@ -264,63 +516,40 @@ export default function ChatInput({
     // Prevent default paste behavior for images
     event.preventDefault();
 
-    const attachmentsToAdd: { attachment: MessageAttachment; file: File }[] =
-      [];
+    const workItems: AttachmentWorkItem[] = [];
 
     for (const item of imageItems) {
       const file = item.getAsFile();
       if (!file) continue;
 
-      // Validate file size
-      if (file.size > MAX_FILE_SIZE_BYTES) {
-        alert(
-          `Pasted image is too large. Maximum size is ${MAX_FILE_SIZE_MB}MB.`
-        );
-        continue;
-      }
+      const validation = validateFile(file, {
+        allowImages: true,
+        allowPdf: false,
+        onTypeError: () => {},
+        onSizeError: () =>
+          alert(
+            `Pasted image is too large. Maximum size is ${MAX_FILE_SIZE_MB}MB.`
+          ),
+      });
+
+      if (!validation) continue;
 
       try {
-        const dataUrl = await convertFileToBase64(file);
-
-        // Save to IndexedDB
-        let storageId: string | undefined;
-        try {
-          storageId = await saveFile(file);
-        } catch (error) {
-          const errorMessage =
-            error instanceof Error ? error.message : "Unknown error";
-          if (errorMessage.includes("quota")) {
-            alert(
-              "Storage is full. Your image will be available in this session but may not be saved in history."
-            );
-          }
-          // Continue without storageId
-        }
-
-        const attachment: MessageAttachment = {
-          id: createAttachmentId(),
-          name:
-            file.name ||
-            `pasted-image-${Date.now()}.${file.type.split("/")[1]}`,
-          mimeType: file.type,
-          size: file.size,
-          dataUrl,
-          type: "image",
-          storageId,
-        };
-
-        attachmentsToAdd.push({ attachment, file });
+        const nameOverride =
+          file.name || `pasted-image-${Date.now()}.${file.type.split("/")[1]}`;
+        const workItem = await buildAttachmentWorkItem({
+          file,
+          ...validation,
+          nameOverride,
+          storageLabel: "image",
+        });
+        workItems.push(workItem);
       } catch (error) {
         console.error("Error converting pasted image to base64:", error);
       }
     }
 
-    if (attachmentsToAdd.length > 0) {
-      setUploadedAttachments((prev) => [
-        ...prev,
-        ...attachmentsToAdd.map((item) => item.attachment),
-      ]);
-    }
+    addAttachmentsWithProcessing(workItems);
   };
 
   // Drag and Drop Handlers
@@ -353,79 +582,28 @@ export default function ChatInput({
   };
 
   const processImageFile = async (file: File) => {
-    // Validate file type - accept images and PDFs
-    const isImage = file.type.startsWith("image/");
-    const isPdf = file.type === "application/pdf";
+    const validation = validateFile(file, {
+      allowImages: true,
+      allowPdf: true,
+      rejectSvg: true,
+      onSvgError: () =>
+        alert("SVG files are not supported. Please use PNG, JPG, or WebP"),
+      onTypeError: () => alert("Please select an image or PDF file"),
+      onSizeError: () =>
+        alert(
+          `File "${file.name}" is too large. Maximum size is ${MAX_FILE_SIZE_MB}MB.`
+        ),
+    });
 
-    if (!isImage && !isPdf) {
-      alert("Please select an image or PDF file");
-      return;
-    }
-
-    // Reject SVG files
-    if (file.type === "image/svg+xml") {
-      alert("SVG files are not supported. Please use PNG, JPG, or WebP");
-      return;
-    }
-
-    // Validate file size
-    if (file.size > MAX_FILE_SIZE_BYTES) {
-      alert(
-        `File "${file.name}" is too large. Maximum size is ${MAX_FILE_SIZE_MB}MB.`
-      );
-      return;
-    }
+    if (!validation) return;
 
     try {
-      const dataUrl = await convertFileToBase64(file);
-
-      // Save to IndexedDB
-      let storageId: string | undefined;
-      try {
-        storageId = await saveFile(file);
-      } catch (error) {
-        const errorMessage =
-          error instanceof Error ? error.message : "Unknown error";
-        if (errorMessage.includes("quota")) {
-          alert(
-            "Storage is full. Your file will be available in this session but may not be saved in history."
-          );
-        }
-        // Continue without storageId
-      }
-
-      const attachment: MessageAttachment = {
-        id: createAttachmentId(),
-        name: file.name,
-        mimeType: file.type,
-        size: file.size,
-        dataUrl,
-        type: isImage ? "image" : "file",
-        storageId,
-      };
-
-      setUploadedAttachments((prev) => [...prev, attachment]);
-
-      // Extract text from PDF if applicable
-      if (isPdf) {
-        extractTextFromPdf(file)
-          .then((text) => {
-            if (!text.trim()) return;
-            setUploadedAttachments((prev) =>
-              prev.map((item) =>
-                item.id === attachment.id
-                  ? { ...item, textContent: text }
-                  : item
-              )
-            );
-          })
-          .catch((error) => {
-            console.warn(
-              "Failed to extract text from PDF attachment, continuing without text content.",
-              error
-            );
-          });
-      }
+      const workItem = await buildAttachmentWorkItem({
+        file,
+        ...validation,
+        storageLabel: "file",
+      });
+      addAttachmentsWithProcessing([workItem]);
     } catch (error) {
       console.error("Error processing file:", error);
     }
@@ -452,7 +630,7 @@ export default function ChatInput({
       {isCentered && (
         <div
           className={`fixed z-20 flex flex-col items-center pointer-events-none ${
-            isMobile || !isAuthenticated
+            isMobileLayout || !isAuthenticated
               ? "inset-x-0"
               : isSidebarCollapsed
                 ? "inset-x-0"
@@ -460,7 +638,7 @@ export default function ChatInput({
           }`}
           style={{
             top: "50%",
-            transform: isMobile
+            transform: isMobileLayout
               ? "translateY(calc(-50% - 100px))"
               : "translateY(calc(-50% - 120px))",
           }}
@@ -472,12 +650,11 @@ export default function ChatInput({
           </div>
         </div>
       )}
-
       {/* Chat Input Container */}
       <div
         className={`${
-          isCentered && !isMobile
-            ? `fixed z-20 flex items-start justify-center transition-all duration-500 ease-out ${
+          isCentered && !isMobileLayout
+            ? `fixed z-20 flex items-start justify-center ${
                 !isAuthenticated
                   ? "inset-x-0"
                   : isSidebarCollapsed
@@ -485,9 +662,9 @@ export default function ChatInput({
                     : "left-72 right-0"
               }`
             : `${
-                isMobile
-                  ? `fixed z-20 left-0 right-0 w-screen ${unifiedBgClass} backdrop-blur-sm transition-all duration-300 ease-in-out px-0 pb-2 pt-0`
-                  : "fixed z-20 bg-background backdrop-blur-sm transition-all duration-300 ease-in-out " +
+                isMobileLayout
+                  ? `fixed z-20 left-0 right-0 w-screen ${unifiedBgClass} backdrop-blur-sm px-0 pb-2 pt-0`
+                  : "fixed z-20 bg-background backdrop-blur-sm " +
                     (!isAuthenticated
                       ? "left-0 right-0 pb-4 pt-0"
                       : isSidebarCollapsed
@@ -496,15 +673,19 @@ export default function ChatInput({
               }`
         }`}
         style={{
-          top: isCentered && !isMobile ? "calc(50% - 56px)" : undefined,
+          top: isCentered && !isMobileLayout ? "calc(50% - 56px)" : undefined,
           bottom:
-            isMobile || !isCentered ? (isMobile ? "0px" : "16px") : undefined,
+            isMobileLayout || !isCentered
+              ? isMobileLayout
+                ? "0px"
+                : "16px"
+              : undefined,
           paddingBottom: "env(safe-area-inset-bottom)",
         }}
       >
         <div
           className={`${
-            isMobile
+            isMobileLayout
               ? "w-full max-w-none px-4 pb-3"
               : "mx-auto w-full " +
                 (isCentered ? "max-w-152" : "max-w-176") +
@@ -513,7 +694,7 @@ export default function ChatInput({
         >
           {/* Unified Input Container with Attachment Preview Inside */}
           <div
-            className={`relative flex flex-col w-full rounded-full transition-all duration-300 ease-out ${
+            className={`relative flex flex-col w-full rounded-3xl overflow-hidden ${
               isDragging
                 ? "bg-linear-to-br from-purple-500/20 via-purple-500/10 to-purple-500/5 border-2 border-dashed border-purple-400/70 shadow-[0_0_40px_-5px_rgba(168,85,247,0.5)] scale-[1.01]"
                 : "bg-muted/50 border border-border"
@@ -573,7 +754,7 @@ export default function ChatInput({
                     <button
                       onClick={() => removeAttachment(attachment.id)}
                       className={`absolute -top-1 -right-1 bg-red-500 hover:bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs transition-opacity duration-150 ${
-                        isMobile
+                        isMobileLayout
                           ? "opacity-100"
                           : "opacity-0 group-hover:opacity-100"
                       }`}
@@ -586,7 +767,13 @@ export default function ChatInput({
             )}
 
             {/* Textarea and Buttons - Second Row */}
-            <div className="relative flex items-center w-full pb-1">
+            <div
+              className="relative flex w-full"
+              style={{
+                paddingBottom: isStackLayout ? 48 : 4,
+                transition: "padding-bottom 0.2s ease-in-out",
+              }}
+            >
               <textarea
                 ref={textareaRef}
                 value={inputMessage}
@@ -596,7 +783,7 @@ export default function ChatInput({
                   if (
                     e.key === "Enter" &&
                     !e.shiftKey &&
-                    (!isMobile || e.metaKey || e.ctrlKey)
+                    (!isMobileLayout || e.metaKey || e.ctrlKey)
                   ) {
                     e.preventDefault();
                     // Prevent sending when models or wallet are still loading
@@ -616,7 +803,7 @@ export default function ChatInput({
                       : `Ask anything...`
                     : `Sign in to start chatting...`
                 }
-                className="flex-1 bg-transparent px-4 py-3 text-[16.5px] sm:text-[16.5px] text-foreground placeholder:text-muted-foreground focus:outline-none pl-14 pr-12 resize-none min-h-[48px] overflow-y-auto"
+                className="bg-transparent py-3 text-[16.5px] sm:text-[16.5px] text-foreground placeholder:text-muted-foreground focus:outline-none resize-none min-h-[48px] overflow-y-auto w-full"
                 autoComplete="off"
                 data-tutorial="chat-input"
                 rows={1}
@@ -625,62 +812,64 @@ export default function ChatInput({
                   minHeight: "48px",
                   maxHeight: maxTextareaHeight,
                   fontSize: "16px",
+                  paddingLeft: isStackLayout ? 16 : 56,
+                  paddingRight: isStackLayout ? 16 : 48,
+                  transition: "padding 0.2s ease-in-out",
                 }}
                 onInput={(e) => {
                   const target = e.target as HTMLTextAreaElement;
                   target.style.height = "auto";
-                  const textareaOnlyHeight = Math.min(
-                    target.scrollHeight,
-                    maxTextareaHeight
+                  const textareaOnlyHeight = getTextareaOnlyHeight(
+                    target.scrollHeight
                   );
-                  target.style.height = textareaOnlyHeight + "px";
-                  // Include attachment height in total height
-                  const attachmentHeight =
-                    uploadedAttachments.length > 0 ? 88 : 0;
-                  setTextareaHeight(textareaOnlyHeight + attachmentHeight);
+                  target.style.height = `${textareaOnlyHeight}px`;
+                  setTextareaHeight(textareaOnlyHeight + getExtraHeight());
                 }}
               />
 
-              {/* Attachment upload button */}
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={!isAuthenticated}
-                className="absolute left-3 bottom-2 p-2 rounded-full bg-transparent hover:bg-muted disabled:opacity-50 disabled:bg-transparent transition-colors cursor-pointer"
-                aria-label="Upload attachment"
-              >
-                <Paperclip className="h-5 w-5 text-foreground" />
-              </button>
+              {/* Toolbar or Absolute Buttons */}
+              <div className="absolute bottom-2 left-0 right-0 flex w-full items-center justify-between px-3 pointer-events-none">
+                {/* Attachment upload button */}
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={!isAuthenticated}
+                  className={`p-2 rounded-full bg-transparent hover:bg-muted disabled:opacity-50 disabled:bg-transparent transition-colors cursor-pointer pointer-events-auto`}
+                  aria-label="Upload attachment"
+                >
+                  <Paperclip className="h-5 w-5 text-foreground" />
+                </button>
 
-              {/* Send button */}
-              <button
-                onClick={handleSendMessage}
-                disabled={
-                  isLoading ||
-                  isLoadingModels ||
-                  isWalletLoading ||
-                  (!isAuthenticated &&
-                    !inputMessage.trim() &&
-                    uploadedAttachments.length === 0)
-                }
-                className={`absolute right-3 bottom-2 p-2 rounded-full transition-colors text-foreground ${
-                  showRedButton
-                    ? "bg-red-500 hover:bg-red-600 text-white"
-                    : "bg-transparent hover:bg-secondary disabled:hover:bg-transparent"
-                } disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer`}
-                aria-label="Send message"
-              >
-                {isLoading ? (
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                ) : (
-                  <ArrowRight className="h-5 w-5" />
-                )}
-              </button>
+                {/* Send button */}
+                <button
+                  onClick={handleSendMessage}
+                  disabled={
+                    isLoading ||
+                    isLoadingModels ||
+                    isWalletLoading ||
+                    (!isAuthenticated &&
+                      !inputMessage.trim() &&
+                      uploadedAttachments.length === 0)
+                  }
+                  className={`p-2 rounded-full transition-colors text-foreground ${
+                    showRedButton
+                      ? "bg-red-500 hover:bg-red-600 text-white"
+                      : "bg-transparent hover:bg-secondary disabled:hover:bg-transparent"
+                  } disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer pointer-events-auto`}
+                  aria-label="Send message"
+                >
+                  {isLoading ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <ArrowRight className="h-5 w-5" />
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>
       </div>
       {/* Bottom spacer for visible padding below the input */}
-      {(!isCentered || isMobile) && (
+      {(!isCentered || isMobileLayout) && (
         <div
           className={`fixed bottom-0 z-20 pointer-events-none ${
             !isAuthenticated
@@ -688,7 +877,7 @@ export default function ChatInput({
               : isSidebarCollapsed
                 ? "left-0 right-0"
                 : "left-72 right-0"
-          } ${isMobile ? "h-3" : "h-4"} ${unifiedBgClass}`}
+          } ${isMobileLayout ? "h-3" : "h-4"} ${unifiedBgClass}`}
           style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
         />
       )}

@@ -15,6 +15,7 @@ import {
   Copy,
   Check,
   Globe,
+  Bitcoin,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { Model } from "@/types/models";
@@ -23,7 +24,6 @@ import {
   getProviderFromModelName,
 } from "@/utils/modelUtils";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
-import { useCashuWithXYZ } from "@/hooks/useCashuWithXYZ";
 import {
   loadModelProviderMap,
   loadDisabledProviders,
@@ -31,12 +31,12 @@ import {
 import {
   parseModelKey,
   normalizeBaseUrl,
-  upsertCachedProviderModels,
   getCachedProviderModels,
   getRequiredSatsForModel,
   isModelAvailable,
 } from "@/utils/modelUtils";
 import { recommendedModels, webSearchModels } from "@/lib/preconfiguredModels";
+import { getPendingCashuTokenAmount } from "@/utils/cashuUtils";
 
 interface ModelSelectorProps {
   selectedModel: Model | null;
@@ -85,11 +85,8 @@ export default function ModelSelector({
   const [modelProviderMap, setModelProviderMap] = useState<
     Record<string, string>
   >({});
-  const [providerModelCache, setProviderModelCache] = useState<
-    Record<string, Record<string, Model>>
-  >({});
-  const [loadingProviderBases, setLoadingProviderBases] = useState<Set<string>>(
-    new Set()
+  const [providerModelCache] = useState<Record<string, Record<string, Model>>>(
+    {}
   );
   const [detailsBaseUrl, setDetailsBaseUrl] = useState<string | null>(null);
   const [pairFilters, setPairFilters] = useState<Set<string>>(new Set());
@@ -233,22 +230,68 @@ export default function ModelSelector({
     return filteredModels[0] ?? null;
   }, [filteredModels, hoveredModelId, selectedModel]);
 
-  // Display helpers: convert sats/token -> tokens/sat
-  const computeTokensPerSat = (satsPerToken?: number): number | null => {
+  // Display helpers: convert sats/token -> sats/1M tokens
+  const computeSatsPer1M = (satsPerToken?: number): number | null => {
     if (
       typeof satsPerToken !== "number" ||
       !isFinite(satsPerToken) ||
       satsPerToken <= 0
     )
       return null;
-    return 1 / satsPerToken;
+    return satsPerToken * 1_000_000;
   };
 
-  const formatTokensPerSat = (satsPerToken?: number): string => {
-    const value = computeTokensPerSat(satsPerToken);
+  const formatSatsPer1M = (satsPerToken?: number): string => {
+    const value = computeSatsPer1M(satsPerToken);
     if (value === null) return "—";
-    if (value >= 1000) return `${Math.round(value).toLocaleString()} token/sat`;
-    return `${value.toFixed(2)} token/sat`;
+    if (value >= 100)
+      return `${Math.round(value).toLocaleString()} sat/1M tokens`;
+    return `${value.toFixed(2)} sat/1M tokens`;
+  };
+
+  // Percentile-based log prices for normalization (excludes extreme outliers)
+  const pricingBounds = useMemo(() => {
+    const prices = dedupedModels
+      .map((m) => m.sats_pricing?.completion)
+      .filter(
+        (p): p is number => typeof p === "number" && p > 0 && isFinite(p)
+      );
+
+    if (prices.length === 0) return { minLog: 0, maxLog: 4 };
+
+    // Sort prices and use 5th/95th percentiles to exclude extreme outliers
+    const sorted = [...prices].sort((a, b) => a - b);
+    const p5Index = Math.floor(sorted.length * 0.05);
+    const p95Index = Math.min(
+      sorted.length - 1,
+      Math.floor(sorted.length * 0.95)
+    );
+    const p5 = sorted[p5Index];
+    const p95 = sorted[p95Index];
+
+    return {
+      minLog: Math.log10(p5),
+      maxLog: Math.log10(p95),
+    };
+  }, [dedupedModels]);
+
+  // Normalized pricing index: 1 = cheapest, 5 = most expensive
+  const getPricingIndex = (satsPrice?: number): number | null => {
+    if (
+      typeof satsPrice !== "number" ||
+      satsPrice <= 0 ||
+      !isFinite(satsPrice)
+    ) {
+      return null;
+    }
+
+    const { minLog, maxLog } = pricingBounds;
+    const range = maxLog - minLog;
+    if (range <= 0) return 3; // All models same price
+
+    // Normalize to 1-5 scale (min price -> 1, max price -> 5)
+    const normalized = 1 + ((Math.log10(satsPrice) - minLog) / range) * 4;
+    return Math.round(Math.min(5, Math.max(1, normalized)) * 10) / 10;
   };
 
   const formatProviderLabel = (
@@ -587,7 +630,7 @@ export default function ModelSelector({
 
   // Shared model list sections
   const renderModelListSections = () => (
-    <div className="overflow-y-auto max-h-[60vh] pb-3">
+    <div className="overflow-y-auto max-h-[60vh] pb-10">
       {/* Current Model Section */}
       {selectedModel && (
         <div className="p-1">
@@ -697,7 +740,10 @@ export default function ModelSelector({
       ? providerModels[model.id]
       : undefined;
     const effectiveModelForPricing = providerSpecificModel || model;
-    const isAvailable = isModelAvailable(effectiveModelForPricing, balance);
+    const isAvailable = isModelAvailable(
+      effectiveModelForPricing,
+      balance + getPendingCashuTokenAmount()
+    );
     const requiredMin = getRequiredSatsForModel(effectiveModelForPricing);
     const isFav = isFavorite || isConfiguredModel(model.id);
     const effectiveProviderLabel =
@@ -721,7 +767,7 @@ export default function ModelSelector({
           !isAvailable
             ? "opacity-40 cursor-not-allowed"
             : isSelectedItem
-              ? "bg-muted cursor-pointer"
+              ? "bg-primary/10 ring-1 ring-primary/30 cursor-pointer"
               : "hover:bg-muted/50 cursor-pointer"
         }`}
         onMouseEnter={() => setHoveredModelId(model.id)}
@@ -733,7 +779,7 @@ export default function ModelSelector({
               e.stopPropagation();
               toggleConfiguredModel(configuredKeyOverride || model.id);
             }}
-            className={`flex-shrink-0 p-0.5 rounded transition-colors cursor-pointer ${
+            className={`shrink-0 p-0.5 rounded transition-colors cursor-pointer ${
               isFav
                 ? "text-yellow-500 hover:text-yellow-400"
                 : "text-muted-foreground hover:text-yellow-500"
@@ -757,8 +803,16 @@ export default function ModelSelector({
               }
             }}
           >
-            <div className={`font-medium truncate`}>
+            <div className="font-medium truncate flex items-center gap-1.5">
               {getModelNameWithoutProvider(model.name)}
+              {isSelectedItem && (
+                <Check className="h-3.5 w-3.5 text-primary shrink-0" />
+              )}
+              {!isAvailable && requiredMin > 0 && (
+                <span className="text-[10px] text-yellow-600 dark:text-yellow-400 font-medium shrink-0">
+                  Min: {requiredMin.toFixed(0)} sats
+                </span>
+              )}
             </div>
             <div className="text-xs text-muted-foreground flex items-center justify-between">
               <span className="text-muted-foreground truncate pr-2 flex items-center gap-1">
@@ -777,27 +831,59 @@ export default function ModelSelector({
                   </span>
                 )}
               </span>
-              <span className="mx-2 flex-shrink-0">
-                {formatTokensPerSat(
-                  effectiveModelForPricing?.sats_pricing?.completion
-                )}
+              <span
+                className="mx-2 shrink-0 inline-flex items-center gap-0.5"
+                title="Pricing (1-5 ₿): fewer = cheaper"
+              >
+                {(() => {
+                  const value = getPricingIndex(
+                    effectiveModelForPricing?.sats_pricing?.completion
+                  );
+                  if (value === null) return "—";
+                  const fullCount = Math.floor(value);
+                  const hasHalf =
+                    value - fullCount >= 0.3 && value - fullCount < 0.8;
+                  const emptyCount =
+                    5 -
+                    fullCount -
+                    (hasHalf ? 1 : 0) -
+                    (value - fullCount >= 0.8 ? 1 : 0);
+                  const extraFull = value - fullCount >= 0.8 ? 1 : 0;
+
+                  return (
+                    <>
+                      {/* Full yellow icons */}
+                      {Array.from({ length: fullCount + extraFull }, (_, i) => (
+                        <Bitcoin
+                          key={`full-${i}`}
+                          className="h-3 w-3 text-yellow-500 -ml-0.5 first:ml-0"
+                        />
+                      ))}
+                      {/* Half icon */}
+                      {hasHalf && (
+                        <span className="relative w-3 h-3 overflow-hidden -ml-0.5">
+                          <Bitcoin className="h-3 w-3 text-muted-foreground/15 absolute" />
+                          <span
+                            className="absolute inset-0 overflow-hidden"
+                            style={{ width: "50%" }}
+                          >
+                            <Bitcoin className="h-3 w-3 text-yellow-500" />
+                          </span>
+                        </span>
+                      )}
+                      {/* Empty gray icons */}
+                      {Array.from({ length: emptyCount }, (_, i) => (
+                        <Bitcoin
+                          key={`empty-${i}`}
+                          className="h-3 w-3 text-muted-foreground/15 -ml-0.5"
+                        />
+                      ))}
+                    </>
+                  );
+                })()}
               </span>
-              {!isAvailable && requiredMin > 0 && (
-                <span className="text-yellow-600 dark:text-yellow-400 font-medium flex-shrink-0">
-                  • Min: {requiredMin.toFixed(0)} sats
-                </span>
-              )}
             </div>
           </div>
-
-          {/* Selected Indicator */}
-          {isSelectedItem && (
-            <div
-              className={`text-xs font-medium flex-shrink-0 text-green-600 dark:text-green-400`}
-            >
-              ✓
-            </div>
-          )}
 
           {/* Mobile: Details view navigation trigger */}
           {isMobile && (
@@ -809,7 +895,7 @@ export default function ModelSelector({
                 setDetailsBaseUrl(baseForPricing);
                 navigateToView("details");
               }}
-              className="flex-shrink-0 p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 cursor-pointer"
+              className="shrink-0 p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 cursor-pointer"
               title="View details"
               type="button"
             >
@@ -984,13 +1070,13 @@ export default function ModelSelector({
             <div className="bg-muted/50 rounded-md p-2 border border-border">
               <div className="text-muted-foreground">Prompt</div>
               <div className="font-medium mt-1 text-foreground">
-                {formatTokensPerSat(effectiveModel?.sats_pricing?.prompt)}
+                {formatSatsPer1M(effectiveModel?.sats_pricing?.prompt)}
               </div>
             </div>
             <div className="bg-muted/50 rounded-md p-2 border border-border">
               <div className="text-muted-foreground">Completion</div>
               <div className="font-medium mt-1 text-foreground">
-                {formatTokensPerSat(effectiveModel?.sats_pricing?.completion)}
+                {formatSatsPer1M(effectiveModel?.sats_pricing?.completion)}
               </div>
             </div>
           </div>
@@ -1052,7 +1138,7 @@ export default function ModelSelector({
           )}
         </div>
         <ChevronDown
-          className={`h-4 w-4 text-muted-foreground flex-shrink-0 transition-transform ${
+          className={`h-4 w-4 text-muted-foreground shrink-0 transition-transform ${
             isModelDrawerOpen ? "rotate-180" : ""
           }`}
         />

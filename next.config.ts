@@ -6,6 +6,13 @@ const withPWACfg = withPWA({
   register: true,
   skipWaiting: true,
   disable: process.env.NODE_ENV === "development",
+  // Exclude RSC payload files (.txt) from precaching - they contain React Server Component data
+  // that should not be served directly
+  buildExcludes: [/\.txt$/],
+  // Exclude .txt files from public precaching
+  publicExcludes: ["!*.txt"],
+  // Prevent navigation fallback for .txt files (RSC payloads)
+  navigateFallbackDenylist: [/\.txt$/],
   runtimeCaching: [
     {
       urlPattern: /^https:\/\/fonts\.(?:googleapis|gstatic)\.com\/.*/i,

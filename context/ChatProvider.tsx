@@ -15,9 +15,11 @@ import { useUiState, UseUiStateReturn } from "@/hooks/useUiState";
 import { useModelState, UseModelStateReturn } from "@/hooks/useModelState";
 import { useChatActions, UseChatActionsReturn } from "@/hooks/useChatActions";
 import { useCashuWithXYZ } from "@/hooks/useCashuWithXYZ";
+import { useBlossomSync } from "@/hooks/useBlossomSync";
+import { usePnsKeys } from "@/hooks/usePnsKeys";
 import { useAuth } from "./AuthProvider";
-import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { useNostrLogin } from "@nostrify/react/login";
+import { useAccountManager } from "@/components/ClientProviders";
+import { useObservableState } from "applesauce-react/hooks";
 import type { NostrEvent } from "nostr-tools";
 import { userPubkey$, userSigner$ } from "@/hooks/useChatSync1081";
 
@@ -53,46 +55,75 @@ interface ChatProviderProps {
  */
 export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
   const { isAuthenticated } = useAuth();
-  const { user } = useCurrentUser();
-  const { logins } = useNostrLogin();
+  const { manager } = useAccountManager();
+  const accounts = useObservableState(manager.accounts$) || [];
+  const activeAccount = useObservableState(manager.active$);
 
-  // Update pnsKeys$ and userSigner$ observables when user changes
+  // Update userPubkey$ and userSigner$ observables when user changes
   useEffect(() => {
-    if (user?.pubkey && logins.length > 0) {
-      userPubkey$.next(user?.pubkey);
+    const accountToUse = activeAccount || accounts[0];
 
-      // Set the user signer for 1081 event decryption
-      if (user.signer?.nip44 && typeof user.signer.signEvent === "function") {
-        userSigner$.next({
-          signer: user.signer as {
-            nip44: {
-              encrypt: (pubkey: string, plaintext: string) => Promise<string>;
-              decrypt: (pubkey: string, content: string) => Promise<string>;
-            };
-            signEvent: (event: {
-              kind: number;
-              created_at: number;
-              tags: string[][];
-              content: string;
-            }) => Promise<NostrEvent>;
-          },
-          pubkey: user.pubkey,
-        });
-      } else {
-        userSigner$.next(null);
-      }
+    if (!accountToUse) {
+      userPubkey$.next(null);
+      userSigner$.next(null);
+      return;
+    }
+
+    const pubkey = accountToUse.pubkey;
+    userPubkey$.next(pubkey);
+
+    // Set the user signer for 1081 event decryption from applesauce account
+    const signer = accountToUse.signer;
+    console.log("signeringg", signer, pubkey, accountToUse);
+    if (signer?.nip44 && typeof signer.signEvent === "function") {
+      userSigner$.next({
+        signer: signer as {
+          nip44: {
+            encrypt: (pubkey: string, plaintext: string) => Promise<string>;
+            decrypt: (pubkey: string, content: string) => Promise<string>;
+          };
+          signEvent: (event: {
+            kind: number;
+            created_at: number;
+            tags: string[][];
+            content: string;
+          }) => Promise<NostrEvent>;
+        },
+        pubkey: pubkey,
+      });
     } else {
       userSigner$.next(null);
     }
-  }, [user?.pubkey, user?.signer, logins]);
+  }, [accounts, activeAccount]);
 
   const conversationState = useConversationState();
   const cashuWithXYZ = useCashuWithXYZ();
+
+  // Blossom sync for AI-generated images
+  const { uploadToBlossomAsync, blossomSyncEnabled } = useBlossomSync();
+  const { pnsKeys } = usePnsKeys();
+
+  // Create a stable callback for uploading generated images to Blossom
+  const handleBlossomUpload = useCallback(
+    async (file: File): Promise<{ hash: string; servers: string[] } | null> => {
+      if (blossomSyncEnabled && pnsKeys) {
+        try {
+          return await uploadToBlossomAsync(file, pnsKeys);
+        } catch {
+          return null;
+        }
+      }
+      return null;
+    },
+    [blossomSyncEnabled, pnsKeys, uploadToBlossomAsync]
+  );
+
   const chatActions = useChatActions({
     createAndStoreChatEvent: conversationState.createAndStoreChatEvent,
     getLastNonSystemMessageEventId:
       conversationState.getLastNonSystemMessageEventId,
     updateLastMessageSatsSpent: conversationState.updateLastMessageSatsSpent,
+    onBlossomUpload: handleBlossomUpload,
   });
   const apiState = useApiState(
     isAuthenticated,

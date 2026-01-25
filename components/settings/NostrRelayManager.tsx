@@ -173,7 +173,7 @@ const NostrRelayManager: React.FC = () => {
       console.log("Testing relay connections with query...");
 
       // This will attempt to connect to all configured relays
-      const events = nostr.query([testFilter]);
+      nostr.query([testFilter]);
 
       // Give it a moment to attempt connections
       await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -212,16 +212,16 @@ const NostrRelayManager: React.FC = () => {
         </p>
         <div className="max-h-48 overflow-y-auto space-y-2 mb-4">
           {nostrRelays.length > 0 ? (
-            nostrRelays.map((relay, index) => {
+            nostrRelays.map((relay) => {
               const relayStatus = getRelayStatus(relay);
               return (
                 <div
                   className="flex items-center justify-between bg-muted/50 rounded-md p-2"
-                  key={index}
+                  key={relay}
                 >
-                  <div className="flex items-center gap-2 flex-grow min-w-0">
+                  <div className="flex items-center gap-2 grow min-w-0">
                     {getStatusIcon(relayStatus.status)}
-                    <div className="flex flex-col min-w-0 flex-grow">
+                    <div className="flex flex-col min-w-0 grow">
                       <span className="text-sm text-foreground truncate">
                         {relay}
                       </span>
@@ -244,7 +244,7 @@ const NostrRelayManager: React.FC = () => {
                   </div>
                   <button
                     onClick={() => handleRemoveRelay(relay)}
-                    className="text-red-400 hover:text-red-500 transition-colors ml-2 flex-shrink-0"
+                    className="text-red-400 hover:text-red-500 transition-colors ml-2 shrink-0"
                     type="button"
                   >
                     <XCircle className="h-4 w-4" />
@@ -261,7 +261,7 @@ const NostrRelayManager: React.FC = () => {
         <div className="flex items-center gap-2">
           <input
             type="text"
-            className="flex-grow bg-muted/50 border border-border rounded-md px-3 py-2 text-sm text-foreground focus:border-foreground/30 focus:outline-none"
+            className="grow bg-muted/50 border border-border rounded-md px-3 py-2 text-sm text-foreground focus:border-foreground/30 focus:outline-none"
             placeholder="Add new Nostr relay URL"
             value={newRelayInput}
             onChange={(e) => setNewRelayInput(e.target.value)}

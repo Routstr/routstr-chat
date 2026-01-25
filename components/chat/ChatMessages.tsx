@@ -14,6 +14,7 @@ import ThinkingSection from "@/components/ui/ThinkingSection";
 import VersionNavigator from "@/components/chat/VersionNavigator";
 import {
   RefObject,
+  ReactNode,
   useState,
   useRef,
   useEffect,
@@ -51,6 +52,21 @@ const getAnnotationsFromContent = (
   return textContent?.annotations;
 };
 
+const messageActionButtonClassName =
+  "flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground bg-muted/50 hover:bg-muted border border-border rounded-md px-3 py-1.5 transition-colors cursor-pointer";
+
+const MessageActionButton = ({
+  onClick,
+  children,
+}: {
+  onClick: () => void;
+  children: ReactNode;
+}) => (
+  <button onClick={onClick} className={messageActionButtonClassName}>
+    {children}
+  </button>
+);
+
 interface ChatMessagesProps {
   messages: Message[];
   streamingContent: string;
@@ -67,6 +83,7 @@ interface ChatMessagesProps {
   isMobile: boolean;
   textareaHeight?: number;
   isLoading: boolean;
+  isPaymentProcessing: boolean;
 }
 
 export default function ChatMessages({
@@ -85,6 +102,7 @@ export default function ChatMessages({
   isMobile,
   textareaHeight,
   isLoading,
+  isPaymentProcessing,
 }: ChatMessagesProps) {
   const [copiedMessageIndex, setCopiedMessageIndex] = useState<number | null>(
     null
@@ -102,11 +120,11 @@ export default function ChatMessages({
   const shouldAlwaysShowSystemMessage = (
     content: string | MessageContent[]
   ): boolean => {
-    const textContent = getTextFromContent(content);
+    const textContent = getTextFromContent(content).trim();
     return (
-      textContent.trim().startsWith("ATTENTION") ||
-      textContent.trim().startsWith("Uncaught Error") ||
-      textContent.trim().startsWith("Unknown Error")
+      textContent.startsWith("ATTENTION") ||
+      textContent.startsWith("Uncaught Error") ||
+      textContent.startsWith("Unknown Error")
     );
   };
 
@@ -182,17 +200,20 @@ export default function ChatMessages({
     return systemGroupMap;
   };
 
+  const systemGroupsMap = useMemo(
+    () => identifySystemGroups(),
+    [messages, getTextFromContent]
+  );
+
   // Group messages by their depth in the conversation tree
   // System message groups are treated as a single version (represented by their first message)
   const messageVersions = useMemo(() => {
     const groups = new Map<number, Message[]>();
 
-    const systemGroupMap = identifySystemGroups();
+    const systemGroupMap = systemGroupsMap;
 
     // Filter messages: exclude system messages that are part of a group (keep only first of each group)
     const messagesToVersion: Message[] = [];
-    const messageIndexMap = new Map<Message, number>(); // Maps message to original index
-
     let skipUntilIndex = -1;
     messages.forEach((msg, index) => {
       // If we're skipping (inside a system group), continue until we're past it
@@ -203,13 +224,11 @@ export default function ChatMessages({
       if (systemGroup) {
         // Add only the first message of the group
         messagesToVersion.push(systemGroup.firstMessage);
-        messageIndexMap.set(systemGroup.firstMessage, index);
         // Skip the rest of the group
         skipUntilIndex = index + systemGroup.count - 1;
       } else {
         // Regular message (user, assistant, or standalone system)
         messagesToVersion.push(msg);
-        messageIndexMap.set(msg, index);
       }
     });
 
@@ -276,7 +295,7 @@ export default function ChatMessages({
     }
 
     return groups;
-  }, [messages]);
+  }, [messages, systemGroupsMap]);
 
   const getMessageToDisplay = (message: Message, index: number) => {
     const versions = messageVersions.get(index);
@@ -351,8 +370,6 @@ export default function ChatMessages({
     },
     [messageVersions, selectedVersions]
   );
-
-  const systemGroupsMap = identifySystemGroups();
 
   // Toggle a specific system message group
   const toggleSystemGroup = (eventId: string) => {
@@ -664,7 +681,9 @@ export default function ChatMessages({
                                       <div className="flex flex-wrap gap-2 mb-2">
                                         {message.content
                                           .filter(
-                                            (item) => item.type === "image_url"
+                                            (item) =>
+                                              item.type === "image_url" &&
+                                              item.image_url?.url
                                           )
                                           .map((item, imgIndex) => (
                                             <img
@@ -1008,11 +1027,10 @@ export default function ChatMessages({
                                 : "opacity-100 md:opacity-0 md:group-hover:opacity-100"
                             } transition-opacity duration-200 flex items-center gap-2`}
                           >
-                            <button
+                            <MessageActionButton
                               onClick={() =>
                                 copyMessageContent(index, message.content)
                               }
-                              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground bg-muted/50 hover:bg-muted border border-border rounded-md px-3 py-1.5 transition-colors cursor-pointer"
                             >
                               {copiedMessageIndex === index ? (
                                 <Check className="w-3 h-3" />
@@ -1022,10 +1040,9 @@ export default function ChatMessages({
                               {copiedMessageIndex === index
                                 ? "Copied!"
                                 : "Copy"}
-                            </button>
-                            <button
+                            </MessageActionButton>
+                            <MessageActionButton
                               onClick={() => retryMessage(index)}
-                              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground bg-muted/50 hover:bg-muted border border-border rounded-md px-3 py-1.5 transition-colors cursor-pointer"
                             >
                               <svg
                                 width="12"
@@ -1050,11 +1067,10 @@ export default function ChatMessages({
                                 />
                               </svg>
                               Try Again
-                            </button>
+                            </MessageActionButton>
                             {message.satsSpent !== undefined &&
                               message.satsSpent > 0 && (
-                                <span className="flex items-center gap-1 text-xs text-amber-400/80 px-2 py-1">
-                                  -{" "}
+                                <span className="flex items-center gap-1 text-xs text-[#f7931a] px-2 py-1">
                                   {message.satsSpent.toFixed(
                                     message.satsSpent < 1 ? 3 : 0
                                   )}{" "}
@@ -1091,6 +1107,18 @@ export default function ChatMessages({
               );
             })
           )}
+
+          {isPaymentProcessing &&
+            !streamingContent &&
+            !thinkingContent &&
+            messages.length > 0 && (
+              <div className="flex flex-col items-start mb-6">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground animate-pulse">
+                  <div className="h-4 w-4 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                  Processing payment...
+                </div>
+              </div>
+            )}
 
           {thinkingContent && (
             <ThinkingSection

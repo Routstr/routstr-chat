@@ -5,8 +5,10 @@ import MarkdownRenderer from "./MarkdownRenderer";
 import { downloadImageFromSrc } from "../utils/download";
 import { FileText } from "lucide-react";
 import type { MessageContent as ChatMessageContent } from "@/types/chat";
-import { getFile } from "@/utils/indexedDb";
+import { getFile, saveFile } from "@/utils/indexedDb";
 import SourcesDropdown from "./SourcesDropdown";
+import { useBlossomSync } from "@/hooks/useBlossomSync";
+import { usePnsKeys } from "@/hooks/usePnsKeys";
 
 interface MessageContentProps {
   content: string | ChatMessageContent[];
@@ -76,6 +78,39 @@ function processAnnotations(
   return result;
 }
 
+function getImageDedupKey(
+  item: ChatMessageContent,
+  index: number
+): string {
+  const url = item.image_url?.url;
+  const storageId = item.image_url?.storageId;
+  const blossomHash = item.image_url?.blossomHash;
+
+  if (url) return `url:${url}`;
+  if (storageId) return `storage:${storageId}`;
+  if (blossomHash) return `blossom:${blossomHash}`;
+  return `index:${index}`;
+}
+
+function dedupeImageContent(
+  items: ChatMessageContent[]
+): ChatMessageContent[] {
+  const seen = new Set<string>();
+  const deduped: ChatMessageContent[] = [];
+  let imageIndex = 0;
+
+  for (const item of items) {
+    if (item.type !== "image_url") continue;
+    const key = getImageDedupKey(item, imageIndex);
+    imageIndex += 1;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(item);
+  }
+
+  return deduped;
+}
+
 export default function MessageContentRenderer({
   content,
   citations,
@@ -89,6 +124,10 @@ export default function MessageContentRenderer({
   const loadedImagesRef = useRef<Set<string>>(new Set());
   const cleanupUrlsRef = useRef<string[]>([]);
 
+  // Blossom sync for cross-device image loading
+  const { fetchFromBlossom, blossomSyncEnabled } = useBlossomSync();
+  const { pnsKeys } = usePnsKeys();
+
   const setImageStatus = (key: string, status: ImageStatus) => {
     setImageStatusMap((prev) => {
       if (prev[key] === status) return prev;
@@ -99,51 +138,102 @@ export default function MessageContentRenderer({
   const isImageLoaded = (key: string) => imageStatusMap[key] === "loaded";
   const isImageError = (key: string) => imageStatusMap[key] === "error";
 
-  // Effect to load images from IndexedDB if needed
+  // Effect to load images from IndexedDB or Blossom if needed
   useEffect(() => {
     if (typeof content === "string") return;
 
     const loadImages = async () => {
-      // console.log(content);
       const imageItems = content.filter((item) => item.type === "image_url");
 
       for (const item of imageItems) {
         if (!item.image_url) continue;
 
-        const { url, storageId } = item.image_url;
+        const { url, storageId, blossomHash, blossomServers } = item.image_url;
 
         // If we have a URL, we don't need to load from DB
         if (url && url.length > 0) continue;
 
-        // If we have a storageId but no URL, and haven't loaded it yet
-        if (storageId && !loadedImagesRef.current.has(storageId)) {
-          // Mark as loaded immediately to prevent double-loading in Strict Mode
-          loadedImagesRef.current.add(storageId);
+        // Create a unique key for this image
+        const loadKey = storageId || blossomHash;
+        if (!loadKey) continue;
 
+        // Check if we already have this image loaded
+        if (blobUrls[loadKey]) {
+          continue;
+        }
+
+        // Try IndexedDB first if we have storageId (only attempt once)
+        if (storageId && !loadedImagesRef.current.has(`idb-${storageId}`)) {
+          loadedImagesRef.current.add(`idb-${storageId}`);
           try {
             const file = await getFile(storageId);
             if (file) {
               const objectUrl = URL.createObjectURL(file);
               cleanupUrlsRef.current.push(objectUrl);
-              setBlobUrls((prev) => ({ ...prev, [storageId]: objectUrl }));
-            } else {
-              // File not found - mark as error so user sees feedback
-              setImageStatus(`error-${storageId}`, "error");
+              setBlobUrls((prev) => ({ ...prev, [loadKey]: objectUrl }));
+              continue;
             }
-          } catch (error) {
-            // Error loading file - mark as error
-            setImageStatus(`error-${storageId}`, "error");
-            console.warn(
-              `Failed to load file from storage (ID: ${storageId}):`,
-              error instanceof Error ? error.message : "Unknown error"
-            );
+          } catch {
+            // Continue to try Blossom
           }
+        }
+
+        // If IndexedDB failed or file not found, try Blossom (only if pnsKeys ready)
+        if (
+          blossomSyncEnabled &&
+          blossomHash &&
+          pnsKeys &&
+          !loadedImagesRef.current.has(`blossom-${blossomHash}`)
+        ) {
+          loadedImagesRef.current.add(`blossom-${blossomHash}`);
+          try {
+            const result = await fetchFromBlossom(
+              blossomHash,
+              pnsKeys,
+              blossomServers
+            );
+            if (result) {
+              // Create a copy to ensure proper ArrayBuffer type
+              const blobData = new Uint8Array(result.data)
+                .buffer as ArrayBuffer;
+              const blob = new Blob([blobData], { type: result.mimeType });
+              const objectUrl = URL.createObjectURL(blob);
+              cleanupUrlsRef.current.push(objectUrl);
+              setBlobUrls((prev) => ({ ...prev, [loadKey]: objectUrl }));
+
+              // Optionally save to IndexedDB for faster future access
+              if (storageId) {
+                try {
+                  const file = new File([blob], "recovered-image", {
+                    type: result.mimeType,
+                  });
+                  await saveFile(file);
+                } catch {
+                  // Ignore save errors - we already have the image displayed
+                }
+              }
+              continue; // Successfully loaded from Blossom
+            }
+          } catch {
+            // Blossom fetch failed, will show error
+          }
+        }
+
+        // Only mark as error if we've tried all available options
+        // Don't mark error if pnsKeys isn't ready and we have a blossomHash
+        if (
+          !blossomHash ||
+          (blossomHash &&
+            pnsKeys &&
+            loadedImagesRef.current.has(`blossom-${blossomHash}`))
+        ) {
+          setImageStatus(`error-${loadKey}`, "error");
         }
       }
     };
 
     loadImages();
-  }, [content]);
+  }, [content, blossomSyncEnabled, pnsKeys, fetchFromBlossom, blobUrls]);
 
   // Cleanup object URLs on unmount to prevent memory leaks
   useEffect(() => {
@@ -179,7 +269,7 @@ export default function MessageContentRenderer({
     return mimeType.toUpperCase();
   };
 
-  const imageContent = content.filter((item) => item.type === "image_url");
+  const imageContent = dedupeImageContent(content);
 
   // Separate text, image, and file content
   const textContent = content.filter(
@@ -288,10 +378,11 @@ export default function MessageContentRenderer({
         <div className="flex flex-wrap gap-4">
           {imageContent.map((item, index) => {
             const storageId = item.image_url?.storageId;
-            // Use direct URL if available, otherwise try blob URL from storageId
+            const blossomHash = item.image_url?.blossomHash;
+            // Use direct URL if available, otherwise try blob URL from storageId or blossomHash
+            const loadKey = storageId || blossomHash;
             const imageUrl =
-              item.image_url?.url ||
-              (storageId ? blobUrls[storageId] : undefined);
+              item.image_url?.url || (loadKey ? blobUrls[loadKey] : undefined);
 
             const statusKey = `${index}-${imageUrl ?? "no-url"}`;
             const loaded = isImageLoaded(statusKey);

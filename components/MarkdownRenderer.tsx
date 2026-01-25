@@ -4,7 +4,6 @@ import ReactMarkdown from "react-markdown";
 import remarkMath from "remark-math";
 import remarkGfm from "remark-gfm";
 import rehypeKatex from "rehype-katex";
-import rehypeRaw from "rehype-raw";
 import CodeBlock from "./CodeBlock";
 import "katex/dist/katex.min.css";
 import { downloadImageFromSrc } from "../utils/download";
@@ -13,6 +12,31 @@ interface MarkdownRendererProps {
   content: string;
   className?: string;
 }
+
+const getSafeHref = (href?: string) => {
+  if (!href) return null;
+  if (href.startsWith("/") || href.startsWith("#")) return href;
+  try {
+    const url = new URL(href);
+    if (["http:", "https:", "mailto:", "tel:"].includes(url.protocol)) {
+      return href;
+    }
+  } catch {}
+  return null;
+};
+
+const getSafeImageSrc = (src?: string | Blob) => {
+  if (!src) return null;
+  if (typeof src !== "string") return null;
+  if (src.startsWith("/")) return src;
+  try {
+    const url = new URL(src);
+    if (["http:", "https:", "data:", "blob:"].includes(url.protocol)) {
+      return src;
+    }
+  } catch {}
+  return null;
+};
 
 export default function MarkdownRenderer({
   content,
@@ -26,7 +50,7 @@ export default function MarkdownRenderer({
     >
       <ReactMarkdown
         remarkPlugins={[remarkMath, remarkGfm]}
-        rehypePlugins={[rehypeRaw, rehypeKatex]}
+        rehypePlugins={[rehypeKatex]}
         components={{
           // Code blocks and inline code
           code: ({ className, children, ...props }: any) => {
@@ -93,16 +117,26 @@ export default function MarkdownRenderer({
           ),
 
           // Links
-          a: ({ href, children }) => (
-            <a
-              href={href}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-400 hover:text-blue-300 underline underline-offset-2 transition-colors"
-            >
-              {children}
-            </a>
-          ),
+          a: ({ href, children }) => {
+            const safeHref = getSafeHref(href);
+            if (!safeHref) {
+              return (
+                <span className="text-blue-400 underline underline-offset-2">
+                  {children}
+                </span>
+              );
+            }
+            return (
+              <a
+                href={safeHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-400 hover:text-blue-300 underline underline-offset-2 transition-colors"
+              >
+                {children}
+              </a>
+            );
+          },
 
           // Blockquotes
           blockquote: ({ children }) => (
@@ -154,23 +188,27 @@ export default function MarkdownRenderer({
           ),
 
           // Images with download button overlay
-          img: ({ src, alt }) => (
-            <div className="relative inline-block mb-4 group">
-              <img
-                src={src}
-                alt={alt}
-                className="max-w-full h-auto rounded-lg border border-border"
-              />
-              <button
-                type="button"
-                onClick={() => src && downloadImageFromSrc(src)}
-                className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-card hover:bg-muted text-foreground text-xs rounded-md px-2 py-1 border border-border"
-                aria-label="Download image"
-              >
-                Download
-              </button>
-            </div>
-          ),
+          img: ({ src, alt }) => {
+            const safeSrc = getSafeImageSrc(src);
+            if (!safeSrc) return null;
+            return (
+              <div className="relative inline-block mb-4 group">
+                <img
+                  src={safeSrc}
+                  alt={alt}
+                  className="max-w-full h-auto rounded-lg border border-border"
+                />
+                <button
+                  type="button"
+                  onClick={() => downloadImageFromSrc(safeSrc)}
+                  className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-card hover:bg-muted text-foreground text-xs rounded-md px-2 py-1 border border-border"
+                  aria-label="Download image"
+                >
+                  Download
+                </button>
+              </div>
+            );
+          },
         }}
       >
         {content}

@@ -1,112 +1,24 @@
-import React, { useState, useEffect } from "react";
-import { Zap, Link2, Wifi, WifiOff, Loader, AlertCircle } from "lucide-react";
+import React, { useState } from "react";
+import { Link2, Wifi, WifiOff, Loader, AlertCircle } from "lucide-react";
+import { useBitcoinConnectStatus } from "@/hooks/useBitcoinConnect";
 
 const NWCWalletManager: React.FC = () => {
-  const [nwcStatus, setNwcStatus] = useState<
-    "disconnected" | "connecting" | "connected"
-  >("disconnected");
-  const [nwcBalance, setNwcBalance] = useState<number | null>(null);
+  const {
+    status: nwcStatus,
+    balance: nwcBalance,
+    providerName: walletProvider,
+    connect,
+    disconnect,
+    reset,
+  } = useBitcoinConnectStatus();
   const [isDisconnecting, setIsDisconnecting] = useState(false);
   const [showConfirmDisconnect, setShowConfirmDisconnect] = useState(false);
-  const [walletProvider, setWalletProvider] = useState<string | null>(null);
-
-  useEffect(() => {
-    let unsubConnect: undefined | (() => void);
-    let unsubDisconnect: undefined | (() => void);
-    let unsubConnecting: undefined | (() => void);
-
-    (async () => {
-      try {
-        const mod = await import("@getalby/bitcoin-connect-react");
-
-        const fetchBalance = async (provider: any): Promise<number | null> => {
-          try {
-            if (provider && typeof provider.getBalance === "function") {
-              const res = await provider.getBalance();
-              if (typeof res === "number") return res;
-              if (res && typeof res === "object") {
-                if (
-                  "balance" in res &&
-                  typeof (res as any).balance === "number"
-                ) {
-                  const unit = ((res as any).unit || "")
-                    .toString()
-                    .toLowerCase();
-                  const n = (res as any).balance as number;
-                  return unit.includes("msat") ? Math.floor(n / 1000) : n;
-                }
-                if (
-                  "balanceMsats" in res &&
-                  typeof (res as any).balanceMsats === "number"
-                ) {
-                  return Math.floor((res as any).balanceMsats / 1000);
-                }
-              }
-            }
-          } catch {}
-          return null;
-        };
-
-        unsubConnecting = mod.onConnecting?.(() => setNwcStatus("connecting"));
-        unsubConnect = mod.onConnected?.(async (provider: any) => {
-          setNwcStatus("connected");
-          const sats = await fetchBalance(provider);
-          if (sats !== null) setNwcBalance(sats);
-
-          // Extract wallet provider name
-          try {
-            const cfg = mod.getConnectorConfig?.();
-            if (cfg && typeof cfg === "object" && "name" in cfg) {
-              setWalletProvider((cfg as any).name || null);
-            }
-          } catch {}
-        });
-        unsubDisconnect = mod.onDisconnected?.(() => {
-          setNwcStatus("disconnected");
-          setNwcBalance(null);
-          setWalletProvider(null);
-        });
-
-        // Check if already connected
-        try {
-          const cfg = mod.getConnectorConfig?.();
-          if (cfg) {
-            setNwcStatus("connected");
-            // Extract wallet provider name if available
-            if (cfg && typeof cfg === "object" && "name" in cfg) {
-              setWalletProvider((cfg as any).name || null);
-            }
-            try {
-              const provider = await mod.requestProvider();
-              const sats = await fetchBalance(provider);
-              if (sats !== null) setNwcBalance(sats);
-            } catch {}
-          }
-        } catch {}
-      } catch {}
-    })();
-
-    return () => {
-      try {
-        unsubConnect && unsubConnect();
-      } catch {}
-      try {
-        unsubDisconnect && unsubDisconnect();
-      } catch {}
-      try {
-        unsubConnecting && unsubConnecting();
-      } catch {}
-    };
-  }, []);
 
   const handleDisconnect = async () => {
     setIsDisconnecting(true);
     try {
-      const mod = await import("@getalby/bitcoin-connect-react");
-      await mod.disconnect();
-      setNwcStatus("disconnected");
-      setNwcBalance(null);
-      setWalletProvider(null);
+      await disconnect();
+      reset();
     } catch (error) {
       console.error("Error disconnecting NWC wallet:", error);
     } finally {
@@ -125,8 +37,7 @@ const NWCWalletManager: React.FC = () => {
 
   const handleConnect = async () => {
     try {
-      const mod = await import("@getalby/bitcoin-connect-react");
-      await mod.launchModal();
+      await connect();
     } catch (error) {
       console.error("Error launching NWC modal:", error);
     }

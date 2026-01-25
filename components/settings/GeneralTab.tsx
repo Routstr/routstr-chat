@@ -2,14 +2,14 @@ import React, { useState, useEffect } from "react";
 import { Switch } from "@/components/ui/switch";
 import { LogOut, XCircle, Copy } from "lucide-react";
 import { AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
+import { nip19 } from "nostr-tools";
 import NostrRelayManager from "./NostrRelayManager"; // Import the new component
 import NWCWalletManager from "./NWCWalletManager"; // Import the NWC wallet manager
 import AutoRefillSettings from "./AutoRefillSettings"; // Import auto-refill settings
 import ThemeSettings from "./ThemeSettings"; // Import theme settings
-import { useLoggedInAccounts } from "@/hooks/useLoggedInAccounts";
-import { useLoginActions } from "@/hooks/useLoginActions";
-import { useNostrLogin } from "@nostrify/react/login";
 import { useChatSync } from "@/hooks/useChatSync";
+import { useAccountManager } from "@/components/ClientProviders";
+import { useObservableState } from "applesauce-react/hooks";
 import {
   loadAutoDeleteConversations,
   saveAutoDeleteConversations,
@@ -18,8 +18,6 @@ import {
 } from "@/utils/storageUtils";
 
 interface GeneralTabProps {
-  publicKey: string | undefined;
-  loginType: "nsec" | "bunker" | "extension" | `x-${string}` | undefined;
   logout?: () => void;
   router?: AppRouterInstance;
   onClose: () => void;
@@ -27,8 +25,6 @@ interface GeneralTabProps {
 }
 
 const GeneralTab: React.FC<GeneralTabProps> = ({
-  publicKey,
-  loginType,
   logout,
   router,
   onClose,
@@ -42,10 +38,9 @@ const GeneralTab: React.FC<GeneralTabProps> = ({
     alert(message); // Placeholder for a proper toast notification
   };
 
-  const { currentUser, otherUsers, setLogin, removeLogin } =
-    useLoggedInAccounts();
-  const { logins } = useNostrLogin();
-  const loginActions = useLoginActions();
+  const { manager } = useAccountManager();
+  const applesauceAccounts = useObservableState(manager.accounts$) || [];
+  const activeApplesauceAccount = useObservableState(manager.active$);
   const { chatSyncEnabled, setChatSyncEnabled } = useChatSync();
   const [autoDeleteEnabled, setAutoDeleteEnabled] = useState<boolean>(false);
   const [keepAliveEnabled, setKeepAliveEnabled] = useState<boolean>(false);
@@ -192,93 +187,76 @@ const GeneralTab: React.FC<GeneralTabProps> = ({
             Current Account
           </div>
           <div className="font-mono text-xs text-foreground/70 break-all">
-            {currentUser?.pubkey || publicKey || "Not available"}
+            {activeApplesauceAccount?.pubkey || "Not available"}
+            {activeApplesauceAccount &&
+              " [" + activeApplesauceAccount.type + "]"}
           </div>
         </div>
-        {otherUsers && otherUsers.length > 0 && (
+        {applesauceAccounts.some(
+          (acct) => acct.id !== activeApplesauceAccount?.id
+        ) && (
           <div className="mb-3 bg-muted/50 border border-border rounded-md p-3">
             <div className="text-xs text-muted-foreground mb-2">
               Switch Account
             </div>
             <div className="flex flex-col gap-2">
-              {otherUsers.map((acct) => (
-                <div key={acct.id} className="flex items-center gap-2">
-                  <div className="flex-1 font-mono text-xs text-muted-foreground break-all">
-                    {acct.pubkey}
+              {applesauceAccounts
+                .filter((acct) => acct.id !== activeApplesauceAccount?.id)
+                .map((acct) => (
+                  <div key={acct.id} className="flex items-center gap-2">
+                    <div className="flex-1 font-mono text-xs text-muted-foreground break-all">
+                      {acct.pubkey} ({acct.type})
+                    </div>
+                    <button
+                      className="px-2 py-1 rounded-md bg-muted hover:bg-muted/80 border border-border text-foreground text-xs transition-colors cursor-pointer"
+                      onClick={() => manager.setActive(acct)}
+                      type="button"
+                    >
+                      Use
+                    </button>
+                    <button
+                      className="px-2 py-1 rounded-md bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 text-xs transition-colors cursor-pointer"
+                      onClick={() => manager.removeAccount(acct.id)}
+                      type="button"
+                    >
+                      Remove
+                    </button>
                   </div>
-                  <button
-                    className="px-2 py-1 rounded-md bg-muted hover:bg-muted/80 border border-border text-foreground text-xs transition-colors cursor-pointer"
-                    onClick={() => setLogin(acct.id)}
-                    type="button"
-                  >
-                    Use
-                  </button>
-                  <button
-                    className="px-2 py-1 rounded-md bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 text-xs transition-colors cursor-pointer"
-                    onClick={() => removeLogin(acct.id)}
-                    type="button"
-                  >
-                    Remove
-                  </button>
-                </div>
-              ))}
+                ))}
             </div>
           </div>
         )}
-        <div className="mb-3 bg-muted/50 border border-border rounded-md p-3">
-          <div className="text-xs text-muted-foreground mb-2">
-            Add Account by nsec
-          </div>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              className="flex-1 bg-transparent border border-border rounded-md px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:border-foreground/30 focus:outline-none"
-              placeholder="nsec1..."
-              value={newNsec}
-              onChange={(e) => setNewNsec(e.target.value)}
-            />
-            <button
-              className="px-3 py-2 rounded-md bg-muted hover:bg-muted/80 border border-border text-foreground text-sm transition-colors cursor-pointer"
-              onClick={() => {
-                const trimmed = newNsec.trim();
-                if (!trimmed.startsWith("nsec1")) return;
-                try {
-                  loginActions.nsec(trimmed);
-                  setNewNsec("");
-                } catch {}
-              }}
-              type="button"
-            >
-              Add
-            </button>
-          </div>
-        </div>
         <div className="flex gap-2 mt-2">
-          {loginType === "nsec" && logins[0]?.data && (
-            <button
-              className="grow flex items-center justify-center gap-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 px-3 py-2 rounded-md text-sm transition-colors cursor-pointer"
-              onClick={() => {
-                const nsecData = logins[0]?.data;
-                const nsec =
-                  nsecData &&
-                  "nsec" in nsecData &&
-                  typeof nsecData.nsec === "string" &&
-                  nsecData.nsec.startsWith("nsec1")
-                    ? nsecData.nsec
-                    : "";
-                if (nsec) {
-                  navigator.clipboard.writeText(nsec);
-                  toast("nsec copied to clipboard!");
-                } else {
-                  toast("Unable to export nsec");
-                }
-              }}
-              type="button"
-            >
-              <Copy className="h-4 w-4" />
-              <span>Copy nsec</span>
-            </button>
-          )}
+          {activeApplesauceAccount &&
+            activeApplesauceAccount.type === "nsec" && (
+              <button
+                className="grow flex items-center justify-center gap-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 px-3 py-2 rounded-md text-sm transition-colors cursor-pointer"
+                onClick={() => {
+                  try {
+                    const keyData = activeApplesauceAccount.signer.key;
+                    // Convert Uint8Array to nsec format
+                    const nsec =
+                      keyData instanceof Uint8Array
+                        ? nip19.nsecEncode(keyData)
+                        : "";
+
+                    if (nsec) {
+                      navigator.clipboard.writeText(nsec);
+                      toast("nsec copied to clipboard!");
+                    } else {
+                      toast("Unable to export nsec");
+                    }
+                  } catch (error) {
+                    console.error("Error converting key to nsec:", error);
+                    toast("Unable to export nsec");
+                  }
+                }}
+                type="button"
+              >
+                <Copy className="h-4 w-4" />
+                <span>Copy nsec</span>
+              </button>
+            )}
           {logout && router && (
             <button
               className="grow flex items-center justify-center gap-2 bg-muted hover:bg-muted/80 border border-border text-foreground px-3 py-2 rounded-md text-sm transition-colors cursor-pointer"
@@ -301,7 +279,7 @@ const GeneralTab: React.FC<GeneralTabProps> = ({
       {/* Version Information */}
       <div className="mt-8 pt-4 border-t border-border">
         <div className="text-xs text-muted-foreground text-center">
-          Version 0.2.1a
+          Version 0.3.0
         </div>
       </div>
     </>

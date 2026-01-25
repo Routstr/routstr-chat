@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNostrLogin } from "@nostrify/react/login";
 import { clearAllStorage } from "@/utils/storageUtils";
+import { useAccountManager } from "@/components/ClientProviders";
+import { useObservableState } from "applesauce-react/hooks";
 
 export interface UseAuthStateReturn {
   isAuthenticated: boolean;
   authChecked: boolean;
   logout: () => Promise<void>;
-  logins: readonly any[];
 }
 
 /**
@@ -15,18 +16,24 @@ export interface UseAuthStateReturn {
  * user session persistence, and authentication checks
  */
 export const useAuthState = (): UseAuthStateReturn => {
-  const { logins, removeLogin } = useNostrLogin();
+  const { manager } = useAccountManager();
+  const accounts = useObservableState(manager.accounts$) || [];
   const [authChecked, setAuthChecked] = useState(true);
 
-  const isAuthenticated = logins.length > 0;
+  const isAuthenticated = accounts.length > 0;
 
   const logout = useCallback(async () => {
-    const login = logins[0];
-    if (login) {
-      removeLogin(login.id);
-      clearAllStorage();
+    // Logout from applesauce-accounts
+    const activeAccount = manager.active$.value;
+    if (activeAccount) {
+      // @ts-ignore
+      manager.removeAccount(activeAccount);
     }
-  }, [logins, removeLogin]);
+    // Optionally remove all accounts if that's what logout should do
+    // For now, just clearing active account and storage seems consistent with existing logic
+
+    clearAllStorage();
+  }, [manager]);
 
   // Set authChecked to true on initial render
   useEffect(() => {
@@ -37,6 +44,5 @@ export const useAuthState = (): UseAuthStateReturn => {
     isAuthenticated,
     authChecked,
     logout,
-    logins,
   };
 };

@@ -590,30 +590,6 @@ export const removeLocalCashuToken = (baseUrl: string): void => {
 };
 
 /**
- * Migrates the old 'current_cashu_token' to the new 'local_cashu_tokens' format.
- * This function should be called once to ensure backward compatibility.
- * @param baseUrl The base URL to associate with the migrated token.
- */
-export const migrateCurrentCashuToken = (baseUrl: string): void => {
-  if (!canUseLocalStorage()) return;
-  try {
-    const currentToken = localStorage.getItem("current_cashu_token");
-    if (currentToken) {
-      console.log(
-        "Migrating current_cashu_token to local_cashu_tokens format..."
-      );
-      setLocalCashuToken(baseUrl, currentToken);
-      localStorage.removeItem("current_cashu_token");
-      console.log(
-        "Migration complete: current_cashu_token moved to local_cashu_tokens."
-      );
-    }
-  } catch (error) {
-    console.error("Error migrating current_cashu_token:", error);
-  }
-};
-
-/**
  * Load disabled providers from localStorage
  * @returns Array of disabled provider base URLs
  */

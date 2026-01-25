@@ -21,6 +21,12 @@ import {
   saveDisabledProviders,
   setProviderLastUpdate,
 } from "@/utils/storageUtils";
+import {
+  getProviderEndpoints,
+  isOnionUrl,
+  isTorContext,
+  normalizeProviderUrl,
+} from "@/utils/torUtils";
 
 type ProviderItem = {
   name: string;
@@ -57,6 +63,7 @@ const ModelsTab: React.FC<ModelsTabProps> = ({
   const [isLoadingProviderModels, setIsLoadingProviderModels] = useState(false);
   const [isProviderPopoverOpen, setIsProviderPopoverOpen] = useState(false);
   const [disabledProviders, setDisabledProviders] = useState<string[]>([]);
+  const torMode = isTorContext();
 
   useEffect(() => {
     // Load disabled providers from localStorage
@@ -70,11 +77,17 @@ const ModelsTab: React.FC<ModelsTabProps> = ({
         const res = await fetch("https://api.routstr.com/v1/providers/");
         if (!res.ok) throw new Error("Failed to fetch providers");
         const data = await res.json();
-        const list: ProviderItem[] = (data?.providers ?? []).map((p: any) => ({
-          name: p.name || p.endpoint_url,
-          endpoint_url: p.endpoint_url,
-          endpoint_urls: p.endpoint_urls,
-        }));
+        let list: ProviderItem[] = (data?.providers ?? [])
+          .map((p: any) => {
+            const endpoints = getProviderEndpoints(p, torMode);
+            if (endpoints.length === 0) return null;
+            return {
+              name: p.name || p.endpoint_url || endpoints[0],
+              endpoint_url: endpoints[0],
+              endpoint_urls: endpoints.slice(1),
+            };
+          })
+          .filter(Boolean) as ProviderItem[];
         // Filter out staging providers on production
         const isProduction =
           typeof window !== "undefined" &&
@@ -85,13 +98,20 @@ const ModelsTab: React.FC<ModelsTabProps> = ({
 
         // Add localhost in development
         if (process.env.NODE_ENV === "development") {
-          filteredList = [
-            ...filteredList,
-            {
-              name: "Localhost",
-              endpoint_url: "http://localhost:8000/",
-            },
-          ];
+          const devEndpoints = getProviderEndpoints(
+            { endpoint_url: "http://localhost:8000/" },
+            torMode
+          );
+          if (devEndpoints.length > 0) {
+            filteredList = [
+              ...filteredList,
+              {
+                name: "Localhost",
+                endpoint_url: devEndpoints[0],
+                endpoint_urls: devEndpoints.slice(1),
+              },
+            ];
+          }
         }
 
         // Keep provided order; optionally alphabetical by name for UX
@@ -105,10 +125,8 @@ const ModelsTab: React.FC<ModelsTabProps> = ({
         // Filter out disabled providers for dropdown
         const disabled = loadDisabledProviders();
         const filtered = sorted.filter((p) => {
-          const primary = p.endpoint_url?.startsWith("http")
-            ? p.endpoint_url
-            : `https://${p.endpoint_url}`;
-          const normalized = primary.endsWith("/") ? primary : `${primary}/`;
+          const normalized = normalizeProviderUrl(p.endpoint_url, torMode);
+          if (!normalized) return false;
           return !disabled.includes(normalized);
         });
         setProviders(filtered);
@@ -116,10 +134,8 @@ const ModelsTab: React.FC<ModelsTabProps> = ({
         // Default selection: first entry only (no special host preference)
         if (filtered.length > 0 && !selectedProvider) {
           const baseUrlRaw = filtered[0].endpoint_url;
-          const primary = baseUrlRaw?.startsWith("http")
-            ? baseUrlRaw
-            : `https://${baseUrlRaw}`;
-          setSelectedProvider(primary.endsWith("/") ? primary : `${primary}/`);
+          const primary = normalizeProviderUrl(baseUrlRaw, torMode);
+          if (primary) setSelectedProvider(primary);
         }
       } catch (e) {
         console.error(e);
@@ -205,10 +221,7 @@ const ModelsTab: React.FC<ModelsTabProps> = ({
     if (!base) return "System default";
     try {
       const match = providers.find((pr) => {
-        const primary = pr.endpoint_url?.startsWith("http")
-          ? pr.endpoint_url
-          : `https://${pr.endpoint_url}`;
-        const normalized = primary.endsWith("/") ? primary : `${primary}/`;
+        const normalized = normalizeProviderUrl(pr.endpoint_url, torMode);
         return normalized === base;
       });
       return match ? `${match.name} — ${base}` : base;
@@ -217,15 +230,9 @@ const ModelsTab: React.FC<ModelsTabProps> = ({
     }
   };
 
-  const normalizeProviderUrl = (endpointUrl: string): string => {
-    const primary = endpointUrl?.startsWith("http")
-      ? endpointUrl
-      : `https://${endpointUrl}`;
-    return primary.endsWith("/") ? primary : `${primary}/`;
-  };
-
   const toggleProviderDisabled = (providerUrl: string) => {
-    const normalized = normalizeProviderUrl(providerUrl);
+    const normalized = normalizeProviderUrl(providerUrl, torMode);
+    if (!normalized) return;
     setDisabledProviders((prev) => {
       const isDisabled = prev.includes(normalized);
       // If re-enabling, expire cache to force fresh fetch
@@ -238,10 +245,8 @@ const ModelsTab: React.FC<ModelsTabProps> = ({
       saveDisabledProviders(updated);
       // Update filtered providers list
       const filtered = allProviders.filter((p) => {
-        const primary = p.endpoint_url?.startsWith("http")
-          ? p.endpoint_url
-          : `https://${p.endpoint_url}`;
-        const normalizedUrl = primary.endsWith("/") ? primary : `${primary}/`;
+        const normalizedUrl = normalizeProviderUrl(p.endpoint_url, torMode);
+        if (!normalizedUrl) return false;
         return !updated.includes(normalizedUrl);
       });
       setProviders(filtered);
@@ -258,8 +263,8 @@ const ModelsTab: React.FC<ModelsTabProps> = ({
   };
 
   const isProviderDisabled = (providerUrl: string): boolean => {
-    const normalized = normalizeProviderUrl(providerUrl);
-    return disabledProviders.includes(normalized);
+    const normalized = normalizeProviderUrl(providerUrl, torMode);
+    return normalized ? disabledProviders.includes(normalized) : false;
   };
 
   return (
@@ -355,9 +360,9 @@ const ModelsTab: React.FC<ModelsTabProps> = ({
                       setProviders(allProviders);
                     } else {
                       // Disable all providers
-                      const allDisabled = allProviders.map((p) =>
-                        normalizeProviderUrl(p.endpoint_url)
-                      );
+                      const allDisabled = allProviders
+                        .map((p) => normalizeProviderUrl(p.endpoint_url, torMode))
+                        .filter((value): value is string => Boolean(value));
                       setDisabledProviders(allDisabled);
                       saveDisabledProviders(allDisabled);
                       setProviders([]);
@@ -397,10 +402,16 @@ const ModelsTab: React.FC<ModelsTabProps> = ({
               ) : allProviders.length > 0 ? (
                 allProviders.map((provider) => {
                   const normalized = normalizeProviderUrl(
-                    provider.endpoint_url
+                    provider.endpoint_url,
+                    torMode
                   );
+                  if (!normalized) return null;
                   const isDisabled = isProviderDisabled(provider.endpoint_url);
-                  if (normalized.includes("http://")) return null;
+                  if (
+                    normalized.startsWith("http://") &&
+                    !isOnionUrl(normalized)
+                  )
+                    return null;
                   return (
                     <div
                       key={`${provider.name}-${normalized}`}

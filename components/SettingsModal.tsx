@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { X } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Model } from "@/types/models";
 import { AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import { TransactionHistory } from "@/types/chat";
@@ -10,16 +9,26 @@ import ModelsTab from "@/components/settings/ModelsTab";
 import HistoryTab from "./settings/HistoryTab";
 import ApiKeysTab from "./settings/ApiKeysTab";
 import UnifiedWallet from "@/features/wallet/components/UnifiedWallet";
-import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { useNostrLogin } from "@nostrify/react/login";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
-import { Drawer } from "vaul";
+import { Drawer, DrawerContent, DrawerTitle } from "@/components/ui/drawer";
 import { DEFAULT_MINT_URL } from "@/lib/utils";
+import { ModalShell } from "@/components/ui/ModalShell";
+import CloseButton from "@/components/ui/CloseButton";
+
+type SettingsTab = "settings" | "wallet" | "history" | "api-keys" | "models";
+
+const SETTINGS_TABS: { key: SettingsTab; label: string }[] = [
+  { key: "settings", label: "General" },
+  { key: "models", label: "Models" },
+  { key: "wallet", label: "Wallet" },
+  { key: "history", label: "History" },
+  { key: "api-keys", label: "API Keys" },
+];
 
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  initialActiveTab?: "settings" | "wallet" | "history" | "api-keys" | "models";
+  initialActiveTab?: SettingsTab;
   baseUrl: string;
   models: readonly Model[];
   balance: number;
@@ -63,103 +72,30 @@ const SettingsModal = ({
   fetchModels,
   isMobile: propIsMobile,
 }: SettingsModalProps) => {
-  const { user } = useCurrentUser();
-  const [activeTab, setActiveTab] = useState<
-    "settings" | "wallet" | "history" | "api-keys" | "models"
-  >(initialActiveTab || "settings");
-  const [baseUrls, setBaseUrls] = useState<string[]>([]); // State to hold base URLs
+  const [activeTab, setActiveTab] = useState<SettingsTab>(
+    initialActiveTab || "settings"
+  );
   const mediaQueryIsMobile = useMediaQuery("(max-width: 640px)");
   const isMobile = propIsMobile ?? mediaQueryIsMobile;
+  const baseUrls = baseUrl ? [baseUrl] : [];
 
-  // Derive base URLs from current baseUrl only (no defaults)
   useEffect(() => {
-    const list = baseUrl ? [baseUrl] : [];
-    setBaseUrls(list);
-  }, [baseUrl]);
+    if (isOpen) {
+      setActiveTab(initialActiveTab || "settings");
+    }
+  }, [initialActiveTab, isOpen]);
 
   if (!isOpen) return null;
 
-  const contentBody = (
-    <>
-      <div className="bg-card flex justify-between items-center p-4 shrink-0">
-        <h2 className="text-xl font-semibold text-foreground">Settings</h2>
-        <button
-          onClick={onClose}
-          className="text-foreground/70 hover:text-foreground cursor-pointer"
-        >
-          <X className="h-5 w-5" />
-        </button>
-      </div>
+  const tabButtonBase =
+    "px-4 py-2 text-sm font-medium shrink-0 whitespace-nowrap cursor-pointer";
 
-      {/* Tabs */}
-      <div className="flex border-b border-border shrink-0 overflow-x-auto">
-        <button
-          className={`px-4 py-2 text-sm font-medium shrink-0 whitespace-nowrap ${
-            activeTab === "settings"
-              ? "text-foreground border-b-2 border-foreground"
-              : "text-muted-foreground hover:text-foreground"
-          } cursor-pointer`}
-          onClick={() => setActiveTab("settings")}
-          type="button"
-        >
-          General
-        </button>
-        <button
-          className={`px-4 py-2 text-sm font-medium shrink-0 whitespace-nowrap ${
-            activeTab === "models"
-              ? "text-foreground border-b-2 border-foreground"
-              : "text-muted-foreground hover:text-foreground"
-          } cursor-pointer`}
-          onClick={() => setActiveTab("models")}
-          type="button"
-        >
-          Models
-        </button>
-        <button
-          className={`px-4 py-2 text-sm font-medium shrink-0 whitespace-nowrap ${
-            activeTab === "wallet"
-              ? "text-foreground border-b-2 border-foreground"
-              : "text-muted-foreground hover:text-foreground"
-          } cursor-pointer`}
-          onClick={() => setActiveTab("wallet")}
-          type="button"
-        >
-          Wallet
-        </button>
-        <button
-          className={`px-4 py-2 text-sm font-medium shrink-0 whitespace-nowrap ${
-            activeTab === "history"
-              ? "text-foreground border-b-2 border-foreground"
-              : "text-muted-foreground hover:text-foreground"
-          } cursor-pointer`}
-          onClick={() => setActiveTab("history")}
-          type="button"
-        >
-          History
-        </button>
-        <button
-          className={`px-4 py-2 text-sm font-medium shrink-0 whitespace-nowrap ${
-            activeTab === "api-keys"
-              ? "text-foreground border-b-2 border-foreground"
-              : "text-muted-foreground hover:text-foreground"
-          } cursor-pointer`}
-          onClick={() => setActiveTab("api-keys")}
-          type="button"
-        >
-          API Keys
-        </button>
-      </div>
-
-      <div className="p-4 flex-1 overflow-y-auto">
-        {activeTab === "settings" ? (
-          <GeneralTab
-            publicKey={user?.pubkey}
-            loginType={user?.method}
-            logout={logout}
-            router={router}
-            onClose={onClose}
-          />
-        ) : activeTab === "models" ? (
+  const renderActiveTab = () => {
+    switch (activeTab) {
+      case "settings":
+        return <GeneralTab logout={logout} router={router} onClose={onClose} />;
+      case "models":
+        return (
           <ModelsTab
             models={models}
             configuredModels={configuredModels}
@@ -169,21 +105,26 @@ const SettingsModal = ({
             setModelProviderFor={setModelProviderFor}
             fetchModels={fetchModels}
           />
-        ) : activeTab === "history" ? (
+        );
+      case "history":
+        return (
           <HistoryTab
-            transactionHistory={transactionHistory}
             setTransactionHistory={setTransactionHistory}
             clearConversations={clearConversations}
             onClose={onClose}
           />
-        ) : activeTab === "api-keys" ? (
+        );
+      case "api-keys":
+        return (
           <ApiKeysTab
             baseUrl={baseUrl}
             baseUrls={baseUrls}
             setActiveTab={setActiveTab}
             isMobile={isMobile}
           />
-        ) : activeTab === "wallet" ? (
+        );
+      case "wallet":
+        return (
           <UnifiedWallet
             balance={balance}
             setBalance={setBalance}
@@ -192,54 +133,82 @@ const SettingsModal = ({
             transactionHistory={transactionHistory}
             setTransactionHistory={setTransactionHistory}
           />
-        ) : null}
+        );
+      default:
+        return null;
+    }
+  };
+
+  const contentBody = (
+    <>
+      <div className="bg-card flex justify-between items-center p-4 shrink-0">
+        <h2 className="text-xl font-semibold text-foreground">Settings</h2>
+        <CloseButton
+          onClick={onClose}
+          className="text-foreground/70 hover:text-foreground"
+          iconClassName="h-5 w-5"
+        />
       </div>
+
+      {/* Tabs */}
+      <div className="flex border-b border-border shrink-0 overflow-x-auto">
+        {SETTINGS_TABS.map((tab) => {
+          const isActive = activeTab === tab.key;
+          return (
+            <button
+              key={tab.key}
+              className={`${tabButtonBase} ${
+                isActive
+                  ? "text-foreground border-b-2 border-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+              onClick={() => setActiveTab(tab.key)}
+              type="button"
+            >
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="p-4 flex-1 overflow-y-auto">{renderActiveTab()}</div>
     </>
   );
 
   if (isMobile) {
     return (
-      <Drawer.Root
+      <Drawer
         open={isOpen}
         onOpenChange={(open) => {
           if (!open) onClose();
         }}
       >
-        <Drawer.Portal>
-          <Drawer.Overlay className="fixed inset-0 bg-black/40 z-60" />
-          <Drawer.Content className="bg-card flex flex-col rounded-t-[10px] mt-24 h-[80%] lg:h-fit max-h-[96%] fixed bottom-0 left-0 right-0 outline-none z-60">
-            <div className="pt-4 pb-4 bg-card rounded-t-[10px] flex-1 overflow-y-auto">
-              <div
-                className="mx-auto w-12 h-1.5 shrink-0 rounded-full bg-muted-foreground/30 mb-4"
-                aria-hidden
-              />
-              <Drawer.Title className="sr-only">Settings</Drawer.Title>
-              <div className="max-w-2xl mx-auto flex flex-col h-full">
-                {contentBody}
-              </div>
+        <DrawerContent className="bg-card flex flex-col rounded-t-[10px] mt-24 h-[80%] lg:h-fit max-h-[96%] outline-none z-60">
+          <div className="pt-4 pb-4 bg-card rounded-t-[10px] flex-1 overflow-y-auto">
+            <DrawerTitle className="sr-only">Settings</DrawerTitle>
+            <div className="max-w-2xl mx-auto flex flex-col h-full">
+              {contentBody}
             </div>
-          </Drawer.Content>
-        </Drawer.Portal>
-      </Drawer.Root>
+          </div>
+        </DrawerContent>
+      </Drawer>
     );
   }
 
   return (
-    <div
-      className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center"
-      onClick={onClose}
+    <ModalShell
+      open={isOpen}
+      onClose={onClose}
+      overlayClassName="bg-black/70 backdrop-blur-sm z-50"
+      contentClassName="bg-card rounded-lg overflow-hidden w-screen h-dvh m-0 sm:max-w-2xl sm:h-[80vh] sm:m-4 border border-border shadow-lg flex flex-col"
+      contentStyle={{
+        paddingTop: "env(safe-area-inset-top)",
+        paddingBottom: "env(safe-area-inset-bottom)",
+      }}
+      closeOnOverlayClick
     >
-      <div
-        className="bg-card rounded-lg overflow-hidden w-screen h-dvh m-0 sm:max-w-2xl sm:h-[80vh] sm:m-4 border border-border shadow-lg flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          paddingTop: "env(safe-area-inset-top)",
-          paddingBottom: "env(safe-area-inset-bottom)",
-        }}
-      >
-        {contentBody}
-      </div>
-    </div>
+      {contentBody}
+    </ModalShell>
   );
 };
 

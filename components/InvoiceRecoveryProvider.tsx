@@ -65,16 +65,17 @@ export const InvoiceRecoveryProvider: React.FC<
     if (trackingInvoices.size === 0) return;
 
     const recoveredInvoices: StoredInvoice[] = [];
+    const nextTracking = new Set(trackingInvoices);
 
     invoices.forEach((inv) => {
-      if (trackingInvoices.has(inv.id)) {
+      if (nextTracking.has(inv.id)) {
         const previousState = previousInvoiceStates.current.get(inv.id);
         const currentState = inv.state as string;
 
         if (previousState && previousState !== currentState) {
           if (currentState === "PAID" || currentState === "ISSUED") {
             recoveredInvoices.push(inv);
-            trackingInvoices.delete(inv.id);
+            nextTracking.delete(inv.id);
             previousInvoiceStates.current.delete(inv.id);
           }
         }
@@ -82,7 +83,7 @@ export const InvoiceRecoveryProvider: React.FC<
     });
 
     if (recoveredInvoices.length > 0) {
-      setTrackingInvoices(new Set(trackingInvoices));
+      setTrackingInvoices(nextTracking);
 
       recoveredInvoices.forEach((inv) => {
         const action = inv.type === "mint" ? "Received" : "Sent";

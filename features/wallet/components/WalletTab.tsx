@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { ClipboardPaste } from "lucide-react";
 import { useWalletOperations } from "@/features/wallet";
 import { TransactionHistory } from "@/types/chat";
 import { MintQuoteState } from "@cashu/cashu-ts";
 import InvoiceModal from "./InvoiceModal";
 import InvoiceHistory from "./InvoiceHistory";
+import { toast } from "sonner";
 
 // Types for Cashu
 interface MintQuoteResponse {
@@ -49,6 +51,14 @@ const WalletTab: React.FC<WalletTabProps> = ({
   const [tokenToImport, setTokenToImport] = useState("");
   const [isImporting, setIsImporting] = useState(false);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+  const handlePasteTokenToImport = useCallback(async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      setTokenToImport(text);
+    } catch {
+      toast.error("Failed to read from clipboard");
+    }
+  }, []);
 
   // Use wallet operations hook
   const {
@@ -338,12 +348,22 @@ const WalletTab: React.FC<WalletTabProps> = ({
                   Via Cashu
                 </h3>
                 <div className="space-y-2">
-                  <textarea
-                    value={tokenToImport}
-                    onChange={(e) => setTokenToImport(e.target.value)}
-                    className="w-full bg-muted/50 border border-border rounded-md px-3 py-2 text-sm text-foreground h-24 focus:border-ring focus:outline-none resize-none"
-                    placeholder="Paste your Cashu token here..."
-                  />
+                  <div className="relative">
+                    <textarea
+                      value={tokenToImport}
+                      onChange={(e) => setTokenToImport(e.target.value)}
+                      className="w-full bg-muted/50 border border-border rounded-md px-3 py-2 pr-10 text-sm text-foreground h-24 focus:border-ring focus:outline-none resize-none"
+                      placeholder="Paste your Cashu token here..."
+                    />
+                    <button
+                      onClick={handlePasteTokenToImport}
+                      className="absolute top-2 right-2 bg-muted/60 hover:bg-muted border border-border text-foreground p-1.5 rounded-md transition-all cursor-pointer flex items-center justify-center"
+                      type="button"
+                      title="Paste"
+                    >
+                      <ClipboardPaste className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                   <button
                     onClick={importToken}
                     disabled={isImporting || !tokenToImport.trim()}
@@ -447,7 +467,6 @@ const WalletTab: React.FC<WalletTabProps> = ({
         checkIntervalRef={checkIntervalRef}
         countdownIntervalRef={countdownIntervalRef}
         setIsAutoChecking={setIsAutoChecking}
-        checkMintQuote={checkMintQuote}
       />
     </div>
   );

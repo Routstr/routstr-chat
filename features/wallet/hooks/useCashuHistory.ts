@@ -1,21 +1,39 @@
-import { useNostr } from "@/hooks/useNostr";
+import { useEffect } from "react";
 import { toast } from "sonner";
-import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { filter } from "rxjs";
+import { useAccountManager } from "@/components/ClientProviders";
+import { useObservableState } from "applesauce-react/hooks";
+import { useAppContext } from "@/hooks/useAppContext";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { CASHU_EVENT_KINDS } from "@/lib/cashu";
 import { SpendingHistoryEntry } from "../core/domain/Transaction";
-import { getLastEventTimestamp } from "@/lib/nostrTimestamps";
 import { useTransactionHistoryStore } from "../state/transactionHistoryStore";
-import { NostrEvent } from "nostr-tools";
+import { relayPool } from "@/lib/applesauce-core";
+import {
+  cashuUserPubkey$,
+  syncCashuHistory$,
+  historyEose$,
+  getCashuHistoryEvents,
+} from "./cashuSync";
 
 /**
  * Hook to fetch and manage the user's Cashu spending history
  */
 export function useCashuHistory() {
-  const { nostr } = useNostr();
-  const { user } = useCurrentUser();
+  const { config } = useAppContext();
+  const { manager } = useAccountManager();
+  const activeAccount = useObservableState(manager.active$);
   const queryClient = useQueryClient();
   const transactionHistoryStore = useTransactionHistoryStore();
+
+  // Activate history sync when user changes
+  useEffect(() => {
+    if (activeAccount?.pubkey) {
+      cashuUserPubkey$.next(activeAccount.pubkey);
+      const sub = syncCashuHistory$.subscribe();
+      return () => sub.unsubscribe();
+    }
+  }, [activeAccount?.pubkey]);
 
   // Create spending history event
   const createHistoryMutation = useMutation({
@@ -32,8 +50,8 @@ export function useCashuHistory() {
       destroyedTokens?: string[];
       redeemedTokens?: string[];
     }) => {
-      if (!user) throw new Error("User not logged in");
-      if (!user.signer.nip44) {
+      if (!activeAccount) throw new Error("User not logged in");
+      if (!activeAccount.nip44) {
         throw new Error("NIP-44 encryption not supported by your signer");
       }
 
@@ -46,13 +64,13 @@ export function useCashuHistory() {
       ];
 
       // Encrypt content
-      const content = await user.signer.nip44.encrypt(
-        user.pubkey,
+      const content = await activeAccount.nip44.encrypt(
+        activeAccount.pubkey,
         JSON.stringify(contentData)
       );
 
       // Create history event with unencrypted redeemed tags
-      const event = await user.signer.signEvent({
+      const event = await activeAccount.signEvent({
         kind: CASHU_EVENT_KINDS.HISTORY,
         content,
         tags: redeemedTokens.map((id) => ["e", id, "", "redeemed"]),
@@ -60,7 +78,7 @@ export function useCashuHistory() {
       });
 
       // Publish event
-      await nostr.event(event);
+      await relayPool.publish(config.relayUrls, event);
 
       // Add to transaction history store
       const historyEntry: SpendingHistoryEntry & { id: string } = {
@@ -78,38 +96,37 @@ export function useCashuHistory() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ["cashu", "history", user?.pubkey],
+        queryKey: ["cashu", "history", activeAccount?.pubkey],
       });
     },
   });
 
   const historyQuery = useQuery({
-    queryKey: ["cashu", "history", user?.pubkey],
-    queryFn: async ({ signal }) => {
-      if (!user) throw new Error("User not logged in");
-      if (!user.signer.nip44) {
+    queryKey: ["cashu", "history", activeAccount?.pubkey],
+    queryFn: async () => {
+      if (!activeAccount) throw new Error("User not logged in");
+      if (!activeAccount.nip44) {
         throw new Error("NIP-44 encryption not supported by your signer");
       }
 
-      // Get the last stored timestamp for the HISTORY event kind
-      const lastTimestamp = getLastEventTimestamp(
-        user.pubkey,
-        CASHU_EVENT_KINDS.HISTORY
-      );
+      // Wait for EOSE or timeout
+      const waitForEose = () =>
+        new Promise<void>((resolve) => {
+          if (historyEose$.getValue()) return resolve();
+          const sub = historyEose$.pipe(filter(Boolean)).subscribe(() => {
+            sub.unsubscribe();
+            resolve();
+          });
+          setTimeout(() => {
+            sub.unsubscribe();
+            resolve();
+          }, 15000);
+        });
 
-      // Create the filter with 'since' if a timestamp exists
-      const filter = {
-        kinds: [CASHU_EVENT_KINDS.HISTORY],
-        authors: [user.pubkey],
-        limit: 2100,
-      };
+      await waitForEose();
 
-      // Add the 'since' property if we have a previous timestamp
-      if (lastTimestamp) {
-        Object.assign(filter, { since: lastTimestamp });
-      }
-
-      const events = await nostr.query([filter], { signal });
+      // Get events from eventStore
+      const events = getCashuHistoryEvents(activeAccount.pubkey);
 
       if (events.length === 0) {
         return [];
@@ -122,8 +139,8 @@ export function useCashuHistory() {
           let decrypted: string;
           try {
             // Decrypt content
-            decrypted = await user.signer.nip44.decrypt(
-              user.pubkey,
+            decrypted = await activeAccount.nip44.decrypt(
+              activeAccount.pubkey,
               event.content
             );
           } catch (error) {
@@ -185,7 +202,7 @@ export function useCashuHistory() {
       // Sort by timestamp (newest first)
       return history.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
     },
-    enabled: !!user && !!user.signer.nip44,
+    enabled: !!activeAccount && !!activeAccount.nip44,
   });
 
   return {

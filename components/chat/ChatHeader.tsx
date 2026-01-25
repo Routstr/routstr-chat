@@ -21,6 +21,24 @@ interface ChatHeaderProps {
   isQrModalOpen: boolean;
 }
 
+const headerIconButtonClassName =
+  "rounded-full p-1.5 border border-border bg-muted/50 hover:bg-muted text-foreground cursor-pointer";
+
+const HeaderIconButton: React.FC<{
+  onClick: () => void;
+  ariaLabel: string;
+  className?: string;
+  children: React.ReactNode;
+}> = ({ onClick, ariaLabel, className = "", children }) => (
+  <button
+    onClick={onClick}
+    className={`${headerIconButtonClassName} ${className}`.trim()}
+    aria-label={ariaLabel}
+  >
+    {children}
+  </button>
+);
+
 const ChatHeader: React.FC<ChatHeaderProps> = ({
   onShowQRCode,
   isQrModalOpen,
@@ -75,41 +93,40 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
       >
         {/* Mobile Menu Button */}
         {isMobile && !isAuthenticated && (
-          <button
+          <HeaderIconButton
             onClick={() => setIsLoginModalOpen(true)}
-            className="absolute left-2 rounded-full p-1.5 border border-border bg-muted/50 hover:bg-muted text-foreground cursor-pointer"
+            className="absolute left-2"
+            ariaLabel="Open login"
           >
             <Menu className="h-4 w-4" />
-          </button>
+          </HeaderIconButton>
         )}
         {isMobile && isAuthenticated && (
           <div className="absolute left-2 flex gap-1.5">
-            <button
+            <HeaderIconButton
               onClick={() => setIsSidebarOpen(true)}
-              className="rounded-full p-1.5 border border-border bg-muted/50 hover:bg-muted text-foreground cursor-pointer"
-              aria-label="Open sidebar"
+              ariaLabel="Open sidebar"
             >
               <Menu className="h-4 w-4" />
-            </button>
-            <button
+            </HeaderIconButton>
+            <HeaderIconButton
               onClick={() => startNewConversation()}
-              className="rounded-full p-1.5 border border-border bg-muted/50 hover:bg-muted text-foreground cursor-pointer"
-              aria-label="New chat"
+              ariaLabel="New chat"
             >
               <SquarePen className="h-4 w-4" />
-            </button>
+            </HeaderIconButton>
           </div>
         )}
 
         {/* Desktop New Chat (only when sidebar is collapsed) */}
         {!isMobile && isAuthenticated && isSidebarCollapsed && (
-          <button
+          <HeaderIconButton
             onClick={() => startNewConversation()}
-            className="absolute left-12 rounded-full p-1.5 border border-border bg-muted/50 hover:bg-muted text-foreground cursor-pointer"
-            aria-label="New chat"
+            className="absolute left-12"
+            ariaLabel="New chat"
           >
             <SquarePen className="h-4 w-4" />
-          </button>
+          </HeaderIconButton>
         )}
 
         {/* Model Selector - left aligned; add padding on mobile and when sidebar is collapsed to avoid overlap */}

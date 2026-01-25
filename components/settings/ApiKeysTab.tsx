@@ -24,7 +24,6 @@ import {
 } from "@/utils/cashuUtils";
 import { toast } from "sonner";
 import { useApiKeysSync } from "@/hooks/useApiKeysSync"; // Import the new hook
-import { useCurrentUser } from "@/hooks/useCurrentUser"; // For checking user login
 import {
   useCashuStore,
   useCashuToken,
@@ -32,15 +31,87 @@ import {
 } from "@/features/wallet";
 import { useCashuWithXYZ } from "@/hooks/useCashuWithXYZ";
 import SettingsDialog from "@/components/ui/SettingsDialog";
+import { ModalShell } from "@/components/ui/ModalShell";
 import { DEFAULT_MINT_URL } from "@/lib/utils";
+import { removeLocalCashuToken } from "@/utils/storageUtils";
+import {
+  getProviderEndpoints,
+  isOnionUrl,
+  isTorContext,
+  normalizeProviderUrl,
+} from "@/utils/torUtils";
 
 export interface StoredApiKey {
   key: string;
-  balance: number | null; // Changed to accept null for invalid keys
-  label?: string; // Added optional label field
-  baseUrl?: string; // Added optional baseUrl field
-  isInvalid?: boolean; // New field to mark invalid keys
+  balance: number | null;
+  label?: string;
+  baseUrl?: string;
+  isInvalid?: boolean;
 }
+
+interface ProviderSelectorProps {
+  availableBaseUrls: string[];
+  selectedBaseUrl: string;
+  onBaseUrlChange: (url: string) => void;
+  showRecommendedLabels: boolean;
+  name: string;
+  recommendedProviders: Array<{
+    url: string;
+    label: string;
+    order: number;
+  }>;
+}
+
+const ProviderSelector: React.FC<ProviderSelectorProps> = ({
+  availableBaseUrls,
+  selectedBaseUrl,
+  onBaseUrlChange,
+  showRecommendedLabels,
+  name,
+  recommendedProviders,
+}) => {
+  return (
+    <div className="mb-4">
+      <p className="text-sm text-muted-foreground mb-2">
+        Select Base URL for this API Key:
+      </p>
+      <div className="max-h-32 overflow-y-auto space-y-2">
+        {availableBaseUrls.map((url: string) => {
+          const baseUrlId = encodeURIComponent(url);
+          const recommendedProvider = recommendedProviders.find((rp) =>
+            url.includes(rp.url.replace(/^https?:\/\//, "").replace(/\/$/, ""))
+          );
+          return (
+            <div className="flex items-center gap-2" key={url}>
+              <input
+                type="radio"
+                id={`${name}-${baseUrlId}`}
+                name={name}
+                className="accent-gray-500"
+                checked={selectedBaseUrl === url}
+                onChange={() => onBaseUrlChange(url)}
+              />
+              <div className="min-w-0 flex-1">
+                <label
+                  htmlFor={`${name}-${baseUrlId}`}
+                  className="text-sm text-foreground truncate block"
+                  title={url}
+                >
+                  {url}
+                  {showRecommendedLabels && recommendedProvider && (
+                    <span className="ml-2 text-xs text-muted-foreground">
+                      ({recommendedProvider.label})
+                    </span>
+                  )}
+                </label>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
 
 interface ApiKeysTabProps {
   baseUrl: string;
@@ -58,12 +129,25 @@ const ApiKeysTab = ({
   // Available provider base URLs (aggregated from providers API + current baseUrl)
   const [availableBaseUrls, setAvailableBaseUrls] = useState<string[]>([]);
   const [isLoadingBaseUrls, setIsLoadingBaseUrls] = useState<boolean>(false);
+  const torMode = isTorContext();
 
   const normalizeBaseUrl = (url: string): string => {
-    if (!url) return "";
-    const withProto = url.startsWith("http") ? url : `https://${url}`;
-    return withProto.endsWith("/") ? withProto : `${withProto}/`;
+    const normalized = normalizeProviderUrl(url, torMode);
+    if (!normalized) return "";
+    if (!torMode && isOnionUrl(normalized)) return "";
+    return normalized;
   };
+
+  // Hardcoded recommended providers with custom ordering
+  const recommendedProviders: Array<{
+    url: string;
+    label: string;
+    order: number;
+  }> = [
+    { url: "https://api.nonkycai.com/", label: "recommended", order: 1 },
+    { url: "https://api.routstr.com/", label: "recommended", order: 2 },
+    { url: "https://privateprovider.xyz/", label: "recommended", order: 3 },
+  ];
 
   // Fetch providers to populate all known base URLs
   useEffect(() => {
@@ -73,7 +157,8 @@ const ApiKeysTab = ({
         const resp = await fetch("https://api.routstr.com/v1/providers/");
         const urls = new Set<string>();
         // Always include currently selected baseUrl if present
-        if (baseUrl) urls.add(normalizeBaseUrl(baseUrl));
+        const normalizedCurrentBase = normalizeBaseUrl(baseUrl);
+        if (normalizedCurrentBase) urls.add(normalizedCurrentBase);
         if (resp.ok) {
           const data = await resp.json();
           const providers: any[] = Array.isArray(data?.providers)
@@ -85,14 +170,8 @@ const ApiKeysTab = ({
             });
           }
           providers.forEach((p: any) => {
-            const primary = p?.endpoint_url;
-            const alternates: string[] = Array.isArray(p?.endpoint_urls)
-              ? p.endpoint_urls
-              : [];
-            if (primary) urls.add(normalizeBaseUrl(primary));
-            alternates.forEach((u) => {
-              if (u) urls.add(normalizeBaseUrl(u));
-            });
+            const endpoints = getProviderEndpoints(p, torMode);
+            endpoints.forEach((endpoint) => urls.add(endpoint));
           });
         }
         // Filter out staging providers on production
@@ -103,24 +182,37 @@ const ApiKeysTab = ({
           if (isProduction && url.includes("staging")) return false;
           return true;
         });
-        // Prioritize api.routstr.com first
-        const preferred = "api.routstr.com";
+
+        // Sort providers: recommended ones first in custom order, then rest alphabetically
         list.sort((a, b) => {
-          const ap = a.includes(preferred) ? 0 : 1;
-          const bp = b.includes(preferred) ? 0 : 1;
-          return ap - bp || a.localeCompare(b);
+          const aRecommended = recommendedProviders.find((rp) =>
+            a.includes(rp.url.replace(/^https?:\/\//, "").replace(/\/$/, ""))
+          );
+          const bRecommended = recommendedProviders.find((rp) =>
+            b.includes(rp.url.replace(/^https?:\/\//, "").replace(/\/$/, ""))
+          );
+
+          const aOrder = aRecommended?.order ?? 999;
+          const bOrder = bRecommended?.order ?? 999;
+
+          if (aOrder !== bOrder) {
+            return aOrder - bOrder;
+          }
+          return a.localeCompare(b);
         });
+
         setAvailableBaseUrls(list);
         // Initialize selections if not already set
         setSelectedNewApiKeyBaseUrl(
-          (prev) => prev || list[0] || normalizeBaseUrl(baseUrl)
+          (prev) => prev || list[0] || normalizedCurrentBase
         );
         setSelectedManualApiKeyBaseUrl(
-          (prev) => prev || list[0] || normalizeBaseUrl(baseUrl)
+          (prev) => prev || list[0] || normalizedCurrentBase
         );
       } catch {
         // On error, fall back to current baseUrl if any
-        const only = baseUrl ? [normalizeBaseUrl(baseUrl)] : [];
+        const fallbackBaseUrl = normalizeBaseUrl(baseUrl);
+        const only = fallbackBaseUrl ? [fallbackBaseUrl] : [];
         setAvailableBaseUrls(only);
         setSelectedNewApiKeyBaseUrl((prev) => prev || only[0] || "");
         setSelectedManualApiKeyBaseUrl((prev) => prev || only[0] || "");
@@ -131,7 +223,6 @@ const ApiKeysTab = ({
     void fetchProviders();
   }, [baseUrl]);
 
-  const { user } = useCurrentUser();
   const {
     syncedApiKeys,
     isLoadingApiKeys,
@@ -140,6 +231,7 @@ const ApiKeysTab = ({
     deleteApiKey,
     cloudSyncEnabled,
     setCloudSyncEnabled,
+    hasActiveAccount,
   } = useApiKeysSync();
   const cashuStore = useCashuStore();
   const usingNip60 = cashuStore.getUsingNip60();
@@ -235,6 +327,7 @@ const ApiKeysTab = ({
   const [isRefreshingKey, setIsRefreshingKey] = useState<string | null>(null); // Loading state for per-key refresh
   const [editingLabelKey, setEditingLabelKey] = useState<string | null>(null); // Key currently being renamed
   const [editingLabelValue, setEditingLabelValue] = useState(""); // Temp label value for editing
+  const [showInlineCreateForm, setShowInlineCreateForm] = useState(false); // Show create API key inline when no keys exist
 
   // Ref to track previous syncedApiKeys for deep comparison
   const prevSyncedApiKeysRef = useRef<StoredApiKey[]>([]);
@@ -280,11 +373,22 @@ const ApiKeysTab = ({
 
   // Effect to manage API keys based on cloud sync setting
   useEffect(() => {
-    if (cloudSyncEnabled && user) {
+    if (cloudSyncEnabled && hasActiveAccount) {
       // Only update if syncedApiKeys content actually changed
       if (!areApiKeysEqual(prevSyncedApiKeysRef.current, syncedApiKeys)) {
         setStoredApiKeys(syncedApiKeys);
         prevSyncedApiKeysRef.current = syncedApiKeys;
+      }
+
+      // Auto-open inline create form if no keys exist after sync
+      if (
+        !isLoadingApiKeys &&
+        !isSyncingApiKeys &&
+        syncedApiKeys.length === 0
+      ) {
+        setShowInlineCreateForm(true);
+      } else {
+        setShowInlineCreateForm(false);
       }
 
       // Migrate local keys to cloud if any exist and cloud is empty
@@ -355,7 +459,18 @@ const ApiKeysTab = ({
         setStoredApiKeys((prevKeys) => (prevKeys.length > 0 ? [] : prevKeys)); // Only clear if not already empty
       }
     }
-  }, [cloudSyncEnabled, user, syncedApiKeys, baseUrl]); // Added syncedApiKeys back with proper deep comparison
+  }, [cloudSyncEnabled, syncedApiKeys, baseUrl, hasActiveAccount]); // Added hasActiveAccount dependency
+
+  // Separate effect to auto-open inline create form when no keys exist
+  useEffect(() => {
+    if (!isLoadingApiKeys && !isSyncingApiKeys) {
+      if (storedApiKeys.length === 0) {
+        setShowInlineCreateForm(true);
+      } else {
+        setShowInlineCreateForm(false);
+      }
+    }
+  }, [isLoadingApiKeys, isSyncingApiKeys, storedApiKeys.length]);
 
   const handleCopyClick = async (keyToCopy: string) => {
     if (keyToCopy) {
@@ -371,7 +486,11 @@ const ApiKeysTab = ({
   };
 
   const createApiKey = async () => {
-    setShowConfirmation(true);
+    if (storedApiKeys.length > 0) {
+      setShowConfirmation(true);
+    } else {
+      setShowInlineCreateForm(true);
+    }
   };
 
   const confirmCreateApiKey = async () => {
@@ -380,7 +499,7 @@ const ApiKeysTab = ({
       let token: string | null | { hasTokens: false } | undefined;
 
       if (!apiKeyAmount || parseInt(apiKeyAmount) <= 0) {
-        alert("Please enter a valid amount for the API key.");
+        toast.error("Please enter a valid amount for the API key.");
         return;
       }
 
@@ -440,6 +559,7 @@ const ApiKeysTab = ({
       setStoredApiKeys(updatedKeys);
       setApiKeyAmount("");
       setNewApiKeyLabel(""); // Clear label input
+      removeLocalCashuToken(selectedNewApiKeyBaseUrl); // Remove cached Cashu token after successful creation
     } catch (error) {
       console.error("Error creating API key:", error);
       toast.error(
@@ -450,6 +570,7 @@ const ApiKeysTab = ({
     } finally {
       setIsLoading(false); // Set loading to false
       setShowConfirmation(false); // Close confirmation modal after loading is complete
+      setShowInlineCreateForm(false); // Close inline form after loading is complete
     }
   };
 
@@ -501,43 +622,68 @@ const ApiKeysTab = ({
     }
   };
 
+  // Helper: persist keys to cloud or localStorage and optionally show a success toast
+  const persistKeys = async (
+    keys: StoredApiKey[],
+    successMessage?: string
+  ): Promise<void> => {
+    setStoredApiKeys(keys);
+    if (cloudSyncEnabled) {
+      await createOrUpdateApiKeys(keys);
+    } else {
+      localStorage.setItem("api_keys", JSON.stringify(keys));
+    }
+    if (successMessage) {
+      toast.success(successMessage);
+    }
+  };
+
+  // Helper: handle fetch error and optionally return a fallback key
+  const handleFetchError = (
+    error: "invalid_api_key" | "network" | "other" | null,
+    keyData: StoredApiKey,
+    context: "bulk" | "single"
+  ): StoredApiKey | null => {
+    const urlToUse = keyData.baseUrl || baseUrl;
+    if (error === "network") {
+      const msg =
+        context === "bulk"
+          ? `Base URL ${urlToUse} is not responding. Skipping key ${keyData.key}.`
+          : `Base URL ${urlToUse} is not responding. Skipping refresh.`;
+      toast.error(msg);
+      return { ...keyData, balance: null, isInvalid: true };
+    } else if (error === "other") {
+      const msg =
+        context === "bulk"
+          ? `Error refreshing balance for key ${keyData.key}.`
+          : "Error refreshing key.";
+      toast.error(msg);
+      return context === "bulk" ? keyData : null; // Keep old data for bulk, no update for single
+    } else if (error === "invalid_api_key") {
+      return { ...keyData, balance: null, isInvalid: true };
+    }
+    return null;
+  };
+
   const refreshApiKeysBalances = async () => {
-    setIsRefreshingBalances(true); // Set loading state
-    const updatedKeys: StoredApiKey[] = [];
+    setIsRefreshingBalances(true);
     try {
+      const updatedKeys: StoredApiKey[] = [];
       for (const keyData of storedApiKeys) {
         const { updatedKey, error } = await fetchUpdatedKey(keyData);
         if (updatedKey) {
           updatedKeys.push(updatedKey);
-          continue;
-        }
-
-        if (error === "network") {
-          const urlToUse = keyData.baseUrl || baseUrl;
-          toast.error(
-            `Base URL ${urlToUse} is not responding. Skipping key ${keyData.key}.`
-          );
-          // In network errors we still mark invalid (helper already does), but updatedKey is null by contract here
-          updatedKeys.push({ ...keyData, balance: null, isInvalid: true });
-        } else if (error === "other") {
-          toast.error(`Error refreshing balance for key ${keyData.key}.`);
-          updatedKeys.push(keyData); // Keep old data if other error occurs
-        } else if (error === "invalid_api_key") {
-          // Shouldn't happen because helper returns updatedKey for this case, but keep safe fallback
-          updatedKeys.push({ ...keyData, balance: null, isInvalid: true });
+        } else {
+          const fallback = handleFetchError(error, keyData, "bulk");
+          if (fallback) updatedKeys.push(fallback);
         }
       }
-      // Update local storage if not cloud syncing, otherwise the hook will handle it
-      setStoredApiKeys(updatedKeys);
-      if (cloudSyncEnabled) {
-        await createOrUpdateApiKeys(updatedKeys); // Sync updated keys to cloud
-        toast.success("API Key balances refreshed and synced to cloud!");
-      } else {
-        localStorage.setItem("api_keys", JSON.stringify(updatedKeys));
-        toast.success("API Key balances refreshed!");
-      }
+      const successMsg = cloudSyncEnabled
+        ? "API Key balances refreshed and synced to cloud!"
+        : "API Key balances refreshed!";
+      await persistKeys(updatedKeys, successMsg);
     } finally {
-      setIsRefreshingBalances(false); // Reset loading state
+      setIsRefreshingBalances(false);
     }
   };
 
@@ -549,38 +695,16 @@ const ApiKeysTab = ({
         const newKeys = storedApiKeys.map((k) =>
           k.key === keyData.key ? updatedKey : k
         );
-        setStoredApiKeys(newKeys);
-
-        if (cloudSyncEnabled) {
-          await createOrUpdateApiKeys(newKeys);
-          toast.success("API key balance refreshed!");
-        } else {
-          localStorage.setItem("api_keys", JSON.stringify(newKeys));
-          toast.success("API key balance refreshed!");
-        }
+        await persistKeys(newKeys, "API key balance refreshed!");
         return;
       }
 
-      if (error === "network") {
-        const urlToUse = keyData.baseUrl || baseUrl;
-        toast.error(
-          `Base URL ${urlToUse} is not responding. Skipping refresh.`
-        );
-      } else if (error === "other") {
-        toast.error("Error refreshing key.");
-      } else if (error === "invalid_api_key") {
-        // Mark invalid locally for single refresh as well
+      const fallback = handleFetchError(error, keyData, "single");
+      if (fallback) {
         const newKeys = storedApiKeys.map((k) =>
-          k.key === keyData.key
-            ? { ...keyData, balance: null, isInvalid: true }
-            : k
+          k.key === keyData.key ? fallback : k
         );
-        setStoredApiKeys(newKeys);
-        if (cloudSyncEnabled) {
-          await createOrUpdateApiKeys(newKeys);
-        } else {
-          localStorage.setItem("api_keys", JSON.stringify(newKeys));
-        }
+        await persistKeys(newKeys);
       }
     } finally {
       setIsRefreshingKey(null);
@@ -773,8 +897,9 @@ const ApiKeysTab = ({
       const data = await response.json();
       toast.success(`Successfully topped up ${topUpAmount} sats!`);
 
-      // Refresh the API key balances to show the updated balance
-      await refreshApiKeysBalances();
+      // Refresh only the topped-up key's balance
+      await refreshSingleApiKeyBalance(keyToTopUp);
+      if (data.msats) removeLocalCashuToken(baseUrl);
     } catch (error) {
       console.error("Error during top up:", error);
       if (error instanceof TypeError) {
@@ -866,44 +991,6 @@ const ApiKeysTab = ({
       {" "}
       {/* Added relative positioning back */}
       <h3 className="text-sm font-medium text-foreground/80">API Keys</h3>
-      {user && (
-        <div className="flex items-center justify-between p-3 bg-muted/50 rounded-md border border-border">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-foreground/80">
-              Sync with Cloud (Nostr)
-            </span>
-            <div
-              className="relative inline-block"
-              onMouseEnter={() => setShowTooltip(true)}
-              onMouseLeave={() => setShowTooltip(false)}
-            >
-              <Info className="h-4 w-4 text-muted-foreground hover:text-foreground transition-colors cursor-pointer" />
-              <div
-                className={`absolute top-full left-1/2 -translate-x-1/2 mt-2 p-3 bg-card text-foreground text-xs rounded-md shadow-lg transition-opacity duration-300 w-64 border border-border whitespace-normal z-50 ${
-                  showTooltip
-                    ? "opacity-100 pointer-events-auto"
-                    : "opacity-0 pointer-events-none"
-                }`}
-              >
-                <p>
-                  API keys are synced with Nostr using{" "}
-                  <span className="font-semibold">NIP-78</span> (Kind 30078) for
-                  addressable replaceable events.
-                </p>
-                <p className="mt-1">
-                  Data is encrypted using{" "}
-                  <span className="font-semibold">NIP-44</span> for enhanced
-                  security and privacy.
-                </p>
-              </div>
-            </div>
-          </div>
-          <Switch
-            checked={cloudSyncEnabled}
-            onCheckedChange={setCloudSyncEnabled}
-          />
-        </div>
-      )}
       <div className="bg-muted/50 border border-border rounded-md p-4">
         <div className="flex items-center justify-between">
           <div>
@@ -1018,6 +1105,74 @@ const ApiKeysTab = ({
           ))}
         </div>
       )}
+      {showInlineCreateForm && storedApiKeys.length === 0 && (
+        <div className="space-y-3 mt-6">
+          <h4 className="text-sm font-medium text-muted-foreground">
+            Create Your First API Key
+          </h4>
+          <div className="bg-muted/50 border border-border rounded-md p-4">
+            <p className="text-sm text-muted-foreground mb-4">
+              Note: Your API keys will be stored{" "}
+              {cloudSyncEnabled
+                ? "in the cloud (Nostr) and also cached locally."
+                : "only locally. If you clear your local storage, your keys and thus the BALANCE attached to them will be LOST."}
+            </p>
+            <div className="flex items-center space-x-2 mb-2">
+              <input
+                type="text"
+                placeholder="API Key Label (optional)"
+                value={newApiKeyLabel}
+                onChange={(e) => setNewApiKeyLabel(e.target.value)}
+                className="grow bg-muted/50 border border-border rounded-md px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+            </div>
+            <div className="flex items-center space-x-2 mb-2">
+              <input
+                type="number"
+                placeholder="Amount"
+                value={apiKeyAmount}
+                onChange={(e) => setApiKeyAmount(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    void confirmCreateApiKey();
+                  }
+                }}
+                className="grow bg-muted/50 border border-border rounded-md px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+              <button
+                onClick={() => setApiKeyAmount(localMintBalance.toString())}
+                className="px-3 py-2 bg-muted/50 border border-border text-muted-foreground rounded-md text-sm hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
+              >
+                Max
+              </button>
+            </div>
+            <ProviderSelector
+              availableBaseUrls={availableBaseUrls}
+              selectedBaseUrl={selectedNewApiKeyBaseUrl}
+              onBaseUrlChange={setSelectedNewApiKeyBaseUrl}
+              showRecommendedLabels={true}
+              name="inlineApiKeyBaseUrl"
+              recommendedProviders={recommendedProviders}
+            />
+            <div className="flex justify-end space-x-2">
+              <button
+                className="px-4 py-2 bg-transparent text-muted-foreground hover:text-foreground rounded-md text-sm transition-colors cursor-pointer"
+                onClick={() => setShowInlineCreateForm(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2 bg-transparent border border-border text-foreground/80 rounded-md text-sm hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
+                onClick={confirmCreateApiKey}
+                disabled={isLoading || isSyncingApiKeys}
+              >
+                {isLoading ? "Creating..." : "Create"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {storedApiKeys.length > 0 && (
         <div className="space-y-3">
           <h4 className="text-sm font-medium text-muted-foreground mt-6">
@@ -1025,14 +1180,14 @@ const ApiKeysTab = ({
               ? "Cloud Synced API Keys"
               : "Locally Stored API Keys"}
           </h4>
-          {storedApiKeys.map((keyData, index) => {
+          {storedApiKeys.map((keyData) => {
             const isExpanded = expandedKeys.has(keyData.key);
             const displayUrl = keyData.baseUrl
               ? keyData.baseUrl.replace(/^https?:\/\//, "").replace(/\/$/, "")
               : "No URL";
             return (
               <div
-                key={index}
+                key={keyData.key}
                 className="bg-muted/50 rounded-md border border-border overflow-hidden"
               >
                 {/* Single Line Compact Header */}
@@ -1253,7 +1408,7 @@ const ApiKeysTab = ({
         </div>
       )}
       <div className="pb-20"></div>
-      {showConfirmation && (
+      {showConfirmation && !showInlineCreateForm && (
         <SettingsDialog
           open={showConfirmation}
           onOpenChange={(open) => {
@@ -1331,36 +1486,14 @@ const ApiKeysTab = ({
                     Max
                   </button>
                 </div>
-                {availableBaseUrls.length >= 1 && (
-                  <div className="mb-4">
-                    <p className="text-sm text-muted-foreground mb-2">
-                      Select Base URL for this API Key:
-                    </p>
-                    <div className="max-h-32 overflow-y-auto space-y-2">
-                      {availableBaseUrls.map((url: string, index: number) => (
-                        <div className="flex items-center gap-2" key={index}>
-                          <input
-                            type="radio"
-                            id={`newApiKeyBaseUrl-${index}`}
-                            name="newApiKeyBaseUrl"
-                            className="accent-gray-500"
-                            checked={selectedNewApiKeyBaseUrl === url}
-                            onChange={() => setSelectedNewApiKeyBaseUrl(url)}
-                          />
-                          <div className="min-w-0 flex-1">
-                            <label
-                              htmlFor={`newApiKeyBaseUrl-${index}`}
-                              className="text-sm text-foreground truncate block"
-                              title={url}
-                            >
-                              {url}
-                            </label>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                <ProviderSelector
+                  availableBaseUrls={availableBaseUrls}
+                  selectedBaseUrl={selectedNewApiKeyBaseUrl}
+                  onBaseUrlChange={setSelectedNewApiKeyBaseUrl}
+                  showRecommendedLabels={true}
+                  name="newApiKeyBaseUrl"
+                  recommendedProviders={recommendedProviders}
+                />
                 <div className="flex justify-end space-x-2 mt-auto">
                   <button
                     className="px-4 py-2 bg-transparent text-muted-foreground hover:text-foreground rounded-md text-sm transition-colors cursor-pointer"
@@ -1380,176 +1513,182 @@ const ApiKeysTab = ({
           </div>
         </SettingsDialog>
       )}
-      {showDeleteConfirmation && (
-        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center">
-          <div className="bg-card rounded-lg p-6 max-w-md w-full border border-border">
-            {refundFailed ? (
-              <>
-                <h4 className="text-lg font-semibold text-foreground mb-4">
-                  Refund Failed
-                </h4>
-                <p className="text-sm text-muted-foreground mb-4">
-                  ATTENTION! The REFUND operation FAILED. Do you still want to
-                  delete this API Key? Any remaining balance will be lost.
-                  {cloudSyncEnabled
-                    ? " This will also update your cloud-synced API keys."
-                    : ""}
-                </p>
-                <div className="flex justify-end space-x-2">
-                  <button
-                    className="px-4 py-2 bg-transparent text-muted-foreground hover:text-foreground rounded-md text-sm transition-colors cursor-pointer"
-                    onClick={confirmDeleteApiKey}
-                  >
-                    Delete Anyway
-                  </button>
-                  <button
-                    className="px-4 py-2 bg-transparent border border-border text-foreground/80 rounded-md text-sm hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
-                    onClick={() => {
-                      setShowDeleteConfirmation(false);
-                      setKeyToDeleteConfirmation(null);
-                      setRefundFailed(false);
-                      setIsDeletingKey(null);
-                    }}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </>
-            ) : isDeletingKey === keyToDeleteConfirmation ||
-              isSyncingApiKeys ? (
-              <>
-                <h4 className="text-lg font-semibold text-foreground mb-4">
-                  Deleting API Key...
-                </h4>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Please wait while the API key is being deleted and{" "}
-                  {cloudSyncEnabled
-                    ? "synced to the cloud and refunded"
-                    : "refunded"}
-                  .
-                </p>
-                <div className="flex justify-center">
-                  <svg
-                    className="animate-spin h-8 w-8 text-foreground"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                  >
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                    ></circle>
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                    ></path>
-                  </svg>
-                </div>
-              </>
-            ) : (
-              <>
-                <h4 className="text-lg font-semibold text-foreground mb-4">
-                  Confirm API Key Deletion
-                </h4>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Are you sure you want to delete this API Key? This action
-                  cannot be undone. Any remaining balance will be refunded.
-                  {cloudSyncEnabled
-                    ? " This will also update your cloud-synced API keys."
-                    : ""}
-                </p>
-                <div className="flex justify-end space-x-2">
-                  <button
-                    className="px-4 py-2 bg-transparent text-muted-foreground hover:text-foreground rounded-md text-sm transition-colors cursor-pointer"
-                    onClick={() => {
-                      setShowDeleteConfirmation(false);
-                      setKeyToDeleteConfirmation(null);
-                    }}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    className="px-4 py-2 bg-transparent border border-border text-foreground/80 rounded-md text-sm hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
-                    onClick={confirmDeleteApiKey}
-                  >
-                    Confirm Delete
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      )}
-      {showTopUpModal && (
-        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center">
-          <div className="bg-card rounded-lg p-6 max-w-md w-full border border-border">
+      <ModalShell
+        open={showDeleteConfirmation}
+        overlayClassName="bg-black/70 z-50"
+        contentClassName="bg-card rounded-lg p-6 max-w-md w-full border border-border"
+      >
+        {refundFailed ? (
+          <>
             <h4 className="text-lg font-semibold text-foreground mb-4">
-              Top Up API Key
+              Refund Failed
             </h4>
             <p className="text-sm text-muted-foreground mb-4">
-              Top up "{keyToTopUp?.label || "Unnamed"}" API key with additional
-              sats.
+              ATTENTION! The REFUND operation FAILED. Do you still want to
+              delete this API Key? Any remaining balance will be lost.
+              {cloudSyncEnabled
+                ? " This will also update your cloud-synced API keys."
+                : ""}
             </p>
-            <div className="mb-4">
-              <label className="block text-sm text-muted-foreground mb-2">
-                Amount (sats):
-              </label>
-              <div className="flex items-center space-x-2">
-                <input
-                  type="number"
-                  placeholder="Enter amount"
-                  value={topUpAmount}
-                  onChange={(e) => setTopUpAmount(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      void confirmTopUp();
-                    }
-                  }}
-                  className="grow bg-muted/50 border border-border rounded-md px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                />
-                <button
-                  onClick={() => setTopUpAmount(localMintBalance.toString())}
-                  className="px-3 py-2 bg-muted/50 border border-border text-muted-foreground rounded-md text-sm hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
-                >
-                  Max
-                </button>
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                Available: {localMintBalance} sats
-              </p>
+            <div className="flex justify-end space-x-2">
+              <button
+                className="px-4 py-2 bg-transparent text-muted-foreground hover:text-foreground rounded-md text-sm transition-colors cursor-pointer"
+                onClick={confirmDeleteApiKey}
+                type="button"
+              >
+                Delete Anyway
+              </button>
+              <button
+                className="px-4 py-2 bg-transparent border border-border text-foreground/80 rounded-md text-sm hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
+                onClick={() => {
+                  setShowDeleteConfirmation(false);
+                  setKeyToDeleteConfirmation(null);
+                  setRefundFailed(false);
+                  setIsDeletingKey(null);
+                }}
+                type="button"
+              >
+                Cancel
+              </button>
             </div>
+          </>
+        ) : isDeletingKey === keyToDeleteConfirmation || isSyncingApiKeys ? (
+          <>
+            <h4 className="text-lg font-semibold text-foreground mb-4">
+              Deleting API Key...
+            </h4>
+            <p className="text-sm text-muted-foreground mb-4">
+              Please wait while the API key is being deleted and{" "}
+              {cloudSyncEnabled
+                ? "synced to the cloud and refunded"
+                : "refunded"}
+              .
+            </p>
+            <div className="flex justify-center">
+              <svg
+                className="animate-spin h-8 w-8 text-foreground"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                ></circle>
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                ></path>
+              </svg>
+            </div>
+          </>
+        ) : (
+          <>
+            <h4 className="text-lg font-semibold text-foreground mb-4">
+              Confirm API Key Deletion
+            </h4>
+            <p className="text-sm text-muted-foreground mb-4">
+              Are you sure you want to delete this API Key? This action cannot
+              be undone. Any remaining balance will be refunded.
+              {cloudSyncEnabled
+                ? " This will also update your cloud-synced API keys."
+                : ""}
+            </p>
             <div className="flex justify-end space-x-2">
               <button
                 className="px-4 py-2 bg-transparent text-muted-foreground hover:text-foreground rounded-md text-sm transition-colors cursor-pointer"
                 onClick={() => {
-                  setShowTopUpModal(false);
-                  setTopUpAmount("");
-                  setKeyToTopUp(null);
+                  setShowDeleteConfirmation(false);
+                  setKeyToDeleteConfirmation(null);
                 }}
+                type="button"
               >
                 Cancel
               </button>
               <button
-                className="px-4 py-2 bg-muted border border-border text-foreground rounded-md text-sm hover:bg-muted/80 transition-colors disabled:opacity-50 cursor-pointer"
-                onClick={confirmTopUp}
-                disabled={
-                  !topUpAmount ||
-                  parseInt(topUpAmount) <= 0 ||
-                  parseInt(topUpAmount) > localMintBalance
-                }
+                className="px-4 py-2 bg-transparent border border-border text-foreground/80 rounded-md text-sm hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
+                onClick={confirmDeleteApiKey}
+                type="button"
               >
-                Confirm Top Up
+                Confirm Delete
               </button>
             </div>
+          </>
+        )}
+      </ModalShell>
+      <ModalShell
+        open={showTopUpModal}
+        overlayClassName="bg-black/70 z-50"
+        contentClassName="bg-card rounded-lg p-6 max-w-md w-full border border-border"
+      >
+        <h4 className="text-lg font-semibold text-foreground mb-4">
+          Top Up API Key
+        </h4>
+        <p className="text-sm text-muted-foreground mb-4">
+          Top up "{keyToTopUp?.label || "Unnamed"}" API key with additional
+          sats.
+        </p>
+        <div className="mb-4">
+          <label className="block text-sm text-muted-foreground mb-2">
+            Amount (sats):
+          </label>
+          <div className="flex items-center space-x-2">
+            <input
+              type="number"
+              placeholder="Enter amount"
+              value={topUpAmount}
+              onChange={(e) => setTopUpAmount(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void confirmTopUp();
+                }
+              }}
+              className="grow bg-muted/50 border border-border rounded-md px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+            />
+            <button
+              onClick={() => setTopUpAmount(localMintBalance.toString())}
+              className="px-3 py-2 bg-muted/50 border border-border text-muted-foreground rounded-md text-sm hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
+              type="button"
+            >
+              Max
+            </button>
           </div>
+          <p className="text-xs text-muted-foreground mt-1">
+            Available: {localMintBalance} sats
+          </p>
         </div>
-      )}
+        <div className="flex justify-end space-x-2">
+          <button
+            className="px-4 py-2 bg-transparent text-muted-foreground hover:text-foreground rounded-md text-sm transition-colors cursor-pointer"
+            onClick={() => {
+              setShowTopUpModal(false);
+              setTopUpAmount("");
+              setKeyToTopUp(null);
+            }}
+            type="button"
+          >
+            Cancel
+          </button>
+          <button
+            className="px-4 py-2 bg-muted border border-border text-foreground rounded-md text-sm hover:bg-muted/80 transition-colors disabled:opacity-50 cursor-pointer"
+            onClick={confirmTopUp}
+            disabled={
+              !topUpAmount ||
+              parseInt(topUpAmount) <= 0 ||
+              parseInt(topUpAmount) > localMintBalance
+            }
+            type="button"
+          >
+            Confirm Top Up
+          </button>
+        </div>
+      </ModalShell>
       {/* Add API Key Modal */}
       {showAddApiKeyModal && (
         <SettingsDialog
@@ -1647,38 +1786,14 @@ const ApiKeysTab = ({
                     />
                   </div>
 
-                  {availableBaseUrls.length >= 1 && (
-                    <div>
-                      <label className="block text-sm text-muted-foreground mb-2">
-                        Base URL
-                      </label>
-                      <div className="max-h-32 overflow-y-auto space-y-2 bg-muted/50 rounded-md p-2 border border-border">
-                        {availableBaseUrls.map((url: string, index: number) => (
-                          <div className="flex items-center gap-2" key={index}>
-                            <input
-                              type="radio"
-                              id={`manualApiKeyBaseUrl-${index}`}
-                              name="manualApiKeyBaseUrl"
-                              className="accent-gray-500"
-                              checked={selectedManualApiKeyBaseUrl === url}
-                              onChange={() =>
-                                setSelectedManualApiKeyBaseUrl(url)
-                              }
-                            />
-                            <div className="min-w-0 flex-1">
-                              <label
-                                htmlFor={`manualApiKeyBaseUrl-${index}`}
-                                className="text-sm text-foreground truncate block"
-                                title={url}
-                              >
-                                {url}
-                              </label>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                  <ProviderSelector
+                    availableBaseUrls={availableBaseUrls}
+                    selectedBaseUrl={selectedManualApiKeyBaseUrl}
+                    onBaseUrlChange={setSelectedManualApiKeyBaseUrl}
+                    showRecommendedLabels={false}
+                    name="manualApiKeyBaseUrl"
+                    recommendedProviders={recommendedProviders}
+                  />
                 </div>
 
                 <div className="flex justify-end space-x-2 mt-6">

@@ -9,7 +9,6 @@ import { useTransactionHistoryStore } from "@/features/wallet/state/transactionH
 type ViewMode = "combined" | "separate";
 
 interface HistoryTabProps {
-  transactionHistory: TransactionHistory[];
   setTransactionHistory: (
     transactionHistory:
       | TransactionHistory[]
@@ -20,7 +19,6 @@ interface HistoryTabProps {
 }
 
 const HistoryTab: React.FC<HistoryTabProps> = ({
-  transactionHistory,
   setTransactionHistory,
   clearConversations,
   onClose,
@@ -37,12 +35,17 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
   const getHistoryEntries = useTransactionHistoryStore(
     (state) => state.getHistoryEntries
   );
+  const clearHistory = useTransactionHistoryStore(
+    (state) => state.clearHistory
+  );
   const historyEntries = getHistoryEntries();
 
   // Process entries to pair received with sent for "combined" view
   const processedEntries = useMemo(() => {
     // Sort by timestamp oldest first for pairing
-    const sorted = historyEntries;
+    const sorted = [...historyEntries].sort(
+      (a, b) => (a.timestamp || 0) - (b.timestamp || 0)
+    );
 
     const paired = new Set<string>(); // Track paired entry IDs
     const result: Array<{
@@ -130,6 +133,7 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
       )
     ) {
       setTransactionHistory([]);
+      clearHistory();
       localStorage.removeItem("transaction_history");
       localStorage.removeItem("current_cashu_token"); // Also clear pending token
       setPendingCashuAmount(null); // Clear pending amount state
@@ -165,11 +169,11 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
         </div>
 
         {/* View Mode Tabs */}
-        <div className="flex gap-1 mb-3 p-1 bg-muted/50 rounded-md w-fit">
+        <div className="inline-flex items-center gap-1 mb-3 p-1 rounded-full border border-border bg-muted/40 text-[11px] leading-none">
           <button
             type="button"
             onClick={() => setViewMode("combined")}
-            className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
+            className={`min-w-[92px] px-3 py-1.5 font-medium rounded-full transition-colors ${
               viewMode === "combined"
                 ? "bg-background text-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground"
@@ -180,7 +184,7 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
           <button
             type="button"
             onClick={() => setViewMode("separate")}
-            className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
+            className={`min-w-[92px] px-3 py-1.5 font-medium rounded-full transition-colors ${
               viewMode === "separate"
                 ? "bg-background text-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground"

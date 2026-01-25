@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   AlertCircle,
   Copy,
@@ -10,6 +10,7 @@ import {
   Plus,
   Trash2,
   Eraser,
+  ClipboardPaste,
 } from "lucide-react";
 import {
   getEncodedTokenV4,
@@ -17,6 +18,8 @@ import {
   MeltQuoteResponse,
   MintQuoteResponse,
   getDecodedToken,
+  MintQuoteState,
+  MeltQuoteState,
 } from "@cashu/cashu-ts";
 import {
   useCashuWallet,
@@ -26,7 +29,6 @@ import {
   formatBalance,
   calculateBalanceByMint,
 } from "@/features/wallet";
-import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { cn } from "@/lib/utils";
 import {
   computeTotalBalanceSats,
@@ -40,19 +42,22 @@ import {
   parseInvoiceAmount,
   createMeltQuote,
 } from "@/lib/cashuLightning";
+import { toast } from "sonner";
 import { useTransactionHistoryStore } from "@/features/wallet";
-import { PendingTransaction } from "../state/transactionHistoryStore";
+import { createPendingTransaction } from "@/utils/transactionUtils";
 import { getBalanceFromStoredProofs } from "@/utils/cashuUtils";
 import { useInvoiceSync } from "@/hooks/useInvoiceSync";
 import { useInvoiceChecker } from "@/hooks/useInvoiceChecker";
-import { MintQuoteState, MeltQuoteState } from "@cashu/cashu-ts";
 import InvoiceHistory from "./InvoiceHistory";
 import { useCashuWithXYZ } from "@/hooks/useCashuWithXYZ";
 import { DEFAULT_MINT_URL } from "@/lib/utils";
-import dynamic from "next/dynamic";
-
-// Helper function to generate unique IDs
-const generateId = () => crypto.randomUUID();
+import { useObservableState } from "applesauce-react/hooks";
+import { useAccountManager } from "@/components/ClientProviders";
+import {
+  requestBitcoinConnectProvider,
+  useBitcoinConnectStatus,
+} from "@/hooks/useBitcoinConnect";
+import BitcoinConnectStatusRow from "@/components/bitcoin-connect/BitcoinConnectStatusRow";
 
 const SixtyWallet: React.FC<{
   mintUrl: string;
@@ -98,10 +103,11 @@ const SixtyWallet: React.FC<{
   const [isRemovingMint, setIsRemovingMint] = useState(false);
   const [pendingAmount, setPendingAmount] = useState<number | null>(null);
   const [isPayingWithWallet, setIsPayingWithWallet] = useState(false);
-  const [bcStatus, setBcStatus] = useState<
-    "disconnected" | "connecting" | "connected"
-  >("disconnected");
-  const [bcBalance, setBcBalance] = useState<number | null>(null);
+  const {
+    status: bcStatus,
+    balance: bcBalance,
+    connect: connectWallet,
+  } = useBitcoinConnectStatus();
 
   // Migration state
   const [localWalletBalance, setLocalWalletBalance] = useState(0);
@@ -146,86 +152,12 @@ const SixtyWallet: React.FC<{
     }
   };
 
-  useEffect(() => {
-    let unsubConnect: undefined | (() => void);
-    let unsubDisconnect: undefined | (() => void);
-    let unsubConnecting: undefined | (() => void);
-
-    (async () => {
-      try {
-        const mod = await import("@getalby/bitcoin-connect-react");
-        const fetchBalance = async (provider: any): Promise<number | null> => {
-          try {
-            if (provider && typeof provider.getBalance === "function") {
-              const res = await provider.getBalance();
-              if (typeof res === "number") return res;
-              if (res && typeof res === "object") {
-                if (
-                  "balance" in res &&
-                  typeof (res as any).balance === "number"
-                ) {
-                  const unit = ((res as any).unit || "")
-                    .toString()
-                    .toLowerCase();
-                  const n = (res as any).balance as number;
-                  return unit.includes("msat") ? Math.floor(n / 1000) : n;
-                }
-                if (
-                  "balanceMsats" in res &&
-                  typeof (res as any).balanceMsats === "number"
-                ) {
-                  return Math.floor((res as any).balanceMsats / 1000);
-                }
-              }
-            }
-          } catch {}
-          return null;
-        };
-
-        unsubConnecting = mod.onConnecting?.(() => setBcStatus("connecting"));
-        unsubConnect = mod.onConnected?.(async (provider: any) => {
-          setBcStatus("connected");
-          const sats = await fetchBalance(provider);
-          if (sats !== null) setBcBalance(sats);
-        });
-        unsubDisconnect = mod.onDisconnected?.(() => {
-          setBcStatus("disconnected");
-          setBcBalance(null);
-        });
-
-        try {
-          const cfg = mod.getConnectorConfig?.();
-          if (cfg) {
-            setBcStatus("connected");
-            try {
-              const provider = await mod.requestProvider();
-              const sats = await fetchBalance(provider);
-              if (sats !== null) setBcBalance(sats);
-            } catch {}
-          }
-        } catch {}
-      } catch {}
-    })();
-
-    return () => {
-      try {
-        unsubConnect && unsubConnect();
-      } catch {}
-      try {
-        unsubDisconnect && unsubDisconnect();
-      } catch {}
-      try {
-        unsubConnecting && unsubConnecting();
-      } catch {}
-    };
-  }, []);
 
   const payWithConnectedWallet = async () => {
     if (!invoice) return;
     setIsPayingWithWallet(true);
     try {
-      const mod = await import("@getalby/bitcoin-connect-react");
-      const provider = await mod.requestProvider();
+      const provider = await requestBitcoinConnectProvider();
       try {
         const res = await provider.sendPayment(invoice);
         if (res && (res as any).preimage) {
@@ -256,10 +188,10 @@ const SixtyWallet: React.FC<{
 
     const amount =
       quickMintAmount !== undefined ? quickMintAmount : parseInt(receiveAmount);
+    console.log("rdlogs: ", receiveAmount);
+    console.log("rdlogs: ", isNaN(parseInt(receiveAmount)));
 
     if (isNaN(amount) || amount <= 0) {
-      console.log("rdlogs: ", receiveAmount);
-      console.log("rdlogs: ", isNaN(parseInt(receiveAmount)));
       setError("Please enter a valid amount");
       return;
     }
@@ -290,22 +222,16 @@ const SixtyWallet: React.FC<{
         expiresAt: invoiceData.expiresAt,
       });
 
-      // Create pending transaction
-      const pendingTxId = generateId();
-      const pendingTransaction: PendingTransaction = {
-        id: pendingTxId,
+      const pendingTransaction = createPendingTransaction({
         direction: "in",
-        amount: amount.toString(),
-        timestamp: Math.floor(Date.now() / 1000),
-        status: "pending",
+        amount,
         mintUrl: cashuStore.activeMintUrl,
         quoteId: invoiceData.quoteId,
         paymentRequest: invoiceData.paymentRequest,
-      };
+      });
 
-      // Store the pending transaction
       transactionHistoryStore.addPendingTransaction(pendingTransaction);
-      setPendingTransactionId(pendingTxId);
+      setPendingTransactionId(pendingTransaction.id);
 
       // Invoice checker will handle payment status automatically
     } catch (error) {
@@ -325,7 +251,8 @@ const SixtyWallet: React.FC<{
     await handleCreateInvoice(amount);
   };
 
-  const { user } = useCurrentUser();
+  const { manager } = useAccountManager();
+  const activeAccount = useObservableState(manager.active$);
   const { wallet, isLoading, updateProofs } = useCashuWallet();
   const {
     mutate: handleCreateWallet,
@@ -352,11 +279,19 @@ const SixtyWallet: React.FC<{
   const [generatedToken, setGeneratedToken] = useState(""); // For send
   const [tokenToImport, setTokenToImport] = useState(""); // For receive
   const [sendAmount, setSendAmount] = useState(""); // For send
+  const handlePasteTokenToImport = useCallback(async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      setTokenToImport(text);
+    } catch {
+      toast.error("Failed to read from clipboard");
+    }
+  }, []);
 
   useEffect(() => {
     if (createWalletError) {
-      setError(createWalletError.message);
       console.log(createWalletError.message);
+      setError(createWalletError.message);
     }
   }, [createWalletError]);
 
@@ -431,10 +366,10 @@ const SixtyWallet: React.FC<{
 
   const handleRemoveMint = async (mintUrl: string) => {
     try {
+      console.log(mintUrl);
       setIsRemovingMint(true);
       setError(null);
       setSuccessMessage(null);
-      console.log(mintUrl);
 
       await removeMint(mintUrl);
       setSuccessMessage(
@@ -534,7 +469,6 @@ const SixtyWallet: React.FC<{
 
   // Handle lightning send invoice input
   const handleInvoiceInput = async (value: string) => {
-    console.log("rdlogs:gm", processingInvoiceRef.current, currentMeltQuoteId);
     if (!cashuStore.activeMintUrl) {
       setError(
         "No active mint selected. Please select a mint in your wallet settings."
@@ -549,6 +483,7 @@ const SixtyWallet: React.FC<{
 
     setSendInvoice(value);
     processingInvoiceRef.current = value;
+    console.log("rdlogs:gm", processingInvoiceRef.current, currentMeltQuoteId);
 
     // Create melt quote
     const mintUrl = cashuStore.activeMintUrl;
@@ -801,13 +736,13 @@ const SixtyWallet: React.FC<{
           <div className="mt-4">
             <button
               onClick={() => handleCreateWallet()}
-              disabled={!user}
+              disabled={!activeAccount}
               className="bg-muted border border-border text-foreground px-4 py-2 rounded-md text-sm font-medium hover:bg-muted/80 transition-colors disabled:opacity-50 cursor-pointer"
               type="button"
             >
               Create Wallet
             </button>
-            {!user && (
+            {!activeAccount && (
               <div className="bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-300 p-3 rounded-md text-sm mt-4">
                 <div className="flex items-center">
                   <AlertCircle className="h-4 w-4 mr-2" />
@@ -1095,41 +1030,12 @@ const SixtyWallet: React.FC<{
                 </h3>
 
                 {/* Bitcoin Connect: Connect Wallet */}
-                <div className="bg-muted/50 border border-border rounded-md p-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-xs text-muted-foreground">
-                      Wallet (NWC)
-                    </span>
-                    {bcStatus === "connected" ? (
-                      <div className="flex items-center gap-2 text-xs">
-                        <span className="text-green-600 dark:text-green-400">
-                          Connected
-                        </span>
-                        {bcBalance !== null && (
-                          <span className="text-muted-foreground">
-                            • {bcBalance.toLocaleString()} sats
-                          </span>
-                        )}
-                      </div>
-                    ) : (
-                      <button
-                        onClick={async () => {
-                          try {
-                            const mod =
-                              await import("@getalby/bitcoin-connect-react");
-                            mod.launchModal();
-                          } catch {}
-                        }}
-                        className="px-3 py-1.5 text-xs bg-muted border border-border rounded-md text-foreground hover:bg-muted/80"
-                        type="button"
-                      >
-                        {bcStatus === "connecting"
-                          ? "Connecting…"
-                          : "Connect wallet"}
-                      </button>
-                    )}
-                  </div>
-                </div>
+                <BitcoinConnectStatusRow
+                  status={bcStatus}
+                  balance={bcBalance}
+                  onConnect={connectWallet}
+                  className="rounded-md p-3"
+                />
 
                 {/* Quick Mint Buttons */}
                 <div className="space-y-2">
@@ -1243,12 +1149,22 @@ const SixtyWallet: React.FC<{
                   Via Cashu
                 </h3>
                 <div className="space-y-2">
-                  <textarea
-                    value={tokenToImport}
-                    onChange={(e) => setTokenToImport(e.target.value)}
-                    className="w-full bg-muted/50 border border-border rounded-md px-3 py-2 text-sm text-foreground h-24 focus:border-ring focus:outline-none resize-none"
-                    placeholder="Paste your Cashu token here..."
-                  />
+                  <div className="relative">
+                    <textarea
+                      value={tokenToImport}
+                      onChange={(e) => setTokenToImport(e.target.value)}
+                      className="w-full bg-muted/50 border border-border rounded-md px-3 py-2 pr-10 text-sm text-foreground h-24 focus:border-ring focus:outline-none resize-none"
+                      placeholder="Paste your Cashu token here..."
+                    />
+                    <button
+                      onClick={handlePasteTokenToImport}
+                      className="absolute top-2 right-2 bg-muted/60 hover:bg-muted border border-border text-foreground p-1.5 rounded-md transition-all cursor-pointer flex items-center justify-center"
+                      type="button"
+                      title="Paste"
+                    >
+                      <ClipboardPaste className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                   <button
                     onClick={handleReceiveToken}
                     disabled={isImporting || !tokenToImport.trim()}
@@ -1435,7 +1351,6 @@ const SixtyWallet: React.FC<{
         checkIntervalRef={{ current: null }}
         countdownIntervalRef={{ current: null }}
         setIsAutoChecking={() => {}}
-        checkMintQuote={() => Promise.resolve()}
         onPayWithWallet={async () => {
           await payWithConnectedWallet();
         }}

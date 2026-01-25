@@ -1,6 +1,7 @@
-import { create } from "zustand";
-import { persist, createJSONStorage } from "zustand/middleware";
+import { create, StateCreator } from "zustand";
+import { persist, createJSONStorage, StateStorage } from "zustand/middleware";
 import { NostrEvent } from "nostr-tools";
+import { openDB, IDBPDatabase } from "idb";
 import { EventStoreState, Filter } from "./types";
 import {
   isAnyReplaceable,
@@ -13,6 +14,48 @@ import {
   matchesAnyFilter,
   getTimeline as getTimelineFromEvents,
 } from "./filters";
+
+const DB_NAME = "zustand-event-store";
+const STORE_NAME = "keyval";
+const DB_VERSION = 1;
+
+/**
+ * Get or create the IndexedDB database instance
+ */
+let dbPromise: Promise<IDBPDatabase> | null = null;
+
+function getDB(): Promise<IDBPDatabase> {
+  if (!dbPromise) {
+    dbPromise = openDB(DB_NAME, DB_VERSION, {
+      upgrade(db) {
+        if (!db.objectStoreNames.contains(STORE_NAME)) {
+          db.createObjectStore(STORE_NAME);
+        }
+      },
+    });
+  }
+  return dbPromise;
+}
+
+/**
+ * IndexedDB storage adapter for Zustand persist middleware
+ * Uses the idb library for IndexedDB access
+ */
+const indexedDBStorage: StateStorage = {
+  getItem: async (name: string): Promise<string | null> => {
+    const db = await getDB();
+    const value = await db.get(STORE_NAME, name);
+    return value ?? null;
+  },
+  setItem: async (name: string, value: string): Promise<void> => {
+    const db = await getDB();
+    await db.put(STORE_NAME, value, name);
+  },
+  removeItem: async (name: string): Promise<void> => {
+    const db = await getDB();
+    await db.delete(STORE_NAME, name);
+  },
+};
 
 /**
  * Zustand-based Event Database
@@ -291,7 +334,7 @@ export const useEventDatabase = create<EventStoreState>()(
     }),
     {
       name: "nostr-event-store",
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => indexedDBStorage),
       // Only persist data, not methods
       partialize: (state) => ({
         events: state.events,

@@ -80,6 +80,7 @@ export class MintService {
           return { [keyset.id]: keysetVar };
         })
       );
+      console.log("Filtered Keysets", filteredKeysets, keys);
 
       return { mintInfo, keysets: filteredKeysets, keys: keys };
     } catch (error) {

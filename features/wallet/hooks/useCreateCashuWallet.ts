@@ -1,5 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
-import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useAccountManager } from "@/components/ClientProviders";
+import { useObservableState } from "applesauce-react/hooks";
 import { useCashuWallet } from "./useCashuWallet";
 import { useCashuStore } from "../state/cashuStore";
 import { defaultMints } from "../core/services/MintService";
@@ -12,13 +13,14 @@ import { bytesToHex } from "@noble/hashes/utils";
  * @returns A mutation for creating a Cashu wallet
  */
 export function useCreateCashuWallet() {
-  const { user } = useCurrentUser();
+  const { manager } = useAccountManager();
+  const activeAccount = useObservableState(manager.active$);
   const { createWallet } = useCashuWallet();
   const cashuStore = useCashuStore();
 
   return useMutation({
     mutationFn: async () => {
-      if (!user) {
+      if (!activeAccount) {
         throw new Error("You must be logged in to create a wallet");
       }
 

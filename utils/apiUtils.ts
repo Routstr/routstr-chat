@@ -25,6 +25,7 @@ import { SpendCashuResult } from "@/hooks/useCashuWithXYZ";
 import { Model } from "@/types/models";
 import { getModelForBase, getRequiredSatsForModel } from "./modelUtils";
 import { saveFile } from "@/utils/indexedDb";
+import { isOnionUrl, isTorContext } from "@/utils/torUtils";
 
 export interface FetchAIResponseParams {
   messageHistory: Message[];
@@ -49,7 +50,11 @@ export interface FetchAIResponseParams {
   onTransactionUpdate: (transaction: TransactionHistory) => void;
   transactionHistory: TransactionHistory[];
   onTokenCreated: (amount: number) => void;
+  onPaymentProcessing?: (isProcessing: boolean) => void;
   onLastMessageSatsUpdate?: (satsSpent: number) => void;
+  onBlossomUpload?: (
+    file: File
+  ) => Promise<{ hash: string; servers: string[] } | null>;
 }
 
 interface APIErrorVerdict {
@@ -71,6 +76,7 @@ function findNextBestProvider(
   failedProviders: Set<string>
 ): string | null {
   try {
+    const torMode = isTorContext();
     // Load all cached provider models from storage
     const modelsFromAllProviders = getStorageItem<Record<string, Model[]>>(
       "modelsFromAllProviders",
@@ -91,7 +97,8 @@ function findNextBestProvider(
       if (
         baseUrl === currentBaseUrl ||
         failedProviders.has(baseUrl) ||
-        disabledProviders.has(baseUrl)
+        disabledProviders.has(baseUrl) ||
+        (!torMode && isOnionUrl(baseUrl))
       ) {
         continue;
       }
@@ -399,7 +406,9 @@ export const fetchAIResponse = async (
     onTransactionUpdate,
     transactionHistory,
     onTokenCreated,
+    onPaymentProcessing,
     onLastMessageSatsUpdate,
+    onBlossomUpload,
   } = params;
 
   const initialBalance = usingNip60 ? balance : getBalanceFromStoredProofs();
@@ -418,8 +427,9 @@ export const fetchAIResponse = async (
   try {
     const storedToken = getLocalCashuToken(baseUrl);
 
+    onPaymentProcessing?.(true);
     const result = await spendCashu(mintUrl, tokenAmount, baseUrl, true);
-
+    
     if (result.status === "failed" || !result.token) {
       const errorMessage =
         result.error ||
@@ -525,7 +535,9 @@ export const fetchAIResponse = async (
             )
           );
         } else {
-          onMessageAppend(await createAssistantMessage(streamingResult));
+          onMessageAppend(
+            await createAssistantMessage(streamingResult, onBlossomUpload)
+          );
         }
       } else {
         logApiError(
@@ -852,15 +864,45 @@ function mergeImages(
   newImages: ImageData[]
 ): void {
   newImages.forEach((img) => {
-    const existingIndex = accumulatedImages.findIndex(
-      (existing) => existing.index === img.index
-    );
+    const newUrl = img.image_url?.url;
+    const existingIndex = accumulatedImages.findIndex((existing) => {
+      const existingUrl = existing.image_url?.url;
+      if (newUrl && existingUrl) {
+        return existingUrl === newUrl;
+      }
+      if (img.index !== undefined && existing.index !== undefined) {
+        return existing.index === img.index;
+      }
+      return false;
+    });
     if (existingIndex === -1) {
       accumulatedImages.push(img);
     } else {
       accumulatedImages[existingIndex] = img;
     }
   });
+}
+
+function dedupeImages(images: ImageData[]): ImageData[] {
+  const seen = new Set<string>();
+  const deduped: ImageData[] = [];
+
+  for (const img of images) {
+    const key = img.image_url?.url
+      ? `url:${img.image_url.url}`
+      : img.index !== undefined
+        ? `index:${img.index}`
+        : null;
+
+    if (key) {
+      if (seen.has(key)) continue;
+      seen.add(key);
+    }
+
+    deduped.push(img);
+  }
+
+  return deduped;
 }
 
 /**
@@ -885,12 +927,19 @@ function dataUrlToFile(dataUrl: string, filename: string): File {
 /**
  * Creates an assistant message from streaming result
  * @param streamingResult The result from streaming response
+ * @param onBlossomUpload Optional callback to upload images to Blossom for cross-device sync
  * @returns Assistant message with text, images, and optional thinking
  */
 async function createAssistantMessage(
-  streamingResult: StreamingResult
+  streamingResult: StreamingResult,
+  onBlossomUpload?: (
+    file: File
+  ) => Promise<{ hash: string; servers: string[] } | null>
 ): Promise<Message> {
-  const hasImages = streamingResult.images && streamingResult.images.length > 0;
+  const uniqueImages = streamingResult.images
+    ? dedupeImages(streamingResult.images)
+    : undefined;
+  const hasImages = uniqueImages && uniqueImages.length > 0;
   const hasThinking = streamingResult.thinking !== undefined;
   const hasCitations =
     streamingResult.citations && streamingResult.citations.length > 0;
@@ -922,17 +971,21 @@ async function createAssistantMessage(
     }
 
     // Process images and save to IndexedDB
-    if (streamingResult.images) {
-      for (let i = 0; i < streamingResult.images.length; i++) {
-        const img = streamingResult.images[i];
+    if (uniqueImages) {
+      for (let i = 0; i < uniqueImages.length; i++) {
+        const img = uniqueImages[i];
         let storageId: string | undefined;
+        let blossomHash: string | undefined;
+        let blossomServers: string[] | undefined;
+
+        // Convert base64 URL to File
+        const file = dataUrlToFile(
+          img.image_url.url,
+          `ai-image-${Date.now()}-${i}.png`
+        );
 
         try {
-          // Convert base64 URL to File and save to IndexedDB
-          const file = dataUrlToFile(
-            img.image_url.url,
-            `ai-image-${Date.now()}-${i}.png`
-          );
+          // Save to IndexedDB
           storageId = await saveFile(file);
         } catch (error) {
           const errorMessage =
@@ -947,11 +1000,26 @@ async function createAssistantMessage(
           // Continue without storageId (will rely on base64 in memory)
         }
 
+        // Upload to Blossom for cross-device sync (await to get hash)
+        if (onBlossomUpload) {
+          try {
+            const result = await onBlossomUpload(file);
+            if (result) {
+              blossomHash = result.hash;
+              blossomServers = result.servers;
+            }
+          } catch {
+            // Ignore Blossom upload errors, continue without sync
+          }
+        }
+
         content.push({
           type: "image_url",
           image_url: {
             url: img.image_url.url,
             storageId,
+            blossomHash,
+            blossomServers,
           },
         });
       }

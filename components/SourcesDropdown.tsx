@@ -41,7 +41,7 @@ export default function SourcesDropdown({
             <div>
               <ol className="space-y-2">
                 {citations.map((url, index) => (
-                  <li key={index} className="flex items-start gap-2">
+                  <li key={`${url}-${index}`} className="flex items-start gap-2">
                     <span className="text-xs text-muted-foreground mt-0.5 min-w-[16px]">
                       {index + 1}.
                     </span>
@@ -64,7 +64,10 @@ export default function SourcesDropdown({
             <div>
               <ol className="space-y-2">
                 {annotations.map((annotation, index) => (
-                  <li key={index} className="flex items-start gap-2">
+                  <li
+                    key={`${annotation.url}-${annotation.start_index}-${annotation.end_index}-${index}`}
+                    className="flex items-start gap-2"
+                  >
                     <span className="text-xs text-muted-foreground mt-0.5 min-w-[16px]">
                       {index + 1}.
                     </span>

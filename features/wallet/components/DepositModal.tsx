@@ -7,6 +7,7 @@ import {
   Zap,
   ArrowRight,
   Info,
+  ClipboardPaste,
 } from "lucide-react";
 import QRCode from "react-qr-code";
 import {
@@ -17,7 +18,7 @@ import {
   calculateBalanceByMint,
   useTransactionHistoryStore,
 } from "@/features/wallet";
-import { PendingTransaction } from "../state/transactionHistoryStore";
+import { createPendingTransaction } from "@/utils/transactionUtils";
 import {
   createLightningInvoice,
   mintTokensFromPaidInvoice,
@@ -26,6 +27,9 @@ import { useInvoiceSync } from "@/hooks/useInvoiceSync";
 import { useInvoiceChecker } from "@/hooks/useInvoiceChecker";
 import { MintQuoteState } from "@cashu/cashu-ts";
 import dynamic from "next/dynamic";
+import { toast } from "sonner";
+import { ModalShell } from "@/components/ui/ModalShell";
+import CloseButton from "@/components/ui/CloseButton";
 
 const BCButton = dynamic(
   () => import("@getalby/bitcoin-connect-react").then((m) => m.Button),
@@ -35,9 +39,6 @@ const BCPayButton = dynamic(
   () => import("@getalby/bitcoin-connect-react").then((m) => m.PayButton),
   { ssr: false }
 );
-
-// Helper function to generate unique IDs
-const generateId = () => crypto.randomUUID();
 
 interface DepositModalProps {
   isOpen: boolean;
@@ -60,26 +61,7 @@ const DepositModal: React.FC<DepositModalProps> = ({
   initialAmount,
   autoCreate,
 }) => {
-  const modalRef = useRef<HTMLDivElement>(null);
   const hasAutoCreatedRef = useRef(false);
-
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        modalRef.current &&
-        !modalRef.current.contains(event.target as Node)
-      ) {
-        onClose();
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [isOpen, onClose]);
 
   const popularAmounts = [100, 500, 1000];
 
@@ -181,26 +163,22 @@ const DepositModal: React.FC<DepositModalProps> = ({
         expiresAt: invoiceData.expiresAt,
       });
 
-      const pendingTxId = generateId();
-      const pendingTransaction: PendingTransaction = {
-        id: pendingTxId,
+      const pendingTransaction = createPendingTransaction({
         direction: "in",
-        amount: amount.toString(),
-        timestamp: Math.floor(Date.now() / 1000),
-        status: "pending",
+        amount,
         mintUrl: cashuStore.activeMintUrl,
         quoteId: invoiceData.quoteId,
         paymentRequest: invoiceData.paymentRequest,
-      };
+      });
 
       transactionHistoryStore.addPendingTransaction(pendingTransaction);
-      setPendingTransactionId(pendingTxId);
+      setPendingTransactionId(pendingTransaction.id);
 
       checkPaymentStatus(
         cashuStore.activeMintUrl,
         invoiceData.quoteId,
         amount,
-        pendingTxId
+        pendingTransaction.id
       );
     } catch (error) {
       console.error("Error creating invoice:", error);
@@ -324,6 +302,14 @@ const DepositModal: React.FC<DepositModalProps> = ({
 
   const [tokenToImport, setTokenToImport] = useState("");
   const [isImporting, setIsImporting] = useState(false);
+  const handlePasteTokenToImport = useCallback(async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      setTokenToImport(text);
+    } catch {
+      toast.error("Failed to read from clipboard");
+    }
+  }, []);
 
   const handleReceiveToken = async () => {
     if (!tokenToImport) {
@@ -349,36 +335,23 @@ const DepositModal: React.FC<DepositModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-      <div
-        ref={modalRef}
-        className="bg-card border border-border rounded-md p-4 max-w-sm w-full max-h-[90vh] overflow-y-auto relative"
-      >
-        <button
-          onClick={onClose}
-          className="absolute top-3 right-3 text-white/50 hover:text-white"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={1.5}
-            stroke="currentColor"
-            className="w-4 h-4"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M6 18L18 6M6 6l12 12"
-            />
-          </svg>
-        </button>
-        <h2 className="text-xl font-semibold text-white mb-4">Deposit Funds</h2>
-        {initialAmount && initialAmount > 0 && (
-          <div className="bg-white/5 border border-white/20 rounded-md p-2 text-white/70 text-xs mb-3">
-            Suggested amount: {initialAmount} sats
-          </div>
-        )}
+    <ModalShell
+      open={isOpen}
+      onClose={onClose}
+      overlayClassName="bg-black/60 z-50 p-4"
+      contentClassName="bg-card border border-border rounded-md p-4 max-w-sm w-full max-h-[90vh] overflow-y-auto relative"
+      closeOnOverlayClick
+    >
+      <CloseButton
+        onClick={onClose}
+        className="absolute top-3 right-3 text-white/50 hover:text-white"
+      />
+      <h2 className="text-xl font-semibold text-white mb-4">Deposit Funds</h2>
+      {initialAmount && initialAmount > 0 && (
+        <div className="bg-white/5 border border-white/20 rounded-md p-2 text-white/70 text-xs mb-3">
+          Suggested amount: {initialAmount} sats
+        </div>
+      )}
 
         {isLoading && (
           <div className="bg-blue-500/10 border border-blue-500/30 text-blue-200 p-3 rounded-md text-sm mb-4 flex items-center">
@@ -536,13 +509,24 @@ const DepositModal: React.FC<DepositModalProps> = ({
           <div className="space-y-4">
             <h3 className="text-sm font-medium text-white/80">Via Cashu</h3>
             <div className="space-y-2">
-              <textarea
-                value={tokenToImport}
-                onChange={(e) => setTokenToImport(e.target.value)}
-                disabled={isLoading}
-                className="w-full bg-white/5 border border-white/10 rounded-md px-3 py-2 text-sm text-white h-24 focus:border-white/30 focus:outline-none resize-none disabled:opacity-50"
-                placeholder="Paste your Cashu token here..."
-              />
+              <div className="relative">
+                <textarea
+                  value={tokenToImport}
+                  onChange={(e) => setTokenToImport(e.target.value)}
+                  disabled={isLoading}
+                  className="w-full bg-white/5 border border-white/10 rounded-md px-3 py-2 pr-10 text-sm text-white h-24 focus:border-white/30 focus:outline-none resize-none disabled:opacity-50"
+                  placeholder="Paste your Cashu token here..."
+                />
+                <button
+                  onClick={handlePasteTokenToImport}
+                  className="absolute top-2 right-2 bg-white/10 hover:bg-white/15 border border-white/10 text-white p-1.5 rounded-md transition-all cursor-pointer flex items-center justify-center"
+                  type="button"
+                  title="Paste"
+                  disabled={isLoading}
+                >
+                  <ClipboardPaste className="h-3.5 w-3.5" />
+                </button>
+              </div>
               <button
                 onClick={handleReceiveToken}
                 disabled={isImporting || !tokenToImport.trim() || isLoading}
@@ -554,8 +538,7 @@ const DepositModal: React.FC<DepositModalProps> = ({
             </div>
           </div>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 };
 

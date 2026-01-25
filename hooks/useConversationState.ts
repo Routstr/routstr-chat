@@ -7,7 +7,6 @@ import {
   deleteConversationFromStorage,
   clearAllConversations,
   sortConversationsByRecentActivity,
-  persistConversationsSnapshot,
 } from "@/utils/conversationUtils";
 import {
   getTextFromContent,
@@ -16,7 +15,6 @@ import {
 import {
   loadActiveConversationId,
   saveActiveConversationId,
-  loadLastUsedModel,
   loadSatsSpentMap,
   saveSatsSpent,
   loadAutoDeleteConversations,
@@ -29,7 +27,6 @@ import {
 import { eventStore } from "@/lib/applesauce-core";
 import { useChatSync1081, derivedPnsKeys$ } from "./useChatSync1081";
 import { PnsKeys, SALT_PNS, createPnsDeletionEvent } from "@/lib/pns";
-import { SyncDirection } from "applesauce-relay";
 import { useDeletionSync } from "./useDeletionSync";
 
 export interface UseConversationStateReturn {
@@ -456,6 +453,7 @@ export const useConversationState = (): UseConversationStateReturn => {
     (conversationId: string, message: Message) => {
       // Get or create conversation in map
       let conversation = conversationsMapRef.current.get(conversationId);
+      console.log("COULD FIND,", conversation, conversationId);
 
       if (!conversation) {
         // Create new conversation if it doesn't exist
@@ -486,7 +484,6 @@ export const useConversationState = (): UseConversationStateReturn => {
       }
 
       if (activeConversationId === conversationId) {
-        console.log(activeConversationId, conversationId);
         setMessages([...conversation.messages]);
       }
     },
