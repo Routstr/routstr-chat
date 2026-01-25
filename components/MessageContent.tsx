@@ -9,6 +9,7 @@ import { getFile, saveFile } from "@/utils/indexedDb";
 import SourcesDropdown from "./SourcesDropdown";
 import { useBlossomSync } from "@/hooks/useBlossomSync";
 import { usePnsKeys } from "@/hooks/usePnsKeys";
+import { storeStorageIdMapping } from "@/utils/storageUtils";
 
 interface MessageContentProps {
   content: string | ChatMessageContent[];
@@ -78,10 +79,7 @@ function processAnnotations(
   return result;
 }
 
-function getImageDedupKey(
-  item: ChatMessageContent,
-  index: number
-): string {
+function getImageDedupKey(item: ChatMessageContent, index: number): string {
   const url = item.image_url?.url;
   const storageId = item.image_url?.storageId;
   const blossomHash = item.image_url?.blossomHash;
@@ -92,9 +90,7 @@ function getImageDedupKey(
   return `index:${index}`;
 }
 
-function dedupeImageContent(
-  items: ChatMessageContent[]
-): ChatMessageContent[] {
+function dedupeImageContent(items: ChatMessageContent[]): ChatMessageContent[] {
   const seen = new Set<string>();
   const deduped: ChatMessageContent[] = [];
   let imageIndex = 0;
@@ -207,7 +203,8 @@ export default function MessageContentRenderer({
                   const file = new File([blob], "recovered-image", {
                     type: result.mimeType,
                   });
-                  await saveFile(file);
+                  const newStorageId = await saveFile(file);
+                  storeStorageIdMapping(storageId, newStorageId);
                 } catch {
                   // Ignore save errors - we already have the image displayed
                 }

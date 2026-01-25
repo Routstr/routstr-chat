@@ -502,6 +502,7 @@ export const STORAGE_KEYS = {
   TOPUP_PROMPT_SEEN: "topup_prompt_seen",
   CREATED_EPHEMERAL_NSEC: "created_ephemeral_nsec",
   DISABLED_PROVIDERS: "disabled_providers",
+  STORAGE_ID_MAPPING: "storage_id_mapping",
   MINTS_FROM_ALL_PROVIDERS: "mints_from_all_providers",
   INFO_FROM_ALL_PROVIDERS: "info_from_all_providers",
   LAST_MODELS_UPDATE: "lastModelsUpdate",
@@ -918,4 +919,53 @@ export const saveSatsSpent = (eventId: string, satsSpent: number): void => {
 export const getSatsSpent = (eventId: string): number | undefined => {
   const map = loadSatsSpentMap();
   return map[eventId];
+};
+
+// ============================================
+// Storage ID Mapping (old storage ID -> new storage ID)
+// ============================================
+
+/**
+ * Load storage ID mapping from localStorage
+ * @returns Map of old storage ID -> new storage ID
+ */
+export const loadStorageIdMapping = (): Record<string, string> => {
+  return getStorageItem<Record<string, string>>(
+    STORAGE_KEYS.STORAGE_ID_MAPPING,
+    {}
+  );
+};
+
+/**
+ * Save storage ID mapping to localStorage
+ * @param mapping Map of old storage ID -> new storage ID
+ */
+export const saveStorageIdMapping = (mapping: Record<string, string>): void => {
+  setStorageItem(STORAGE_KEYS.STORAGE_ID_MAPPING, mapping);
+};
+
+/**
+ * Store a single storage ID mapping (old -> new)
+ * @param storageId The old storage ID
+ * @param newStorageId The new storage ID
+ */
+export const storeStorageIdMapping = (
+  storageId: string,
+  newStorageId: string
+): void => {
+  const mapping = loadStorageIdMapping();
+  mapping[storageId] = newStorageId;
+  saveStorageIdMapping(mapping);
+};
+
+/**
+ * Get the new storage ID for a given old storage ID
+ * @param storageId The old storage ID to look up
+ * @returns The new storage ID, or undefined if not found
+ */
+export const getMappedStorageId = (
+  storageId: string
+): string | undefined => {
+  const mapping = loadStorageIdMapping();
+  return mapping[storageId];
 };

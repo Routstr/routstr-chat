@@ -1,5 +1,6 @@
 import { Message, MessageAttachment, MessageContent } from "@/types/chat";
 import { getFile } from "@/utils/indexedDb";
+import { getMappedStorageId } from "./storageUtils";
 
 /**
  * Extracts text content from a message that can be either string or multimodal content
@@ -101,7 +102,8 @@ export const convertMessageForAPI = async (
         // If URL is empty and storageId exists, fetch from IndexedDB
         if (url === "" && storageId) {
           try {
-            const file = await getFile(storageId);
+            const mappedStorageId = getMappedStorageId(storageId) ?? storageId;
+            const file = await getFile(mappedStorageId);
             if (file) {
               const base64Url = await fileToBase64(file);
               return {
