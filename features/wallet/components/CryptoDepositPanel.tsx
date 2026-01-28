@@ -323,11 +323,7 @@ const CryptoDepositPanel: React.FC<CryptoDepositPanelProps> = ({
       transactionHistoryStore.addPendingTransaction(pendingTransaction);
       pendingTxIdRef.current = pendingTransaction.id;
 
-      const polygonRefundAddress = "0xd1e10eda29aa7d2802d09beca928b3e095e92be5";
-      const userAddress =
-        selectedOption.chain === "Polygon"
-          ? polygonRefundAddress
-          : "0x0000000000000000000000000000000000000000";
+      const userAddress = "0x0000000000000000000000000000000000000000";
       const userId = generateUserId(activeAccount?.pubkey ?? null);
 
       console.info("[CryptoDeposit] Creating LendaSwap", {

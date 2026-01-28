@@ -1,7 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import ClientProviders from "@/components/ClientProviders";
+import dynamic from "next/dynamic";
+const ClientProviders = dynamic(() => import("@/components/ClientProviders"), {
+  ssr: false,
+});
 import { Toaster } from "@/components/ui/sonner";
 import BitcoinConnectClient from "@/components/bitcoin-connect/BitcoinConnectClient";
 import SWUpdater from "@/components/SWUpdater";
