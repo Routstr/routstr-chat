@@ -566,7 +566,9 @@ export function useCashuWallet() {
 
   // Check localStorage for timeout status to ensure consistency across hook instances
   const hasTimedOut =
-    didRelaysTimeout || localStorage.getItem("cashu_relays_timeout") === "true";
+    didRelaysTimeout ||
+    (typeof window !== "undefined" &&
+      localStorage.getItem("cashu_relays_timeout") === "true");
 
   return {
     wallet: walletQuery.data?.wallet,
