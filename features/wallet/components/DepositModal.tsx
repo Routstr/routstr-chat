@@ -30,6 +30,7 @@ import dynamic from "next/dynamic";
 import { toast } from "sonner";
 import { ModalShell } from "@/components/ui/ModalShell";
 import CloseButton from "@/components/ui/CloseButton";
+import CryptoDepositPanel from "@/features/wallet/components/CryptoDepositPanel";
 
 const BCButton = dynamic(
   () => import("@getalby/bitcoin-connect-react").then((m) => m.Button),
@@ -536,6 +537,12 @@ const DepositModal: React.FC<DepositModalProps> = ({
                 {isImporting ? "Importing..." : "Import Token"}
               </button>
             </div>
+          </div>
+
+          {/* Crypto Deposit Section */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-medium text-white/80">Via Crypto</h3>
+            <CryptoDepositPanel />
           </div>
         </div>
     </ModalShell>

@@ -55,6 +55,7 @@ const ChatContainer: React.FC<ChatContainerProps> = ({
   return (
     <div
       className={`flex h-dvh w-full bg-background text-foreground overflow-hidden`}
+      suppressHydrationWarning
     >
       {/* Mobile Sidebar Overlay */}
       {isMobile && isAuthenticated && (

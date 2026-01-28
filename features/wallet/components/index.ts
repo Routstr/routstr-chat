@@ -4,6 +4,7 @@
 
 export { default as BalanceDisplay } from "./BalanceDisplay";
 export { default as DepositModal } from "./DepositModal";
+export { default as CryptoDepositPanel } from "./CryptoDepositPanel";
 export { default as SixtyWallet } from "./SixtyWallet";
 export { default as WalletTab } from "./WalletTab";
 export { default as UnifiedWallet } from "./UnifiedWallet";

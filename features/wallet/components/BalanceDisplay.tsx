@@ -54,6 +54,7 @@ import BalancePopoverHeader from "@/features/wallet/components/balance/BalancePo
 import BalanceOverviewTab from "@/features/wallet/components/balance/BalanceOverviewTab";
 import BalanceActivityTab from "@/features/wallet/components/balance/BalanceActivityTab";
 import BalanceInvoiceTab from "@/features/wallet/components/balance/BalanceInvoiceTab";
+import CryptoDepositPanel from "@/features/wallet/components/CryptoDepositPanel";
 
 /**
  * User balance and authentication status component with comprehensive wallet popover
@@ -112,7 +113,7 @@ const BalanceDisplay: React.FC<BalanceDisplayProps> = ({
   const [isPayingInvoice, setIsPayingInvoice] = useState(false);
 
   // Receive state
-  const [receiveTab, setReceiveTab] = useState<"lightning" | "token">(
+  const [receiveTab, setReceiveTab] = useState<"lightning" | "crypto" | "token">(
     "lightning"
   );
   const [mintAmount, setMintAmount] = useState("");
@@ -1483,7 +1484,7 @@ const BalanceDisplay: React.FC<BalanceDisplayProps> = ({
                   {/* Note about msats if using msat unit */}
                   {msatNote}
 
-                  {/* Sub-tabs for Lightning/Token */}
+                  {/* Sub-tabs for Lightning/Token/Crypto */}
                   <div className="flex bg-muted/50 rounded-lg p-1">
                     <button
                       onClick={() => setReceiveTab("lightning")}
@@ -1502,6 +1503,13 @@ const BalanceDisplay: React.FC<BalanceDisplayProps> = ({
                       type="button"
                     >
                       Token
+                    </button>
+                    <button
+                      onClick={() => setReceiveTab("crypto")}
+                      className={getSubTabClass(receiveTab === "crypto")}
+                      type="button"
+                    >
+                      Crypto
                     </button>
                   </div>
 
@@ -1612,6 +1620,10 @@ const BalanceDisplay: React.FC<BalanceDisplayProps> = ({
                         Import a Cashu token to add sats to your wallet
                       </div>
                     </div>
+                  )}
+
+                  {receiveTab === "crypto" && (
+                    <CryptoDepositPanel />
                   )}
                 </div>
               )}

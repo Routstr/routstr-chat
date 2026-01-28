@@ -1,6 +1,7 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 
 interface ModalShellProps {
@@ -30,7 +31,14 @@ export const ModalShell: React.FC<ModalShellProps> = ({
   contentRole = "dialog",
   contentAriaLabel,
 }) => {
-  if (!open) return null;
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    return () => setMounted(false);
+  }, []);
+
+  if (!open || !mounted) return null;
 
   const shouldStopPropagation =
     stopPropagation ?? (closeOnAnyClick ? false : true);
@@ -46,10 +54,10 @@ export const ModalShell: React.FC<ModalShellProps> = ({
     }
   };
 
-  return (
+  return createPortal(
     <div
       className={cn(
-        "fixed inset-0 flex items-center justify-center",
+        "fixed inset-0 flex items-center justify-center z-9999",
         overlayClassName
       )}
       onMouseDown={handleOverlayMouseDown}
@@ -66,6 +74,7 @@ export const ModalShell: React.FC<ModalShellProps> = ({
       >
         {children}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

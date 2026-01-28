@@ -49,6 +49,7 @@ import { DEFAULT_MINT_URL } from "@/lib/utils";
 import { toast } from "sonner";
 import { ModalShell } from "@/components/ui/ModalShell";
 import CloseButton from "@/components/ui/CloseButton";
+import CryptoDepositPanel from "@/features/wallet/components/CryptoDepositPanel";
 import {
   requestBitcoinConnectProvider,
   useBitcoinConnectStatus,
@@ -103,9 +104,9 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
   } = useBitcoinConnectStatus();
   const [cashuToken, setCashuToken] = useState("");
   const [isReceivingToken, setIsReceivingToken] = useState(false);
-  const [activeTab, setActiveTab] = useState<"lightning" | "token" | "wallet">(
-    "lightning"
-  );
+  const [activeTab, setActiveTab] = useState<
+    "lightning" | "crypto" | "token" | "wallet"
+  >("lightning");
   const [nwcCustomAmount, setNwcCustomAmount] = useState("");
   const [isPayingWithNWC, setIsPayingWithNWC] = useState(false);
   const [activePage, setActivePage] = useState<"topup" | "login">(
@@ -783,6 +784,7 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
     { key: "lightning" as const, label: "Lightning" },
     { key: "token" as const, label: "Token" },
     { key: "wallet" as const, label: "NWC" },
+    { key: "crypto" as const, label: "Crypto" },
   ];
 
   const topUpTabButtonBase =
@@ -987,6 +989,11 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
               </button>
             </div>
           </div>
+        )}
+
+        {/* Crypto Tab */}
+        {activeTab === "crypto" && (
+          <CryptoDepositPanel />
         )}
 
         {/* Wallet Tab */}
@@ -1487,7 +1494,7 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
         }}
       >
         <DrawerContent
-          className={`bg-card flex flex-col rounded-t-[10px] mt-24 ${dialogHeightClass} outline-none z-[60] overflow-hidden`}
+          className={`bg-card flex flex-col rounded-t-[10px] mt-24 ${dialogHeightClass} outline-none z-60 overflow-hidden`}
         >
           <div className="pt-4 pb-4 bg-card rounded-t-[10px] flex-1 flex flex-col min-h-0">
             <DrawerTitle className="sr-only">{headerTitle}</DrawerTitle>

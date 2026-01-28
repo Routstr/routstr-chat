@@ -21,11 +21,23 @@ export function useInvoiceChecker() {
   const checkMintInvoice = useCallback(
     async (invoice: StoredInvoice) => {
       try {
+        console.info("[InvoiceChecker] Checking mint invoice", {
+          id: invoice.id,
+          mintUrl: invoice.mintUrl,
+          quoteId: invoice.quoteId,
+          amount: invoice.amount,
+          state: invoice.state,
+        });
         const mint = new Mint(invoice.mintUrl);
         const wallet = new Wallet(mint);
         await wallet.loadMint();
 
         const quoteStatus = await wallet.checkMintQuote(invoice.quoteId);
+        console.info("[InvoiceChecker] Mint quote status", {
+          id: invoice.id,
+          quoteId: invoice.quoteId,
+          state: quoteStatus.state,
+        });
 
         if (
           (quoteStatus.state === MintQuoteState.PAID ||
@@ -42,12 +54,21 @@ export function useInvoiceChecker() {
           // Only try to mint if state is PAID (not ISSUED, which means tokens already exist)
           if (quoteStatus.state === MintQuoteState.PAID) {
             try {
+              console.info("[InvoiceChecker] Minting proofs", {
+                id: invoice.id,
+                quoteId: invoice.quoteId,
+                amount: invoice.amount,
+              });
               const proofs = await wallet.mintProofs(
                 invoice.amount,
                 invoice.quoteId
               );
 
               if (proofs.length > 0) {
+                console.info("[InvoiceChecker] Minted proofs", {
+                  id: invoice.id,
+                  count: proofs.length,
+                });
                 // Add proofs to store
                 cashuStore.addProofs(proofs, `invoice-${invoice.id}`);
 
@@ -83,9 +104,14 @@ export function useInvoiceChecker() {
                 "Error minting tokens for paid invoice:",
                 mintError
               );
+              console.info("[InvoiceChecker] Minting error details", mintError);
 
               // Check if tokens were already issued (in case of race condition)
               try {
+                console.info("[InvoiceChecker] Rechecking mint quote", {
+                  id: invoice.id,
+                  quoteId: invoice.quoteId,
+                });
                 const recheckStatus = await wallet.checkMintQuote(
                   invoice.quoteId
                 );
@@ -96,6 +122,10 @@ export function useInvoiceChecker() {
                     invoice.quoteId
                   );
                   if (proofs.length > 0) {
+                    console.info("[InvoiceChecker] Recovered proofs", {
+                      id: invoice.id,
+                      count: proofs.length,
+                    });
                     cashuStore.addProofs(proofs, `invoice-${invoice.id}`);
                     await updateInvoice(invoice.id, {
                       state: MintQuoteState.ISSUED,
@@ -123,6 +153,10 @@ export function useInvoiceChecker() {
                   }
                 }
               } catch (recoveryError) {
+                console.info(
+                  "[InvoiceChecker] Recovery error",
+                  recoveryError
+                );
                 console.error("Failed to recover tokens:", recoveryError);
               }
 
@@ -140,11 +174,19 @@ export function useInvoiceChecker() {
             );
 
             try {
+              console.info("[InvoiceChecker] Attempting issued recovery", {
+                id: invoice.id,
+                quoteId: invoice.quoteId,
+              });
               const proofs = await wallet.mintProofs(
                 invoice.amount,
                 invoice.quoteId
               );
               if (proofs.length > 0) {
+                console.info("[InvoiceChecker] Issued recovery proofs", {
+                  id: invoice.id,
+                  count: proofs.length,
+                });
                 cashuStore.addProofs(proofs, `invoice-${invoice.id}`);
 
                 // Only show success if balance actually increased (tokens were recovered)
@@ -178,6 +220,10 @@ export function useInvoiceChecker() {
             } catch (recoveryError: any) {
               // Silently ignore "already issued" errors - this is normal
               if (!recoveryError?.message?.includes("already issued")) {
+                console.info(
+                  "[InvoiceChecker] Issued recovery error",
+                  recoveryError
+                );
                 console.error(
                   "Failed to recover issued tokens:",
                   recoveryError
@@ -191,11 +237,21 @@ export function useInvoiceChecker() {
           }
         } else if (quoteStatus.state !== invoice.state) {
           // Just update the state if it changed
+          console.info("[InvoiceChecker] Updating invoice state", {
+            id: invoice.id,
+            from: invoice.state,
+            to: quoteStatus.state,
+          });
           await updateInvoice(invoice.id, { state: quoteStatus.state });
         }
 
         return false;
       } catch (error) {
+        console.info("[InvoiceChecker] Mint invoice check error", {
+          id: invoice.id,
+          quoteId: invoice.quoteId,
+          error,
+        });
         console.error(`Error checking mint invoice ${invoice.id}:`, error);
 
         // Update retry count and next retry time
@@ -221,11 +277,23 @@ export function useInvoiceChecker() {
   const checkMeltInvoice = useCallback(
     async (invoice: StoredInvoice) => {
       try {
+        console.info("[InvoiceChecker] Checking melt invoice", {
+          id: invoice.id,
+          mintUrl: invoice.mintUrl,
+          quoteId: invoice.quoteId,
+          amount: invoice.amount,
+          state: invoice.state,
+        });
         const mint = new Mint(invoice.mintUrl);
         const wallet = new Wallet(mint);
         await wallet.loadMint();
 
         const quoteStatus = await wallet.checkMeltQuote(invoice.quoteId);
+        console.info("[InvoiceChecker] Melt quote status", {
+          id: invoice.id,
+          quoteId: invoice.quoteId,
+          state: quoteStatus.state,
+        });
 
         if (
           quoteStatus.state === MeltQuoteState.PAID &&
@@ -254,6 +322,11 @@ export function useInvoiceChecker() {
 
         return false;
       } catch (error) {
+        console.info("[InvoiceChecker] Melt invoice check error", {
+          id: invoice.id,
+          quoteId: invoice.quoteId,
+          error,
+        });
         console.error(`Error checking melt invoice ${invoice.id}:`, error);
 
         // Update retry count and next retry time
@@ -286,6 +359,9 @@ export function useInvoiceChecker() {
     const pending = getPendingInvoices();
     if (pending.length === 0) return;
 
+    console.info("[InvoiceChecker] Checking pending invoices", {
+      count: pending.length,
+    });
     setIsChecking(true);
     lastCheckRef.current = now;
 
@@ -303,9 +379,14 @@ export function useInvoiceChecker() {
         (r) => r.status === "fulfilled" && r.value
       ).length;
 
+      console.info("[InvoiceChecker] Pending invoice results", {
+        successCount,
+        total: results.length,
+      });
       if (successCount > 0) {
       }
     } catch (error) {
+      console.info("[InvoiceChecker] Pending check error", error);
       console.error("Error checking pending invoices:", error);
     } finally {
       setIsChecking(false);
@@ -321,6 +402,7 @@ export function useInvoiceChecker() {
   // Set up automatic checking interval
   useEffect(() => {
     // Check immediately on mount
+    console.info("[InvoiceChecker] Initial check");
     checkPendingInvoices();
 
     // Clean up old invoices on mount
