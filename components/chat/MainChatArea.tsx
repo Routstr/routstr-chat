@@ -1,6 +1,7 @@
 "use client";
 
-import React from "react";
+import React, { useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import { useChat } from "@/context/ChatProvider";
 import { useAuth } from "@/context/AuthProvider";
 import ChatMessages from "./ChatMessages";
@@ -14,6 +15,9 @@ import { getTextFromContent } from "@/utils/messageUtils";
  */
 const MainChatArea: React.FC = () => {
   const { isAuthenticated } = useAuth();
+  const searchParams = useSearchParams();
+  const chatIdFromUrl = useMemo(() => searchParams.get("chatId"), [searchParams]);
+  
   const {
     // Message State
     messages,
@@ -49,6 +53,8 @@ const MainChatArea: React.FC = () => {
     // Conversation State
     activeConversationId,
     getActiveConversationId,
+    conversationsLoaded,
+    isSyncing,
 
     // API State
     selectedModel,
@@ -61,6 +67,12 @@ const MainChatArea: React.FC = () => {
     saveInlineEdit,
     retryMessage,
   } = useChat();
+
+  const isLoadingChatFromUrl = useMemo(() => {
+    if (!chatIdFromUrl) return false;
+    if (chatIdFromUrl === activeConversationId && messages.length > 0) return false;
+    return !conversationsLoaded || isSyncing;
+  }, [chatIdFromUrl, activeConversationId, messages.length, conversationsLoaded, isSyncing]);
 
   const handleSendMessage = async () => {
     await sendMessage(
@@ -122,6 +134,7 @@ const MainChatArea: React.FC = () => {
         textareaHeight={textareaHeight}
         isLoading={isLoading}
         isPaymentProcessing={isPaymentProcessing}
+        isLoadingChatFromUrl={isLoadingChatFromUrl}
       />
 
       {/* Chat Input */}
@@ -139,6 +152,7 @@ const MainChatArea: React.FC = () => {
         hasMessages={messages.length > 0}
         isLoadingModels={isLoadingModels}
         isWalletLoading={isWalletLoading}
+        isLoadingChatFromUrl={isLoadingChatFromUrl}
       />
     </>
   );

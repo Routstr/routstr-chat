@@ -1,5 +1,8 @@
 "use client";
 
+// Initialize logger early to intercept all console calls
+import "@/lib/logger";
+
 import {
   ReactNode,
   useEffect,
@@ -7,7 +10,6 @@ import {
   createContext,
   useContext,
 } from "react";
-import NostrProvider from "@/components/NostrProvider";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import dynamic from "next/dynamic";
 import { migrateStorageItems, saveRelays } from "@/utils/storageUtils";
@@ -15,12 +17,6 @@ import { InvoiceRecoveryProvider } from "@/components/InvoiceRecoveryProvider";
 import { AccountManager } from "applesauce-accounts";
 import { registerCommonAccountTypes } from "applesauce-accounts/accounts";
 import { merge, Subject } from "rxjs";
-import { relayPool } from "@/lib/applesauce-core";
-
-const DynamicNostrLoginProvider = dynamic(
-  () => import("@nostrify/react/login").then((mod) => mod.NostrLoginProvider),
-  { ssr: false }
-);
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
@@ -162,13 +158,9 @@ export default function ClientProviders({ children }: { children: ReactNode }) {
           defaultConfig={defaultConfig}
           presetRelays={presetRelays}
         >
-          <DynamicNostrLoginProvider storageKey="nostr:login">
-            <NostrProvider>
-              <QueryClientProvider client={queryClient}>
-                <InvoiceRecoveryProvider>{children}</InvoiceRecoveryProvider>
-              </QueryClientProvider>
-            </NostrProvider>
-          </DynamicNostrLoginProvider>
+          <QueryClientProvider client={queryClient}>
+            <InvoiceRecoveryProvider>{children}</InvoiceRecoveryProvider>
+          </QueryClientProvider>
         </AppProvider>
       </ThemeProvider>
     </AccountContext.Provider>

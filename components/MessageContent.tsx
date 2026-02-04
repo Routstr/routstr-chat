@@ -18,6 +18,25 @@ interface MessageContentProps {
 }
 
 /**
+ * Extracts the domain from a URL, including subdomains (but removes www.)
+ * @param url The URL to extract domain from
+ * @returns The domain (e.g., "google.com" from "https://www.google.com")
+ */
+function extractDomain(url: string): string {
+  try {
+    const urlObj = new URL(url);
+    let hostname = urlObj.hostname;
+    // Remove www. prefix if present
+    if (hostname.startsWith("www.")) {
+      hostname = hostname.slice(4);
+    }
+    return hostname;
+  } catch {
+    return url;
+  }
+}
+
+/**
  * Processes text content to replace citation markers [1], [2], etc. with markdown links
  * @param text The text content with citation markers
  * @param citations Array of citation URLs
@@ -33,7 +52,8 @@ function processCitations(text: string, citations?: string[]): string {
     const index = parseInt(num, 10) - 1;
     if (index >= 0 && index < citations.length) {
       const url = citations[index];
-      return `[[${num}]](${url})`;
+      const domain = extractDomain(url);
+      return `[${domain}](${url})`;
     }
     return match; // Return original if citation not found
   });

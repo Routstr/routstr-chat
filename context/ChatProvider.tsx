@@ -74,7 +74,6 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
 
     // Set the user signer for 1081 event decryption from applesauce account
     const signer = accountToUse.signer;
-    console.log("signeringg", signer, pubkey, accountToUse);
     if (signer?.nip44 && typeof signer.signEvent === "function") {
       userSigner$.next({
         signer: signer as {

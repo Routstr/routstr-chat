@@ -1,105 +1,26 @@
 import React, { useState } from "react";
-import {
-  Plus,
-  XCircle,
-  Wifi,
-  WifiOff,
-  Clock,
-  Loader,
-  RefreshCw,
-} from "lucide-react";
+import { Plus, XCircle, Wifi, WifiOff } from "lucide-react";
 import { useAppContext } from "@/hooks/useAppContext";
-import { useNostr } from "@nostrify/react";
+import { relayPool } from "@/lib/applesauce-core";
 
 const NostrRelayManager: React.FC = () => {
   const { config, updateConfig } = useAppContext();
-  const { nostr } = useNostr();
   const [newRelayInput, setNewRelayInput] = useState<string>("");
 
   const nostrRelays = config.relayUrls;
-  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Get relay connection status using same logic as useCashuWallet
+  // Get relay connection status using applesauce-core relay pool
   const getRelayStatus = (relayUrl: string) => {
-    if (!nostr.relays) return { status: "unknown", readyStateText: "UNKNOWN" };
-
-    const relay = nostr.relays.get(relayUrl);
-    if (!relay)
-      return { status: "not_connected", readyStateText: "NOT CONNECTED" };
-
-    const socket = (relay as any).socket;
-    const readyState = socket?._underlyingWebsocket?.readyState;
-    const closedByUser = socket?._closedByUser;
-    const lastConnection = socket?._lastConnection;
-    const idleTimer = (relay as any).idleTimer;
-
-    const getReadyStateText = (state: number) => {
-      switch (state) {
-        case 0:
-          return "CONNECTING";
-        case 1:
-          return "OPEN";
-        case 2:
-          return "CLOSING";
-        case 3:
-          return "CLOSED";
-        default:
-          return "UNKNOWN";
-      }
-    };
-
-    // Determine actual status based on multiple factors
-    let status: string;
-    let statusText: string;
-
-    if (readyState === 1) {
-      status = "connected";
-      statusText = "CONNECTED";
-    } else if (readyState === 0) {
-      status = "connecting";
-      statusText = "CONNECTING";
-    } else if (idleTimer !== undefined && idleTimer > 0) {
-      // Connection exists but is idle
-      status = "idle";
-      statusText = `IDLE`;
-    } else if (closedByUser) {
-      status = "closed_by_user";
-      statusText = "CLOSED BY USER";
-    } else if (readyState === 3 || readyState === 2) {
-      status = "disconnected";
-      statusText = getReadyStateText(readyState);
-    } else {
-      status = "unknown";
-      statusText = "UNKNOWN";
+    const relay = relayPool.relay(relayUrl);
+    if (!relay) {
+      return { status: "not_connected" as const, statusText: "NOT CONNECTED" };
     }
 
-    // Add last connection info if available
-    let lastConnectionText = "";
-    if (lastConnection) {
-      const lastConnTime = new Date(lastConnection);
-      const now = new Date();
-      const diffMinutes = Math.floor(
-        (now.getTime() - lastConnTime.getTime()) / (1000 * 60)
-      );
-
-      if (diffMinutes < 1) {
-        lastConnectionText = "just now";
-      } else if (diffMinutes < 60) {
-        lastConnectionText = `${diffMinutes}m ago`;
-      } else {
-        const diffHours = Math.floor(diffMinutes / 60);
-        lastConnectionText = `${diffHours}h ago`;
-      }
-    }
+    const isConnected = relay.connected;
 
     return {
-      status,
-      readyState,
-      readyStateText: statusText,
-      closedByUser,
-      idleTimer,
-      lastConnection,
-      lastConnectionText,
+      status: isConnected ? ("connected" as const) : ("disconnected" as const),
+      statusText: isConnected ? "CONNECTED" : "DISCONNECTED",
     };
   };
 
@@ -107,16 +28,10 @@ const NostrRelayManager: React.FC = () => {
     switch (status) {
       case "connected":
         return <Wifi className="h-4 w-4 text-green-400" />;
-      case "connecting":
-        return <Loader className="h-4 w-4 text-yellow-400 animate-spin" />;
-      case "idle":
-        return <Clock className="h-4 w-4 text-blue-400" />;
-      case "closed_by_user":
-        return <XCircle className="h-4 w-4 text-orange-400" />;
       case "disconnected":
         return <WifiOff className="h-4 w-4 text-red-400" />;
       case "not_connected":
-        return <Clock className="h-4 w-4 text-gray-400" />;
+        return <WifiOff className="h-4 w-4 text-gray-400" />;
       default:
         return <WifiOff className="h-4 w-4 text-gray-400" />;
     }
@@ -126,12 +41,6 @@ const NostrRelayManager: React.FC = () => {
     switch (status) {
       case "connected":
         return "text-green-400";
-      case "connecting":
-        return "text-yellow-400";
-      case "idle":
-        return "text-blue-400";
-      case "closed_by_user":
-        return "text-orange-400";
       case "disconnected":
         return "text-red-400";
       case "not_connected":
@@ -159,52 +68,12 @@ const NostrRelayManager: React.FC = () => {
     }));
   };
 
-  const handleRefreshConnections = async () => {
-    setIsRefreshing(true);
-    try {
-      // Use a simple query to test all relay connections
-      // This will attempt to connect to all relays and fetch a minimal result
-      const testFilter = {
-        kinds: [1], // Note events
-        limit: 1, // Only need one event to test the connection
-        since: Math.floor(Date.now() / 1000) - 3600, // Only check last hour to minimize data
-      };
-
-      console.log("Testing relay connections with query...");
-
-      // This will attempt to connect to all configured relays
-      nostr.query([testFilter]);
-
-      // Give it a moment to attempt connections
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-
-      console.log("Relay connection test completed");
-    } catch (error) {
-      console.error("Error refreshing relay connections:", error);
-    } finally {
-      setTimeout(() => {
-        setIsRefreshing(false);
-      }, 1000);
-    }
-  };
-
   return (
     <div className="mb-6">
-      <div className="flex items-center justify-between mb-2">
+      <div className="mb-2">
         <h3 className="text-sm font-medium text-foreground/80">
           Nostr Management
         </h3>
-        <button
-          onClick={handleRefreshConnections}
-          disabled={isRefreshing}
-          className="flex items-center gap-1 px-2 py-1 text-xs bg-muted hover:bg-muted/80 text-foreground rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          type="button"
-        >
-          <RefreshCw
-            className={`h-3 w-3 ${isRefreshing ? "animate-spin" : ""}`}
-          />
-          {isRefreshing ? "Refreshing..." : "Refresh"}
-        </button>
       </div>
       <div className="bg-muted/50 border border-border rounded-md p-4">
         <p className="text-sm text-foreground mb-3">
@@ -231,14 +100,8 @@ const NostrRelayManager: React.FC = () => {
                             relayStatus.status
                           )}`}
                         >
-                          {relayStatus.readyStateText}
+                          {relayStatus.statusText}
                         </span>
-                        {relayStatus.lastConnectionText &&
-                          relayStatus.status !== "connected" && (
-                            <span className="text-xs text-muted-foreground">
-                              Last: {relayStatus.lastConnectionText}
-                            </span>
-                          )}
                       </div>
                     </div>
                   </div>

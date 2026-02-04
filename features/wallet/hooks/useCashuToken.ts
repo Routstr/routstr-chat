@@ -477,7 +477,6 @@ export function useCashuToken() {
         let keysets = mintDetails?.keysets;
 
         const activeKeysets = keysets?.filter((k) => k.active);
-        console.log("ACTIVE ", activeKeysets);
         const units = [...new Set(activeKeysets?.map((k) => k.unit))];
         const preferredUnit = units?.includes("msat")
           ? "msat"

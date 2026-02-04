@@ -21,6 +21,10 @@ const BLOSSOM_SERVERS_KEY = "blossomServers";
 // Subscribers for storage changes
 const blossomSyncSubscribers = new Set<() => void>();
 
+// Cached values for useSyncExternalStore (arrays need stable references)
+let cachedBlossomServers: string[] = DEFAULT_BLOSSOM_SERVERS;
+let cachedBlossomServersJson: string = JSON.stringify(DEFAULT_BLOSSOM_SERVERS);
+
 // Subscribe function for useSyncExternalStore
 const subscribeToBlossomSync = (callback: () => void) => {
   blossomSyncSubscribers.add(callback);
@@ -43,9 +47,21 @@ const getBlossomSyncEnabledSnapshot = (): boolean => {
   return getStorageItem<boolean>(BLOSSOM_SYNC_ENABLED_KEY, true);
 };
 
-// Get current servers from localStorage
+// Get current servers from localStorage (with stable reference)
 const getBlossomServersSnapshot = (): string[] => {
-  return getStorageItem<string[]>(BLOSSOM_SERVERS_KEY, DEFAULT_BLOSSOM_SERVERS);
+  const servers = getStorageItem<string[]>(
+    BLOSSOM_SERVERS_KEY,
+    DEFAULT_BLOSSOM_SERVERS
+  );
+  const serversJson = JSON.stringify(servers);
+
+  // Only return a new reference if the value actually changed
+  if (serversJson !== cachedBlossomServersJson) {
+    cachedBlossomServers = servers;
+    cachedBlossomServersJson = serversJson;
+  }
+
+  return cachedBlossomServers;
 };
 
 // Server snapshots (for SSR)
@@ -60,6 +76,9 @@ const setBlossomSyncEnabledGlobal = (enabled: boolean): void => {
 
 const setBlossomServersGlobal = (servers: string[]): void => {
   setStorageItem(BLOSSOM_SERVERS_KEY, servers);
+  // Update cache immediately to ensure consistency
+  cachedBlossomServers = servers;
+  cachedBlossomServersJson = JSON.stringify(servers);
   blossomSyncSubscribers.forEach((callback) => callback());
 };
 

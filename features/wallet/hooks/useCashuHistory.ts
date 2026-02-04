@@ -132,9 +132,21 @@ export function useCashuHistory() {
         return [];
       }
 
+      // Get existing history from store to avoid re-decrypting
+      const existingHistory = useTransactionHistoryStore.getState().history;
+      const existingHistoryMap = new Map(
+        existingHistory.map((entry) => [entry.id, entry])
+      );
+
       const history: (SpendingHistoryEntry & { id: string })[] = [];
 
       for (const event of events) {
+        // Check if we already have this event decrypted in store
+        if (existingHistoryMap.has(event.id)) {
+          history.push(existingHistoryMap.get(event.id)!);
+          continue;
+        }
+
         try {
           let decrypted: string;
           try {

@@ -4,6 +4,7 @@ import { LogOut, XCircle, Copy } from "lucide-react";
 import { AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import { nip19 } from "nostr-tools";
 import NostrRelayManager from "./NostrRelayManager"; // Import the new component
+import BlossomServerManager from "./BlossomServerManager"; // Import Blossom server manager
 import NWCWalletManager from "./NWCWalletManager"; // Import the NWC wallet manager
 import AutoRefillSettings from "./AutoRefillSettings"; // Import auto-refill settings
 import ThemeSettings from "./ThemeSettings"; // Import theme settings
@@ -170,6 +171,9 @@ const GeneralTab: React.FC<GeneralTabProps> = ({
 
       {/* Nostr Relays */}
       <NostrRelayManager />
+
+      {/* Blossom Storage */}
+      <BlossomServerManager />
 
       {/* NWC Wallet */}
       <NWCWalletManager />

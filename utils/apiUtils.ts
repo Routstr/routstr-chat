@@ -428,13 +428,14 @@ export const fetchAIResponse = async (
 
   const tokenAmount = getRequiredSatsForModel(selectedModel, apiMessages);
   let tokenBalance = 0;
+  let tokenBalanceUnit: "sat" | "msat" = "sat";
 
   try {
     const storedToken = getLocalCashuToken(baseUrl);
 
     onPaymentProcessing?.(true);
     const result = await spendCashu(mintUrl, tokenAmount, baseUrl, true);
-    
+
     if (result.status === "failed" || !result.token) {
       const errorMessage =
         result.error ||
@@ -473,11 +474,14 @@ export const fetchAIResponse = async (
 
         const data = await response.json();
         tokenBalance = data.balance;
+        tokenBalanceUnit = "msat"; // wallet/info returns msats
       } catch (error) {
         tokenBalance = tokenAmount;
+        tokenBalanceUnit = "sat";
       }
     } else {
       tokenBalance = tokenAmount;
+      tokenBalanceUnit = "sat";
     }
 
     onTokenCreated(getPendingCashuTokenAmount());
@@ -505,6 +509,7 @@ export const fetchAIResponse = async (
 
     if (response instanceof Response && (response as any).tokenBalance) {
       tokenBalance = (response as any).tokenBalance; // if a new token was created and we had set a stored token balance beforehand.
+      tokenBalanceUnit = "sat";
     }
 
     if (!response.body) {
@@ -577,6 +582,7 @@ export const fetchAIResponse = async (
         usingNip60,
         storeCashu,
         tokenBalance,
+        tokenBalanceUnit,
         initialBalance,
         selectedModel,
         onBalanceUpdate,
@@ -601,12 +607,15 @@ export const fetchAIResponse = async (
     const isDev = process.env.NODE_ENV === "development";
     const isBeta =
       typeof window !== "undefined" &&
-      window.location.origin === "https://beta.chat.routstr.com";
+      (window.location.origin === "https://beta.chat.routstr.com" ||
+        window.location.origin === "https://alpha.chat.routstr.com");
 
     if (error instanceof Error) {
-      const modifiedErrorMsg = error.message.includes("Error in input stream")
-        ? "AI stream was cut off, please try again"
-        : error.message;
+      const modifiedErrorMsg =
+        error.message.includes("Error in input stream") ||
+        error.message.includes("Load failed")
+          ? "AI stream was cut off, turn on Keep Active or please try again"
+          : error.message;
 
       const errorMsg =
         "Uncaught Error: " +
@@ -1351,6 +1360,7 @@ async function handlePostResponseRefund(params: {
   usingNip60: boolean;
   storeCashu: (token: string) => Promise<any[]>;
   tokenBalance: number;
+  tokenBalanceUnit: "sat" | "msat";
   initialBalance: number;
   selectedModel: any;
   onBalanceUpdate: (balance: number) => void;
@@ -1366,6 +1376,7 @@ async function handlePostResponseRefund(params: {
     usingNip60,
     storeCashu,
     tokenBalance,
+    tokenBalanceUnit,
     initialBalance,
     selectedModel,
     onBalanceUpdate,
@@ -1377,6 +1388,16 @@ async function handlePostResponseRefund(params: {
   } = params;
 
   let satsSpent: number;
+  const tokenBalanceInSats =
+    tokenBalanceUnit === "msat" ? tokenBalance / 1000 : tokenBalance;
+  const computeSpent = (refundedAmount?: number) => {
+    const spendBasis =
+      unit === "msat" ? tokenBalanceInSats : Math.ceil(tokenBalanceInSats);
+    if (refundedAmount === undefined) return spendBasis;
+    const refundedInSats =
+      unit === "msat" ? refundedAmount / 1000 : refundedAmount;
+    return spendBasis - refundedInSats;
+  };
 
   const refundStatus = await unifiedRefund(
     mintUrl,
@@ -1391,13 +1412,11 @@ async function handlePostResponseRefund(params: {
     ) {
       satsSpent = 0;
     } else if (refundStatus.refundedAmount === undefined) {
-      satsSpent = tokenBalance;
+      satsSpent = computeSpent();
     } else {
       if (usingNip60) {
         // For msats, keep decimal precision; for sats, use Math.ceil
-        satsSpent =
-          (unit === "msat" ? tokenBalance : Math.ceil(tokenBalance)) -
-          refundStatus.refundedAmount;
+        satsSpent = computeSpent(refundStatus.refundedAmount);
         onBalanceUpdate(initialBalance - satsSpent);
       } else {
         const { apiBalance, proofsBalance } = await fetchBalances(
@@ -1443,7 +1462,7 @@ async function handlePostResponseRefund(params: {
       await logApiErrorForRefund(refundStatus, baseUrl, onMessageAppend);
     }
     // For msats, keep decimal precision; for sats, use Math.ceil
-    satsSpent = unit === "msat" ? tokenBalance : Math.ceil(tokenBalance);
+    satsSpent = computeSpent();
   }
   console.log("spent: ", satsSpent);
   const netCosts = satsSpent - estimatedCosts;
@@ -1460,7 +1479,8 @@ async function handlePostResponseRefund(params: {
     const isDev = process.env.NODE_ENV === "development";
     const isBeta =
       typeof window !== "undefined" &&
-      window.location.origin === "https://beta.chat.routstr.com";
+      (window.location.origin === "https://beta.chat.routstr.com" ||
+        window.location.origin === "https://alpha.chat.routstr.com");
     if (isBeta || isDev)
       // Hiding these for now. We'll enable them again once its more stable.
       logApiError(

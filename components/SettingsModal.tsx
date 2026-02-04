@@ -8,6 +8,7 @@ import GeneralTab from "./settings/GeneralTab";
 import ModelsTab from "@/components/settings/ModelsTab";
 import HistoryTab from "./settings/HistoryTab";
 import ApiKeysTab from "./settings/ApiKeysTab";
+import DevConsoleTab from "./settings/DevConsoleTab";
 import UnifiedWallet from "@/features/wallet/components/UnifiedWallet";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { Drawer, DrawerContent, DrawerTitle } from "@/components/ui/drawer";
@@ -15,15 +16,36 @@ import { DEFAULT_MINT_URL } from "@/lib/utils";
 import { ModalShell } from "@/components/ui/ModalShell";
 import CloseButton from "@/components/ui/CloseButton";
 
-type SettingsTab = "settings" | "wallet" | "history" | "api-keys" | "models";
+type SettingsTab =
+  | "settings"
+  | "wallet"
+  | "history"
+  | "api-keys"
+  | "models"
+  | "dev-console";
 
-const SETTINGS_TABS: { key: SettingsTab; label: string }[] = [
-  { key: "settings", label: "General" },
-  { key: "models", label: "Models" },
-  { key: "wallet", label: "Wallet" },
-  { key: "history", label: "History" },
-  { key: "api-keys", label: "API Keys" },
-];
+const getSettingsTabs = (): { key: SettingsTab; label: string }[] => {
+  const isDev = process.env.NODE_ENV === "development";
+  const isBeta =
+    typeof window !== "undefined" &&
+    (window.location.origin === "https://beta.chat.routstr.com" ||
+      window.location.origin === "https://alpha.chat.routstr.com");
+
+  const tabs: { key: SettingsTab; label: string }[] = [
+    { key: "settings", label: "General" },
+    { key: "models", label: "Models" },
+    { key: "wallet", label: "Wallet" },
+    { key: "history", label: "History" },
+    { key: "api-keys", label: "API Keys" },
+  ];
+
+  // Only show Dev Console in development or beta environments
+  if (isDev || isBeta) {
+    tabs.push({ key: "dev-console", label: "Dev Console" });
+  }
+
+  return tabs;
+};
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -134,6 +156,8 @@ const SettingsModal = ({
             setTransactionHistory={setTransactionHistory}
           />
         );
+      case "dev-console":
+        return <DevConsoleTab />;
       default:
         return null;
     }
@@ -152,7 +176,7 @@ const SettingsModal = ({
 
       {/* Tabs */}
       <div className="flex border-b border-border shrink-0 overflow-x-auto">
-        {SETTINGS_TABS.map((tab) => {
+        {getSettingsTabs().map((tab) => {
           const isActive = activeTab === tab.key;
           return (
             <button

@@ -1,21 +1,11 @@
 import { Conversation, Message } from "@/types/chat";
 import { getTextFromContent, stripImageDataFromMessages } from "./messageUtils";
-import { loadActiveConversationId } from "./storageUtils";
-import { createConversation } from "./eventProcessing";
 
 const CONVERSATIONS_STORAGE_KEY = "saved_conversations";
 const CONVERSATIONS_UPDATED_AT_KEY = "saved_conversations_updated_at";
 
 const hasLocalStorage = (): boolean =>
   typeof window !== "undefined" && typeof window.localStorage !== "undefined";
-
-export const getConversationsUpdatedAt = (): number => {
-  if (!hasLocalStorage()) return 0;
-  const raw = window.localStorage.getItem(CONVERSATIONS_UPDATED_AT_KEY);
-  if (!raw) return 0;
-  const parsed = Number(raw);
-  return Number.isFinite(parsed) ? parsed : 0;
-};
 
 export const persistConversationsSnapshot = (
   conversations: Conversation[],
@@ -42,16 +32,6 @@ export const persistConversationsSnapshot = (
   console.log("persis", conversations);
 
   return timestamp;
-};
-
-const ensureUpdatedAtExists = () => {
-  if (!hasLocalStorage()) return;
-  if (!window.localStorage.getItem(CONVERSATIONS_UPDATED_AT_KEY)) {
-    window.localStorage.setItem(
-      CONVERSATIONS_UPDATED_AT_KEY,
-      String(Date.now())
-    );
-  }
 };
 
 /**
@@ -131,59 +111,12 @@ export const loadConversationsFromStorage = (): Conversation[] => {
 
     const parsedConversations = JSON.parse(savedConversationsData);
     if (Array.isArray(parsedConversations)) {
-      ensureUpdatedAtExists();
       return parsedConversations;
     }
   } catch (error) {
     console.error("Error loading conversations from storage:", error);
   }
   return [];
-};
-
-/**
- * Creates a new conversation
- * @param existingConversations Current conversations array
- * @param initialMessages Optional initial messages for the conversation
- * @returns Object with new conversation and updated conversations array
- */
-export const createAndStoreNewConversation = (
-  existingConversations: Conversation[],
-  initialMessages: Message[] = [],
-  timestamp?: string
-): {
-  newConversation: Conversation;
-  updatedConversations: Conversation[];
-} => {
-  // First check if there's an existing conversation with no messages
-  const emptyConversation = existingConversations.find(
-    (conv) => conv.messages.length === 0
-  );
-
-  if (emptyConversation) {
-    // Return the existing empty conversation
-    return {
-      newConversation: emptyConversation,
-      updatedConversations: existingConversations,
-    };
-  }
-
-  // If no empty conversation found, create a new one
-  const newId = timestamp ?? Date.now().toString();
-  const messagesToStore = stripImageDataFromMessages(initialMessages);
-  const newConversation: Conversation = {
-    id: newId,
-    title: `Conversation ${existingConversations.length + 1}`,
-    messages: messagesToStore,
-  };
-
-  const updatedConversations = [...existingConversations, newConversation];
-  console.log("insdie", updatedConversations);
-  persistConversationsSnapshot(updatedConversations);
-
-  return {
-    newConversation,
-    updatedConversations,
-  };
 };
 
 /**
@@ -205,51 +138,12 @@ export const deleteConversationFromStorage = (
 };
 
 /**
- * Finds a conversation by ID
- * @param conversations Array of conversations to search
- * @param conversationId ID to search for
- * @returns Found conversation or undefined
- */
-export const findConversationById = (
-  conversations: Conversation[],
-  conversationId: string
-): Conversation | undefined => {
-  return conversations.find((c) => {
-    if (c.id === conversationId) return c;
-  });
-};
-
-/**
  * Clears all conversations from storage
  */
 export const clearAllConversations = (): void => {
   if (!hasLocalStorage()) return;
   window.localStorage.removeItem(CONVERSATIONS_STORAGE_KEY);
   window.localStorage.removeItem(CONVERSATIONS_UPDATED_AT_KEY);
-};
-
-/**
- * Updates a specific conversation in the array
- * @param conversations Current conversations array
- * @param conversationId ID of conversation to update
- * @param updates Partial conversation object with updates
- * @returns Updated conversations array
- */
-export const updateConversation = (
-  conversations: Conversation[],
-  conversationId: string,
-  updates: Partial<Conversation>
-): Conversation[] => {
-  const updatedConversations = conversations.map((conversation) => {
-    if (conversation.id === conversationId) {
-      return { ...conversation, ...updates };
-    }
-    return conversation;
-  });
-
-  console.log("insdie", updatedConversations);
-  persistConversationsSnapshot(updatedConversations);
-  return updatedConversations;
 };
 
 /**
@@ -275,47 +169,4 @@ export const sortConversationsByRecentActivity = (
     // If one is empty and the other is not, empty comes first
     return aIsEmpty ? -1 : 1;
   });
-};
-
-/**
- * Saves an event ID to a message in storage by matching the prevId
- * @param conversationId ID of the conversation
- * @param prevId The previous event ID to match against the message's _prevId
- * @param eventId The event ID to add to the matched message
- * @returns Updated conversations array or null if not found
- */
-export const saveEventIdInStorage = (
-  conversationId: string,
-  message: Message,
-  eventId: string
-): Conversation[] | null => {
-  // Load conversations from storage
-  const conversations = loadConversationsFromStorage();
-
-  // Find the target conversation
-  const targetConversation = findConversationById(
-    conversations,
-    conversationId
-  );
-  if (!targetConversation) {
-    console.error(`Conversation with ID ${conversationId} not found`);
-    return null;
-  }
-
-  // Append the message to the end of the target conversation
-  const updatedConversations = conversations.map((conversation) => {
-    if (conversation.id === conversationId) {
-      return {
-        ...conversation,
-        messages: [...conversation.messages, { ...message, _eventId: eventId }],
-      };
-    }
-    return conversation;
-  });
-
-  console.log("insdie EVNETS", updatedConversations);
-
-  // Persist the updated conversations
-  persistConversationsSnapshot(updatedConversations);
-  return updatedConversations;
 };

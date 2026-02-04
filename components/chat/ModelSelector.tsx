@@ -27,6 +27,7 @@ import { useMediaQuery } from "@/hooks/useMediaQuery";
 import {
   loadModelProviderMap,
   loadDisabledProviders,
+  getStorageItem,
 } from "@/utils/storageUtils";
 import {
   parseModelKey,
@@ -305,6 +306,68 @@ export default function ModelSelector({
       }
     } catch {}
     return getProviderFromModelName(model.name);
+  };
+
+  const getProviderPricingEntries = (modelId: string) => {
+    const allProviderModels = getStorageItem<Record<string, Model[]>>(
+      "modelsFromAllProviders",
+      {}
+    );
+    const disabledProviders = new Set(loadDisabledProviders());
+    const entriesMap = new Map<
+      string,
+      {
+        baseUrl: string;
+        providerLabel: string;
+        promptCost: number | null;
+        completionCost: number | null;
+        model: Model;
+      }
+    >();
+
+    for (const [baseUrl, models] of Object.entries(allProviderModels)) {
+      const normalized = normalizeBaseUrl(baseUrl);
+      if (!normalized || disabledProviders.has(normalized)) continue;
+      const model = models.find((m) => m.id === modelId);
+      if (!model) continue;
+      const promptCost =
+        typeof model.sats_pricing?.prompt === "number" &&
+        isFinite(model.sats_pricing.prompt)
+          ? model.sats_pricing.prompt
+          : null;
+      const completionCost =
+        typeof model.sats_pricing?.completion === "number" &&
+        isFinite(model.sats_pricing.completion)
+          ? model.sats_pricing.completion
+          : null;
+      entriesMap.set(normalized, {
+        baseUrl: normalized,
+        providerLabel: formatProviderLabel(normalized, model),
+        promptCost,
+        completionCost,
+        model,
+      });
+    }
+
+    const entries = Array.from(entriesMap.values());
+    entries.sort((a, b) => {
+      const aCost = a.completionCost ?? Number.POSITIVE_INFINITY;
+      const bCost = b.completionCost ?? Number.POSITIVE_INFINITY;
+      if (aCost !== bCost) return aCost - bCost;
+      const aPrompt = a.promptCost ?? Number.POSITIVE_INFINITY;
+      const bPrompt = b.promptCost ?? Number.POSITIVE_INFINITY;
+      return aPrompt - bPrompt;
+    });
+    return entries;
+  };
+
+  const selectProviderForModel = (model: Model, baseUrl: string) => {
+    const normalized = normalizeBaseUrl(baseUrl);
+    if (!normalized) return;
+    setModelProviderMap((prev) => ({ ...prev, [model.id]: normalized }));
+    setModelProviderFor?.(model.id, normalized);
+    setDetailsBaseUrl(normalized);
+    handleModelChange(model.id, `${model.id}@@${normalized}`);
   };
 
   // Treat a model as configured if any configured key matches its id or `${id}@@...`
@@ -912,6 +975,9 @@ export default function ModelSelector({
     // Determine provider base for details: prefer explicit detailsBaseUrl, otherwise mapping
     const baseForDetails =
       normalizeBaseUrl(detailsBaseUrl) ||
+      (selectedModel?.id === model.id && currentSelectedBaseUrl
+        ? normalizeBaseUrl(currentSelectedBaseUrl)
+        : null) ||
       normalizeBaseUrl(modelProviderMap[model.id]);
     const providerModels = baseForDetails
       ? providerModelCache[baseForDetails]
@@ -921,6 +987,34 @@ export default function ModelSelector({
       : undefined;
     const effectiveModel = providerSpecificModel || model;
     const providerLabel = formatProviderLabel(baseForDetails, effectiveModel);
+    const providerPricingEntries = getProviderPricingEntries(model.id);
+    const cheapestBaseUrl = providerPricingEntries[0]?.baseUrl ?? null;
+    const mappedCheapestBase = normalizeBaseUrl(modelProviderMap[model.id]);
+    const normalizedDetailsBase = normalizeBaseUrl(baseForDetails);
+    const currentPricingEntry = normalizedDetailsBase
+      ? providerPricingEntries.find(
+          (entry) => entry.baseUrl === normalizedDetailsBase
+        )
+      : undefined;
+    const currentCompletionCost = currentPricingEntry?.completionCost ?? null;
+
+    const formatPercentDelta = (
+      entryCost: number | null,
+      baselineCost: number | null
+    ): string | null => {
+      if (
+        entryCost === null ||
+        baselineCost === null ||
+        !isFinite(entryCost) ||
+        !isFinite(baselineCost) ||
+        baselineCost <= 0
+      )
+        return null;
+      const diff = ((entryCost - baselineCost) / baselineCost) * 100;
+      const rounded = Math.round(diff * 10) / 10;
+      const sign = rounded > 0 ? "+" : rounded < 0 ? "-" : "";
+      return `${sign}${Math.abs(rounded).toFixed(1)}%`;
+    };
 
     // Date formatter for created timestamp (epoch seconds)
     const formatDate = (epochSeconds?: number): string => {
@@ -1087,6 +1181,90 @@ export default function ModelSelector({
             </div>
           )}
         </div>
+
+        {providerPricingEntries.length > 0 && (
+          <div className="space-y-1">
+            <div className="text-xs text-muted-foreground">
+              Provider cost comparison
+            </div>
+            <div className="space-y-1">
+              {providerPricingEntries.map((entry, index) => {
+                const isActive =
+                  currentSelectedBaseUrl &&
+                  normalizeBaseUrl(currentSelectedBaseUrl) === entry.baseUrl;
+                const isCheapest =
+                  cheapestBaseUrl && entry.baseUrl === cheapestBaseUrl;
+                const isDefaultCheapest =
+                  isCheapest &&
+                  mappedCheapestBase &&
+                  mappedCheapestBase === entry.baseUrl;
+                const isSelected = isActive || isDefaultCheapest;
+                const percentDelta = formatPercentDelta(
+                  entry.completionCost,
+                  currentCompletionCost
+                );
+                return (
+                  <button
+                    key={entry.baseUrl}
+                    onClick={() => selectProviderForModel(model, entry.baseUrl)}
+                    type="button"
+                    className={`w-full text-left rounded-md border px-2 py-1 text-[11px] transition-colors ${
+                      isSelected
+                        ? "border-primary/40 bg-primary/10"
+                        : "border-border bg-muted/40 hover:bg-muted"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="inline-flex items-center justify-center h-4 min-w-[18px] px-1 rounded-full bg-muted text-[9px] text-muted-foreground">
+                        #{index + 1}
+                      </span>
+                      <span className="font-medium truncate">
+                        {entry.providerLabel}
+                      </span>
+                      {isCheapest && (
+                        <span className="text-[9px] px-1 py-0.5 rounded-full bg-yellow-500/10 text-yellow-700 dark:text-yellow-400">
+                          cheapest
+                        </span>
+                      )}
+                      {isActive && (
+                        <span className="text-[9px] px-1 py-0.5 rounded-full bg-primary/15 text-primary">
+                          current
+                        </span>
+                      )}
+                      {!isActive && isDefaultCheapest && (
+                        <span className="text-[9px] px-1 py-0.5 rounded-full bg-muted text-muted-foreground">
+                          default
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-0.5 text-[10px] text-muted-foreground/80 flex flex-wrap gap-2">
+                      <span>
+                        P: {formatSatsPer1M(entry.promptCost ?? undefined)}
+                      </span>
+                      <span>
+                        C: {formatSatsPer1M(entry.completionCost ?? undefined)}
+                      </span>
+                      {!isActive && percentDelta && (
+                        <span
+                          className={
+                            percentDelta.startsWith("-")
+                              ? "text-emerald-600 dark:text-emerald-400"
+                              : "text-amber-600 dark:text-amber-400"
+                          }
+                        >
+                          {percentDelta}
+                        </span>
+                      )}
+                      {isActive && (
+                        <span className="text-muted-foreground">0%</span>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Capabilities section removed per request */}
       </div>

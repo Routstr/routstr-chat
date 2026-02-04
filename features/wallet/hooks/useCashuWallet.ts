@@ -17,7 +17,6 @@ import {
   type CashuStore,
 } from "../state/cashuStore";
 import { Proof } from "@cashu/cashu-ts";
-import { NSchema as n } from "@nostrify/nostrify";
 import { z } from "zod";
 import { useNutzaps } from "./useNutzaps";
 import { hexToBytes } from "@noble/hashes/utils";
@@ -54,7 +53,6 @@ async function initiateMints(
       try {
         const lastUpdate = cashuStore.getLastUpdate(mint);
         if (lastUpdate && lastUpdate > Date.now() - 60 * 60 * 1000) {
-          console.log("mint already activated", mint);
           return;
         } else {
           const { mintInfo, keysets, keys } =
@@ -166,7 +164,7 @@ export function useCashuWallet() {
           activeAccount.pubkey,
           event.content
         );
-        const data = n.json().pipe(z.string().array().array()).parse(decrypted);
+        const data = z.string().array().array().parse(JSON.parse(decrypted));
 
         const privkey = data.find(([key]) => key === "privkey")?.[1];
 
@@ -426,7 +424,6 @@ export function useCashuWallet() {
         const filteredEvents = nip60TokenEvents.filter(
           (event) => !deletedEventIds.has(event.id)
         );
-        console.log("FILTER S ASJFKOSDGFMEVENTS", filteredEvents);
 
         // Add proofs to store only for non-deleted events
         filteredEvents.forEach((event) => {
@@ -566,7 +563,9 @@ export function useCashuWallet() {
 
   // Check localStorage for timeout status to ensure consistency across hook instances
   const hasTimedOut =
-    didRelaysTimeout || localStorage.getItem("cashu_relays_timeout") === "true";
+    didRelaysTimeout ||
+    (typeof window !== "undefined" &&
+      localStorage.getItem("cashu_relays_timeout") === "true");
 
   return {
     wallet: walletQuery.data?.wallet,

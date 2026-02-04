@@ -7,6 +7,7 @@ import rehypeKatex from "rehype-katex";
 import CodeBlock from "./CodeBlock";
 import "katex/dist/katex.min.css";
 import { downloadImageFromSrc } from "../utils/download";
+import { ExternalLink } from "lucide-react";
 
 interface MarkdownRendererProps {
   content: string;
@@ -23,6 +24,40 @@ const getSafeHref = (href?: string) => {
     }
   } catch {}
   return null;
+};
+
+const stripParenthesesAroundLinks = (text: string): string => {
+  // Remove ( ) around markdown links: ([text](url)) -> [text](url)
+  return text.replace(/\(\[([^\]]+)\]\(([^)]+)\)\)/g, '[$1]($2)');
+};
+
+const TRACKING_PARAMS = new Set([
+  'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'utm_id',
+  'ref', 'source', 'from', 'via',
+  'fbclid', 'gclid', 'dclid', 'gbraid', 'wbraid',
+  'msclkid', 'twclkid', 'igshid', 'mc_cid', 'mc_eid',
+  '_ga', '_gl', 'yclid', 'zanpid', 'spm', 'share_source',
+]);
+
+const cleanUrl = (url: string): string => {
+  try {
+    const parsed = new URL(url);
+    const params = new URLSearchParams(parsed.search);
+    let modified = false;
+    for (const key of [...params.keys()]) {
+      if (TRACKING_PARAMS.has(key.toLowerCase())) {
+        params.delete(key);
+        modified = true;
+      }
+    }
+    if (modified) {
+      parsed.search = params.toString();
+      return parsed.toString();
+    }
+    return url;
+  } catch {
+    return url;
+  }
 };
 
 const getSafeImageSrc = (src?: string | Blob) => {
@@ -51,6 +86,7 @@ export default function MarkdownRenderer({
       <ReactMarkdown
         remarkPlugins={[remarkMath, remarkGfm]}
         rehypePlugins={[rehypeKatex]}
+        children={stripParenthesesAroundLinks(content)}
         components={{
           // Code blocks and inline code
           code: ({ className, children, ...props }: any) => {
@@ -126,14 +162,39 @@ export default function MarkdownRenderer({
                 </span>
               );
             }
+            const cleanedHref = cleanUrl(safeHref);
+            const childText = typeof children === 'string' ? children : '';
+            const isCitationNumber = /^\d+$/.test(childText.trim());
+
+            if (isCitationNumber) {
+              return (
+                <a
+                  href={cleanedHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1 ml-0.5 align-super text-[0.65rem] font-medium rounded bg-slate-500/15 text-slate-400 hover:bg-slate-500/25 hover:text-slate-300 transition-colors no-underline border border-slate-500/20"
+                  title={cleanedHref}
+                >
+                  {childText.trim()}
+                  <ExternalLink className="h-2.5 w-2.5 ml-0.5 opacity-50" />
+                </a>
+              );
+            }
+
+            // Clean the display text if it's a URL
+            let displayContent = children;
+            if (typeof children === 'string' && children.startsWith('http')) {
+              displayContent = cleanUrl(children);
+            }
             return (
               <a
-                href={safeHref}
+                href={cleanedHref}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-blue-400 hover:text-blue-300 underline underline-offset-2 transition-colors"
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-muted/50 text-foreground/60 hover:bg-muted hover:text-foreground/80 dark:bg-muted/40 dark:text-foreground/50 dark:hover:bg-muted/60 dark:hover:text-foreground/70 transition-colors no-underline break-all border border-border/30"
               >
-                {children}
+                {displayContent}
+                <ExternalLink className="h-3 w-3 shrink-0 opacity-40" />
               </a>
             );
           },
@@ -210,9 +271,7 @@ export default function MarkdownRenderer({
             );
           },
         }}
-      >
-        {content}
-      </ReactMarkdown>
+      />
     </div>
   );
 }
