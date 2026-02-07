@@ -47,11 +47,10 @@ export const isTorBrowser = (): boolean => {
     hasSpoofedApis = true;
   }
   
-  // Consider it Tor Browser if Firefox + multiple privacy indicators
-  const privacyIndicators = [isUtcTimezone, hasLimitedScreen, hasSpoofedApis]
-    .filter(Boolean).length;
-  
-  return privacyIndicators >= 2;
+  // Spoofed APIs is the strongest Tor-specific indicator (normal browsers
+  // have plugins). Require it + at least one other indicator to avoid
+  // false positives (e.g., London user with maximized Firefox window).
+  return hasSpoofedApis && (isUtcTimezone || hasLimitedScreen);
 };
 
 /**
