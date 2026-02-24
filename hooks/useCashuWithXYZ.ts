@@ -409,7 +409,7 @@ export function useCashuWithXYZ() {
     let totalBalance = nip60Balance + localBalance + totalPendingBalance;
 
     // If totalBalance is 0, refetch latest balances from store and recalculate
-    if (totalBalance === 0) {
+    if (totalBalance < adjustedAmount) {
       const proofs = await cashuStore.getAllProofs();
       console.log(proofs);
       const result = calculateBalanceByMint(proofs, cashuStore.mints);
