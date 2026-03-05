@@ -5,6 +5,7 @@ import React, {
   useContext,
   useEffect,
   useCallback,
+  useRef,
 } from "react";
 import {
   useConversationState,
@@ -22,6 +23,8 @@ import { useAccountManager } from "@/components/ClientProviders";
 import { useObservableState } from "applesauce-react/hooks";
 import type { NostrEvent } from "nostr-tools";
 import { userPubkey$, userSigner$ } from "@/hooks/useChatSync1081";
+import { clearEventStore } from "@/lib/applesauce-core";
+import { reset1081SyncState } from "@/hooks/sync/sync1081Keyring";
 
 interface ChatContextType
   extends
@@ -58,10 +61,22 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
   const { manager } = useAccountManager();
   const accounts = useObservableState(manager.accounts$) || [];
   const activeAccount = useObservableState(manager.active$);
+  const previousPubkeyRef = useRef<string | null>(null);
 
   // Update userPubkey$ and userSigner$ observables when user changes
   useEffect(() => {
     const accountToUse = activeAccount || accounts[0];
+    const nextPubkey = accountToUse?.pubkey ?? null;
+    const previousPubkey = previousPubkeyRef.current;
+
+    // Clear cached events/state when identity changes so stale events are not
+    // decrypted with the new account keys.
+    if (previousPubkey && previousPubkey !== nextPubkey) {
+      clearEventStore();
+      reset1081SyncState();
+    }
+
+    previousPubkeyRef.current = nextPubkey;
 
     if (!accountToUse) {
       userPubkey$.next(null);

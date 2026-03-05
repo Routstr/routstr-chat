@@ -255,6 +255,18 @@ export const sync1081Event$ = combineLatest([
 const processed1081EventIds = new Set<string>();
 
 /**
+ * Reset in-memory sync state when user identity changes.
+ * This prevents cross-account key/event reuse that can cause decrypt errors.
+ */
+export function reset1081SyncState(): void {
+  processed1081EventIds.clear();
+  derivedPnsKeys$.next(new Map());
+  syncStats1081.eventsReceived = 0;
+  syncStats1081.lastSyncTime = null;
+  eventsReceived$.next(0);
+}
+
+/**
  * Processes stored kind-1081 events (decrypt + derive PNS keys).
  * This is intentionally separate from the network sync above.
  */

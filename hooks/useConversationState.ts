@@ -28,6 +28,8 @@ import { eventStore } from "@/lib/applesauce-core";
 import { useChatSync1081, derivedPnsKeys$ } from "./useChatSync1081";
 import { PnsKeys, SALT_PNS, createPnsDeletionEvent } from "@/lib/pns";
 import { useDeletionSync } from "./useDeletionSync";
+import { useAccountManager } from "@/components/ClientProviders";
+import { useObservableState } from "applesauce-react/hooks";
 
 export interface UseConversationStateReturn {
   conversations: Conversation[];
@@ -98,6 +100,10 @@ export const useConversationState = (): UseConversationStateReturn => {
   const processedEventIdsRef = useRef<Set<string>>(new Set());
   const migrationAttemptedRef = useRef(false);
   const autoDeleteAttemptedRef = useRef(false);
+  const previousPubkeyRef = useRef<string | null>(null);
+  const { manager } = useAccountManager();
+  const activeAccount = useObservableState(manager.active$);
+  const activePubkey = activeAccount?.pubkey ?? null;
 
   const {
     isSyncing: isPublishing,
@@ -116,6 +122,21 @@ export const useConversationState = (): UseConversationStateReturn => {
   const { performDeletionSync } = useDeletionSync();
 
   const isSyncing = isPublishing || loading1081 || loadingDerivedPns;
+
+  useEffect(() => {
+    const previousPubkey = previousPubkeyRef.current;
+    if (previousPubkey && previousPubkey !== activePubkey) {
+      processedEventIdsRef.current.clear();
+      conversationsMapRef.current.clear();
+      migrationAttemptedRef.current = false;
+      autoDeleteAttemptedRef.current = false;
+      setConversations([]);
+      setMessages([]);
+      setActiveConversationId(null);
+      saveActiveConversationId(null);
+    }
+    previousPubkeyRef.current = activePubkey;
+  }, [activePubkey]);
 
   const syncWithNostr = useCallback(async () => {
     console.log("[useConversationState] syncWithNostr triggered");
