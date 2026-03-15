@@ -7,11 +7,116 @@ export type ProviderDirectoryEntry = {
 };
 
 const TOR_ONION_SUFFIX = ".onion";
+const TOR_MODE_STORAGE_KEY = "routstr_tor_mode_preference";
 
+/**
+ * Detect if the user is using Tor Browser based on userAgent.
+ * Tor Browser modifies the userAgent to match Firefox ESR on Windows
+ * to reduce fingerprinting, but we can detect common patterns.
+ */
+export const isTorBrowser = (): boolean => {
+  if (typeof window === "undefined" || typeof navigator === "undefined") {
+    return false;
+  }
+  
+  const ua = navigator.userAgent.toLowerCase();
+  
+  // Tor Browser uses Firefox ESR and often has specific version patterns
+  // It also blocks many fingerprinting APIs, which we can detect
+  const isFirefox = ua.includes("firefox");
+  
+  if (!isFirefox) return false;
+  
+  // Check for Tor Browser-specific behaviors:
+  // 1. Tor Browser spoofs timezone to UTC
+  const timezoneOffset = new Date().getTimezoneOffset();
+  const isUtcTimezone = timezoneOffset === 0;
+  
+  // 2. Tor Browser limits screen dimensions reporting
+  const hasLimitedScreen = typeof window.screen !== "undefined" && 
+    (window.screen.width === window.innerWidth || 
+     window.outerWidth === window.innerWidth);
+  
+  // 3. Check for blocked/spoofed APIs common in Tor Browser
+  let hasSpoofedApis = false;
+  try {
+    // Tor Browser returns empty or spoofed values for these
+    const plugins = navigator.plugins;
+    hasSpoofedApis = plugins.length === 0;
+  } catch {
+    hasSpoofedApis = true;
+  }
+  
+  // Spoofed APIs is the strongest Tor-specific indicator (normal browsers
+  // have plugins). Require it + at least one other indicator to avoid
+  // false positives (e.g., London user with maximized Firefox window).
+  return hasSpoofedApis && (isUtcTimezone || hasLimitedScreen);
+};
+
+/**
+ * Get the user's Tor mode preference from localStorage.
+ * Returns: true (force Tor), false (force clearnet), null (auto-detect)
+ */
+export const getTorModePreference = (): boolean | null => {
+  if (typeof window === "undefined" || typeof localStorage === "undefined") {
+    return null;
+  }
+  
+  try {
+    const stored = localStorage.getItem(TOR_MODE_STORAGE_KEY);
+    if (stored === "true") return true;
+    if (stored === "false") return false;
+    return null; // auto-detect
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Set the user's Tor mode preference.
+ * @param preference - true (force Tor), false (force clearnet), null (auto-detect)
+ */
+export const setTorModePreference = (preference: boolean | null): void => {
+  if (typeof window === "undefined" || typeof localStorage === "undefined") {
+    return;
+  }
+  
+  try {
+    if (preference === null) {
+      localStorage.removeItem(TOR_MODE_STORAGE_KEY);
+    } else {
+      localStorage.setItem(TOR_MODE_STORAGE_KEY, String(preference));
+    }
+  } catch {
+    // localStorage may be unavailable in some contexts
+  }
+};
+
+/**
+ * Check if we're in a Tor context (should route to .onion endpoints).
+ * 
+ * Detection priority:
+ * 1. User preference (if explicitly set)
+ * 2. Frontend accessed via .onion URL
+ * 3. Tor Browser detection
+ */
 export const isTorContext = (): boolean => {
   if (typeof window === "undefined") return false;
+  
+  // Check user preference first
+  const preference = getTorModePreference();
+  if (preference !== null) {
+    return preference;
+  }
+  
+  // Check if frontend is accessed via .onion
   const hostname = window.location.hostname.toLowerCase();
-  return hostname.endsWith(TOR_ONION_SUFFIX);
+  if (hostname.endsWith(TOR_ONION_SUFFIX)) {
+    return true;
+  }
+  
+  // Check if using Tor Browser on clearnet frontend
+  return isTorBrowser();
 };
 
 export const isOnionUrl = (url: string): boolean => {
