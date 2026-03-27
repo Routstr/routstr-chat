@@ -18,23 +18,26 @@ const isBun = (): boolean => {
   return typeof process.versions.bun !== "undefined";
 };
 
-const createDatabase = (dbPath: string): BetterSqlite3Database => {
+// Lazy-load better-sqlite3 to avoid bundling it for client-side code
+let cachedDbModule: any = null;
+
+const loadDatabase = async (dbPath: string): Promise<BetterSqlite3Database> => {
   if (isBun()) {
     throw new Error(
       "SQLite driver not supported in Bun. Use createBunSqliteDriver() instead."
     );
   }
 
-  let Database: any = null;
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    Database = require("better-sqlite3");
+    if (!cachedDbModule) {
+      cachedDbModule = (await import("better-sqlite3")).default;
+    }
+    return new cachedDbModule(dbPath);
   } catch (error) {
     throw new Error(
       `better-sqlite3 is required for sqlite storage. Install it to use sqlite storage. (${error})`
     );
   }
-  return new Database(dbPath);
 };
 
 export const createSqliteDriver = (
@@ -43,21 +46,38 @@ export const createSqliteDriver = (
   const dbPath = options.dbPath || "routstr.sqlite";
   const tableName = options.tableName || "sdk_storage";
 
-  const db = createDatabase(dbPath);
-  db.exec(
-    `CREATE TABLE IF NOT EXISTS ${tableName} (key TEXT PRIMARY KEY, value TEXT NOT NULL)`
-  );
+  let db: BetterSqlite3Database;
+  let selectStmt: any;
+  let upsertStmt: any;
+  let deleteStmt: any;
 
-  const selectStmt = db.prepare(`SELECT value FROM ${tableName} WHERE key = ?`);
-  const upsertStmt = db.prepare(
-    `INSERT INTO ${tableName} (key, value) VALUES (?, ?)
+  const initDb = async () => {
+    if (!db) {
+      db = await loadDatabase(dbPath);
+      db.exec(
+        `CREATE TABLE IF NOT EXISTS ${tableName} (key TEXT PRIMARY KEY, value TEXT NOT NULL)`
+      );
+
+      selectStmt = db.prepare(`SELECT value FROM ${tableName} WHERE key = ?`);
+      upsertStmt = db.prepare(
+        `INSERT INTO ${tableName} (key, value) VALUES (?, ?)
      ON CONFLICT(key) DO UPDATE SET value = excluded.value`
-  );
-  const deleteStmt = db.prepare(`DELETE FROM ${tableName} WHERE key = ?`);
+      );
+      deleteStmt = db.prepare(`DELETE FROM ${tableName} WHERE key = ?`);
+    }
+  };
+
+  // Initialize asynchronously on first use
+  const ensureInit = async () => {
+    if (!db) {
+      await initDb();
+    }
+  };
 
   return {
     async getItem<T>(key: string, defaultValue: T): Promise<T> {
       try {
+        await ensureInit();
         const row = selectStmt.get(key);
         if (!row || typeof row.value !== "string") return defaultValue;
         try {
@@ -75,6 +95,7 @@ export const createSqliteDriver = (
     },
     async setItem<T>(key: string, value: T): Promise<void> {
       try {
+        await ensureInit();
         upsertStmt.run(key, JSON.stringify(value));
       } catch (error) {
         console.error(`SQLite setItem failed for key "${key}":`, error);
@@ -82,6 +103,7 @@ export const createSqliteDriver = (
     },
     async removeItem(key: string): Promise<void> {
       try {
+        await ensureInit();
         deleteStmt.run(key);
       } catch (error) {
         console.error(`SQLite removeItem failed for key "${key}":`, error);
@@ -96,7 +118,9 @@ export async function createBunSqliteDriver(
   dbPath: string
 ): Promise<StorageDriver> {
   // @ts-ignore - bun:sqlite is only available at runtime in Bun environments
-  const SQLite = (await import("bun:sqlite")).default;
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore
+  const SQLite = (await import(/* webpackIgnore: true */ "bun:sqlite")).default;
   const db = new SQLite(dbPath);
 
   db.run(`

@@ -9,9 +9,9 @@ import { getDecodedToken } from "@cashu/cashu-ts";
 
 interface BalanceSummary {
   walletBalance: Record<string, number>;
-  cachedTokens: Array<{ baseUrl: string; balance: number }>;
   apiKeys: Array<{ baseUrl: string; balance: number }>;
   childKeys: Array<{ parentBaseUrl: string; balance: number }>;
+  cachedReceiveTokens: Array<{ baseUrl: string; amount: number }>;
 }
 
 async function runWalletCommand(args: string[]): Promise<string> {
@@ -153,14 +153,16 @@ async function main(): Promise<void> {
   }
   console.log(`  Total: ${totalWallet} sats\n`);
 
-  console.log("=== Cached Tokens ===");
-  const cachedTokens = store.getState().cachedTokens;
-  const totalCached = cachedTokens.reduce(
-    (sum, t) => sum + (t.balance || 0),
+  console.log("=== Cached Receive Tokens ===");
+  const cachedReceiveTokens = store.getState().cachedReceiveTokens;
+  const totalCached = cachedReceiveTokens.reduce(
+    (sum, t) => sum + (t.amount || 0),
     0
   );
-  for (const token of cachedTokens) {
-    console.log(`  ${token.baseUrl}: ${token.balance || 0} sats`);
+  for (const token of cachedReceiveTokens) {
+    // cachedReceiveTokens don't have baseUrl, just show token preview
+    const tokenPreview = token.token.substring(0, 20) + "...";
+    console.log(`  ${tokenPreview}: ${token.amount || 0} sats (${token.unit})`);
   }
   console.log(`  Total: ${totalCached} sats\n`);
 

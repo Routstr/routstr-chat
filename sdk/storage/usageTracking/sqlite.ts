@@ -27,23 +27,26 @@ const isBun = (): boolean => {
   return typeof process.versions.bun !== "undefined";
 };
 
-const createDatabase = (dbPath: string): BetterSqlite3Database => {
+// Lazy-load better-sqlite3 to avoid bundling it for client-side code
+let cachedDbModule: any = null;
+
+const loadDatabase = async (dbPath: string): Promise<BetterSqlite3Database> => {
   if (isBun()) {
     throw new Error(
       "SQLite driver not supported in Bun. Use createMemoryDriver() instead."
     );
   }
 
-  let Database: any = null;
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    Database = require("better-sqlite3");
+    if (!cachedDbModule) {
+      cachedDbModule = (await import("better-sqlite3")).default;
+    }
+    return new cachedDbModule(dbPath);
   } catch (error) {
     throw new Error(
       `better-sqlite3 is required for sqlite usage tracking. Install it to use sqlite storage. (${error})`
     );
   }
-  return new Database(dbPath);
 };
 
 const buildWhereClause = (
@@ -88,39 +91,56 @@ export const createSqliteUsageTrackingDriver = (
 ): UsageTrackingDriver => {
   const dbPath = options.dbPath || "routstr.sqlite";
   const tableName = options.tableName || "usage_tracking";
-  const db = createDatabase(dbPath);
   const legacyStorageDriver = options.legacyStorageDriver;
 
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS ${tableName} (
-      id TEXT PRIMARY KEY,
-      timestamp INTEGER NOT NULL,
-      model_id TEXT NOT NULL,
-      base_url TEXT NOT NULL,
-      request_id TEXT NOT NULL,
-      cost REAL NOT NULL,
-      sats_cost REAL NOT NULL,
-      prompt_tokens INTEGER NOT NULL,
-      completion_tokens INTEGER NOT NULL,
-      total_tokens INTEGER NOT NULL,
-      client TEXT,
-      session_id TEXT,
-      tags TEXT
-    );
-    CREATE INDEX IF NOT EXISTS idx_${tableName}_timestamp ON ${tableName}(timestamp);
-    CREATE INDEX IF NOT EXISTS idx_${tableName}_model_id ON ${tableName}(model_id);
-    CREATE INDEX IF NOT EXISTS idx_${tableName}_base_url ON ${tableName}(base_url);
-    CREATE INDEX IF NOT EXISTS idx_${tableName}_session_id ON ${tableName}(session_id);
-    CREATE INDEX IF NOT EXISTS idx_${tableName}_client ON ${tableName}(client);
-  `);
+  let db: BetterSqlite3Database;
+  let insertStmt: any;
+  let preparedStmts: { [key: string]: any } = {};
 
-  const insertStmt = db.prepare(`
-    INSERT OR REPLACE INTO ${tableName} (
-      id, timestamp, model_id, base_url, request_id,
-      cost, sats_cost, prompt_tokens, completion_tokens, total_tokens,
-      client, session_id, tags
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
+  const initDb = async () => {
+    if (!db) {
+      db = await loadDatabase(dbPath);
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS ${tableName} (
+          id TEXT PRIMARY KEY,
+          timestamp INTEGER NOT NULL,
+          model_id TEXT NOT NULL,
+          base_url TEXT NOT NULL,
+          request_id TEXT NOT NULL,
+          cost REAL NOT NULL,
+          sats_cost REAL NOT NULL,
+          prompt_tokens INTEGER NOT NULL,
+          completion_tokens INTEGER NOT NULL,
+          total_tokens INTEGER NOT NULL,
+          client TEXT,
+          session_id TEXT,
+          tags TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_${tableName}_timestamp ON ${tableName}(timestamp);
+        CREATE INDEX IF NOT EXISTS idx_${tableName}_model_id ON ${tableName}(model_id);
+        CREATE INDEX IF NOT EXISTS idx_${tableName}_base_url ON ${tableName}(base_url);
+        CREATE INDEX IF NOT EXISTS idx_${tableName}_session_id ON ${tableName}(session_id);
+        CREATE INDEX IF NOT EXISTS idx_${tableName}_client ON ${tableName}(client);
+      `);
+
+      insertStmt = db.prepare(`
+        INSERT OR REPLACE INTO ${tableName} (
+          id, timestamp, model_id, base_url, request_id,
+          cost, sats_cost, prompt_tokens, completion_tokens, total_tokens,
+          client, session_id, tags
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+    }
+  };
+
+  // Lazy async initialization
+  let initPromise: Promise<void> | null = null;
+  const ensureInit = async () => {
+    if (!initPromise) {
+      initPromise = initDb();
+    }
+    await initPromise;
+  };
 
   let migrationComplete = false;
 
@@ -186,17 +206,27 @@ export const createSqliteUsageTrackingDriver = (
     tags: typeof row.tags === "string" ? JSON.parse(row.tags) : undefined,
   });
 
+  const getStatement = (sql: string): any => {
+    if (!preparedStmts[sql]) {
+      preparedStmts[sql] = db.prepare(sql);
+    }
+    return preparedStmts[sql];
+  };
+
   return {
     async migrate(): Promise<void> {
+      await ensureInit();
       await ensureMigrated();
     },
 
     async append(entry: UsageTrackingEntry): Promise<void> {
+      await ensureInit();
       await ensureMigrated();
       appendOne(entry);
     },
 
     async appendMany(entries: UsageTrackingEntry[]): Promise<void> {
+      await ensureInit();
       await ensureMigrated();
       for (const entry of entries) {
         appendOne(entry);
@@ -204,10 +234,11 @@ export const createSqliteUsageTrackingDriver = (
     },
 
     async list(options: ListUsageTrackingOptions = {}): Promise<UsageTrackingEntry[]> {
+      await ensureInit();
       await ensureMigrated();
       const { sql, params } = buildWhereClause(options);
       const limitSql = typeof options.limit === "number" ? " LIMIT ?" : "";
-      const stmt = db.prepare(
+      const stmt = getStatement(
         `SELECT * FROM ${tableName} ${sql} ORDER BY timestamp DESC${limitSql}`
       );
       const rows = stmt.all(
@@ -217,23 +248,26 @@ export const createSqliteUsageTrackingDriver = (
     },
 
     async count(options: Omit<ListUsageTrackingOptions, "limit"> = {}): Promise<number> {
+      await ensureInit();
       await ensureMigrated();
       const { sql, params } = buildWhereClause(options);
-      const stmt = db.prepare(`SELECT COUNT(*) as count FROM ${tableName} ${sql}`);
+      const stmt = getStatement(`SELECT COUNT(*) as count FROM ${tableName} ${sql}`);
       const row = stmt.get(...params);
       return Number(row?.count ?? 0);
     },
 
     async deleteOlderThan(timestamp: number): Promise<number> {
+      await ensureInit();
       await ensureMigrated();
-      const stmt = db.prepare(`DELETE FROM ${tableName} WHERE timestamp < ?`);
+      const stmt = getStatement(`DELETE FROM ${tableName} WHERE timestamp < ?`);
       const result = stmt.run(timestamp);
       return result.changes;
     },
 
     async clear(): Promise<void> {
+      await ensureInit();
       await ensureMigrated();
-      db.prepare(`DELETE FROM ${tableName}`).run();
+      getStatement(`DELETE FROM ${tableName}`).run();
     },
   };
 };

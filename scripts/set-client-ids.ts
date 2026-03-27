@@ -113,10 +113,11 @@ Examples:
   const currentClientIds = store.getState().clientIds;
 
   if (mode === "set") {
+    // TypeScript narrows the type after the early exit check above
     const newEntry: ClientIdEntry = {
-      clientId,
-      name,
-      apiKey,
+      clientId: clientId as string,
+      name: name as string,
+      apiKey: apiKey as string,
       createdAt: Date.now(),
       lastUsed: null,
     };
@@ -129,19 +130,19 @@ Examples:
     let updated: ClientIdEntry[];
 
     if (existingIndex !== -1) {
-      // Update existing
+      // Update existing - TypeScript knows name and apiKey are not null here due to earlier check
       updated = currentClientIds.map((e, i) =>
         i === existingIndex
-          ? { ...e, name, apiKey, lastUsed: Date.now() }
+          ? { ...e, name: name as string, apiKey: apiKey as string, lastUsed: Date.now() }
           : e
       );
       console.log(`ClientId "${clientId}" has been updated.\n`);
     } else {
-      // Add new
+      // Add new - TypeScript knows name and apiKey are not null here due to earlier check
       const newEntry: ClientIdEntry = {
-        clientId: clientId!,
-        name: name!,
-        apiKey: apiKey!,
+        clientId: clientId as string,
+        name: name as string,
+        apiKey: apiKey as string,
         createdAt: Date.now(),
         lastUsed: null,
       };
