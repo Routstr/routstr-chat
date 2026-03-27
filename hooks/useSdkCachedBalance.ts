@@ -19,7 +19,8 @@ export function useSdkCachedBalance(): number {
     let unsubscribe: (() => void) | null = null;
 
     const computeBalance = () => {
-      const tokens = storeRef.current.store.getState().cachedTokens;
+      // Use apiKeys for cached balance calculation (renamed from cachedTokens)
+      const tokens = storeRef.current.store.getState().apiKeys;
       const total = tokens.reduce((sum, t) => sum + (t.balance || 0), 0);
       setCachedBalance(total);
     };

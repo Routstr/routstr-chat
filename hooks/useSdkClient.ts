@@ -36,11 +36,6 @@ const createPendingDeps = (): {
     getAllProvidersModels: () => ({}),
   };
   const pendingStorage: StorageAdapter = {
-    getToken: pendingHandler,
-    setToken: pendingHandler,
-    removeToken: pendingHandler,
-    updateTokenBalance: pendingHandler,
-    getCachedTokenDistribution: () => [],
     saveProviderInfo: pendingHandler,
     getProviderInfo: () => null,
     getApiKey: () => null,

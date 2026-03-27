@@ -58,7 +58,7 @@ export interface FetchOptions {
  * RoutstrClient is the main SDK entry point
  */
 export type AlertLevel = "max" | "min";
-export type RoutstrClientMode = "xcashu" | "apikeys";
+export type RoutstrClientMode = "xcashu" | "apikeys" | "lazyrefund";
 export type DebugLevel = "DEBUG" | "WARN" | "ERROR";
 
 const TOPUP_MARGIN = 1.2;

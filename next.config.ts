@@ -56,6 +56,28 @@ const nextConfig: NextConfig = {
   },
   // Add HMR configuration to prevent ping errors
   webpack: (config, { dev, isServer }) => {
+    // Prevent native Node.js modules from being bundled for the client
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        path: false,
+        crypto: false,
+      };
+      // Ignore native modules that shouldn't be bundled for client
+      config.module.rules.push({
+        test: /node_modules\/better-sqlite3\/.*/,
+        use: { loader: "null-loader" },
+      });
+      config.module.rules.push({
+        test: /node_modules\/bindings\/.*/,
+        use: { loader: "null-loader" },
+      });
+      config.module.rules.push({
+        test: /node_modules\/file-uri-to-path\/.*/,
+        use: { loader: "null-loader" },
+      });
+    }
     if (dev && !isServer) {
       config.watchOptions = {
         poll: 1000,
@@ -64,7 +86,7 @@ const nextConfig: NextConfig = {
     }
     return config;
   },
-  serverExternalPackages: [],
+  serverExternalPackages: ["better-sqlite3"],
   // Silence Next 16 Turbopack + webpack plugin warning (next-pwa injects webpack config)
   // See: https://nextjs.org/docs/app/api-reference/next-config-js/turbopack
   turbopack: {},
