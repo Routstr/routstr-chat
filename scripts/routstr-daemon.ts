@@ -206,6 +206,39 @@ async function saveRequestBody(
   return filename;
 }
 
+function toForwardHeaders(
+  headers: IncomingMessage["headers"]
+): Record<string, string> {
+  const forwarded: Record<string, string> = {};
+  const hopByHop = new Set([
+    "host",
+    "connection",
+    "content-length",
+    "transfer-encoding",
+    "keep-alive",
+    "proxy-authenticate",
+    "proxy-authorization",
+    "te",
+    "trailer",
+    "upgrade",
+  ]);
+
+  for (const [key, value] of Object.entries(headers)) {
+    if (!key || hopByHop.has(key.toLowerCase())) {
+      continue;
+    }
+    if (Array.isArray(value)) {
+      forwarded[key] = value.join(", ");
+      continue;
+    }
+    if (typeof value === "string") {
+      forwarded[key] = value;
+    }
+  }
+
+  return forwarded;
+}
+
 async function main(): Promise<void> {
   const { port, provider, mode } = parseArgs(process.argv);
 
@@ -355,11 +388,14 @@ async function main(): Promise<void> {
         (req.headers["x-routstr-provider"] as string | undefined) ||
         provider ||
         undefined;
+      const forwardedHeaders = toForwardHeaders(req.headers);
 
       try {
         const response = await routeRequests({
           modelId,
           requestBody,
+          path: url.pathname,
+          headers: forwardedHeaders,
           forcedProvider,
           debugLevel: "DEBUG",
           mode,

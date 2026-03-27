@@ -30,6 +30,8 @@ export interface RouteRequestOptions {
   requestBody: unknown;
   /** Optional: API path (defaults to /v1/chat/completions) */
   path?: string;
+  /** Optional: request headers to forward upstream */
+  headers?: Record<string, string>;
   /** Optional: force a specific provider base URL */
   forcedProvider?: string;
   /** Wallet adapter for Cashu operations */
@@ -86,6 +88,7 @@ async function resolveRouteRequestContext(options: RouteRequestOptions): Promise
   baseUrl: string;
   mintUrl: string;
   path: string;
+  headers: Record<string, string>;
   modelId: string;
   proxiedBody: Record<string, unknown>;
 }> {
@@ -93,6 +96,7 @@ async function resolveRouteRequestContext(options: RouteRequestOptions): Promise
     modelId,
     requestBody,
     path = "/v1/chat/completions",
+    headers = {},
     forcedProvider,
     walletAdapter,
     storageAdapter,
@@ -216,6 +220,7 @@ async function resolveRouteRequestContext(options: RouteRequestOptions): Promise
     baseUrl,
     mintUrl,
     path,
+    headers,
     modelId,
     proxiedBody,
   };
@@ -227,7 +232,7 @@ async function resolveRouteRequestContext(options: RouteRequestOptions): Promise
 export async function routeRequests(
   options: RouteRequestOptions
 ): Promise<Response> {
-  const { client, baseUrl, mintUrl, path, modelId, proxiedBody } =
+  const { client, baseUrl, mintUrl, path, headers, modelId, proxiedBody } =
     await resolveRouteRequestContext(options);
 
   try {
@@ -235,6 +240,7 @@ export async function routeRequests(
       path,
       method: "POST",
       body: proxiedBody,
+      headers,
       baseUrl,
       mintUrl,
       modelId,
@@ -262,7 +268,7 @@ export async function routeRequestsToNodeResponse(
   options: RouteRequestToNodeResponseOptions
 ): Promise<void> {
   const { res } = options;
-  const { client, baseUrl, mintUrl, path, modelId, proxiedBody } =
+  const { client, baseUrl, mintUrl, path, headers, modelId, proxiedBody } =
     await resolveRouteRequestContext(options);
 
   try {
@@ -270,6 +276,7 @@ export async function routeRequestsToNodeResponse(
       path,
       method: "POST",
       body: proxiedBody,
+      headers,
       baseUrl,
       mintUrl,
       modelId,
