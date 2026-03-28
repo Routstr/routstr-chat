@@ -1,7 +1,7 @@
 import { createServer, IncomingMessage, ServerResponse } from "http";
 import { Readable } from "stream";
 import {
-  routeRequests,
+  routeRequestsToNodeResponse,
   createSdkStore,
   createSqliteDriver,
   ModelManager,
@@ -391,7 +391,7 @@ async function main(): Promise<void> {
       const forwardedHeaders = toForwardHeaders(req.headers);
 
       try {
-        const response = await routeRequests({
+        await routeRequestsToNodeResponse({
           modelId,
           requestBody,
           path: url.pathname,
@@ -404,38 +404,7 @@ async function main(): Promise<void> {
           providerRegistry,
           discoveryAdapter,
           modelManager,
-        });
-
-        res.statusCode = response.status;
-        response.headers.forEach((value, key) => {
-          res.setHeader(key, value);
-        });
-
-        if (!response.body) {
-          res.end();
-          return;
-        }
-
-        const nodeReadable = Readable.fromWeb(response.body as any);
-        await new Promise<void>((resolve, reject) => {
-          let settled = false;
-          const finish = () => {
-            if (settled) return;
-            settled = true;
-            resolve();
-          };
-          const fail = (err: unknown) => {
-            if (settled) return;
-            settled = true;
-            reject(err);
-          };
-
-          res.once("finish", finish);
-          res.once("close", finish);
-          res.once("error", fail);
-          nodeReadable.once("error", fail);
-
-          nodeReadable.pipe(res);
+          res,
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);

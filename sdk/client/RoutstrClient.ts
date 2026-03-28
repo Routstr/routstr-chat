@@ -39,8 +39,8 @@ import {
   extractUsageFromResponseBody,
   type UsageTrackingData,
 } from "./usage";
-import { createSSEParserTransform } from "./sse";
 import { Readable } from "stream";
+import { createSSETrackingStream } from "./sse";
 
 /**
  * Options for fetching AI response
@@ -263,9 +263,9 @@ export class RoutstrClient {
       return;
     }
 
-    const nodeReadable = Readable.fromWeb(body as any);
+    const reader = body.getReader();
 
-    await new Promise<void>((resolve, reject) => {
+    await new Promise<void>(async (resolve, reject) => {
       let settled = false;
       const finish = async () => {
         if (settled) return;
@@ -299,9 +299,24 @@ export class RoutstrClient {
       res.once("finish", finish);
       res.once("close", finish);
       res.once("error", fail);
-      nodeReadable.once("error", fail);
 
-      nodeReadable.pipe(res);
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) {
+            res.end();
+            break;
+          }
+
+          if (!res.write(Buffer.from(value))) {
+            await new Promise<void>((drainResolve) =>
+              res.once("drain", drainResolve)
+            );
+          }
+        }
+      } catch (error) {
+        fail(error);
+      }
     });
   }
 
@@ -395,8 +410,8 @@ export class RoutstrClient {
     let capturedResponseId: string | undefined;
 
     if (contentType.includes("text/event-stream") && response.body) {
-      const nodeReadable = Readable.fromWeb(response.body as any);
-      const sseParser = createSSEParserTransform(
+      const trackedBody = createSSETrackingStream(
+        response.body as globalThis.ReadableStream<Uint8Array>,
         (usage) => {
           capturedUsage = usage;
           (processedResponse as any).usage = usage;
@@ -406,12 +421,8 @@ export class RoutstrClient {
           (processedResponse as any).requestId = responseId;
         }
       );
-      const transformed = nodeReadable.pipe(sseParser, { end: true });
-      const webStream = Readable.toWeb(
-        transformed
-      ) as globalThis.ReadableStream<Uint8Array>;
 
-      processedResponse = new Response(webStream, {
+      processedResponse = new Response(trackedBody, {
         status: response.status,
         statusText: response.statusText,
         headers: response.headers,
@@ -663,6 +674,50 @@ export class RoutstrClient {
             ? undefined
             : JSON.stringify(body),
       });
+
+      if ((body as any)?.stream && response.body) {
+        const contentType = response.headers.get("content-type") || "";
+        if (contentType.includes("text/event-stream")) {
+          const originalBody = response.body as globalThis.ReadableStream<Uint8Array>;
+          const reader = originalBody.getReader();
+          const start = Date.now();
+          let readCount = 0;
+
+          const instrumentedBody = new ReadableStream<Uint8Array>({
+            async pull(controller) {
+              const before = Date.now();
+              const { done, value } = await reader.read();
+              const after = Date.now();
+              const waitMs = after - before;
+              const totalMs = after - start;
+
+              if (done) {
+                console.log(`[SDK_STREAM_DEBUG] done total=${totalMs}ms reads=${readCount}`);
+                controller.close();
+                return;
+              }
+
+              readCount += 1;
+              console.log(
+                `[SDK_STREAM_DEBUG] read#${readCount} total=${totalMs}ms wait=${waitMs}ms bytes=${value.byteLength}`
+              );
+              controller.enqueue(value);
+            },
+            async cancel(reason) {
+              await reader.cancel(reason);
+            },
+          });
+
+          const instrumentedResponse = new Response(instrumentedBody, {
+            status: response.status,
+            statusText: response.statusText,
+            headers: response.headers,
+          });
+          (instrumentedResponse as any).baseUrl = (response as any).baseUrl;
+          (instrumentedResponse as any).token = (response as any).token;
+          return instrumentedResponse;
+        }
+      }
       if (this.mode === "xcashu") this._log("DEBUG", "response,", response);
 
       (response as any).baseUrl = baseUrl;
