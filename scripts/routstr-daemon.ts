@@ -21,6 +21,11 @@ const MOCK_ERROR_CODES: Record<string, number> = {
   // 'https://api.provider.com': 429,
 };
 
+// Hardcoded list of disabled providers
+const DISABLED_PROVIDERS = [
+  "https://llm.satsandsports.cash",
+];
+
 if (process.env.NODE_ENV === "test" || process.env.MOCK_ERRORS) {
   const originalFetch = global.fetch;
   global.fetch = async (input: string | URL | Request, init?: RequestInit) => {
@@ -244,6 +249,10 @@ async function main(): Promise<void> {
 
   const { store, hydrate } = createSdkStore({ driver: createSqliteDriver() });
   await hydrate;
+
+  // Set hardcoded disabled providers
+  store.getState().setDisabledProviders(DISABLED_PROVIDERS);
+
   const discoveryAdapter = createDiscoveryAdapterFromStore(store);
   const providerRegistry = createProviderRegistryFromStore(store);
   const storageAdapter = createStorageAdapterFromStore(store);
