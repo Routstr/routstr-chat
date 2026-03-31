@@ -15,6 +15,7 @@ import { useObservableState } from "applesauce-react/hooks";
 import { useAppContext } from "@/hooks/useAppContext";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { MintQuoteState, MeltQuoteState } from "@cashu/cashu-ts";
+import { getStorageItem, setStorageItem } from "@/utils/storageUtils";
 import {
   invoices$,
   configSyncLoading$,
@@ -68,20 +69,12 @@ export function useInvoiceSync() {
 
   // Cloud sync enabled state (persisted to localStorage)
   const [cloudSyncEnabled, setCloudSyncEnabled] = useState<boolean>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("invoice_cloud_sync_enabled") !== "false";
-    }
-    return true;
+    return getStorageItem<boolean>("invoice_cloud_sync_enabled", true);
   });
 
   // Persist cloud sync enabled to localStorage
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      localStorage.setItem(
-        "invoice_cloud_sync_enabled",
-        String(cloudSyncEnabled)
-      );
-    }
+    setStorageItem("invoice_cloud_sync_enabled", cloudSyncEnabled);
   }, [cloudSyncEnabled]);
 
   // Update reactive inputs when account/config changes
@@ -132,11 +125,9 @@ export function useInvoiceSync() {
 
   // Local storage operations
   const getLocalInvoices = useCallback((): StoredInvoice[] => {
-    if (typeof window === "undefined") return [];
-    const stored = localStorage.getItem("lightning_invoices");
-    if (!stored) return [];
+    const data = getStorageItem<InvoiceStore | null>("lightning_invoices", null);
+    if (!data) return [];
     try {
-      const data = JSON.parse(stored) as InvoiceStore;
       return data.invoices || [];
     } catch {
       return [];
@@ -144,12 +135,11 @@ export function useInvoiceSync() {
   }, []);
 
   const saveLocalInvoices = useCallback((invoices: StoredInvoice[]) => {
-    if (typeof window === "undefined") return;
     const store: InvoiceStore = {
       invoices,
       lastSync: Date.now(),
     };
-    localStorage.setItem("lightning_invoices", JSON.stringify(store));
+    setStorageItem("lightning_invoices", store);
   }, []);
 
   // Merge cloud and local invoices

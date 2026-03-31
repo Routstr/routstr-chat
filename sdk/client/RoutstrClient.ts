@@ -789,13 +789,14 @@ export class RoutstrClient {
       this.storageAdapter.getApiKey(baseUrl);
 
       let topupAmount = params.requiredSats;
+      let currentBalance = 0;
 
       try {
         const currentBalanceInfo = await this.balanceManager.getTokenBalance(
           params.token,
           baseUrl
         );
-        const currentBalance =
+        currentBalance =
           currentBalanceInfo.unit === "msat"
             ? currentBalanceInfo.amount / 1000
             : currentBalanceInfo.amount;
@@ -860,12 +861,29 @@ export class RoutstrClient {
             "DEBUG",
             `[RoutstrClient] _handleErrorResponse: Retrying 402 (attempt ${retryCount + 1}/${MAX_RETRIES_PER_PROVIDER})`
           );
-          return this._makeRequest({
+          const retriedResponse = await this._makeRequest({
             ...params,
             token: params.token,
             headers: this._withAuthHeader(params.baseHeaders, params.token),
             retryCount: retryCount + 1,
           });
+          const initialTokenBalanceOverride = Math.max(
+            0,
+            currentBalance +
+              Number(
+                topupResult.toppedUpAmount ?? topupAmount * TOPUP_MARGIN
+              )
+          );
+          if (initialTokenBalanceOverride > 0) {
+            (retriedResponse as any).initialTokenBalanceOverride = Math.max(
+              0,
+              Number(
+                (retriedResponse as any).initialTokenBalanceOverride ?? 0
+              ),
+              initialTokenBalanceOverride
+            );
+          }
+          return retriedResponse;
         } else {
           this._log(
             "DEBUG",
@@ -1104,7 +1122,13 @@ export class RoutstrClient {
       clientApiKey,
     } = params;
 
-    let satsSpent: number = initialTokenBalance;
+    const effectiveInitialTokenBalance = Math.max(
+      0,
+      Number(
+        (response as any)?.initialTokenBalanceOverride ?? initialTokenBalance
+      ) || 0
+    );
+    let satsSpent: number = effectiveInitialTokenBalance;
 
     if (this.mode === "xcashu" && response) {
       const refundToken = response.headers.get("x-cashu") ?? undefined;
@@ -1115,9 +1139,11 @@ export class RoutstrClient {
           if (receiveResult.success) {
             // Remove the spent token from storage
             this.storageAdapter.removeXcashuToken(baseUrl, token);
-            satsSpent =
-              initialTokenBalance -
-              receiveResult.amount * (receiveResult.unit == "sat" ? 1 : 1000);
+            satsSpent = Math.max(
+              0,
+              effectiveInitialTokenBalance -
+                receiveResult.amount * (receiveResult.unit == "sat" ? 1 : 1000)
+            );
           }
         } catch (error) {
           this._log("ERROR", "[xcashu] Failed to receive refund token:", error);
@@ -1152,10 +1178,16 @@ export class RoutstrClient {
         }
         this.storageAdapter.updateApiKeyBalance(baseUrl, latestTokenBalance);
 
-        satsSpent = initialTokenBalance - latestTokenBalance;
+        satsSpent = Math.max(
+          0,
+          effectiveInitialTokenBalance - latestTokenBalance
+        );
       } catch (e) {
         this._log("WARN", "Could not get updated API key balance:", e);
-        satsSpent = fallbackSatsSpent ?? initialTokenBalance;
+        satsSpent = Math.max(
+          0,
+          fallbackSatsSpent ?? effectiveInitialTokenBalance
+        );
       }
     }
 
@@ -1178,8 +1210,9 @@ export class RoutstrClient {
           await this.cashuSpender.refundXcashuTokens(mintUrl);
         this._log("DEBUG", "Refund xcashu tokens results:", xcashuResults);
 
-        // Also refund API keys (apikeys mode)
-        const results = await this.cashuSpender.refundProviders(mintUrl);
+        // Force immediate post-response refunds. The "recently used" guard is
+        // meant for opportunistic sweeps, not the normal request lifecycle.
+        const results = await this.cashuSpender.refundProviders(mintUrl, true);
       } catch (error) {
         this._log("ERROR", "Failed to refund providers:", error);
       }

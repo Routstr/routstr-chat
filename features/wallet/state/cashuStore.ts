@@ -8,6 +8,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { GetInfoResponse, Keyset, MintKeys } from "@cashu/cashu-ts";
 import { CashuToken } from "../core/domain/Token";
+import { createScopedPersistStorage } from "@/utils/scopedPersistStorage";
 
 interface ProofWithEventId extends Proof {
   eventId: string;
@@ -381,6 +382,9 @@ export const useCashuStore = create<CashuStore>()(
         });
       },
     }),
-    { name: "cashu" }
+    {
+      name: "cashu",
+      storage: createScopedPersistStorage(),
+    }
   )
 );

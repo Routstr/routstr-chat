@@ -14,6 +14,7 @@ import {
   derivedPnsKeys$,
   derivedPnsPubkeys$,
   processStored1081Events$,
+  resetSync1081State,
   sync1081Event$,
   syncStats1081,
   triggerProcessStored1081Events,
@@ -52,6 +53,7 @@ export {
   userSigner$,
   derivedPnsKeys$,
   derivedPnsPubkeys$,
+  resetSync1081State,
   triggerProcessStored1081Events,
   syncStats1081,
   syncStatsDerivedPns,
@@ -69,6 +71,20 @@ export function useChatSync1081() {
   const [currentPnsKeys, setCurrentPnsKeys] = useState<PnsKeys | null>(null);
   const syncCount1081Ref = useRef(0);
   const syncCountDerivedPnsRef = useRef(0);
+
+  useEffect(() => {
+    const sub = userPubkey$.subscribe(() => {
+      setDerivedPnsEvents([]);
+      setCurrentDerivedPnsKeys(new Map());
+      setCurrentPnsKeys(null);
+      syncCount1081Ref.current = 0;
+      syncCountDerivedPnsRef.current = 0;
+      setLoading1081(false);
+      setLoadingDerivedPns(false);
+      setError(null);
+    });
+    return () => sub.unsubscribe();
+  }, []);
 
   // Subscribe to derived PNS keys
   useEffect(() => {

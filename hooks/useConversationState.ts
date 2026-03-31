@@ -3,6 +3,7 @@ import { firstValueFrom, map, filter, timeout } from "rxjs";
 import { Conversation, Message } from "@/types/chat";
 import {
   loadConversationsFromStorage,
+  persistConversationsSnapshot,
   saveConversationToStorage,
   deleteConversationFromStorage,
   clearAllConversations,
@@ -28,6 +29,7 @@ import { eventStore } from "@/lib/applesauce-core";
 import { useChatSync1081, derivedPnsKeys$ } from "./useChatSync1081";
 import { PnsKeys, SALT_PNS, createPnsDeletionEvent } from "@/lib/pns";
 import { useDeletionSync } from "./useDeletionSync";
+import { useAccountManager } from "@/components/ClientProviders";
 
 export interface UseConversationStateReturn {
   conversations: Conversation[];
@@ -82,6 +84,7 @@ export interface UseConversationStateReturn {
  * active conversation tracking, and conversation persistence
  */
 export const useConversationState = (): UseConversationStateReturn => {
+  const { activeAccount } = useAccountManager();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [conversationsLoaded, setConversationsLoaded] = useState(false);
   const [activeConversationId, setActiveConversationId] = useState<
@@ -107,6 +110,7 @@ export const useConversationState = (): UseConversationStateReturn => {
   } = useChatSync();
   const {
     derivedPnsEvents: syncedEvents,
+    derivedPnsKeys: currentDerivedPnsKeys,
     loading1081,
     loadingDerivedPns,
     currentPnsKeys,
@@ -116,6 +120,38 @@ export const useConversationState = (): UseConversationStateReturn => {
   const { performDeletionSync } = useDeletionSync();
 
   const isSyncing = isPublishing || loading1081 || loadingDerivedPns;
+  const activeIdentityId = activeAccount?.pubkey ?? null;
+
+  useEffect(() => {
+    conversationsMapRef.current.clear();
+    processedEventIdsRef.current.clear();
+    migrationAttemptedRef.current = false;
+    autoDeleteAttemptedRef.current = false;
+
+    if (!activeIdentityId) {
+      setConversations([]);
+      setMessages([]);
+      setActiveConversationId(null);
+      setConversationsLoaded(true);
+      return;
+    }
+
+    const storedConversations = loadConversationsFromStorage();
+    storedConversations.forEach((conversation) => {
+      conversationsMapRef.current.set(conversation.id, conversation);
+    });
+
+    const sortedConversations = sortConversationsByRecentActivity(storedConversations);
+    const storedActiveConversationId = loadActiveConversationId();
+    const activeConversation = storedActiveConversationId
+      ? conversationsMapRef.current.get(storedActiveConversationId)
+      : null;
+
+    setConversations(sortedConversations);
+    setActiveConversationId(storedActiveConversationId);
+    setMessages(activeConversation?.messages ?? []);
+    setConversationsLoaded(true);
+  }, [activeIdentityId]);
 
   const syncWithNostr = useCallback(async () => {
     console.log("[useConversationState] syncWithNostr triggered");
@@ -138,19 +174,37 @@ export const useConversationState = (): UseConversationStateReturn => {
       if (hasUnsyncedMessages) {
         migrationAttemptedRef.current = true;
         console.log("Found unsynced messages, starting migration...");
-        const updatedConversations = migrateConversations(
-          storedConversations,
-          currentPnsKeys
-        );
+        let cancelled = false;
 
-        if (updatedConversations) {
-          // Update map and state with migrated conversations (containing event IDs)
+        void (async () => {
+          const updatedConversations = await migrateConversations(
+            storedConversations,
+            currentPnsKeys
+          );
+
+          if (!updatedConversations || cancelled) {
+            return;
+          }
+
           updatedConversations.forEach((c) => {
             conversationsMapRef.current.set(c.id, c);
           });
-          setConversations(updatedConversations);
-          clearAllConversations();
-        }
+
+          const sortedConversations =
+            sortConversationsByRecentActivity(updatedConversations);
+          persistConversationsSnapshot(sortedConversations);
+          setConversations(sortedConversations);
+
+          const storedActiveConversationId = loadActiveConversationId();
+          const activeConversation = storedActiveConversationId
+            ? conversationsMapRef.current.get(storedActiveConversationId)
+            : null;
+          setMessages(activeConversation?.messages ?? []);
+        })();
+
+        return () => {
+          cancelled = true;
+        };
       }
     }
   }, [currentPnsKeys, conversationsLoaded, migrateConversations]);
@@ -169,7 +223,16 @@ export const useConversationState = (): UseConversationStateReturn => {
     let failedDecryptions = 0;
     let successfulDecryptions = 0;
 
-    const eventsToLoad = eventStore.getByFilters({ kinds: [1080] });
+    const currentDerivedPubkeys = Array.from(currentDerivedPnsKeys.values()).map(
+      (pnsKeys) => pnsKeys.pnsKeypair.pubKey
+    );
+    const eventsToLoad =
+      currentDerivedPubkeys.length > 0
+        ? eventStore.getByFilters({
+            kinds: [1080],
+            authors: currentDerivedPubkeys,
+          })
+        : [];
     eventsToLoad.forEach((event) => {
       // Skip already processed events
       if (processedEventIdsRef.current.has(event.id)) {
@@ -245,7 +308,7 @@ export const useConversationState = (): UseConversationStateReturn => {
       }
     }
     setConversationsLoaded(true);
-  }, [syncedEvents, currentPnsKeys, loading1081]);
+  }, [syncedEvents, currentPnsKeys, currentDerivedPnsKeys, loading1081]);
 
   // Set editing content when editing message index changes
   useEffect(() => {

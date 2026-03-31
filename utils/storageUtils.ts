@@ -1,5 +1,6 @@
 import { TransactionHistory } from "@/types/chat";
 import { useCashuStore } from "@/features/wallet/state/cashuStore";
+import { getScopedStorageKey } from "./accountScope";
 
 /**
  * SSR-safe check for localStorage availability
@@ -43,8 +44,9 @@ export interface CashuTokenEntry {
  */
 export const setStorageItem = <T>(key: string, value: T): void => {
   if (!canUseLocalStorage()) return;
+  const resolvedKey = getScopedStorageKey(key);
   try {
-    localStorage.setItem(key, JSON.stringify(value));
+    localStorage.setItem(resolvedKey, JSON.stringify(value));
   } catch (error) {
     // Handle storage full scenarios gracefully
     if (isQuotaExceeded(error)) {
@@ -60,17 +62,17 @@ export const setStorageItem = <T>(key: string, value: T): void => {
         localStorage.removeItem("modelsFromAllProviders");
       } catch {}
       try {
-        localStorage.setItem(key, JSON.stringify(value));
+        localStorage.setItem(resolvedKey, JSON.stringify(value));
         return;
       } catch (retryError) {
         console.warn(
-          `Storage quota exceeded; unable to persist key "${key}" after cleanup attempt.`,
+          `Storage quota exceeded; unable to persist key "${resolvedKey}" after cleanup attempt.`,
           retryError
         );
         return;
       }
     }
-    console.error(`Error storing item with key "${key}":`, error);
+    console.error(`Error storing item with key "${resolvedKey}":`, error);
   }
 };
 
@@ -82,8 +84,9 @@ export const setStorageItem = <T>(key: string, value: T): void => {
  */
 export const getStorageItem = <T>(key: string, defaultValue: T): T => {
   if (!canUseLocalStorage()) return defaultValue;
+  const resolvedKey = getScopedStorageKey(key);
   try {
-    const item = localStorage.getItem(key);
+    const item = localStorage.getItem(resolvedKey);
     if (item === null) return defaultValue;
 
     // Try to parse as JSON first
@@ -98,14 +101,14 @@ export const getStorageItem = <T>(key: string, defaultValue: T): T => {
       throw parseError;
     }
   } catch (error) {
-    console.error(`Error retrieving item with key "${key}":`, error);
+    console.error(`Error retrieving item with key "${resolvedKey}":`, error);
     // Clear the corrupted item from storage
     if (canUseLocalStorage()) {
       try {
-        localStorage.removeItem(key);
+        localStorage.removeItem(resolvedKey);
       } catch (removeError) {
         console.error(
-          `Error removing corrupted item with key "${key}":`,
+          `Error removing corrupted item with key "${resolvedKey}":`,
           removeError
         );
       }
@@ -120,10 +123,11 @@ export const getStorageItem = <T>(key: string, defaultValue: T): T => {
  */
 export const removeStorageItem = (key: string): void => {
   if (!canUseLocalStorage()) return;
+  const resolvedKey = getScopedStorageKey(key);
   try {
-    localStorage.removeItem(key);
+    localStorage.removeItem(resolvedKey);
   } catch (error) {
-    console.error(`Error removing item with key "${key}":`, error);
+    console.error(`Error removing item with key "${resolvedKey}":`, error);
   }
 };
 
@@ -134,10 +138,11 @@ export const removeStorageItem = (key: string): void => {
  */
 export const hasStorageItem = (key: string): boolean => {
   if (!canUseLocalStorage()) return false;
+  const resolvedKey = getScopedStorageKey(key);
   try {
-    return localStorage.getItem(key) !== null;
+    return localStorage.getItem(resolvedKey) !== null;
   } catch (error) {
-    console.error(`Error checking existence of key "${key}":`, error);
+    console.error(`Error checking existence of key "${resolvedKey}":`, error);
     return false;
   }
 };
@@ -378,7 +383,7 @@ export const DEFAULT_RELAYS: readonly string[] = [
  */
 export const loadUsingNip60 = (): boolean => {
   if (!canUseLocalStorage()) return true;
-  const storedValue = localStorage.getItem("usingNip60");
+  const storedValue = localStorage.getItem(getScopedStorageKey("usingNip60"));
   if (storedValue === null) return true;
   try {
     // Stored value may be a JSON-encoded boolean or a raw string
@@ -892,12 +897,46 @@ export const updateAPILastTopupTime = (
 
 const SATS_SPENT_STORAGE_KEY = "sats_spent_by_event";
 
+const normalizeSatsSpentValue = (value: unknown): number | undefined => {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) {
+    return undefined;
+  }
+
+  return Math.max(0, numericValue);
+};
+
 /**
  * Load sats spent map from localStorage
  * @returns Map of eventId -> satsSpent
  */
 export const loadSatsSpentMap = (): Record<string, number> => {
-  return getStorageItem<Record<string, number>>(SATS_SPENT_STORAGE_KEY, {});
+  const storedMap = getStorageItem<Record<string, number>>(
+    SATS_SPENT_STORAGE_KEY,
+    {}
+  );
+  const normalizedMap: Record<string, number> = {};
+  let didSanitize = false;
+
+  Object.entries(storedMap).forEach(([eventId, satsSpent]) => {
+    const normalizedValue = normalizeSatsSpentValue(satsSpent);
+    if (normalizedValue === undefined) {
+      didSanitize = true;
+      return;
+    }
+
+    if (normalizedValue !== satsSpent) {
+      didSanitize = true;
+    }
+
+    normalizedMap[eventId] = normalizedValue;
+  });
+
+  if (didSanitize) {
+    setStorageItem(SATS_SPENT_STORAGE_KEY, normalizedMap);
+  }
+
+  return normalizedMap;
 };
 
 /**
@@ -907,7 +946,7 @@ export const loadSatsSpentMap = (): Record<string, number> => {
  */
 export const saveSatsSpent = (eventId: string, satsSpent: number): void => {
   const map = loadSatsSpentMap();
-  map[eventId] = satsSpent;
+  map[eventId] = normalizeSatsSpentValue(satsSpent) ?? 0;
   setStorageItem(SATS_SPENT_STORAGE_KEY, map);
 };
 

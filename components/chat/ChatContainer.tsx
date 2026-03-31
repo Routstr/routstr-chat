@@ -35,6 +35,7 @@ const ChatContainer: React.FC<ChatContainerProps> = ({
     setIsSidebarCollapsed,
     isMobile,
     setIsSettingsOpen,
+    setIsLoginModalOpen,
     setInitialSettingsTab,
 
     // Conversation State
@@ -81,6 +82,7 @@ const ChatContainer: React.FC<ChatContainerProps> = ({
           loadConversation={loadConversation}
           deleteConversation={deleteConversation}
           setIsSettingsOpen={setIsSettingsOpen}
+          setIsLoginModalOpen={setIsLoginModalOpen}
           setInitialSettingsTab={setInitialSettingsTab}
           balance={balance}
           syncWithNostr={syncWithNostr}

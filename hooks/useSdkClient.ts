@@ -14,6 +14,9 @@ import {
   type RoutstrClientMode,
 } from "@/sdk/client/RoutstrClient";
 import type { WalletAdapter } from "@/sdk/wallet/interfaces";
+import { useAccountManager } from "@/components/ClientProviders";
+import { useObservableState } from "applesauce-react/hooks";
+import { getScopedDbName } from "@/utils/accountScope";
 
 interface UseSdkClientResult {
   client: RoutstrClient;
@@ -65,23 +68,30 @@ export function useSdkClient(
   walletAdapter: WalletAdapter | null,
   mode: RoutstrClientMode = "xcashu"
 ): UseSdkClientResult {
+  const { manager } = useAccountManager();
+  const activeAccount = useObservableState(manager.active$);
   const [error, setError] = useState<Error | null>(null);
   const [isReady, setIsReady] = useState(false);
-  const storeRef = useRef<ReturnType<typeof createSdkStore> | null>(null);
+  const identityId = activeAccount?.pubkey ?? null;
 
-  if (!storeRef.current) {
-    storeRef.current = createSdkStore({
-      driver: isBrowser ? createIndexedDBDriver() : createMemoryDriver(),
-    });
-  }
+  const scopedStore = useMemo(
+    () =>
+      createSdkStore({
+        driver: isBrowser
+          ? createIndexedDBDriver({
+              dbName: getScopedDbName("routstr-sdk", identityId),
+            })
+          : createMemoryDriver(),
+      }),
+    [identityId]
+  );
 
   const deps = useMemo(() => {
-    if (!storeRef.current) return createPendingDeps();
     return {
-      storageAdapter: createStorageAdapterFromStore(storeRef.current.store),
-      providerRegistry: createProviderRegistryFromStore(storeRef.current.store),
+      storageAdapter: createStorageAdapterFromStore(scopedStore.store),
+      providerRegistry: createProviderRegistryFromStore(scopedStore.store),
     };
-  }, []);
+  }, [scopedStore]);
 
   const client = useMemo(() => {
     if (!walletAdapter) {
@@ -105,8 +115,9 @@ export function useSdkClient(
 
   useEffect(() => {
     let cancelled = false;
-    storeRef
-      .current!.hydrate.then(() => {
+    setIsReady(false);
+    scopedStore.hydrate
+      .then(() => {
         if (cancelled) return;
         setIsReady(true);
         setError(null);
@@ -121,7 +132,7 @@ export function useSdkClient(
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [scopedStore]);
 
   return {
     client,

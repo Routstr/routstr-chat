@@ -1,31 +1,50 @@
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useMemo, useSyncExternalStore } from "react";
 import type { DiscoveryAdapter } from "@/sdk/discovery";
 import {
   createDiscoveryAdapterFromStore,
   createSdkStore,
 } from "@/sdk/storage/store";
 import { localStorageDriver } from "@/sdk/storage/drivers/localStorage";
+import {
+  getCurrentIdentityId,
+  subscribeToIdentityScope,
+} from "@/utils/accountScope";
 
-let browserDiscoveryStore: ReturnType<typeof createSdkStore> | null = null;
+const browserDiscoveryStores = new Map<string, ReturnType<typeof createSdkStore>>();
 
-const getBrowserDiscoveryStore = (): ReturnType<typeof createSdkStore> => {
-  if (!browserDiscoveryStore) {
-    browserDiscoveryStore = createSdkStore({
+const getBrowserDiscoveryStore = (
+  scopeKey: string
+): ReturnType<typeof createSdkStore> => {
+  const existingStore = browserDiscoveryStores.get(scopeKey);
+  if (existingStore) {
+    return existingStore;
+  }
+
+  const store = createSdkStore({
       driver: localStorageDriver,
     });
-  }
-  return browserDiscoveryStore;
+  browserDiscoveryStores.set(scopeKey, store);
+  return store;
 };
 
 export function useDiscoveryAdapter(): DiscoveryAdapter {
-  const storeRef = useRef(getBrowserDiscoveryStore());
-  const [adapter] = useState(() =>
-    createDiscoveryAdapterFromStore(storeRef.current.store)
+  const scopeKey = useSyncExternalStore(
+    subscribeToIdentityScope,
+    () => getCurrentIdentityId() ?? "__device__",
+    () => "__device__"
+  );
+  const scopedStore = useMemo(
+    () => getBrowserDiscoveryStore(scopeKey),
+    [scopeKey]
+  );
+  const adapter = useMemo(
+    () => createDiscoveryAdapterFromStore(scopedStore.store),
+    [scopedStore]
   );
 
   useEffect(() => {
     let cancelled = false;
-    storeRef.current.hydrate
+    scopedStore.hydrate
       .then(() => {
         if (cancelled) return;
       })
@@ -35,7 +54,7 @@ export function useDiscoveryAdapter(): DiscoveryAdapter {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [scopedStore]);
 
   return adapter;
 }

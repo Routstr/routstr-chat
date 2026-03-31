@@ -1,14 +1,12 @@
 import {
   ChevronDown,
-  PlusCircle,
-  Settings,
   Trash2,
   X,
-  Key,
   SquarePen,
   RefreshCw,
 } from "lucide-react";
 import { Conversation } from "@/types/chat";
+import SidebarProfileMenu from "./SidebarProfileMenu";
 
 interface SidebarProps {
   isAuthenticated: boolean;
@@ -23,6 +21,7 @@ interface SidebarProps {
   loadConversation: (id: string) => void;
   deleteConversation: (id: string, e: React.MouseEvent) => Promise<void>;
   setIsSettingsOpen: (isOpen: boolean) => void;
+  setIsLoginModalOpen: (isOpen: boolean) => void;
   setInitialSettingsTab: (
     tab: "settings" | "wallet" | "history" | "api-keys"
   ) => void;
@@ -44,6 +43,7 @@ export default function Sidebar({
   loadConversation,
   deleteConversation,
   setIsSettingsOpen,
+  setIsLoginModalOpen,
   setInitialSettingsTab,
   balance,
   syncWithNostr,
@@ -158,32 +158,22 @@ export default function Sidebar({
 
         {/* Bottom Controls */}
         <div className="p-4 mt-auto">
-          <div className="flex items-center justify-between">
-            {/* Settings Button - Left */}
-            <button
-              onClick={() => {
-                setIsSettingsOpen(true);
-                setInitialSettingsTab("settings");
-              }}
-              className="flex items-center gap-2 text-sidebar-foreground/90 hover:text-sidebar-foreground bg-sidebar-accent/30 hover:bg-sidebar-accent/50 border border-sidebar-border rounded-md py-2 px-3 h-[36px] text-sm transition-colors cursor-pointer"
-              data-tutorial="settings-button"
-            >
-              <Settings className="h-4 w-4" />
-              <span>Settings</span>
-            </button>
-
-            {/* API Keys Button - Right */}
-            <button
-              onClick={() => {
-                setIsSettingsOpen(true);
-                setInitialSettingsTab("api-keys");
-              }}
-              className="flex items-center gap-2 text-sidebar-foreground/90 hover:text-sidebar-foreground bg-sidebar-accent/30 hover:bg-sidebar-accent/50 border border-sidebar-border rounded-md py-2 px-3 h-[36px] text-sm transition-colors cursor-pointer"
-            >
-              <Key className="h-4 w-4" />
-              <span>API Keys</span>
-            </button>
-          </div>
+          <SidebarProfileMenu
+            onOpenSettings={() => {
+              setIsSettingsOpen(true);
+              setInitialSettingsTab("settings");
+            }}
+            onOpenApiKeys={() => {
+              setIsSettingsOpen(true);
+              setInitialSettingsTab("api-keys");
+            }}
+            onAddAccount={() => setIsLoginModalOpen(true)}
+            onAfterAction={() => {
+              if (isMobile) {
+                setIsSidebarOpen(false);
+              }
+            }}
+          />
         </div>
       </div>
 

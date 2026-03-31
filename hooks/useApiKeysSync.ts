@@ -10,6 +10,7 @@ import { useObservableState } from "applesauce-react/hooks";
 import { useAppContext } from "@/hooks/useAppContext";
 import { StoredApiKey } from "@/components/settings/ApiKeysTab";
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { getStorageItem, setStorageItem } from "@/utils/storageUtils";
 import {
   apiKeys$,
   configSyncLoading$,
@@ -40,20 +41,12 @@ export function useApiKeysSync() {
 
   // Cloud sync enabled state (persisted to localStorage)
   const [cloudSyncEnabled, setCloudSyncEnabled] = useState<boolean>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("api_keys_cloud_sync_enabled") !== "false";
-    }
-    return true;
+    return getStorageItem<boolean>("api_keys_cloud_sync_enabled", true);
   });
 
   // Persist cloud sync enabled to localStorage
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      localStorage.setItem(
-        "api_keys_cloud_sync_enabled",
-        String(cloudSyncEnabled)
-      );
-    }
+    setStorageItem("api_keys_cloud_sync_enabled", cloudSyncEnabled);
   }, [cloudSyncEnabled]);
 
   // Update reactive inputs when account/config changes

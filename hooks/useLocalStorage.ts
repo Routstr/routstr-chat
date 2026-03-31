@@ -1,4 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useSyncExternalStore } from "react";
+import {
+  getScopedStorageKey,
+  subscribeToIdentityScope,
+} from "@/utils/accountScope";
 
 /**
  * Generic hook for managing localStorage state
@@ -13,20 +17,29 @@ export function useLocalStorage<T>(
 ) {
   const serialize = serializer?.serialize || JSON.stringify;
   const deserialize = serializer?.deserialize || JSON.parse;
+  const resolvedKey = useSyncExternalStore(
+    subscribeToIdentityScope,
+    () => getScopedStorageKey(key),
+    () => key
+  );
 
-  const [state, setState] = useState<T>(() => {
+  const loadValue = (storageKey: string): T => {
     // Check if we're in the browser environment
     if (typeof window === "undefined") {
       return defaultValue;
     }
 
     try {
-      const item = localStorage.getItem(key);
+      const item = localStorage.getItem(storageKey);
       return item ? deserialize(item) : defaultValue;
     } catch (error) {
-      console.warn(`Failed to load ${key} from localStorage:`, error);
+      console.warn(`Failed to load ${storageKey} from localStorage:`, error);
       return defaultValue;
     }
+  };
+
+  const [state, setState] = useState<T>(() => {
+    return loadValue(resolvedKey);
   });
 
   const setValue = (value: T | ((prev: T) => T)) => {
@@ -36,28 +49,21 @@ export function useLocalStorage<T>(
 
       // Only access localStorage in the browser
       if (typeof window !== "undefined") {
-        localStorage.setItem(key, serialize(valueToStore));
+        localStorage.setItem(resolvedKey, serialize(valueToStore));
       }
     } catch (error) {
-      console.warn(`Failed to save ${key} to localStorage:`, error);
+      console.warn(`Failed to save ${resolvedKey} to localStorage:`, error);
     }
   };
 
-  // Hydrate from localStorage on client mount
+  // Hydrate from localStorage on client mount and account scope changes
   useEffect(() => {
     if (typeof window === "undefined") {
       return;
     }
 
-    try {
-      const item = localStorage.getItem(key);
-      if (item) {
-        setState(deserialize(item));
-      }
-    } catch (error) {
-      console.warn(`Failed to hydrate ${key} from localStorage:`, error);
-    }
-  }, []); // Run once on mount
+    setState(loadValue(resolvedKey));
+  }, [resolvedKey]); // Run on mount and scope changes
 
   // Sync with localStorage changes from other tabs
   useEffect(() => {
@@ -67,18 +73,21 @@ export function useLocalStorage<T>(
     }
 
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === key && e.newValue !== null) {
+      if (e.key === resolvedKey && e.newValue !== null) {
         try {
           setState(deserialize(e.newValue));
         } catch (error) {
-          console.warn(`Failed to sync ${key} from localStorage:`, error);
+          console.warn(
+            `Failed to sync ${resolvedKey} from localStorage:`,
+            error
+          );
         }
       }
     };
 
     window.addEventListener("storage", handleStorageChange);
     return () => window.removeEventListener("storage", handleStorageChange);
-  }, [key, deserialize]);
+  }, [resolvedKey, deserialize]);
 
   return [state, setValue] as const;
 }
