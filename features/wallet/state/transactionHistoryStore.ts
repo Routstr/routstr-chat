@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { SpendingHistoryEntry } from "../core/domain/Transaction";
+import { createScopedPersistStorage } from "@/utils/scopedPersistStorage";
 
 // Define a pending transaction interface for lightning invoices
 export interface PendingTransaction {
@@ -117,6 +118,9 @@ export const useTransactionHistoryStore = create<TransactionHistoryStore>()(
         set({ history: [], pendingTransactions: [] });
       },
     }),
-    { name: "cashu-history" }
+    {
+      name: "cashu-history",
+      storage: createScopedPersistStorage(),
+    }
   )
 );

@@ -33,7 +33,12 @@ import { useCashuWithXYZ } from "@/hooks/useCashuWithXYZ";
 import SettingsDialog from "@/components/ui/SettingsDialog";
 import { ModalShell } from "@/components/ui/ModalShell";
 import { DEFAULT_MINT_URL } from "@/lib/utils";
-import { removeLocalCashuToken } from "@/utils/storageUtils";
+import {
+  getStorageItem,
+  removeLocalCashuToken,
+  removeStorageItem,
+  setStorageItem,
+} from "@/utils/storageUtils";
 import {
   getProviderEndpoints,
   isOnionUrl,
@@ -242,6 +247,14 @@ const ApiKeysTab = ({
   const [maxMintBalance, setMaxMintBalance] = useState(0);
   const [maxMintBalanceUrl, setMaxMintBalanceUrl] = useState("");
 
+  const loadLocalApiKeys = (): StoredApiKey[] => {
+    return getStorageItem<StoredApiKey[]>("api_keys", []);
+  };
+
+  const saveLocalApiKeys = (keys: StoredApiKey[]): void => {
+    setStorageItem("api_keys", keys);
+  };
+
   const { balances: mintBalances, units: mintUnits } = useMemo(() => {
     if (!cashuStore.proofs) return { balances: {}, units: {} };
     return calculateBalanceByMint(cashuStore.proofs, cashuStore.mints);
@@ -389,21 +402,12 @@ const ApiKeysTab = ({
       }
 
       // Migrate local keys to cloud if any exist and cloud is empty
-      const localKeys =
-        typeof window !== "undefined" ? localStorage.getItem("api_keys") : null; // Check if window is defined (for SSR safety)
-      if (
-        localKeys &&
-        JSON.parse(localKeys).length > 0 &&
-        apiKeys.length === 0
-      ) {
+      const localKeys = loadLocalApiKeys();
+      if (localKeys.length > 0 && apiKeys.length === 0) {
         toast.info("Migrating local API keys to cloud...");
-        const parsedLocalKeys: StoredApiKey[] = JSON.parse(localKeys);
-        createOrUpdateApiKeys(parsedLocalKeys)
+        createOrUpdateApiKeys(localKeys)
           .then(() => {
-            if (typeof window !== "undefined") {
-              // Check if window is defined (for SSR safety)
-              localStorage.removeItem("api_keys"); // Clear local storage after successful migration
-            }
+            removeStorageItem("api_keys");
             toast.success("Local API keys migrated to cloud!");
           })
           .catch((error) => {
@@ -414,11 +418,9 @@ const ApiKeysTab = ({
       // refreshApiKeysBalances(); // Refresh balances immediately after sync
     } else {
       // When cloud sync is disabled or no user, use local storage
-      const storedKeys =
-        typeof window !== "undefined" ? localStorage.getItem("api_keys") : null;
-      if (storedKeys) {
-        const parsedKeys: StoredApiKey[] = JSON.parse(storedKeys);
-        const newLocalKeys = parsedKeys.map((key) => ({
+      const storedKeys = loadLocalApiKeys();
+      if (storedKeys.length > 0) {
+        const newLocalKeys = storedKeys.map((key) => ({
           ...key,
           label: key.label || "Unnamed",
           baseUrl: key.baseUrl || baseUrl,
@@ -549,7 +551,7 @@ const ApiKeysTab = ({
         await createOrUpdateApiKeys(updatedKeys);
         toast.success("API Key created and synced to cloud successfully!");
       } else {
-        localStorage.setItem("api_keys", JSON.stringify(updatedKeys));
+        saveLocalApiKeys(updatedKeys);
         toast.success("API Key created and stored locally!");
       }
 
@@ -628,7 +630,7 @@ const ApiKeysTab = ({
     if (cloudSyncEnabled) {
       await createOrUpdateApiKeys(keys);
     } else {
-      localStorage.setItem("api_keys", JSON.stringify(keys));
+      saveLocalApiKeys(keys);
     }
     if (successMessage) {
       toast.success(successMessage);
@@ -735,7 +737,7 @@ const ApiKeysTab = ({
         await createOrUpdateApiKeys(newKeys);
         toast.success("API key name updated");
       } else {
-        localStorage.setItem("api_keys", JSON.stringify(newKeys));
+        saveLocalApiKeys(newKeys);
         toast.success("API key name updated");
       }
     } catch (e) {
@@ -820,7 +822,7 @@ const ApiKeysTab = ({
       await deleteApiKey(keyToDelete); // The hook handles updating the cloud
       toast.success("API Key deleted and synced to cloud successfully!");
     } else {
-      localStorage.setItem("api_keys", JSON.stringify(updatedKeys));
+      saveLocalApiKeys(updatedKeys);
       toast.success("API Key deleted locally!");
     }
 
@@ -963,7 +965,7 @@ const ApiKeysTab = ({
         await createOrUpdateApiKeys(updatedKeys);
         toast.success("API Key added and synced to cloud successfully!");
       } else {
-        localStorage.setItem("api_keys", JSON.stringify(updatedKeys));
+        saveLocalApiKeys(updatedKeys);
         toast.success("API Key added and stored locally!");
       }
 

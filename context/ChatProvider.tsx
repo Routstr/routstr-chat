@@ -21,7 +21,11 @@ import { useAuth } from "./AuthProvider";
 import { useAccountManager } from "@/components/ClientProviders";
 import { useObservableState } from "applesauce-react/hooks";
 import type { NostrEvent } from "nostr-tools";
-import { userPubkey$, userSigner$ } from "@/hooks/useChatSync1081";
+import {
+  resetSync1081State,
+  userPubkey$,
+  userSigner$,
+} from "@/hooks/useChatSync1081";
 
 interface ChatContextType
   extends
@@ -56,24 +60,22 @@ interface ChatProviderProps {
 export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
   const { isAuthenticated } = useAuth();
   const { manager } = useAccountManager();
-  const accounts = useObservableState(manager.accounts$) || [];
   const activeAccount = useObservableState(manager.active$);
 
-  // Update userPubkey$ and userSigner$ observables when user changes
   useEffect(() => {
-    const accountToUse = activeAccount || accounts[0];
+    resetSync1081State();
 
-    if (!accountToUse) {
+    if (!activeAccount) {
       userPubkey$.next(null);
       userSigner$.next(null);
       return;
     }
 
-    const pubkey = accountToUse.pubkey;
+    const pubkey = activeAccount.pubkey;
     userPubkey$.next(pubkey);
 
     // Set the user signer for 1081 event decryption from applesauce account
-    const signer = accountToUse.signer;
+    const signer = activeAccount.signer;
     if (signer?.nip44 && typeof signer.signEvent === "function") {
       userSigner$.next({
         signer: signer as {
@@ -93,8 +95,27 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     } else {
       userSigner$.next(null);
     }
-  }, [accounts, activeAccount]);
+  }, [activeAccount]);
 
+  return (
+    <ChatProviderScope
+      key={activeAccount?.pubkey ?? "anon"}
+      isAuthenticated={isAuthenticated}
+    >
+      {children}
+    </ChatProviderScope>
+  );
+};
+
+interface ChatProviderScopeProps {
+  children: React.ReactNode;
+  isAuthenticated: boolean;
+}
+
+const ChatProviderScope: React.FC<ChatProviderScopeProps> = ({
+  children,
+  isAuthenticated,
+}) => {
   const conversationState = useConversationState();
   const cashuWithXYZ = useCashuWithXYZ();
 

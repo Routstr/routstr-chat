@@ -1,5 +1,6 @@
 import { Conversation, Message } from "@/types/chat";
 import { getTextFromContent, stripImageDataFromMessages } from "./messageUtils";
+import { getScopedStorageKey } from "./accountScope";
 
 const CONVERSATIONS_STORAGE_KEY = "saved_conversations";
 const CONVERSATIONS_UPDATED_AT_KEY = "saved_conversations_updated_at";
@@ -19,11 +20,11 @@ export const persistConversationsSnapshot = (
 
   try {
     window.localStorage.setItem(
-      CONVERSATIONS_STORAGE_KEY,
+      getScopedStorageKey(CONVERSATIONS_STORAGE_KEY),
       JSON.stringify(conversations)
     );
     window.localStorage.setItem(
-      CONVERSATIONS_UPDATED_AT_KEY,
+      getScopedStorageKey(CONVERSATIONS_UPDATED_AT_KEY),
       String(timestamp)
     );
   } catch (error) {
@@ -105,7 +106,7 @@ export const loadConversationsFromStorage = (): Conversation[] => {
   if (!hasLocalStorage()) return [];
   try {
     const savedConversationsData = window.localStorage.getItem(
-      CONVERSATIONS_STORAGE_KEY
+      getScopedStorageKey(CONVERSATIONS_STORAGE_KEY)
     );
     if (!savedConversationsData) return [];
 
@@ -142,8 +143,10 @@ export const deleteConversationFromStorage = (
  */
 export const clearAllConversations = (): void => {
   if (!hasLocalStorage()) return;
-  window.localStorage.removeItem(CONVERSATIONS_STORAGE_KEY);
-  window.localStorage.removeItem(CONVERSATIONS_UPDATED_AT_KEY);
+  window.localStorage.removeItem(getScopedStorageKey(CONVERSATIONS_STORAGE_KEY));
+  window.localStorage.removeItem(
+    getScopedStorageKey(CONVERSATIONS_UPDATED_AT_KEY)
+  );
 };
 
 /**

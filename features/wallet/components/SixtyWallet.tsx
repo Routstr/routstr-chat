@@ -53,6 +53,7 @@ import { useCashuWithXYZ } from "@/hooks/useCashuWithXYZ";
 import { DEFAULT_MINT_URL } from "@/lib/utils";
 import { useObservableState } from "applesauce-react/hooks";
 import { useAccountManager } from "@/components/ClientProviders";
+import { getStorageItem, removeStorageItem } from "@/utils/storageUtils";
 import {
   requestBitcoinConnectProvider,
   useBitcoinConnectStatus,
@@ -651,14 +652,9 @@ const SixtyWallet: React.FC<{
       setSuccessMessage(null);
 
       // Step 1: Generate token from active NIP-60 mint proofs
-      const storedProofs = localStorage.getItem("cashu_proofs");
-      if (!storedProofs) {
+      const proofs = getStorageItem<any[]>("cashu_proofs", []);
+      if (!proofs.length) {
         throw new Error("No local wallet proofs found");
-      }
-
-      const proofs = JSON.parse(storedProofs);
-      if (!proofs || proofs.length === 0) {
-        throw new Error("No valid proofs found in local wallet");
       }
 
       // Calculate total amount to migrate
@@ -686,7 +682,7 @@ const SixtyWallet: React.FC<{
       );
 
       // Step 3: Clear local wallet proofs after successful migration
-      localStorage.removeItem("cashu_proofs");
+      removeStorageItem("cashu_proofs");
 
       // Update local balance state
       setLocalWalletBalance(0);

@@ -1,6 +1,5 @@
 import {
   BehaviorSubject,
-  Subject,
   catchError,
   combineLatest,
   distinctUntilChanged,
@@ -9,7 +8,6 @@ import {
   from,
   map,
   mergeMap,
-  scan,
   share,
   shareReplay,
   switchMap,
@@ -55,6 +53,14 @@ export function triggerProcessStored1081Events() {
   eventsReceived$.next(syncStats1081.eventsReceived + 1); // increment to ensure emission
 }
 
+export function resetSync1081State() {
+  syncStats1081.eventsReceived = 0;
+  syncStats1081.lastSyncTime = null;
+  eventsReceived$.next(0);
+  processed1081EventIds.clear();
+  derivedPnsKeys$.next(new Map());
+}
+
 /**
  * Observable to collect derived PNS keys from decrypted 1081 events.
  * This accumulates PNS keys extracted from nsecs found in 1081 event content.
@@ -63,20 +69,11 @@ export const derivedPnsKeys$ = new BehaviorSubject<Map<string, PnsKeys>>(
   new Map()
 );
 
-// Subject to emit newly derived PNS keys
-const newDerivedPnsKey$ = new Subject<PnsKeys>();
-
-// Accumulate derived PNS keys in the BehaviorSubject
-newDerivedPnsKey$
-  .pipe(
-    scan((acc, pnsKeys) => {
-      const newMap = new Map(acc);
-      // Use pubkey as the key to avoid duplicates
-      newMap.set(pnsKeys.pnsKeypair.pubKey, pnsKeys);
-      return newMap;
-    }, new Map<string, PnsKeys>())
-  )
-  .subscribe(derivedPnsKeys$);
+function addDerivedPnsKey(pnsKeys: PnsKeys) {
+  const next = new Map(derivedPnsKeys$.getValue());
+  next.set(pnsKeys.pnsKeypair.pubKey, pnsKeys);
+  derivedPnsKeys$.next(next);
+}
 
 /**
  * Observable that emits array of all derived PNS pubkeys for syncing kind-1080.
@@ -178,7 +175,7 @@ async function createAndPublishInitial1081Event(
 
     // Also derive and emit PNS keys from the new nsec
     const pnsKeys = extractAndDerivePnsKeys(contentObj);
-    if (pnsKeys) newDerivedPnsKey$.next(pnsKeys);
+    if (pnsKeys) addDerivedPnsKey(pnsKeys);
 
     return signedEvent;
   } catch (error) {
@@ -263,7 +260,6 @@ export const processStored1081Events$ = combineLatest([
   userSignerDefined$,
   userPubkeyDefined$,
 ]).pipe(
-  filter(([count]) => count > 0),
   switchMap(([_, signerInfo, userPubkey]) => {
     const events = eventStore.getByFilters({ kinds: [1081], authors: [userPubkey] });
 
@@ -280,7 +276,7 @@ export const processStored1081Events$ = combineLatest([
       tap(({ decryptedContent }) => {
         if (!decryptedContent) return;
         const pnsKeys = extractAndDerivePnsKeys(decryptedContent);
-        if (pnsKeys) newDerivedPnsKey$.next(pnsKeys);
+        if (pnsKeys) addDerivedPnsKey(pnsKeys);
       }),
       catchError((err) => {
         console.error("[sync1081Keyring] Error processing stored events:", err);

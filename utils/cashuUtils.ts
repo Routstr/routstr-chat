@@ -11,7 +11,10 @@ import {
   removeLocalCashuToken,
   getLocalCashuTokens,
   CashuTokenEntry,
+  getStorageItem,
+  setStorageItem,
 } from "@/utils/storageUtils";
+import { getScopedStorageKey } from "@/utils/accountScope";
 
 /**
  * Gets both wallet + current Token balance from stored proofs and routstr API
@@ -78,10 +81,8 @@ export const fetchBalances = async (
  */
 export const getBalanceFromStoredProofs = (): number => {
   try {
-    const storedProofs = localStorage.getItem("cashu_proofs");
-    if (!storedProofs) return 0;
-
-    const proofs = JSON.parse(storedProofs);
+    const proofs = getStorageItem<any[]>("cashu_proofs", []);
+    if (!proofs.length) return 0;
     return proofs.reduce(
       (total: number, proof: any) => total + proof.amount,
       0
@@ -98,9 +99,7 @@ export const getBalanceFromStoredProofs = (): number => {
  */
 export const getStoredWrappedTokens = (): Event[] => {
   try {
-    const storedTokens = localStorage.getItem("wrapped_cashu_tokens");
-    if (!storedTokens) return [];
-    return JSON.parse(storedTokens);
+    return getStorageItem<Event[]>("wrapped_cashu_tokens", []);
   } catch (error) {
     console.error("Error getting wrapped tokens:", error);
     return [];
@@ -115,7 +114,7 @@ export const removeWrappedToken = (tokenId: string): void => {
   try {
     const tokens = getStoredWrappedTokens();
     const updatedTokens = tokens.filter((token) => token.id !== tokenId);
-    localStorage.setItem("wrapped_cashu_tokens", JSON.stringify(updatedTokens));
+    setStorageItem("wrapped_cashu_tokens", updatedTokens);
   } catch (error) {
     console.error("Error removing wrapped token:", error);
   }
@@ -232,12 +231,8 @@ export const storeCashuToken = async (
   const proofs = Array.isArray(result) ? result : [];
 
   if (proofs && proofs.length > 0) {
-    const storedProofs = localStorage.getItem("cashu_proofs");
-    const existingProofs = storedProofs ? JSON.parse(storedProofs) : [];
-    localStorage.setItem(
-      "cashu_proofs",
-      JSON.stringify([...existingProofs, ...proofs])
-    );
+    const existingProofs = getStorageItem<any[]>("cashu_proofs", []);
+    setStorageItem("cashu_proofs", [...existingProofs, ...proofs]);
   }
 };
 
@@ -375,7 +370,7 @@ export const unifiedRefund = async (
 export const getPendingCashuTokenAmount = (): number => {
   const distribution = getPendingCashuTokenDistribution();
   const tempKeys = Object.keys(localStorage).filter((key) =>
-    key.startsWith("pending_send_proofs_")
+    key.startsWith(getScopedStorageKey("pending_send_proofs_"))
   );
   const tempAmount = tempKeys.reduce((total, key) => {
     const data = JSON.parse(localStorage.getItem(key) || "{}");

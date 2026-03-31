@@ -13,6 +13,7 @@ import {
 import { calculateInactiveKeysetBalances } from "../core/utils/balance";
 import { MintService } from "../core/services/MintService";
 import { hashToCurve } from "@cashu/crypto/modules/common";
+import { getScopedStorageKey } from "@/utils/accountScope";
 
 // Global flag to track if recovery has been initiated in this session
 let recoveryInitiated = false;
@@ -36,7 +37,7 @@ export function useCashuToken() {
   const recoverPendingProofs = async () => {
     try {
       const keys = Object.keys(localStorage).filter((key) =>
-        key.startsWith("pending_send_proofs_")
+        key.startsWith(getScopedStorageKey("pending_send_proofs_"))
       );
 
       for (const key of keys) {
@@ -224,7 +225,9 @@ export function useCashuToken() {
       }
 
       // Store proofs temporarily before updating wallet state
-      const pendingProofsKey = `pending_send_proofs_${Date.now()}`;
+      const pendingProofsKey = getScopedStorageKey(
+        `pending_send_proofs_${Date.now()}`
+      );
       localStorage.setItem(
         pendingProofsKey,
         JSON.stringify({

@@ -15,6 +15,7 @@ import {
 import { nip19 } from "nostr-tools";
 import { QRCodeSVG } from "qrcode.react";
 import QRCode from "react-qr-code";
+import { useObservableState } from "applesauce-react/hooks";
 import {
   Drawer,
   DrawerContent,
@@ -87,6 +88,7 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
   const [pendingTransactionId, setPendingTransactionId] = useState<
     string | null
   >(null);
+  const [pendingInvoiceId, setPendingInvoiceId] = useState<string | null>(null);
   const [isHydrated, setIsHydrated] = useState(false);
   const [pendingAmount, setPendingAmount] = useState<number | null>(null);
 
@@ -133,7 +135,8 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
   const [showNsec, setShowNsec] = useState(false);
   const [showSaveConfirmation, setShowSaveConfirmation] = useState(false);
 
-  const { manager, manualSave } = useAccountManager();
+  const { manager, addLogin } = useAccountManager();
+  const activeAccount = useObservableState(manager.active$);
 
   useEffect(() => {
     setHasExtension(
@@ -235,17 +238,15 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
     return trimmed;
   };
 
-  const createNsecForLogin = () => {
+  const createNsecForLogin = useCallback(() => {
     // Only create if no accounts exist
     const accounts = manager.accounts$.value;
     if (accounts.length > 0) return;
-    
+
     const account = PrivateKeyAccount.generateNew<AccountMetadata>();
-    manager.addAccount(account);
-    manager.setActive(account);
-    manualSave.next();
+    addLogin(account);
     markEphemeralNsecCreated();
-  };
+  }, [addLogin, manager]);
 
   const generateNewIdentity = useCallback(() => {
     const account = PrivateKeyAccount.generateNew<AccountMetadata>();
@@ -286,22 +287,18 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
 
   const completeSignup = useCallback(() => {
     if (!generatedAccount) return;
-    manager.addAccount(generatedAccount as any);
-    manager.setActive(generatedAccount as any);
-    manualSave.next();
+    addLogin(generatedAccount as any);
     setSignupStep("initial");
     setGeneratedAccount(null);
     onClose();
-  }, [generatedAccount, manager, manualSave, onClose]);
+  }, [addLogin, generatedAccount, onClose]);
 
   const handleExtensionLogin = useCallback(async () => {
     if (!hasExtension) return;
     try {
       setIsConnectingExtension(true);
       const account = await ExtensionAccount.fromExtension();
-      manager.addAccount(account as any);
-      manager.setActive(account as any);
-      manualSave.next();
+      addLogin(account as any);
       onClose();
     } catch (err) {
       console.error("Extension login error:", err);
@@ -311,7 +308,7 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
     } finally {
       setIsConnectingExtension(false);
     }
-  }, [hasExtension, manager, manualSave, onClose]);
+  }, [addLogin, hasExtension, onClose]);
 
   const handleKeyLogin = useCallback(() => {
     if (!loginNsec.trim()) return;
@@ -323,9 +320,7 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
       );
       const count = manager.accounts$.value.length + 1;
       account.metadata = { name: `Account ${count}` };
-      manager.addAccount(account as any);
-      manager.setActive(account as any);
-      manualSave.next();
+      addLogin(account as any);
       setLoginNsec("");
       onClose();
     } catch (err) {
@@ -334,7 +329,7 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
     } finally {
       setIsLoggingIn(false);
     }
-  }, [loginNsec, manager, manualSave, onClose]);
+  }, [addLogin, loginNsec, manager, onClose]);
 
   const handleBunkerConnect = useCallback(async () => {
     if (!bunkerUrl) return;
@@ -347,9 +342,7 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
       const account = new NostrConnectAccount<AccountMetadata>(pubkey, signer);
       const count = manager.accounts$.value.length + 1;
       account.metadata = { name: `Bunker ${count}` };
-      manager.addAccount(account as any);
-      manager.setActive(account as any);
-      manualSave.next();
+      addLogin(account as any);
       setBunkerUrl("");
       setActiveLoginMethod("nsec");
       onClose();
@@ -359,7 +352,7 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
     } finally {
       setIsConnectingBunker(false);
     }
-  }, [bunkerUrl, manager, manualSave, onClose]);
+  }, [addLogin, bunkerUrl, manager, onClose]);
 
   const handleQrCodeLogin = useCallback(async () => {
     try {
@@ -386,9 +379,7 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
         const account = new NostrConnectAccount<AccountMetadata>(pubkey, signer);
         const count = manager.accounts$.value.length + 1;
         account.metadata = { name: `Bunker ${count}` };
-        manager.addAccount(account as any);
-        manager.setActive(account as any);
-        manualSave.next();
+        addLogin(account as any);
         setNostrConnectUri(null);
         setActiveLoginMethod("nsec");
         onClose();
@@ -410,7 +401,7 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
     } finally {
       setIsConnectingQR(false);
     }
-  }, [manager, manualSave, onClose]);
+  }, [addLogin, manager, onClose]);
 
   const cancelQR = useCallback(() => {
     setNostrConnectUri(null);
@@ -535,7 +526,7 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
       setQuoteId(invoiceData.quoteId);
       setPendingAmount(amt);
 
-      await addInvoice({
+      const storedInvoice = await addInvoice({
         type: "mint",
         mintUrl,
         quoteId: invoiceData.quoteId,
@@ -544,6 +535,7 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
         state: MintQuoteState.UNPAID,
         expiresAt: invoiceData.expiresAt,
       });
+      setPendingInvoiceId(storedInvoice.id);
 
       const pendingTx = createPendingTransaction({
         direction: "in",
@@ -555,7 +547,13 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
       transactionHistoryStore.addPendingTransaction(pendingTx);
       setPendingTransactionId(pendingTx.id);
 
-      void checkPaymentStatus(mintUrl, invoiceData.quoteId, amt, pendingTx.id);
+      void checkPaymentStatus(
+        mintUrl,
+        invoiceData.quoteId,
+        amt,
+        pendingTx.id,
+        storedInvoice.id
+      );
     } catch (e) {
       console.error("Error creating invoice:", e);
       toast.error("Failed to create invoice");
@@ -565,7 +563,14 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
   };
 
   const handlePaid = async (_response: any) => {
-    if (!cashuStore.activeMintUrl || !quoteId || !pendingAmount) return;
+    if (
+      !cashuStore.activeMintUrl ||
+      !quoteId ||
+      !pendingAmount ||
+      !pendingInvoiceId
+    ) {
+      return;
+    }
     try {
       const proofs = await mintTokensFromPaidInvoice(
         cashuStore.activeMintUrl,
@@ -578,7 +583,7 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
           proofsToAdd: proofs,
           proofsToRemove: [],
         });
-        await updateInvoice(quoteId, {
+        await updateInvoice(pendingInvoiceId, {
           state: MintQuoteState.PAID,
           paidAt: Date.now(),
         });
@@ -592,6 +597,7 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
         );
         setInvoice("");
         setQuoteId("");
+        setPendingInvoiceId(null);
         setPendingAmount(null);
       }
     } catch (_e) {
@@ -602,6 +608,7 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
   const resetInvoice = useCallback(() => {
     setInvoice("");
     setQuoteId("");
+    setPendingInvoiceId(null);
     setPendingAmount(null);
     setCustomAmount("");
   }, []);
@@ -610,7 +617,8 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
     mintUrl: string,
     qid: string,
     amt: number,
-    pendingId: string
+    pendingId: string,
+    invoiceId: string
   ) => {
     try {
       const proofs = await mintTokensFromPaidInvoice(mintUrl, qid, amt);
@@ -620,18 +628,19 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
           proofsToAdd: proofs,
           proofsToRemove: [],
         });
-        await updateInvoice(qid, {
+        await updateInvoice(invoiceId, {
           state: MintQuoteState.PAID,
           paidAt: Date.now(),
         });
         transactionHistoryStore.removePendingTransaction(pendingId);
         setPendingTransactionId(null);
+        setPendingInvoiceId(null);
         toast.success(`Received ${formatBalance(amt, "sats")}!`);
         return;
       }
       setTimeout(() => {
         if (quoteId === qid) {
-          void checkPaymentStatus(mintUrl, qid, amt, pendingId);
+          void checkPaymentStatus(mintUrl, qid, amt, pendingId, invoiceId);
         }
       }, 5000);
     } catch (e) {
@@ -641,7 +650,7 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
       } else {
         setTimeout(() => {
           if (quoteId === qid) {
-            void checkPaymentStatus(mintUrl, qid, amt, pendingId);
+            void checkPaymentStatus(mintUrl, qid, amt, pendingId, invoiceId);
           }
         }, 5000);
       }
@@ -684,7 +693,7 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
       const paymentRequest = invoiceData.paymentRequest;
       const qid = invoiceData.quoteId;
 
-      await addInvoice({
+      const storedInvoice = await addInvoice({
         type: "mint",
         mintUrl,
         quoteId: qid,
@@ -721,7 +730,7 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
               proofsToAdd: proofs,
               proofsToRemove: [],
             });
-            await updateInvoice(qid, {
+            await updateInvoice(storedInvoice.id, {
               state: MintQuoteState.PAID,
               paidAt: Date.now(),
             });
@@ -733,16 +742,34 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
             }, 2000);
           } else {
             // Start polling if proofs not immediately available
-            void checkPaymentStatus(mintUrl, qid, amt, pendingTx.id);
+            void checkPaymentStatus(
+              mintUrl,
+              qid,
+              amt,
+              pendingTx.id,
+              storedInvoice.id
+            );
           }
         } else {
           // Start polling
-          void checkPaymentStatus(mintUrl, qid, amt, pendingTx.id);
+          void checkPaymentStatus(
+            mintUrl,
+            qid,
+            amt,
+            pendingTx.id,
+            storedInvoice.id
+          );
         }
       } catch (paymentError) {
         console.error("Error paying with NWC:", paymentError);
         toast.error("Payment failed. Please try again.");
-        void checkPaymentStatus(mintUrl, qid, amt, pendingTx.id);
+        void checkPaymentStatus(
+          mintUrl,
+          qid,
+          amt,
+          pendingTx.id,
+          storedInvoice.id
+        );
       }
     } catch (e) {
       console.error("Error creating invoice:", e);
@@ -1427,25 +1454,27 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
   );
 
   const footerContent = isTopUpPage ? (
-    <div className="rounded-lg border border-border bg-muted/40 p-3">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-sm font-medium text-foreground">
-            Sign in to sync your wallet
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Optional, but keeps your access across devices.
-          </p>
+    activeAccount ? null : (
+      <div className="rounded-lg border border-border bg-muted/40 p-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium text-foreground">
+              Sign in to sync your wallet
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Optional, but keeps your access across devices.
+            </p>
+          </div>
+          <button
+            onClick={() => setActivePage("login")}
+            className="shrink-0 px-3 py-2 rounded-md border border-border bg-muted/60 text-foreground text-xs font-medium hover:bg-muted/80 transition-colors"
+            type="button"
+          >
+            Sign in
+          </button>
         </div>
-        <button
-          onClick={() => setActivePage("login")}
-          className="shrink-0 px-3 py-2 rounded-md border border-border bg-muted/60 text-foreground text-xs font-medium hover:bg-muted/80 transition-colors"
-          type="button"
-        >
-          Sign in
-        </button>
       </div>
-    </div>
+    )
   ) : (
     <div className="rounded-lg border border-border bg-muted/40 p-3">
       <div className="flex items-center justify-between gap-3">

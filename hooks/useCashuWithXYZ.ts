@@ -5,7 +5,10 @@ import {
   useCashuWallet,
   useCreateCashuWallet,
 } from "@/features/wallet";
-import { calculateBalanceByMint } from "@/features/wallet";
+import {
+  calculateBalanceByMint,
+  computeTotalBalanceSats,
+} from "@/features/wallet";
 import {
   getBalanceFromStoredProofs,
   getPendingCashuTokenAmount,
@@ -18,6 +21,7 @@ import {
   loadMintsFromAllProviders,
   removeLocalCashuToken,
   setLocalCashuToken,
+  setStorageItem,
   setProviderMints,
 } from "@/utils/storageUtils";
 import {
@@ -96,6 +100,15 @@ export function useCashuWithXYZ() {
   const { manager } = useAccountManager();
   const activeAccount = useObservableState(manager.active$);
 
+  useEffect(() => {
+    setBalance(0);
+    setMaxBalance(0);
+    setCurrentMintUnit("sat");
+    setIsBalanceLoading(true);
+    setHotTokenBalance(0);
+    setTransactionHistoryState(loadTransactionHistory());
+  }, [activeAccount?.pubkey]);
+
   // Load transaction history on mount
   useEffect(() => {
     const history = loadTransactionHistory();
@@ -128,28 +141,22 @@ export function useCashuWithXYZ() {
   useEffect(() => {
     const fetchAndSetBalances = async () => {
       if (usingNip60) {
-        if (isWalletLoading) {
-          setIsBalanceLoading(true);
-          setBalance(0);
-        } else {
-          setIsBalanceLoading(false);
-          let totalBalance = 0;
-          let maxBalance = 0;
-          for (const mintUrl in mintBalances) {
-            const balance = mintBalances[mintUrl];
-            const unit = mintUnits[mintUrl];
-            if (unit === "msat") {
-              totalBalance += balance / 1000;
-              maxBalance = Math.max(maxBalance, balance / 1000);
-            } else {
-              totalBalance += balance;
-              maxBalance = Math.max(maxBalance, balance);
-            }
-          }
-          const balanceBeingSet = Math.round(totalBalance * 100) / 100;
-          setBalance(balanceBeingSet);
-          setMaxBalance(maxBalance);
+        setIsBalanceLoading(isWalletLoading);
+
+        let maxMintBalanceSats = 0;
+        for (const mintUrl in mintBalances) {
+          const mintBalance = mintBalances[mintUrl];
+          const unit = mintUnits[mintUrl];
+          const mintBalanceSats =
+            unit === "msat" ? mintBalance / 1000 : mintBalance;
+          maxMintBalanceSats = Math.max(maxMintBalanceSats, mintBalanceSats);
         }
+
+        const totalBalance = computeTotalBalanceSats(mintBalances, mintUnits);
+        const balanceBeingSet = Math.round(totalBalance * 100) / 100;
+
+        setBalance(balanceBeingSet);
+        setMaxBalance(maxMintBalanceSats);
       } else {
         // Legacy wallet balance calculation would go here
         setIsBalanceLoading(false);
@@ -164,6 +171,14 @@ export function useCashuWithXYZ() {
     isWalletLoading,
     pendingCashuAmountState,
   ]);
+
+  useEffect(() => {
+    if (!activeAccount || isWalletLoading) {
+      return;
+    }
+
+    setStorageItem("wallet_balance_sats", Math.max(0, Math.floor(balance)));
+  }, [activeAccount?.pubkey, balance, isWalletLoading]);
 
   // Migrate inactive keyset balances on mount when wallet is loaded
   useEffect(() => {

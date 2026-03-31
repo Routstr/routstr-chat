@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { NostrEvent } from "nostr-tools";
+import { createScopedPersistStorage } from "@/utils/scopedPersistStorage";
 
 export interface NutzapInformationalEvent {
   event: NostrEvent;
@@ -52,6 +53,9 @@ export const useNutzapStore = create<NutzapStore>()(
         });
       },
     }),
-    { name: "nutzap" }
+    {
+      name: "nutzap",
+      storage: createScopedPersistStorage(),
+    }
   )
 );

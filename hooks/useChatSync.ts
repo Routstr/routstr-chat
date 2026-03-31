@@ -1,15 +1,15 @@
-import { useState, useEffect, useCallback, useSyncExternalStore } from "react";
+import { useState, useCallback, useSyncExternalStore } from "react";
 import { Conversation, Message } from "@/types/chat";
-import { createPnsEvent, KIND_PNS, PnsKeys } from "@/lib/pns";
+import { createPnsEvent, PnsKeys } from "@/lib/pns";
 import { getStorageItem, setStorageItem } from "@/utils/storageUtils";
-import { eventStore } from "@/lib/applesauce-core";
+import { eventStore, relayPool } from "@/lib/applesauce-core";
 import {
   triggerDerivedPnsSync,
   updateChatSyncEnabled,
 } from "./useChatSync1081";
 import { useAccountManager } from "@/components/ClientProviders";
 import { useObservableState } from "applesauce-react/hooks";
-import { ConsoleLogger } from "@cashu/cashu-ts";
+import { useAppContext } from "@/hooks/useAppContext";
 
 // Storage key for chat sync enabled
 const CHAT_SYNC_ENABLED_KEY = "chatSyncEnabled";
@@ -68,11 +68,11 @@ interface ChatSyncHook {
     message: Message,
     pnsKeys: PnsKeys,
     onMessagePublished?: (conversationId: string, message: Message) => void
-  ) => string | null;
+  ) => Promise<string | null>;
   migrateConversations: (
     conversations: Conversation[],
     pnsKeys: PnsKeys
-  ) => Conversation[] | null;
+  ) => Promise<Conversation[] | null>;
 }
 
 interface InnerEventPayload {
@@ -88,7 +88,7 @@ export const useChatSync = (): ChatSyncHook => {
   const [lastSyncTime, setLastSyncTime] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { manager } = useAccountManager();
-  const accounts = useObservableState(manager.accounts$) || [];
+  const { config } = useAppContext();
   const activeAccount = useObservableState(manager.active$);
 
   // Use useSyncExternalStore to share chatSyncEnabled state across all hook instances
@@ -106,11 +106,8 @@ export const useChatSync = (): ChatSyncHook => {
   // 1. Create Inner Event (Kind 20001)
   const createInnerEvent = useCallback(
     (conversationId: string, message: Message): InnerEventPayload => {
-      const accountToUse = activeAccount || accounts[0];
-      const pubkey = accountToUse?.pubkey;
+      const pubkey = activeAccount?.pubkey;
       if (!pubkey) {
-        console.log("WHY ACitge", accounts, activeAccount);
-
         throw new Error("No public key available");
       }
 
@@ -142,17 +139,18 @@ export const useChatSync = (): ChatSyncHook => {
         content: contentStr,
       };
     },
-    [activeAccount, accounts]
+    [activeAccount]
   );
 
   const migrateConversations = useCallback(
-    (
+    async (
       conversations: Conversation[],
       pnsKeys: PnsKeys
-    ): Conversation[] | null => {
+    ): Promise<Conversation[] | null> => {
       try {
         setIsSyncing(true);
         let addedCount = 0;
+        const eventsToPublish: ReturnType<typeof createPnsEvent>[] = [];
 
         // Deep copy to avoid mutating state directly
         const updatedConversations: Conversation[] = JSON.parse(
@@ -171,6 +169,7 @@ export const useChatSync = (): ChatSyncHook => {
               // 2. Create PNS Event
               const pnsEvent = createPnsEvent(inner, pnsKeys);
               eventStore.add(pnsEvent);
+              eventsToPublish.push(pnsEvent);
 
               // Update message with event ID
               message._eventId = pnsEvent.id;
@@ -182,8 +181,12 @@ export const useChatSync = (): ChatSyncHook => {
         }
 
         if (addedCount > 0) {
+          await Promise.allSettled(
+            eventsToPublish.map((event) => relayPool.publish(config.relayUrls, event))
+          );
           console.log(`Migrated ${addedCount} messages`);
           triggerDerivedPnsSync();
+          setLastSyncTime(Date.now());
           return updatedConversations;
         }
 
@@ -195,17 +198,17 @@ export const useChatSync = (): ChatSyncHook => {
         setIsSyncing(false);
       }
     },
-    [createInnerEvent]
+    [config.relayUrls, createInnerEvent]
   );
 
   // Publish Message Flow
   const publishMessage = useCallback(
-    (
+    async (
       conversationId: string,
       message: Message,
       pnsKeys: PnsKeys,
       onMessagePublished?: (conversationId: string, message: Message) => void
-    ): string | null => {
+    ): Promise<string | null> => {
       try {
         setIsSyncing(true);
         setError(null);
@@ -216,17 +219,18 @@ export const useChatSync = (): ChatSyncHook => {
         // 2. Create PNS Event (Encrypted and Signed)
         const pnsEvent = createPnsEvent(inner, pnsKeys);
         eventStore.add(pnsEvent);
-        console.log("Published message with event ID:", pnsEvent.id);
-
-        triggerDerivedPnsSync();
-
-        // Append message to conversationMapRef after successful publish
         if (onMessagePublished) {
           onMessagePublished(conversationId, {
             ...message,
             _eventId: pnsEvent.id,
           });
         }
+
+        await relayPool.publish(config.relayUrls, pnsEvent);
+        console.log("Published message with event ID:", pnsEvent.id);
+
+        triggerDerivedPnsSync();
+        setLastSyncTime(Date.now());
 
         return pnsEvent.id;
       } catch (err) {
@@ -237,7 +241,7 @@ export const useChatSync = (): ChatSyncHook => {
         setIsSyncing(false);
       }
     },
-    [createInnerEvent]
+    [config.relayUrls, createInnerEvent]
   );
 
   return {

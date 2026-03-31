@@ -1,40 +1,53 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useSyncExternalStore } from "react";
 import { createSdkStore, type SdkStore } from "@/sdk/storage/store";
 import { localStorageDriver } from "@/sdk/storage/drivers/localStorage";
+import {
+  getCurrentIdentityId,
+  subscribeToIdentityScope,
+} from "@/utils/accountScope";
 
-let globalStore: ReturnType<typeof createSdkStore> | null = null;
+const sdkStores = new Map<string, ReturnType<typeof createSdkStore>>();
 
-const getSdkStore = (): ReturnType<typeof createSdkStore> => {
-  if (!globalStore) {
-    globalStore = createSdkStore({ driver: localStorageDriver });
+const getSdkStore = (scopeKey: string): ReturnType<typeof createSdkStore> => {
+  const existingStore = sdkStores.get(scopeKey);
+  if (existingStore) {
+    return existingStore;
   }
-  return globalStore;
+
+  const store = createSdkStore({ driver: localStorageDriver });
+  sdkStores.set(scopeKey, store);
+  return store;
 };
 
 export function useSdkCachedBalance(): number {
   const [cachedBalance, setCachedBalance] = useState(0);
-  const storeRef = useRef(getSdkStore());
+  const scopeKey = useSyncExternalStore(
+    subscribeToIdentityScope,
+    () => getCurrentIdentityId() ?? "__device__",
+    () => "__device__"
+  );
+  const scopedStore = useMemo(() => getSdkStore(scopeKey), [scopeKey]);
 
   useEffect(() => {
     let unsubscribe: (() => void) | null = null;
 
     const computeBalance = () => {
-      const apiKeys = storeRef.current.store.getState().apiKeys;
+      const apiKeys = scopedStore.store.getState().apiKeys;
       const total = apiKeys.reduce((sum, k) => sum + (k.balance || 0), 0);
       setCachedBalance(total);
     };
 
     computeBalance();
-    unsubscribe = storeRef.current.store.subscribe(computeBalance);
+    unsubscribe = scopedStore.store.subscribe(computeBalance);
 
-    void storeRef.current.hydrate.catch((error) => {
+    void scopedStore.hydrate.catch((error) => {
       console.warn("Failed to hydrate store", error);
     });
 
     return () => {
       if (unsubscribe) unsubscribe();
     };
-  }, []);
+  }, [scopedStore]);
 
   return cachedBalance;
 }
