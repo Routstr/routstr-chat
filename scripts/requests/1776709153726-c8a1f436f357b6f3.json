@@ -1,0 +1,647 @@
+{
+  "timestamp": "2026-04-20T18:19:13.726Z",
+  "method": "POST",
+  "path": "/v1/chat/completions",
+  "query": {},
+  "headers": {
+    "host": "localhost:8008",
+    "connection": "keep-alive",
+    "accept": "application/json",
+    "user-agent": "OpenAI/JS 6.26.0",
+    "x-stainless-retry-count": "0",
+    "x-stainless-lang": "js",
+    "x-stainless-package-version": "6.26.0",
+    "x-stainless-os": "MacOS",
+    "x-stainless-arch": "arm64",
+    "x-stainless-runtime": "node",
+    "x-stainless-runtime-version": "v22.17.0",
+    "authorization": "Bearer sk-7a9679d0ffe972bcb35ad16339f70530f03c3e3151af16f3",
+    "content-type": "application/json",
+    "accept-language": "*",
+    "sec-fetch-mode": "cors",
+    "accept-encoding": "gzip, deflate",
+    "content-length": "105189"
+  },
+  "modelId": "gpt-5.4",
+  "body": {
+    "model": "gpt-5.4",
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are an expert coding assistant operating inside pi, a coding agent harness. You help users by reading files, executing commands, editing code, and writing new files.\n\nAvailable tools:\n- read: Read file contents\n- bash: Execute bash commands (ls, grep, find, etc.)\n- edit: Make precise file edits with exact text replacement, including multiple disjoint edits in one call\n- write: Create or overwrite files\n\nIn addition to the tools above, you may have access to other custom tools depending on the project.\n\nGuidelines:\n- Use bash for file operations like ls, rg, find\n- Use read to examine files instead of cat or sed.\n- Use edit for precise changes (edits[].oldText must match exactly)\n- When changing multiple separate locations in one file, use one edit call with multiple entries in edits[] instead of multiple edit calls\n- Each edits[].oldText is matched against the original file, not after earlier edits are applied. Do not emit overlapping or nested edits. Merge nearby changes into one edit.\n- Keep edits[].oldText as small as possible while still being unique in the file. Do not pad with large unchanged regions.\n- Use write only for new files or complete rewrites.\n- Be concise in your responses\n- Show file paths clearly when working with files\n\nPi documentation (read only when the user asks about pi itself, its SDK, extensions, themes, skills, or TUI):\n- Main documentation: /Users/r/.nvm/versions/node/v22.17.0/lib/node_modules/@mariozechner/pi-coding-agent/README.md\n- Additional docs: /Users/r/.nvm/versions/node/v22.17.0/lib/node_modules/@mariozechner/pi-coding-agent/docs\n- Examples: /Users/r/.nvm/versions/node/v22.17.0/lib/node_modules/@mariozechner/pi-coding-agent/examples (extensions, custom tools, SDK)\n- When asked about: extensions (docs/extensions.md, examples/extensions/), themes (docs/themes.md), skills (docs/skills.md), prompt templates (docs/prompt-templates.md), TUI components (docs/tui.md), keybindings (docs/keybindings.md), SDK integrations (docs/sdk.md), custom providers (docs/custom-provider.md), adding models (docs/models.md), pi packages (docs/packages.md)\n- When working on pi topics, read the docs and examples, and follow .md cross-references before implementing\n- Always read pi .md files completely and follow links to related docs (e.g., tui.md for TUI API details)\n\nThe following skills provide specialized instructions for specific tasks.\nUse the read tool to load a skill's file when the task matches its description.\nWhen a skill file references a relative path, resolve it against the skill directory (parent of SKILL.md / dirname of the path) and use that absolute path in tool commands.\n\n<available_skills>\n  <skill>\n    <name>routstr-sdk-integration</name>\n    <description>Guide for integrating the @routstr/sdk npm package to route OpenAI-compatible API requests with automatic payment handling</description>\n    <location>/Users/r/.agents/skills/routstr-sdk-integration/SKILL.md</location>\n  </skill>\n  <skill>\n    <name>skills-management</name>\n    <description>Guide for creating, structuring, and managing agent skills in the knightclaw project</description>\n    <location>/Users/r/.agents/skills/skills-management/SKILL.md</location>\n  </skill>\n</available_skills>\nCurrent date: 2026-04-20\nCurrent working directory: /Users/r/projects/routstr_main/routstrd"
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "Can you help me with all the endpoints we have in @src/daemon/ or anywhere else in this project?"
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_XirUNPIMycvueSQ64Ay9TRBi",
+            "type": "function",
+            "function": {
+              "name": "bash",
+              "arguments": "{\"command\":\"rg -n \\\"(router\\\\.|app\\\\.|\\\\.route\\\\(|Method::|warp::path|axum::routing|#[[:space:]]*get\\\\(|#[[:space:]]*post\\\\(|#[[:space:]]*put\\\\(|#[[:space:]]*delete\\\\(|#[[:space:]]*patch\\\\(|endpoint|routes?)\\\" src . --glob '!target'\",\"timeout\":20}"
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "content": "./v1-messages-format-report.md:51:In `routstr-chat/scripts/routstr-daemon.ts`, the request is routed with:\n./v1-messages-format-report.md:54:await routeRequestsToNodeResponse({\n./v1-messages-format-report.md:73:In `../routstrd/src/daemon/http/index.ts`, the request is routed with:\n./v1-messages-format-report.md:76:const response = await routeRequests({\n./v1-messages-format-report.md:95:In the SDK, `routeRequests()` defaults the path to:\n./v1-messages-format-report.md:102:- `routstr-chat/sdk/routeRequests.ts`\n./v1-messages-format-report.md:110:on port 8008, the daemon internally re-routes it as:\n./v1-messages-format-report.md:124:- **8009** uses `routeRequestsToNodeResponse(...)` and explicitly passes `path: url.pathname`\n./v1-messages-format-report.md:125:- **8008** uses `routeRequests(...)` and relies on the SDK default path, which is `/v1/chat/completions`\n./v1-messages-format-report.md:135:- `routstr-chat/sdk/routeRequests.ts`\n./v1-messages-format-report.md:181:const response = await routeRequests({\n./v1-messages-format-report.md:205:Port 8008 currently uses `routeRequests(...)` and then manually streams the returned response body to `res`.\n./v1-messages-format-report.md:206:Port 8009 uses `routeRequestsToNodeResponse(...)` directly.\n./v1-messages-format-report.md:218:2. its handler calls `routeRequests(...)` without `path`\n./src/tui/usage/index.ts:1:export { runUsageTui } from \"./app.ts\";\n./README.md:13:- **Provider Routing**: Automatically discovers and routes requests to available providers\n./README.md:105:The daemon exposes an HTTP server (default port 8008) with the following endpoints:\n./SKILL.md:3:Routstr daemon — a Bun-based CLI tool that runs a background HTTP server for the Routstr protocol. It integrates with `cocod` for Cashu wallet management and routes LLM requests to available providers.\n./SKILL.md:211:Health check endpoint.\n./src/TUI refactor.md:39:- `src/tui/usage/app.ts`\n./src/TUI refactor.md:88:7. Build `app.ts` using the extracted modules.\nsrc/TUI refactor.md:39:- `src/tui/usage/app.ts`\nsrc/TUI refactor.md:88:7. Build `app.ts` using the extracted modules.\nsrc/tui/usage/index.ts:1:export { runUsageTui } from \"./app.ts\";\nsrc/daemon/http/index.ts:7:  routeRequestsToNodeResponse,\nsrc/daemon/http/index.ts:720:    // Client management endpoints\nsrc/daemon/http/index.ts:988:    // Client management endpoints\nsrc/daemon/http/index.ts:1173:    // Allow client management endpoints through\nsrc/daemon/http/index.ts:1228:      await routeRequestsToNodeResponse({\n./src/daemon/http/index.ts:7:  routeRequestsToNodeResponse,\n./src/daemon/http/index.ts:720:    // Client management endpoints\n./src/daemon/http/index.ts:988:    // Client management endpoints\n./src/daemon/http/index.ts:1173:    // Allow client management endpoints through\n./src/daemon/http/index.ts:1228:      await routeRequestsToNodeResponse({\n",
+        "tool_call_id": "call_XirUNPIMycvueSQ64Ay9TRBi"
+      },
+      {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_FoduqfCvWkBMTNlQlDfNVdVM",
+            "type": "function",
+            "function": {
+              "name": "read",
+              "arguments": "{}"
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "content": "Validation failed for tool \"read\":\n  - path: must have required property 'path'\n\nReceived arguments:\n{}",
+        "tool_call_id": "call_FoduqfCvWkBMTNlQlDfNVdVM"
+      },
+      {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_RXGUvo11NgkYgpaKbCuVIh2F",
+            "type": "function",
+            "function": {
+              "name": "read",
+              "arguments": "{\"path\":\"src/daemon/http/index.ts\",\"offset\":1,\"limit\":260}"
+            }
+          },
+          {
+            "id": "call_8hOqAoZGi74jTrdcshzrKeft",
+            "type": "function",
+            "function": {
+              "name": "read",
+              "arguments": "{\"path\":\"README.md\",\"offset\":95,\"limit\":80}"
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "content": "import { randomBytes } from \"crypto\";\nimport { mkdir, writeFile } from \"fs/promises\";\nimport { type IncomingMessage, type ServerResponse } from \"http\";\nimport { homedir } from \"os\";\nimport { join } from \"path\";\nimport {\n  routeRequestsToNodeResponse,\n  InsufficientBalanceError,\n  ProviderManager,\n} from \"@routstr/sdk\";\nimport type { UsageTrackingDriver } from \"@routstr/sdk\";\nimport { logger } from \"../../utils/logger\";\nimport {\n  CocodHttpError,\n  type CocodClient,\n  type CocodState,\n} from \"../wallet/cocod-client\";\nimport { decodeCashuTokenAmount } from \"../wallet\";\n\ntype ClientMode = \"xcashu\" | \"lazyrefund\" | \"apikeys\";\n\ntype WalletStatusOutput = {\n  daemon: \"running\";\n  wallet: \"connected\" | \"error\";\n  walletState: CocodState;\n  balances?: Record<string, number>;\n  mode: ClientMode;\n  error?: string;\n};\n\ntype DaemonDeps = {\n  provider: string | null;\n  server: { close(cb?: () => void): void };\n  store: any;\n  walletClient: CocodClient;\n  walletAdapter: any;\n  storageAdapter: any;\n  providerRegistry: any;\n  discoveryAdapter: any;\n  modelManager: any;\n  ensureProvidersBootstrapped: () => Promise<void>;\n  getRoutstr21Models: (forceRefresh?: boolean) => Promise<any[]>;\n  getModelProviders: (modelId: string) => Promise<any>;\n  mode?: ClientMode;\n  providerManager: ProviderManager;\n};\n\n/**\n * Extracts the client ID from an incoming request by looking up the API key\n * in the store's clientIds list.\n */\nfunction getClientIdFromRequest(\n  req: IncomingMessage,\n  store: { getState(): any },\n): string | undefined {\n  const authHeader = req.headers.authorization;\n\n  if (!authHeader || !authHeader.startsWith(\"Bearer \")) {\n    return undefined;\n  }\n\n  const apiKey = authHeader.slice(7); // Remove \"Bearer \" prefix\n\n  if (!apiKey.startsWith(\"sk-\")) {\n    return undefined;\n  }\n\n  const state = store.getState();\n  const clientIds = state.clientIds || [];\n\n  const matchingClient = (\n    clientIds as { clientId: string; apiKey: string }[]\n  ).find((c) => c.apiKey === apiKey);\n\n  return matchingClient?.clientId;\n}\nfunction generateApiKey(): string {\n  const bytes = randomBytes(24);\n  return `sk-${bytes.toString(\"hex\")}`;\n}\n\nasync function readBody(req: IncomingMessage): Promise<string> {\n  return new Promise((resolve, reject) => {\n    let data = \"\";\n    req.on(\"data\", (chunk) => {\n      data += chunk.toString();\n    });\n    req.on(\"end\", () => resolve(data));\n    req.on(\"error\", reject);\n  });\n}\n\nasync function readJsonBody(\n  req: IncomingMessage,\n): Promise<Record<string, unknown>> {\n  const bodyText = await readBody(req);\n  if (!bodyText) {\n    return {};\n  }\n\n  try {\n    return JSON.parse(bodyText) as Record<string, unknown>;\n  } catch {\n    throw new CocodHttpError(400, \"Invalid JSON body.\");\n  }\n}\n\nfunction parseLimit(value: string | null, fallback = 10): number {\n  const requested = Number.parseInt(value || String(fallback), 10);\n  return Number.isFinite(requested) && requested > 0\n    ? Math.min(requested, 100000) // Cap at 100k entries\n    : fallback;\n}\n\nfunction sendJson(\n  res: ServerResponse,\n  status: number,\n  payload: Record<string, unknown>,\n): void {\n  res.writeHead(status, { \"Content-Type\": \"application/json\" });\n  res.end(JSON.stringify(payload));\n}\n\nfunction toErrorMessage(error: unknown): string {\n  return error instanceof Error ? error.message : String(error);\n}\n\nfunction getWalletStateMessage(state: CocodState): string {\n  switch (state) {\n    case \"LOCKED\":\n      return \"Wallet is locked. Unlock it before performing wallet operations.\";\n    case \"UNINITIALIZED\":\n      return \"Wallet is not initialized. Run 'routstrd onboard' first.\";\n    case \"ERROR\":\n      return \"Wallet is in an error state.\";\n    default:\n      return \"Wallet is unavailable.\";\n  }\n}\n\nfunction respondWithError(\n  res: ServerResponse,\n  error: unknown,\n  fallbackStatus = 500,\n): void {\n  if (error instanceof CocodHttpError) {\n    sendJson(res, error.status, { error: error.message });\n    return;\n  }\n\n  sendJson(res, fallbackStatus, { error: toErrorMessage(error) });\n}\n\nasync function respond(\n  res: ServerResponse,\n  getPayload: () => Promise<Record<string, unknown>>,\n): Promise<void> {\n  try {\n    sendJson(res, 200, await getPayload());\n  } catch (error) {\n    respondWithError(res, error);\n  }\n}\n\nfunction requireStringField(\n  body: Record<string, unknown>,\n  field: string,\n): string | null {\n  const value = body[field];\n  return typeof value === \"string\" && value.trim() ? value.trim() : null;\n}\n\nfunction getRequiredStringField(\n  body: Record<string, unknown>,\n  field: string,\n): string {\n  const value = requireStringField(body, field);\n  if (!value) {\n    throw new CocodHttpError(400, `Missing required '${field}' field.`);\n  }\n  return value;\n}\n\nfunction getRequiredPositiveNumberField(\n  body: Record<string, unknown>,\n  field: string,\n): number {\n  const value = body[field];\n  if (typeof value === \"number\" && Number.isFinite(value) && value > 0) {\n    return value;\n  }\n  if (typeof value === \"string\" && value.trim()) {\n    const parsed = Number.parseInt(value.trim(), 10);\n    if (Number.isFinite(parsed) && parsed > 0) {\n      return parsed;\n    }\n  }\n  throw new CocodHttpError(400, `Missing required '${field}' field.`);\n}\n\nfunction optionalStringField(\n  body: Record<string, unknown>,\n  field: string,\n): string | undefined {\n  const value = body[field];\n  return typeof value === \"string\" && value.trim() ? value.trim() : undefined;\n}\n\nfunction getCurrentMode(deps: DaemonDeps): ClientMode {\n  const stateMode = deps.store.getState()?.mode;\n  return stateMode || deps.mode || \"apikeys\";\n}\n\nasync function logRoutedRequest(payload: Record<string, unknown>): Promise<void> {\n  const requestDir = join(homedir(), \".routstrd\", \"request\");\n  const fileName = `${Date.now()}-${randomBytes(8).toString(\"hex\")}.json`;\n\n  await mkdir(requestDir, { recursive: true });\n  await writeFile(join(requestDir, fileName), JSON.stringify(payload, null, 2));\n}\n\nasync function buildStatusOutput(\n  deps: DaemonDeps,\n): Promise<WalletStatusOutput> {\n  const mode = getCurrentMode(deps);\n\n  try {\n    const walletState = await deps.walletClient.getStatus();\n    if (walletState !== \"UNLOCKED\") {\n      return {\n        daemon: \"running\",\n        wallet: \"error\",\n        walletState,\n        mode,\n        error: getWalletStateMessage(walletState),\n      };\n    }\n\n    const balances = await deps.walletAdapter.getBalances();\n    return {\n      daemon: \"running\",\n      wallet: \"connected\",\n      walletState,\n      balances,\n      mode,\n    };\n  } catch (error) {\n    return {\n      daemon: \"running\",\n      wallet: \"error\",\n      walletState: \"ERROR\",\n      mode,\n      error: toErrorMessage(error),\n    };\n  }\n}\n\nasync function buildWalletDetails(deps: DaemonDeps): Promise<{\n  state: CocodState;\n  ready: boolean;\n\n[1017 more lines in file. Use offset=261 to continue.]",
+        "tool_call_id": "call_RXGUvo11NgkYgpaKbCuVIh2F"
+      },
+      {
+        "role": "tool",
+        "content": "routstrd ping\n```\n\nStop the daemon:\n```sh\nroutstrd stop\n```\n\n### Daemon API\n\nThe daemon exposes an HTTP server (default port 8008) with the following endpoints:\n\n#### Health Check\n```\nGET /health\n```\n\n#### Route Request\n```\nPOST /\n```\n\nRequest body:\n```json\n{\n  \"model\": \"model-id\",\n  \"messages\": [...],\n  \"stream\": false\n}\n```\n\nResponse:\n```json\n{\n  \"choices\": [...],\n  \"usage\": {...}\n}\n```\n\n## Configuration\n\nConfiguration is stored in `~/.routstrd/config.json`:\n\n```json\n{\n  \"port\": 8008,\n  \"provider\": null,\n  \"cocodPath\": null\n}\n```\n\n### Environment Variables\n\n- `ROUTSTRD_DIR` - Config directory (default: `~/.routstrd`)\n- `ROUTSTRD_SOCKET` - Socket path (default: `~/.routstrd/routstrd.sock`)\n- `ROUTSTRD_PID` - PID file path (default: `~/.routstrd/routstrd.pid`)\n\n## Development\n\nInstall dependencies:\n```sh\nbun install\n```\n\nRun CLI:\n```sh\nbun run start\n```\n\nRun daemon:\n```sh\nbun run start\n```\n\nTypecheck:\n```sh\nbun run lint\n```\n\n## Project Structure\n\n[18 more lines in file. Use offset=175 to continue.]",
+        "tool_call_id": "call_8hOqAoZGi74jTrdcshzrKeft"
+      },
+      {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_MfHkUr2rHntcMYUxE56GctIv",
+            "type": "function",
+            "function": {
+              "name": "bash",
+              "arguments": "{\"command\":\"rg -n \\\"req\\\\.url|pathname|method ===|switch \\\\(req\\\\.method|if \\\\(req\\\\.url|new URL\\\\(|startsWith\\\\(|=== \\\\\\\"/|=== '/'|includes\\\\('/'\\\" src/daemon/http/index.ts\",\"timeout\":20}"
+            }
+          },
+          {
+            "id": "call_d78Al8GepFh0HasOb8LyQ1TW",
+            "type": "function",
+            "function": {
+              "name": "bash",
+              "arguments": "{\"command\":\"find src -maxdepth 4 -type f | sort\",\"timeout\":20}"
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "content": "58:  if (!authHeader || !authHeader.startsWith(\"Bearer \")) {\n64:  if (!apiKey.startsWith(\"sk-\")) {\n299:    const url = new URL(req.url || \"/\", `http://${host}`);\n301:    if (req.method === \"GET\" && url.pathname === \"/health\") {\n306:    if (req.method === \"GET\" && url.pathname === \"/ping\") {\n311:    if (req.method === \"GET\" && url.pathname === \"/status\") {\n317:    if (req.method === \"GET\" && url.pathname === \"/wallet/status\") {\n324:    if (req.method === \"POST\" && url.pathname === \"/wallet/unlock\") {\n335:    if (req.method === \"GET\" && url.pathname === \"/wallet/balance\") {\n350:    if (req.method === \"POST\" && url.pathname === \"/wallet/receive/cashu\") {\n361:    if (req.method === \"POST\" && url.pathname === \"/wallet/receive/bolt11\") {\n372:    if (req.method === \"POST\" && url.pathname === \"/wallet/send/cashu\") {\n383:    if (req.method === \"POST\" && url.pathname === \"/wallet/send/bolt11\") {\n394:    if (req.method === \"GET\" && url.pathname === \"/wallet/mints\") {\n407:    if (req.method === \"POST\" && url.pathname === \"/wallet/mints\") {\n417:    if (req.method === \"POST\" && url.pathname === \"/wallet/mints/info\") {\n427:    if (req.method === \"GET\" && url.pathname === \"/models\") {\n440:    const modelProvidersMatch = url.pathname.match(/^\\/models\\/([^\\/]+)\\/providers$/);\n441:    if (req.method === \"GET\" && modelProvidersMatch && modelProvidersMatch[1]) {\n456:    if (req.method === \"GET\" && url.pathname === \"/v1/models\") {\n471:    if (req.method === \"POST\" && url.pathname === \"/stop\") {\n481:    if (req.method === \"POST\" && url.pathname === \"/refund\") {\n543:    if (req.method === \"GET\" && url.pathname === \"/balance\") {\n559:    if (req.method === \"GET\" && url.pathname === \"/keys/balance\") {\n609:    if (req.method === \"POST\" && url.pathname === \"/providers/disable\") {\n664:    if (req.method === \"POST\" && url.pathname === \"/providers/enable\") {\n721:    if (req.method === \"GET\" && url.pathname === \"/clients\") {\n758:    if (req.method === \"POST\" && url.pathname === \"/clients/add\") {\n844:    if (req.method === \"GET\" && url.pathname === \"/providers\") {\n877:    if (req.method === \"POST\" && url.pathname === \"/providers/disable\") {\n932:    if (req.method === \"POST\" && url.pathname === \"/providers/enable\") {\n989:    if (req.method === \"GET\" && url.pathname === \"/clients\") {\n1026:    if (req.method === \"POST\" && url.pathname === \"/clients/add\") {\n1113:    if (req.method === \"GET\" && url.pathname === \"/usage\") {\n1126:    if (req.method === \"GET\" && url.pathname === \"/usagePi\") {\n1141:          entry.requestId.startsWith(requestIdPrefix),\n1174:    if (req.method !== \"POST\" && !url.pathname.startsWith(\"/clients\")) {\n1217:      logger.log(\"Routing request with path: \", url.pathname);\n1221:        path: url.pathname,\n1231:        path: url.pathname,\n",
+        "tool_call_id": "call_MfHkUr2rHntcMYUxE56GctIv"
+      },
+      {
+        "role": "tool",
+        "content": "src/cli-shared.ts\nsrc/cli.ts\nsrc/daemon.ts\nsrc/daemon/args.ts\nsrc/daemon/config-store.ts\nsrc/daemon/http/index.ts\nsrc/daemon/index.ts\nsrc/daemon/models.ts\nsrc/daemon/types.ts\nsrc/daemon/wallet/cocod-client.ts\nsrc/daemon/wallet/index.ts\nsrc/index.ts\nsrc/integrations/claudecode.ts\nsrc/integrations/index.ts\nsrc/integrations/openclaw.ts\nsrc/integrations/opencode.ts\nsrc/integrations/pi.ts\nsrc/integrations/registry.ts\nsrc/start-daemon.ts\nsrc/TUI refactor.md\nsrc/tui/usage/app.ts\nsrc/tui/usage/constants.ts\nsrc/tui/usage/data.ts\nsrc/tui/usage/index.ts\nsrc/tui/usage/render.ts\nsrc/tui/usage/state.ts\nsrc/tui/usage/terminal.ts\nsrc/tui/usage/types.ts\nsrc/utils/config.ts\nsrc/utils/logger.ts\n",
+        "tool_call_id": "call_d78Al8GepFh0HasOb8LyQ1TW"
+      },
+      {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_gTa2VAZ5nfhjulxdDHM7MR6Q",
+            "type": "function",
+            "function": {
+              "name": "read",
+              "arguments": "{\"path\":\"src/daemon/http/index.ts\",\"offset\":290,\"limit\":980}"
+            }
+          },
+          {
+            "id": "call_h2cWglZFvOT9g4AzAkojVKLr",
+            "type": "function",
+            "function": {
+              "name": "bash",
+              "arguments": "{\"command\":\"rg -n \\\"fetch\\\\(|serve\\\\(|createServer\\\\(|Bun\\\\.serve|http.createServer|new URL\\\\(req\\\\.url|url\\\\.pathname ===|routeRequestsToNodeResponse\\\\(\\\" src --glob '!src/daemon/http/index.ts'\",\"timeout\":20}"
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "content": "  ensureProvidersBootstrapped: () => Promise<void>;\n  getRoutstr21Models: (forceRefresh?: boolean) => Promise<any[]>;\n  getModelProviders: (modelId: string) => Promise<any>;\n  mode?: \"xcashu\" | \"apikeys\";\n  usageTrackingDriver: UsageTrackingDriver;\n  providerManager: ProviderManager;\n}) {\n  return async function handler(req: IncomingMessage, res: ServerResponse) {\n    const host = req.headers.host || \"localhost\";\n    const url = new URL(req.url || \"/\", `http://${host}`);\n\n    if (req.method === \"GET\" && url.pathname === \"/health\") {\n      sendJson(res, 200, { ok: true });\n      return;\n    }\n\n    if (req.method === \"GET\" && url.pathname === \"/ping\") {\n      sendJson(res, 200, { output: \"pong\" });\n      return;\n    }\n\n    if (req.method === \"GET\" && url.pathname === \"/status\") {\n      const output = await buildStatusOutput(deps);\n      sendJson(res, 200, { output });\n      return;\n    }\n\n    if (req.method === \"GET\" && url.pathname === \"/wallet/status\") {\n      await respond(res, async () => ({\n        output: await buildWalletDetails(deps),\n      }));\n      return;\n    }\n\n    if (req.method === \"POST\" && url.pathname === \"/wallet/unlock\") {\n      await respond(res, async () => {\n        const body = await readJsonBody(req);\n        const passphrase = getRequiredStringField(body, \"passphrase\");\n        const message = await deps.walletClient.unlock(passphrase);\n        const state = await deps.walletClient.getStatus();\n        return { output: { message, state } };\n      });\n      return;\n    }\n\n    if (req.method === \"GET\" && url.pathname === \"/wallet/balance\") {\n      await respond(res, async () => {\n        const balances = await deps.walletAdapter.getBalances();\n        return {\n          output: {\n            balances,\n            unit: \"sat\",\n            activeMint: deps.walletAdapter.getActiveMintUrl(),\n            walletState: \"UNLOCKED\",\n          },\n        };\n      });\n      return;\n    }\n\n    if (req.method === \"POST\" && url.pathname === \"/wallet/receive/cashu\") {\n      await respond(res, async () => {\n        const body = await readJsonBody(req);\n        const token = getRequiredStringField(body, \"token\");\n        const message = await deps.walletClient.receiveCashu(token);\n        const { amount, unit } = decodeCashuTokenAmount(token);\n        return { output: { message, amount, unit } };\n      });\n      return;\n    }\n\n    if (req.method === \"POST\" && url.pathname === \"/wallet/receive/bolt11\") {\n      await respond(res, async () => {\n        const body = await readJsonBody(req);\n        const amount = getRequiredPositiveNumberField(body, \"amount\");\n        const mintUrl = optionalStringField(body, \"mintUrl\");\n        const invoice = await deps.walletClient.receiveBolt11(amount, mintUrl);\n        return { output: { invoice, amount, mintUrl } };\n      });\n      return;\n    }\n\n    if (req.method === \"POST\" && url.pathname === \"/wallet/send/cashu\") {\n      await respond(res, async () => {\n        const body = await readJsonBody(req);\n        const amount = getRequiredPositiveNumberField(body, \"amount\");\n        const mintUrl = optionalStringField(body, \"mintUrl\");\n        const token = await deps.walletClient.sendCashu(amount, mintUrl);\n        return { output: { token, amount, mintUrl } };\n      });\n      return;\n    }\n\n    if (req.method === \"POST\" && url.pathname === \"/wallet/send/bolt11\") {\n      await respond(res, async () => {\n        const body = await readJsonBody(req);\n        const invoice = getRequiredStringField(body, \"invoice\");\n        const mintUrl = optionalStringField(body, \"mintUrl\");\n        const message = await deps.walletClient.sendBolt11(invoice, mintUrl);\n        return { output: { message, invoice, mintUrl } };\n      });\n      return;\n    }\n\n    if (req.method === \"GET\" && url.pathname === \"/wallet/mints\") {\n      await respond(res, async () => {\n        const mints = await deps.walletClient.listMints();\n        return {\n          output: {\n            mints,\n            activeMint: mints[0] || null,\n          },\n        };\n      });\n      return;\n    }\n\n    if (req.method === \"POST\" && url.pathname === \"/wallet/mints\") {\n      await respond(res, async () => {\n        const body = await readJsonBody(req);\n        const mintUrl = getRequiredStringField(body, \"url\");\n        const message = await deps.walletClient.addMint(mintUrl);\n        return { output: { message, url: mintUrl } };\n      });\n      return;\n    }\n\n    if (req.method === \"POST\" && url.pathname === \"/wallet/mints/info\") {\n      await respond(res, async () => {\n        const body = await readJsonBody(req);\n        const mintUrl = getRequiredStringField(body, \"url\");\n        const info = await deps.walletClient.getMintInfo(mintUrl);\n        return { output: { url: mintUrl, info } };\n      });\n      return;\n    }\n\n    if (req.method === \"GET\" && url.pathname === \"/models\") {\n      try {\n        const forceRefresh =\n          url.searchParams.get(\"refresh\")?.toLowerCase() === \"true\";\n        const models = await deps.getRoutstr21Models(forceRefresh);\n        sendJson(res, 200, { output: { models } });\n      } catch (error) {\n        sendJson(res, 500, { error: toErrorMessage(error) });\n      }\n      return;\n    }\n\n    // Get providers for a specific model\n    const modelProvidersMatch = url.pathname.match(/^\\/models\\/([^\\/]+)\\/providers$/);\n    if (req.method === \"GET\" && modelProvidersMatch && modelProvidersMatch[1]) {\n      try {\n        const modelId = decodeURIComponent(modelProvidersMatch[1]);\n        const modelWithProviders = await deps.getModelProviders(modelId);\n        if (!modelWithProviders) {\n          sendJson(res, 404, { error: `Model '${modelId}' not found` });\n          return;\n        }\n        sendJson(res, 200, { output: modelWithProviders });\n      } catch (error) {\n        sendJson(res, 500, { error: toErrorMessage(error) });\n      }\n      return;\n    }\n\n    if (req.method === \"GET\" && url.pathname === \"/v1/models\") {\n      try {\n        const forceRefresh =\n          url.searchParams.get(\"refresh\")?.toLowerCase() === \"true\";\n        const models = await deps.getRoutstr21Models(forceRefresh);\n        sendJson(res, 200, {\n          object: \"list\",\n          data: models.map((model) => ({ ...model, object: \"model\" })),\n        });\n      } catch (error) {\n        sendJson(res, 500, { error: toErrorMessage(error) });\n      }\n      return;\n    }\n\n    if (req.method === \"POST\" && url.pathname === \"/stop\") {\n      sendJson(res, 200, { output: \"stopping\" });\n      setTimeout(() => {\n        deps.server.close(() => {\n          process.exit(0);\n        });\n      }, 50);\n      return;\n    }\n\n    if (req.method === \"POST\" && url.pathname === \"/refund\") {\n      try {\n        const body = await readJsonBody(req);\n        const mintUrl = getRequiredStringField(body, \"mintUrl\");\n\n        const state = deps.store.getState();\n        const pendingDistribution = (state.cachedTokens || []).map(\n          (t: { baseUrl: string; balance?: number }) => ({\n            baseUrl: t.baseUrl,\n            amount: t.balance || 0,\n          }),\n        );\n        const apiKeysStored = (state.apiKeys || []).map(\n          (k: { baseUrl: string; balance?: number }) => ({\n            baseUrl: k.baseUrl,\n            amount: k.balance || 0,\n          }),\n        );\n\n        if (pendingDistribution.length === 0 && apiKeysStored.length === 0) {\n          sendJson(res, 200, {\n            output: { message: \"No pending tokens to refund\", results: [] },\n          });\n          return;\n        }\n\n        const refundBaseUrls = pendingDistribution\n          .map((p: { baseUrl: string }) => p.baseUrl)\n          .concat(apiKeysStored.map((p: { baseUrl: string }) => p.baseUrl));\n\n        const { RoutstrClient } = await import(\"@routstr/sdk\");\n        const client = new RoutstrClient(\n          deps.walletAdapter,\n          deps.storageAdapter,\n          deps.providerRegistry,\n          \"min\",\n          \"apikeys\",\n        );\n\n        const spender = client.getCashuSpender();\n        const results = await spender.refundProviders(mintUrl, true);\n\n        sendJson(res, 200, {\n          output: {\n            message: `Refunded to ${mintUrl}`,\n            pendingTokens: pendingDistribution.length,\n            apiKeys: apiKeysStored.length,\n            results: results.map(\n              (r: { baseUrl: string; success: boolean }) => ({\n                baseUrl: r.baseUrl,\n                success: r.success,\n              }),\n            ),\n          },\n        });\n      } catch (error) {\n        logger.error(`Refund error: ${toErrorMessage(error)}`);\n        respondWithError(res, error);\n      }\n      return;\n    }\n\n    if (req.method === \"GET\" && url.pathname === \"/balance\") {\n      try {\n        const balances = await deps.walletAdapter.getBalances();\n        sendJson(res, 200, {\n          output: {\n            balances,\n            unit: \"sat\",\n            activeMint: deps.walletAdapter.getActiveMintUrl(),\n          },\n        });\n      } catch (error) {\n        respondWithError(res, error);\n      }\n      return;\n    }\n\n    if (req.method === \"GET\" && url.pathname === \"/keys/balance\") {\n      try {\n        const walletBalances = await deps.walletAdapter.getBalances();\n        const totalWallet = Object.values(walletBalances).reduce<number>(\n          (sum, balance) => sum + Number(balance),\n          0,\n        );\n\n        const state = deps.store.getState();\n        const cachedTokens = state.cachedTokens || [];\n        const totalCached = cachedTokens.reduce(\n          (sum: number, t: { balance?: number }) => sum + (t.balance || 0),\n          0,\n        );\n\n        const apiKeys = state.apiKeys || [];\n        const totalApiKeys = apiKeys.reduce(\n          (sum: number, k: { balance?: number }) => sum + (k.balance || 0),\n          0,\n        );\n\n        const keys: Array<{ id: string; name: string; balance: number }> = [\n          { id: \"wallet\", name: \"Wallet\", balance: totalWallet },\n          ...cachedTokens.map((t: { baseUrl: string; balance?: number }) => ({\n            id: `cached:${t.baseUrl}`,\n            name: `Cached: ${t.baseUrl}`,\n            balance: t.balance || 0,\n          })),\n          ...apiKeys.map((k: { baseUrl: string; balance?: number }) => ({\n            id: `apikey:${k.baseUrl}`,\n            name: `API Key: ${k.baseUrl}`,\n            balance: k.balance || 0,\n          })),\n        ];\n\n        sendJson(res, 200, {\n          output: {\n            keys,\n            total: totalWallet + totalCached + totalApiKeys,\n            unit: \"sat\",\n            apikeysCalled: apiKeys.length,\n          },\n        });\n      } catch (error) {\n        res.writeHead(500, { \"Content-Type\": \"application/json\" });\n        res.end(JSON.stringify({ error: String(error) }));\n      }\n      return;\n    }\n\n    if (req.method === \"POST\" && url.pathname === \"/providers/disable\") {\n      try {\n        const bodyText = await readBody(req);\n        const body = bodyText ? JSON.parse(bodyText) : {};\n        const indices = body.indices as number[] | undefined;\n\n        if (!Array.isArray(indices)) {\n          res.writeHead(400, { \"Content-Type\": \"application/json\" });\n          res.end(\n            JSON.stringify({\n              error: \"Missing or invalid 'indices' field (expected number[]).\",\n            }),\n          );\n          return;\n        }\n\n        const state = deps.store.getState();\n        const baseUrlsList: string[] = state.baseUrlsList || [];\n        const disabledProviders: string[] = [\n          ...(state.disabledProviders || []),\n        ];\n\n        const toDisable: string[] = [];\n        for (const idx of indices) {\n          if (\n            typeof idx === \"number\" &&\n            idx >= 0 &&\n            idx < baseUrlsList.length\n          ) {\n            const baseUrl = baseUrlsList[idx]!;\n            if (!disabledProviders.includes(baseUrl)) {\n              disabledProviders.push(baseUrl);\n              toDisable.push(baseUrl);\n            }\n          }\n        }\n\n        deps.store.getState().setDisabledProviders(disabledProviders);\n\n        res.writeHead(200, { \"Content-Type\": \"application/json\" });\n        res.end(\n          JSON.stringify({\n            output: {\n              message: `Disabled ${toDisable.length} provider(s)`,\n              disabled: toDisable,\n            },\n          }),\n        );\n      } catch (error) {\n        res.writeHead(500, { \"Content-Type\": \"application/json\" });\n        res.end(JSON.stringify({ error: String(error) }));\n      }\n      return;\n    }\n\n    if (req.method === \"POST\" && url.pathname === \"/providers/enable\") {\n      try {\n        const bodyText = await readBody(req);\n        const body = bodyText ? JSON.parse(bodyText) : {};\n        const indices = body.indices as number[] | undefined;\n\n        if (!Array.isArray(indices)) {\n          res.writeHead(400, { \"Content-Type\": \"application/json\" });\n          res.end(\n            JSON.stringify({\n              error: \"Missing or invalid 'indices' field (expected number[]).\",\n            }),\n          );\n          return;\n        }\n\n        const state = deps.store.getState();\n        const baseUrlsList: string[] = state.baseUrlsList || [];\n        const disabledProviders: string[] = [\n          ...(state.disabledProviders || []),\n        ];\n\n        const toEnable: string[] = [];\n        for (const idx of indices) {\n          if (\n            typeof idx === \"number\" &&\n            idx >= 0 &&\n            idx < baseUrlsList.length\n          ) {\n            const baseUrl = baseUrlsList[idx]!;\n            const pos = disabledProviders.indexOf(baseUrl);\n            if (pos !== -1) {\n              disabledProviders.splice(pos, 1);\n              toEnable.push(baseUrl);\n            }\n          }\n        }\n\n        deps.store.getState().setDisabledProviders(disabledProviders);\n\n        res.writeHead(200, { \"Content-Type\": \"application/json\" });\n        res.end(\n          JSON.stringify({\n            output: {\n              message: `Enabled ${toEnable.length} provider(s)`,\n              enabled: toEnable,\n            },\n          }),\n        );\n      } catch (error) {\n        res.writeHead(500, { \"Content-Type\": \"application/json\" });\n        res.end(JSON.stringify({ error: String(error) }));\n      }\n      return;\n    }\n\n    // Client management endpoints\n    if (req.method === \"GET\" && url.pathname === \"/clients\") {\n      try {\n        const state = deps.store.getState();\n        const clientIds = state.clientIds || [];\n\n        const clients = clientIds.map(\n          (c: {\n            clientId: string;\n            name: string;\n            apiKey: string;\n            createdAt: number;\n            lastUsed?: number | null;\n          }) => ({\n            id: c.clientId,\n            name: c.name,\n            apiKey: c.apiKey,\n            createdAt: c.createdAt,\n            lastUsed: c.lastUsed,\n          }),\n        );\n\n        res.writeHead(200, { \"Content-Type\": \"application/json\" });\n        res.end(\n          JSON.stringify({\n            output: {\n              clients,\n              totalCount: clients.length,\n            },\n          }),\n        );\n      } catch (error) {\n        res.writeHead(500, { \"Content-Type\": \"application/json\" });\n        res.end(JSON.stringify({ error: String(error) }));\n      }\n      return;\n    }\n\n    if (req.method === \"POST\" && url.pathname === \"/clients/add\") {\n      try {\n        const bodyText = await readBody(req);\n        const body = bodyText ? JSON.parse(bodyText) : {};\n        const name = body.name as string | undefined;\n\n        if (!name || typeof name !== \"string\" || name.trim() === \"\") {\n          res.writeHead(400, { \"Content-Type\": \"application/json\" });\n          res.end(\n            JSON.stringify({\n              error:\n                \"Missing required 'name' field (must be a non-empty string).\",\n            }),\n          );\n          return;\n        }\n\n        const clientId = name\n          .toLowerCase()\n          .replace(/\\s+/g, \"-\")\n          .replace(/[^a-z0-9-]/g, \"\");\n\n        if (!clientId) {\n          res.writeHead(400, { \"Content-Type\": \"application/json\" });\n          res.end(\n            JSON.stringify({\n              error:\n                \"Invalid client name. Must contain alphanumeric characters.\",\n            }),\n          );\n          return;\n        }\n\n        const state = deps.store.getState();\n        const existingClients = state.clientIds || [];\n        const existingClient = existingClients.find(\n          (c: { clientId: string }) => c.clientId === clientId,\n        );\n\n        if (existingClient) {\n          res.writeHead(409, { \"Content-Type\": \"application/json\" });\n          res.end(\n            JSON.stringify({\n              error: `Client with id '${clientId}' already exists.`,\n            }),\n          );\n          return;\n        }\n\n        const apiKey = generateApiKey();\n        const newClient = {\n          clientId,\n          name: name.trim(),\n          apiKey,\n          createdAt: Date.now(),\n        };\n\n        deps.store\n          .getState()\n          .setClientIds((prev: typeof existingClients) => [\n            ...(prev || []),\n            newClient,\n          ]);\n\n        logger.log(`Added client '${name}' with id '${clientId}'`);\n\n        res.writeHead(200, { \"Content-Type\": \"application/json\" });\n        res.end(\n          JSON.stringify({\n            output: {\n              message: `Client '${name}' added successfully`,\n              client: {\n                id: clientId,\n                name: name.trim(),\n                apiKey,\n                createdAt: newClient.createdAt,\n              },\n            },\n          }),\n        );\n      } catch (error) {\n        respondWithError(res, error);\n      }\n      return;\n    }\n\n    if (req.method === \"GET\" && url.pathname === \"/providers\") {\n      try {\n        const state = deps.store.getState();\n        const baseUrlsList: string[] = state.baseUrlsList || [];\n        const disabledProviders: string[] = state.disabledProviders || [];\n\n        const providers = baseUrlsList.map((baseUrl, index) => ({\n          index,\n          baseUrl,\n          disabled: disabledProviders.includes(baseUrl),\n        }));\n\n        // Only count disabled providers that are actually in the current list\n        // (filter out stale entries from previously disabled providers that are no longer present)\n        const activeDisabledCount = providers.filter((p) => p.disabled).length;\n\n        res.writeHead(200, { \"Content-Type\": \"application/json\" });\n        res.end(\n          JSON.stringify({\n            output: {\n              providers,\n              disabledCount: activeDisabledCount,\n              totalCount: baseUrlsList.length,\n            },\n          }),\n        );\n      } catch (error) {\n        res.writeHead(500, { \"Content-Type\": \"application/json\" });\n        res.end(JSON.stringify({ error: String(error) }));\n      }\n      return;\n    }\n\n    if (req.method === \"POST\" && url.pathname === \"/providers/disable\") {\n      try {\n        const bodyText = await readBody(req);\n        const body = bodyText ? JSON.parse(bodyText) : {};\n        const indices = body.indices as number[] | undefined;\n\n        if (!Array.isArray(indices)) {\n          res.writeHead(400, { \"Content-Type\": \"application/json\" });\n          res.end(\n            JSON.stringify({\n              error: \"Missing or invalid 'indices' field (expected number[]).\",\n            }),\n          );\n          return;\n        }\n\n        const state = deps.store.getState();\n        const baseUrlsList: string[] = state.baseUrlsList || [];\n        const disabledProviders: string[] = [\n          ...(state.disabledProviders || []),\n        ];\n\n        const toDisable: string[] = [];\n        for (const idx of indices) {\n          if (\n            typeof idx === \"number\" &&\n            idx >= 0 &&\n            idx < baseUrlsList.length\n          ) {\n            const baseUrl = baseUrlsList[idx]!;\n            if (!disabledProviders.includes(baseUrl)) {\n              disabledProviders.push(baseUrl);\n              toDisable.push(baseUrl);\n            }\n          }\n        }\n\n        deps.store.getState().setDisabledProviders(disabledProviders);\n\n        res.writeHead(200, { \"Content-Type\": \"application/json\" });\n        res.end(\n          JSON.stringify({\n            output: {\n              message: `Disabled ${toDisable.length} provider(s)`,\n              disabled: toDisable,\n            },\n          }),\n        );\n      } catch (error) {\n        res.writeHead(500, { \"Content-Type\": \"application/json\" });\n        res.end(JSON.stringify({ error: String(error) }));\n      }\n      return;\n    }\n\n    if (req.method === \"POST\" && url.pathname === \"/providers/enable\") {\n      try {\n        const bodyText = await readBody(req);\n        const body = bodyText ? JSON.parse(bodyText) : {};\n        const indices = body.indices as number[] | undefined;\n\n        if (!Array.isArray(indices)) {\n          res.writeHead(400, { \"Content-Type\": \"application/json\" });\n          res.end(\n            JSON.stringify({\n              error: \"Missing or invalid 'indices' field (expected number[]).\",\n            }),\n          );\n          return;\n        }\n\n        const state = deps.store.getState();\n        const baseUrlsList: string[] = state.baseUrlsList || [];\n        const disabledProviders: string[] = [\n          ...(state.disabledProviders || []),\n        ];\n\n        const toEnable: string[] = [];\n        for (const idx of indices) {\n          if (\n            typeof idx === \"number\" &&\n            idx >= 0 &&\n            idx < baseUrlsList.length\n          ) {\n            const baseUrl = baseUrlsList[idx]!;\n            const pos = disabledProviders.indexOf(baseUrl);\n            if (pos !== -1) {\n              disabledProviders.splice(pos, 1);\n              toEnable.push(baseUrl);\n            }\n          }\n        }\n\n        deps.store.getState().setDisabledProviders(disabledProviders);\n\n        res.writeHead(200, { \"Content-Type\": \"application/json\" });\n        res.end(\n          JSON.stringify({\n            output: {\n              message: `Enabled ${toEnable.length} provider(s)`,\n              enabled: toEnable,\n            },\n          }),\n        );\n      } catch (error) {\n        res.writeHead(500, { \"Content-Type\": \"application/json\" });\n        res.end(JSON.stringify({ error: String(error) }));\n      }\n      return;\n    }\n\n    // Client management endpoints\n    if (req.method === \"GET\" && url.pathname === \"/clients\") {\n      try {\n        const state = deps.store.getState();\n        const clientIds = state.clientIds || [];\n\n        const clients = clientIds.map(\n          (c: {\n            clientId: string;\n            name: string;\n            apiKey: string;\n            createdAt: number;\n            lastUsed?: number | null;\n          }) => ({\n            id: c.clientId,\n            name: c.name,\n            apiKey: c.apiKey,\n            createdAt: c.createdAt,\n            lastUsed: c.lastUsed,\n          }),\n        );\n\n        res.writeHead(200, { \"Content-Type\": \"application/json\" });\n        res.end(\n          JSON.stringify({\n            output: {\n              clients,\n              totalCount: clients.length,\n            },\n          }),\n        );\n      } catch (error) {\n        res.writeHead(500, { \"Content-Type\": \"application/json\" });\n        res.end(JSON.stringify({ error: String(error) }));\n      }\n      return;\n    }\n\n    if (req.method === \"POST\" && url.pathname === \"/clients/add\") {\n      try {\n        const bodyText = await readBody(req);\n        const body = bodyText ? JSON.parse(bodyText) : {};\n        const name = body.name as string | undefined;\n\n        if (!name || typeof name !== \"string\" || name.trim() === \"\") {\n          res.writeHead(400, { \"Content-Type\": \"application/json\" });\n          res.end(\n            JSON.stringify({\n              error:\n                \"Missing required 'name' field (must be a non-empty string).\",\n            }),\n          );\n          return;\n        }\n\n        const clientId = name\n          .toLowerCase()\n          .replace(/\\s+/g, \"-\")\n          .replace(/[^a-z0-9-]/g, \"\");\n\n        if (!clientId) {\n          res.writeHead(400, { \"Content-Type\": \"application/json\" });\n          res.end(\n            JSON.stringify({\n              error:\n                \"Invalid client name. Must contain alphanumeric characters.\",\n            }),\n          );\n          return;\n        }\n\n        const state = deps.store.getState();\n        const existingClients = state.clientIds || [];\n        const existingClient = existingClients.find(\n          (c: { clientId: string }) => c.clientId === clientId,\n        );\n\n        if (existingClient) {\n          res.writeHead(409, { \"Content-Type\": \"application/json\" });\n          res.end(\n            JSON.stringify({\n              error: `Client with id '${clientId}' already exists.`,\n            }),\n          );\n          return;\n        }\n\n        const apiKey = generateApiKey();\n        const newClient = {\n          clientId,\n          name: name.trim(),\n          apiKey,\n          createdAt: Date.now(),\n        };\n\n        deps.store\n          .getState()\n          .setClientIds((prev: typeof existingClients) => [\n            ...(prev || []),\n            newClient,\n          ]);\n\n        logger.log(`Added client '${name}' with id '${clientId}'`);\n\n        res.writeHead(200, { \"Content-Type\": \"application/json\" });\n        res.end(\n          JSON.stringify({\n            output: {\n              message: `Client '${name}' added successfully`,\n              client: {\n                id: clientId,\n                name: name.trim(),\n                apiKey,\n                createdAt: newClient.createdAt,\n              },\n            },\n          }),\n        );\n      } catch (error) {\n        res.writeHead(500, { \"Content-Type\": \"application/json\" });\n        res.end(JSON.stringify({ error: String(error) }));\n      }\n      return;\n    }\n\n    if (req.method === \"GET\" && url.pathname === \"/usage\") {\n      try {\n        const output = await deps.usageTrackingDriver.list({\n          limit: parseLimit(url.searchParams.get(\"limit\")),\n        });\n        res.writeHead(200, { \"Content-Type\": \"application/json\" });\n        res.end(JSON.stringify({ output }));\n      } catch (error) {\n        sendJson(res, 500, { error: toErrorMessage(error) });\n      }\n      return;\n    }\n\n    if (req.method === \"GET\" && url.pathname === \"/usagePi\") {\n      try {\n        const timestamp = (url.searchParams.get(\"timestamp\") || \"\").trim();\n        if (!timestamp) {\n          sendJson(res, 400, {\n            error: \"Missing required 'timestamp' query parameter.\",\n          });\n          return;\n        }\n\n        const usageDriver = deps.usageTrackingDriver;\n        const limit = parseLimit(url.searchParams.get(\"limit\"));\n        const allMatching = await usageDriver.list();\n        const requestIdPrefix = `gen-${timestamp}-`;\n        const filtered = allMatching.filter((entry) =>\n          entry.requestId.startsWith(requestIdPrefix),\n        );\n        const entries = filtered.slice(0, limit);\n        const totalEntries = filtered.length;\n        const totalSatsCost = filtered.reduce(\n          (sum, entry) => sum + (entry.satsCost || 0),\n          0,\n        );\n        const recentSatsCost = entries.reduce(\n          (sum, entry) => sum + (entry.satsCost || 0),\n          0,\n        );\n\n        res.writeHead(200, { \"Content-Type\": \"application/json\" });\n        res.end(\n          JSON.stringify({\n            output: {\n              entries,\n              totalEntries,\n              totalSatsCost,\n              recentSatsCost,\n              limit,\n              timestamp,\n            },\n          }),\n        );\n      } catch (error) {\n        sendJson(res, 500, { error: toErrorMessage(error) });\n      }\n      return;\n    }\n\n    // Allow client management endpoints through\n    if (req.method !== \"POST\" && !url.pathname.startsWith(\"/clients\")) {\n      res.writeHead(405, { \"Content-Type\": \"application/json\" });\n      res.end(JSON.stringify({ error: \"Only POST is supported.\" }));\n      return;\n    }\n\n    let requestBody: unknown = {};\n    try {\n      requestBody = await readJsonBody(req);\n    } catch (error) {\n      sendJson(res, 400, {\n        error: \"Invalid JSON body.\",\n        details: toErrorMessage(error),\n      });\n      return;\n    }\n\n    const bodyObj = requestBody as Record<string, unknown>;\n    const modelId = typeof bodyObj.model === \"string\" ? bodyObj.model : \"\";\n\n    if (!modelId) {\n      sendJson(res, 400, { error: \"Missing required 'model' field.\" });\n      return;\n    }\n\n    const forcedProvider: string | undefined =\n      url.searchParams.get(\"provider\") ||\n      (req.headers[\"x-routstr-provider\"] as string | undefined) ||\n      deps.provider ||\n      undefined;\n\n    // Convert req.headers to Record<string, string>\n    const incomingHeaders: Record<string, string> = {};\n    for (const [key, value] of Object.entries(req.headers)) {\n      if (typeof value === \"string\") {\n        incomingHeaders[key] = value;\n      } else if (Array.isArray(value) && value.length > 0) {\n        incomingHeaders[key] = value[0]!;\n      }\n    }\n\n    try {\n      await deps.ensureProvidersBootstrapped();\n      logger.log(\"Routing request with path: \", url.pathname);\n      await logRoutedRequest({\n        timestamp: new Date().toISOString(),\n        method: req.method,\n        path: url.pathname,\n        query: Object.fromEntries(url.searchParams.entries()),\n        headers: incomingHeaders,\n        forcedProvider,\n        modelId,\n        body: requestBody,\n      });\n      await routeRequestsToNodeResponse({\n        modelId,\n        requestBody,\n        path: url.pathname,\n        forcedProvider,\n        headers: incomingHeaders,\n        walletAdapter: deps.walletAdapter,\n        storageAdapter: deps.storageAdapter,\n        providerRegistry: deps.providerRegistry,\n        discoveryAdapter: deps.discoveryAdapter,\n        modelManager: deps.modelManager,\n        debugLevel: \"DEBUG\",\n        mode: deps.mode,\n        usageTrackingDriver: deps.usageTrackingDriver,\n        sdkStore: deps.store,\n        providerManager: deps.providerManager,\n        res,\n      });\n      return;\n    } catch (error) {\n      const message = error instanceof Error ? error.message : String(error);\n      logger.error(`[daemon] Error: ${message}`);\n\n      if (error instanceof InsufficientBalanceError) {\n        const balanceError = error as {\n          required?: number;\n          available?: number;\n          maxMintBalance?: number;\n          maxMintUrl?: string;\n        };\n        res.writeHead(402, { \"Content-Type\": \"application/json\" });\n        res.end(\n          JSON.stringify({\n            error: message,\n            error_type: \"insufficient_balance\",\n            required: balanceError.required,\n            available: balanceError.available,\n            maxMintBalance: balanceError.maxMintBalance,\n            maxMintUrl: balanceError.maxMintUrl,\n          }),\n        );\n        return;\n\n[8 more lines in file. Use offset=1270 to continue.]",
+        "tool_call_id": "call_gTa2VAZ5nfhjulxdDHM7MR6Q"
+      },
+      {
+        "role": "tool",
+        "content": "src/start-daemon.ts:24:    const existing = await fetch(`http://localhost:${port}/health`, {\nsrc/start-daemon.ts:79:      const res = await fetch(`http://localhost:${port}/health`, {\nsrc/daemon/index.ts:62:  const server = createServer();\nsrc/integrations/pi.ts:81:    const response = await fetch(`http://localhost:${port}/models`);\nsrc/integrations/opencode.ts:80:    const response = await fetch(`http://localhost:${port}/models`);\nsrc/cli-shared.ts:34:  const response = await fetch(`http://localhost:${config.port}${path}`, {\nsrc/cli-shared.ts:51:    const response = await fetch(`http://localhost:${config.port}/health`);\nsrc/cli-shared.ts:144:      const balanceResponse = await fetch(`http://localhost:${config.port}/balance`);\nsrc/cli-shared.ts:163:      const response = await fetch(`http://localhost:${config.port}/refund`, {\nsrc/integrations/openclaw.ts:116:    const response = await fetch(`http://localhost:${port}/models`);\n",
+        "tool_call_id": "call_h2cWglZFvOT9g4AzAkojVKLr"
+      },
+      {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_llv5BtFcydBVvftITipmXO3w",
+            "type": "function",
+            "function": {
+              "name": "read",
+              "arguments": "{\"path\":\"/daemon/http/index.ts\"}"
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "content": "ENOENT: no such file or directory, access '/daemon/http/index.ts'",
+        "tool_call_id": "call_llv5BtFcydBVvftITipmXO3w"
+      },
+      {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_qRviuJlUCcvSOfpaPqkcLda5",
+            "type": "function",
+            "function": {
+              "name": "read",
+              "arguments": "{\"path\":\"src/daemon/http/index.ts\",\"offset\":1270,\"limit\":80}"
+            }
+          },
+          {
+            "id": "call_0w29l5x20RZxaeulrYe8XVVY",
+            "type": "function",
+            "function": {
+              "name": "read",
+              "arguments": "{\"path\":\"src/cli-shared.ts\",\"offset\":1,\"limit\":260}"
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "content": "      }\n\n      res.writeHead(500, { \"Content-Type\": \"application/json\" });\n      res.end(JSON.stringify({ error: message }));\n    }\n  };\n}\n",
+        "tool_call_id": "call_qRviuJlUCcvSOfpaPqkcLda5"
+      },
+      {
+        "role": "tool",
+        "content": "import { program } from \"commander\";\nimport { existsSync } from \"fs\";\nimport {\n  CONFIG_FILE,\n  DEFAULT_CONFIG,\n  LOGS_DIR,\n  type RoutstrdConfig,\n} from \"./utils/config\";\n\nexport interface CommandResponse {\n  output?: unknown;\n  error?: string;\n}\n\nexport async function loadConfig(): Promise<RoutstrdConfig> {\n  try {\n    if (existsSync(CONFIG_FILE)) {\n      const content = await Bun.file(CONFIG_FILE).text();\n      return { ...DEFAULT_CONFIG, ...JSON.parse(content) };\n    }\n  } catch (error) {\n    console.error(\"Failed to load config:\", error);\n  }\n  return DEFAULT_CONFIG;\n}\n\nasync function callDaemon(\n  path: string,\n  options: { method?: \"GET\" | \"POST\"; body?: object } = {},\n): Promise<CommandResponse> {\n  const { method = \"GET\", body } = options;\n  const config = await loadConfig();\n\n  const response = await fetch(`http://localhost:${config.port}${path}`, {\n    method,\n    headers: body ? { \"Content-Type\": \"application/json\" } : {},\n    body: body ? JSON.stringify(body) : undefined,\n  });\n\n  if (!response.ok) {\n    const errorData = (await response.json()) as { error?: string };\n    throw new Error(errorData.error || `HTTP ${response.status}`);\n  }\n\n  return response.json() as Promise<CommandResponse>;\n}\n\nexport async function isDaemonRunning(): Promise<boolean> {\n  try {\n    const config = await loadConfig();\n    const response = await fetch(`http://localhost:${config.port}/health`);\n    return response.ok;\n  } catch {\n    return false;\n  }\n}\n\nexport async function startDaemonProcess(): Promise<void> {\n  // Ensure logs directory exists (logger handles date-based files)\n  if (!existsSync(LOGS_DIR)) {\n    await Bun.$`mkdir -p ${LOGS_DIR}`;\n  }\n\n  const proc = Bun.spawn([\n    \"bun\", \"run\", `${import.meta.dir}/daemon/index.ts`\n  ], {\n    stdout: \"inherit\",\n    stderr: \"inherit\",\n    stdin: \"ignore\",\n    detached: true,\n  });\n\n  proc.unref();\n\n  for (let i = 0; i < 50; i++) {\n    await new Promise((resolve) => setTimeout(resolve, 100));\n    if (await isDaemonRunning()) {\n      return;\n    }\n  }\n\n  throw new Error(\"Daemon failed to start within 5 seconds\");\n}\n\nexport async function ensureDaemonRunning(): Promise<void> {\n  if (await isDaemonRunning()) {\n    return;\n  }\n\n  console.log(\"Starting daemon...\");\n  await startDaemonProcess();\n}\n\nexport async function handleDaemonCommand(\n  path: string,\n  options: { method?: \"GET\" | \"POST\"; body?: object } = {},\n): Promise<CommandResponse> {\n  try {\n    await ensureDaemonRunning();\n    const result = await callDaemon(path, options);\n\n    if (result.error) {\n      console.log(result.error);\n      process.exit(1);\n    }\n\n    if (result.output !== undefined) {\n      if (typeof result.output === \"string\") {\n        console.log(result.output);\n      } else {\n        try {\n          const formatted = JSON.stringify(result.output, null, 2);\n          console.log(formatted ?? String(result.output));\n        } catch {\n          console.log(String(result.output));\n        }\n      }\n    }\n\n    return result;\n  } catch (error) {\n    const message = (error as Error).message;\n    if (message?.includes(\"fetch failed\") || message?.includes(\"Connection refused\")) {\n      console.error(\"Daemon is not running and failed to auto-start\");\n      process.exit(1);\n    }\n    console.error(message);\n    process.exit(1);\n  }\n}\n\nexport { program, callDaemon };\n\nprogram\n  .command(\"refund\")\n  .description(\"Refund pending tokens and API keys to a specified mint\")\n  .option(\"-m, --mint-url <mintUrl>\", \"Mint URL to refund to (defaults to first mint in wallet)\")\n  .option(\"-y, --yes\", \"Skip confirmation prompt\", false)\n  .action(async (options: { mintUrl?: string; yes: boolean }) => {\n    const config = await loadConfig();\n\n    let mintUrl = options.mintUrl;\n    if (!mintUrl) {\n      const balanceResponse = await fetch(`http://localhost:${config.port}/balance`);\n      const balanceResult = (await balanceResponse.json()) as {\n        output?: { balances?: Record<string, number> };\n        error?: string;\n      };\n      if (balanceResult.error) {\n        console.log(balanceResult.error);\n        process.exit(1);\n      }\n      const balances = balanceResult.output?.balances;\n      if (!balances || Object.keys(balances).length === 0) {\n        console.log(\"No mint URLs found in wallet balance\");\n        process.exit(1);\n      }\n      mintUrl = Object.keys(balances)[0];\n      console.log(`Using mint URL: ${mintUrl}`);\n    }\n\n    try {\n      const response = await fetch(`http://localhost:${config.port}/refund`, {\n        method: \"POST\",\n        headers: { \"Content-Type\": \"application/json\" },\n        body: JSON.stringify({ mintUrl }),\n      });\n\n      if (!response.ok) {\n        const errorData = (await response.json()) as { error?: string };\n        throw new Error(errorData.error || `HTTP ${response.status}`);\n      }\n\n      const result = (await response.json()) as {\n        output?: {\n          message: string;\n          pendingTokens: number;\n          apiKeys: number;\n          results: Array<{ baseUrl: string; success: boolean }>;\n        };\n        error?: string;\n      };\n\n      if (result.error) {\n        console.log(result.error);\n        process.exit(1);\n      }\n\n      if (result.output) {\n        console.log(result.output.message);\n        console.log(`\\nPending tokens: ${result.output.pendingTokens}`);\n        console.log(`API keys: ${result.output.apiKeys}`);\n        console.log(\"\\nResults:\");\n        for (const r of result.output.results) {\n          console.log(`  - ${r.baseUrl}: ${r.success ? \"success\" : \"failed\"}`);\n        }\n      }\n    } catch (error) {\n      const message = (error as Error).message;\n      if (message?.includes(\"fetch failed\") || message?.includes(\"Connection refused\")) {\n        console.error(\"Daemon is not running\");\n        process.exit(1);\n      }\n      console.error(message);\n      process.exit(1);\n    }\n  });\n",
+        "tool_call_id": "call_0w29l5x20RZxaeulrYe8XVVY"
+      },
+      {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_ytHvS4sSvLBvbq5n5b8Qmu7o",
+            "type": "function",
+            "function": {
+              "name": "bash",
+              "arguments": "{\"command\":\"rg -n \\\"callDaemon\\\\(|handleDaemonCommand\\\\(|\\\\.command\\\\(|/health|/status|/wallet/|/models|/providers|/clients|/usage|/v1/models|/refund|/balance|/stop|/ping\\\" src/cli.ts src/daemon.ts src/index.ts src/integrations -g '!target'\",\"timeout\":20}"
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "content": "src/integrations/opencode.ts:80:    const response = await fetch(`http://localhost:${port}/models`);\nsrc/integrations/registry.ts:41:    configPath: join(process.env.HOME || \"\", \".pi/agent/models.json\"),\nsrc/integrations/openclaw.ts:116:    const response = await fetch(`http://localhost:${port}/models`);\nsrc/integrations/pi.ts:81:    const response = await fetch(`http://localhost:${port}/models`);\nsrc/cli.ts:28:} from \"./daemon/wallet/cocod-client\";\nsrc/cli.ts:232:  .command(\"onboard\")\nsrc/cli.ts:242:  .command(\"start\")\nsrc/cli.ts:263:  .command(\"status\")\nsrc/cli.ts:272:    const result = await callDaemon(\"/status\");\nsrc/cli.ts:294:  .command(\"balance\")\nsrc/cli.ts:300:      callDaemon(\"/balance\"),\nsrc/cli.ts:301:      callDaemon(\"/keys/balance\"),\nsrc/cli.ts:361:  .command(\"ping\")\nsrc/cli.ts:364:    await handleDaemonCommand(\"/ping\");\nsrc/cli.ts:369:  .command(\"models\")\nsrc/cli.ts:378:      const result = await callDaemon(`/models/${encodeURIComponent(options.model)}/providers`);\nsrc/cli.ts:425:    const result = await callDaemon(\nsrc/cli.ts:426:      options.refresh ? \"/models?refresh=true\" : \"/models\",\nsrc/cli.ts:459:  .command(\"usage\")\nsrc/cli.ts:471:    const result = await callDaemon(`/usage?limit=${limit}`);\nsrc/cli.ts:514:  .command(\"providers\")\nsrc/cli.ts:518:  .command(\"list\")\nsrc/cli.ts:523:    const result = await callDaemon(\"/providers\");\nsrc/cli.ts:556:  .command(\"disable <indices...>\")\nsrc/cli.ts:571:    const result = await callDaemon(\"/providers/disable\", {\nsrc/cli.ts:593:  .command(\"enable <indices...>\")\nsrc/cli.ts:608:    const result = await callDaemon(\"/providers/enable\", {\nsrc/cli.ts:631:  .command(\"clients\")\nsrc/cli.ts:635:  .command(\"list\")\nsrc/cli.ts:640:    const result = await callDaemon(\"/clients\");\nsrc/cli.ts:679:  .command(\"add\")\nsrc/cli.ts:686:    const result = await callDaemon(\"/clients/add\", {\nsrc/cli.ts:721:  .command(\"monitor\")\nsrc/cli.ts:724:    const { runUsageTui } = await import(\"./tui/usage/index.ts\");\nsrc/cli.ts:729:  .command(\"top\")\nsrc/cli.ts:732:    const { runUsageTui } = await import(\"./tui/usage/index.ts\");\nsrc/cli.ts:736:const walletCmd = program.command(\"wallet\").description(\"Wallet operations\");\nsrc/cli.ts:739:  .command(\"status\")\nsrc/cli.ts:742:    await handleDaemonCommand(\"/wallet/status\");\nsrc/cli.ts:746:  .command(\"unlock <passphrase>\")\nsrc/cli.ts:749:    await handleDaemonCommand(\"/wallet/unlock\", {\nsrc/cli.ts:756:  .command(\"balance\")\nsrc/cli.ts:759:    await handleDaemonCommand(\"/wallet/balance\");\nsrc/cli.ts:763:  .command(\"receive\")\nsrc/cli.ts:767:  .command(\"cashu <token>\")\nsrc/cli.ts:770:    await handleDaemonCommand(\"/wallet/receive/cashu\", {\nsrc/cli.ts:777:  .command(\"bolt11 <amount>\")\nsrc/cli.ts:784:      const result = await callDaemon(\"/wallet/receive/bolt11\", {\nsrc/cli.ts:811:  .command(\"send\")\nsrc/cli.ts:815:  .command(\"cashu <amount>\")\nsrc/cli.ts:819:    await handleDaemonCommand(\"/wallet/send/cashu\", {\nsrc/cli.ts:829:  .command(\"bolt11 <invoice>\")\nsrc/cli.ts:833:    await handleDaemonCommand(\"/wallet/send/bolt11\", {\nsrc/cli.ts:843:  .command(\"mints\")\nsrc/cli.ts:847:  .command(\"list\")\nsrc/cli.ts:850:    await handleDaemonCommand(\"/wallet/mints\");\nsrc/cli.ts:854:  .command(\"add <url>\")\nsrc/cli.ts:857:    await handleDaemonCommand(\"/wallet/mints\", {\nsrc/cli.ts:864:  .command(\"info <url>\")\nsrc/cli.ts:867:    await handleDaemonCommand(\"/wallet/mints/info\", {\nsrc/cli.ts:875:  .command(\"stop\")\nsrc/cli.ts:878:    await handleDaemonCommand(\"/stop\", { method: \"POST\" });\nsrc/cli.ts:883:  .command(\"service\")\nsrc/cli.ts:887:  .command(\"install\")\nsrc/cli.ts:940:  .command(\"uninstall\")\nsrc/cli.ts:954:  .command(\"logs\")\nsrc/cli.ts:966:  .command(\"restart\")\nsrc/cli.ts:976:      await callDaemon(\"/stop\", { method: \"POST\" });\nsrc/cli.ts:1005:  .command(\"mode\")\nsrc/cli.ts:1060:      await callDaemon(\"/stop\", { method: \"POST\" });\nsrc/cli.ts:1093:  .command(\"logs\")\n",
+        "tool_call_id": "call_ytHvS4sSvLBvbq5n5b8Qmu7o"
+      },
+      {
+        "role": "assistant",
+        "content": "Yes I looked through the project, — and the main HTTP API is in:\n\n- `src/daemon/http/index.ts`\n\nThere do not appear to be other server endpoint definitions elsewhere in `src/`; other files mostly call these endpoints as clients.\n\n## Main daemon endpoints\n\nFrom `src/daemon/http/index.ts`, these endpoints exist:\n\n### Health / status\n- `GET /health`\n- `GET /ping`\n- `GET /status`\n\n### Wallet\n- `GET /wallet/status`\n- `POST /wallet/unlock`\n- `GET /wallet/balance`\n- `POST /wallet/receive/cashu`\n- `POST /wallet/receive/bolt11`\n- `POST /wallet/send/cashu`\n- `POST /wallet/send/bolt11`\n- `GET /wallet/mints`\n- `POST /wallet/mints`\n- `POST /wallet/mints/info`\n\n### Models\n- `GET /models`\n  - supports query: `?refresh=true`\n- `GET /models/:modelId/providers`\n- `GET /v1/models`\n  - supports query: `?refresh=true`\n\n### Daemon control / balances\n- `POST /stop`\n- `POST /refund`\n- `GET /balance`\n- `GET /keys/balance`\n\n### Provider management\n- `GET /providers`\n- `POST /providers/disable`\n- `POST /providers/enable`\n\n### Client management\n- `GET /clients`\n- `POST /clients/add`\n\n### Usage\n- `GET /usage`\n  - supports query: `?limit=...`\n- `GET /usagePi`\n  - requires query: `?timestamp=...`\n  - optional: `&limit=...`\n\n### Routed model inference / passthrough\nFor anything that gets past the explicit routes:\n\n- non-`POST` requests are rejected with `405` unless path starts with `/clients`\n- `POST <any path>` with a JSON body containing `model` is forwarded to:\n  - `routeRequestsToNodeResponse(...)`\n  - using `path: url.pathname`\n\nSo this likely supports OpenAI-style endpoints such as:\n- `POST /`\n- `POST /v1/chat/completions`\n- and potentially other SDK-supported POST paths\n\n## Important note\n`src/daemon/http/index.ts` currently contains duplicated blocks for:\n\n- `POST /providers/disable`\n- `POST /providers/enable`\n- `GET /clients`\n- `POST /clients/add`\n\nThose route handlers appear twice in the file. Only the first matching copy is effectively used.\n\n## Where these endpoints are consumed\n\nCLI and integrations reference these routes in:\n\n- `src/cli.ts`\n- `src/cli-shared.ts`\n- `src/integrations/pi.ts`\n- `src/integrations/opencode.ts`\n- `src/integrations/openclaw.ts`\n- `src/start-daemon.ts`\n\n## Quick mapping to CLI\nExamples:\n- `routstrd status` → `GET /status`\n- `routstrd ping` → `GET /ping`\n- `routstrd balance` → `GET /balance` and `GET /keys/balance`\n- `routstrd models` → `GET /models`\n- `routstrd providers list` → `GET /providers`\n- `routstrd clients list` → `GET /clients`\n- `routstrd wallet ...` → `/wallet/*`\n- `routstrd stop` → `POST /stop`\n\nIf you want, I can turn this into one of these next:\n1. a clean markdown API reference,\n2. a table with method/path/body/response,\n3. or help dedupe and refactor `src/daemon/http/index.ts`."
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "dedupe first. i didn't knwo that."
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_EglzoUme1aiONaMSKclxGeBq",
+            "type": "function",
+            "function": {
+              "name": "edit",
+              "arguments": "{\"path\":\"src/daemon/http/index.ts\",\"edits\":[{\"oldText\":\"    if (req.method === \\\"GET\\\" && url.pathname === \\\"/providers\\\") {\\n      try {\\n        const state = deps.store.getState();\\n        const baseUrlsList: string[] = state.baseUrlsList || [];\\n        const disabledProviders: string[] = state.disabledProviders || [];\\n\\n        const providers = baseUrlsList.map((baseUrl, index) => ({\\n          index,\\n          baseUrl,\\n          disabled: disabledProviders.includes(baseUrl),\\n        }));\\n\\n        // Only count disabled providers that are actually in the current list\\n        // (filter out stale entries from previously disabled providers that are no longer present)\\n        const activeDisabledCount = providers.filter((p) => p.disabled).length;\\n\\n        res.writeHead(200, { \\\"Content-Type\\\": \\\"application/json\\\" });\\n        res.end(\\n          JSON.stringify({\\n            output: {\\n              providers,\\n              disabledCount: activeDisabledCount,\\n              totalCount: baseUrlsList.length,\\n            },\\n          }),\\n        );\\n      } catch (error) {\\n        res.writeHead(500, { \\\"Content-Type\\\": \\\"application/json\\\" });\\n        res.end(JSON.stringify({ error: String(error) }));\\n      }\\n      return;\\n    }\\n\\n    if (req.method === \\\"POST\\\" && url.pathname === \\\"/providers/disable\\\") {\\n      try {\\n        const bodyText = await readBody(req);\\n        const body = bodyText ? JSON.parse(bodyText) : {};\\n        const indices = body.indices as number[] | undefined;\\n\\n        if (!Array.isArray(indices)) {\\n          res.writeHead(400, { \\\"Content-Type\\\": \\\"application/json\\\" });\\n          res.end(\\n            JSON.stringify({\\n              error: \\\"Missing or invalid 'indices' field (expected number[]).\\\",\\n            }),\\n          );\\n          return;\\n        }\\n\\n        const state = deps.store.getState();\\n        const baseUrlsList: string[] = state.baseUrlsList || [];\\n        const disabledProviders: string[] = [\\n          ...(state.disabledProviders || []),\\n        ];\\n\\n        const toDisable: string[] = [];\\n        for (const idx of indices) {\\n          if (\\n            typeof idx === \\\"number\\\" &&\\n            idx >= 0 &&\\n            idx < baseUrlsList.length\\n          ) {\\n            const baseUrl = baseUrlsList[idx]!;\\n            if (!disabledProviders.includes(baseUrl)) {\\n              disabledProviders.push(baseUrl);\\n              toDisable.push(baseUrl);\\n            }\\n          }\\n        }\\n\\n        deps.store.getState().setDisabledProviders(disabledProviders);\\n\\n        res.writeHead(200, { \\\"Content-Type\\\": \\\"application/json\\\" });\\n        res.end(\\n          JSON.stringify({\\n            output: {\\n              message: `Disabled ${toDisable.length} provider(s)`,\\n              disabled: toDisable,\\n            },\\n          }),\\n        );\\n      } catch (error) {\\n        res.writeHead(500, { \\\"Content-Type\\\": \\\"application/json\\\" });\\n        res.end(JSON.stringify({ error: String(error) }));\\n      }\\n      return;\\n    }\\n\\n    if (req.method === \\\"POST\\\" && url.pathname === \\\"/providers/enable\\\") {\\n      try {\\n        const bodyText = await readBody(req);\\n        const body = bodyText ? JSON.parse(bodyText) : {};\\n        const indices = body.indices as number[] | undefined;\\n\\n        if (!Array.isArray(indices)) {\\n          res.writeHead(400, { \\\"Content-Type\\\": \\\"application/json\\\" });\\n          res.end(\\n            JSON.stringify({\\n              error: \\\"Missing or invalid 'indices' field (expected number[]).\\\",\\n            }),\\n          );\\n          return;\\n        }\\n\\n        const state = deps.store.getState();\\n        const baseUrlsList: string[] = state.baseUrlsList || [];\\n        const disabledProviders: string[] = [\\n          ...(state.disabledProviders || []),\\n        ];\\n\\n        const toEnable: string[] = [];\\n        for (const idx of indices) {\\n          if (\\n            typeof idx === \\\"number\\\" &&\\n            idx >= 0 &&\\n            idx < baseUrlsList.length\\n          ) {\\n            const baseUrl = baseUrlsList[idx]!;\\n            const pos = disabledProviders.indexOf(baseUrl);\\n            if (pos !== -1) {\\n              disabledProviders.splice(pos, 1);\\n              toEnable.push(baseUrl);\\n            }\\n          }\\n        }\\n\\n        deps.store.getState().setDisabledProviders(disabledProviders);\\n\\n        res.writeHead(200, { \\\"Content-Type\\\": \\\"application/json\\\" });\\n        res.end(\\n          JSON.stringify({\\n            output: {\\n              message: `Enabled ${toEnable.length} provider(s)`,\\n              enabled: toEnable,\\n            },\\n          }),\\n        );\\n      } catch (error) {\\n        res.writeHead(500, { \\\"Content-Type\\\": \\\"application/json\\\" });\\n        res.end(JSON.stringify({ error: String(error) }));\\n      }\\n      return;\\n    }\\n\\n    // Client management endpoints\\n    if (req.method === \\\"GET\\\" && url.pathname === \\\"/clients\\\") {\\n      try {\\n        const state = deps.store.getState();\\n        const clientIds = state.clientIds || [];\\n\\n        const clients = clientIds.map(\\n          (c: {\\n            clientId: string;\\n            name: string;\\n            apiKey: string;\\n            createdAt: number;\\n            lastUsed?: number | null;\\n          }) => ({\\n            id: c.clientId,\\n            name: c.name,\\n            apiKey: c.apiKey,\\n            createdAt: c.createdAt,\\n            lastUsed: c.lastUsed,\\n          }),\\n        );\\n\\n        res.writeHead(200, { \\\"Content-Type\\\": \\\"application/json\\\" });\\n        res.end(\\n          JSON.stringify({\\n            output: {\\n              clients,\\n              totalCount: clients.length,\\n            },\\n          }),\\n        );\\n      } catch (error) {\\n        res.writeHead(500, { \\\"Content-Type\\\": \\\"application/json\\\" });\\n        res.end(JSON.stringify({ error: String(error) }));\\n      }\\n      return;\\n    }\\n\\n    if (req.method === \\\"POST\\\" && url.pathname === \\\"/clients/add\\\") {\\n      try {\\n        const bodyText = await readBody(req);\\n        const body = bodyText ? JSON.parse(bodyText) : {};\\n        const name = body.name as string | undefined;\\n\\n        if (!name || typeof name !== \\\"string\\\" || name.trim() === \\\"\\\") {\\n          res.writeHead(400, { \\\"Content-Type\\\": \\\"application/json\\\" });\\n          res.end(\\n            JSON.stringify({\\n              error:\\n                \\\"Missing required 'name' field (must be a non-empty string).\\\",\\n            }),\\n          );\\n          return;\\n        }\\n\\n        const clientId = name\\n          .toLowerCase()\\n          .replace(/\\\\s+/g, \\\"-\\\")\\n          .replace(/[^a-z0-9-]/g, \\\"\\\");\\n\\n        if (!clientId) {\\n          res.writeHead(400, { \\\"Content-Type\\\": \\\"application/json\\\" });\\n          res.end(\\n            JSON.stringify({\\n              error:\\n                \\\"Invalid client name. Must contain alphanumeric characters.\\\",\\n            }),\\n          );\\n          return;\\n        }\\n\\n        const state = deps.store.getState();\\n        const existingClients = state.clientIds || [];\\n        const existingClient = existingClients.find(\\n          (c: { clientId: string }) => c.clientId === clientId,\\n        );\\n\\n        if (existingClient) {\\n          res.writeHead(409, { \\\"Content-Type\\\": \\\"application/json\\\" });\\n          res.end(\\n            JSON.stringify({\\n              error: `Client with id '${clientId}' already exists.`,\\n            }),\\n          );\\n          return;\\n        }\\n\\n        const apiKey = generateApiKey();\\n        const newClient = {\\n          clientId,\\n          name: name.trim(),\\n          apiKey,\\n          createdAt: Date.now(),\\n        };\\n\\n        deps.store\\n          .getState()\\n          .setClientIds((prev: typeof existingClients) => [\\n            ...(prev || []),\\n            newClient,\\n          ]);\\n\\n        logger.log(`Added client '${name}' with id '${clientId}'`);\\n\\n        res.writeHead(200, { \\\"Content-Type\\\": \\\"application/json\\\" });\\n        res.end(\\n          JSON.stringify({\\n            output: {\\n              message: `Client '${name}' added successfully`,\\n              client: {\\n                id: clientId,\\n                name: name.trim(),\\n                apiKey,\\n                createdAt: newClient.createdAt,\\n              },\\n            },\\n          }),\\n        );\\n      } catch (error) {\\n        res.writeHead(500, { \\\"Content-Type\\\": \\\"application/json\\\" });\\n        res.end(JSON.stringify({ error: String(error) }));\\n      }\\n      return;\\n    }\\n\\n    if (req.method === \\\"GET\\\" && url.pathname === \\\"/usage\\\") {\",\"newText\":\"    if (req.method === \\\"GET\\\" && url.pathname === \\\"/providers\\\") {\\n      try {\\n        const state = deps.store.getState();\\n        const baseUrlsList: string[] = state.baseUrlsList || [];\\n        const disabledProviders: string[] = state.disabledProviders || [];\\n\\n        const providers = baseUrlsList.map((baseUrl, index) => ({\\n          index,\\n          baseUrl,\\n          disabled: disabledProviders.includes(baseUrl),\\n        }));\\n\\n        // Only count disabled providers that are actually in the current list\\n        // (filter out stale entries from previously disabled providers that are no longer present)\\n        const activeDisabledCount = providers.filter((p) => p.disabled).length;\\n\\n        res.writeHead(200, { \\\"Content-Type\\\": \\\"application/json\\\" });\\n        res.end(\\n          JSON.stringify({\\n            output: {\\n              providers,\\n              disabledCount: activeDisabledCount,\\n              totalCount: baseUrlsList.length,\\n            },\\n          }),\\n        );\\n      } catch (error) {\\n        res.writeHead(500, { \\\"Content-Type\\\": \\\"application/json\\\" });\\n        res.end(JSON.stringify({ error: String(error) }));\\n      }\\n      return;\\n    }\\n\\n    if (req.method === \\\"GET\\\" && url.pathname === \\\"/usage\\\") {\"}]}"
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "content": "Successfully replaced 1 block(s) in src/daemon/http/index.ts.",
+        "tool_call_id": "call_EglzoUme1aiONaMSKclxGeBq"
+      },
+      {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_g1XHlpB2isMNokaxpuBBk3HA",
+            "type": "function",
+            "function": {
+              "name": "bash",
+              "arguments": "{\"command\":\"rg -n \\\"req.method === \\\\\\\"POST\\\\\\\" && url.pathname === \\\\\\\"/providers/disable\\\\\\\"|req.method === \\\\\\\"POST\\\\\\\" && url.pathname === \\\\\\\"/providers/enable\\\\\\\"|req.method === \\\\\\\"GET\\\\\\\" && url.pathname === \\\\\\\"/clients\\\\\\\"|req.method === \\\\\\\"POST\\\\\\\" && url.pathname === \\\\\\\"/clients/add\\\\\\\"\\\" src/daemon/http/index.ts\",\"timeout\":20}"
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "content": "609:    if (req.method === \"POST\" && url.pathname === \"/providers/disable\") {\n664:    if (req.method === \"POST\" && url.pathname === \"/providers/enable\") {\n721:    if (req.method === \"GET\" && url.pathname === \"/clients\") {\n758:    if (req.method === \"POST\" && url.pathname === \"/clients/add\") {\n",
+        "tool_call_id": "call_g1XHlpB2isMNokaxpuBBk3HA"
+      },
+      {
+        "role": "assistant",
+        "content": "Done.\n\nRemoved duplicate route handlers from:\n- `src/daemon/http/index.ts`\n\nConfirmed only one copy remains for:\n- `POST /providers/disable`\n- `POST /providers/enable`\n- `GET /clients`\n- `POST /clients/add`\n\nWant me to do a quick pass now for any other dead/duplicate logic in that handler file?"
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "are all the endpoints in the http:/index.ts file ?"
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": "Yes — as far as actual daemon HTTP route handling goes, they’re all in:\n\n- `src/daemon/http/index.ts`\n\nWhat I checked:\n- searched `src/` for server/router patterns\n- found the request path matching only `src/daemon/http/index.ts`\n- other files like `src/cli.ts`, `src/cli-shared.ts`, `src/integrations/*.ts`, and `src/start-daemon.ts` are clients of that API, not additional in servers:\n\n- **Route definitions / request handling:** `src/daemon/http/index.ts`\n- **Server startup:** `src/daemon/index.ts`\n- **Clients calling those endpoints:** `src/cli.ts`, `src/cli-shared.ts`,\n\nSo `ations/*`, `src/start-daemon.ts`\n\nOne nuance:\n- the file also forwards unmatched `POST` requests to `routeRequestsToNodeResponse(...)`\n- so some supported API surface is partly determined by the SDK behavior, but thesrc/integr daemon that is still in `src/daemon/http/index.ts`\n\nIf you want, I can next extract **every endpoint into a clean method/path table** directly from that file."
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "the logRequest function in there isn't working actually, i wonder why, without making ANY changes to the code, analyze it"
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_s9hnIySr5UEeRVgHIkBg5sUD",
+            "type": "function",
+            "function": {
+              "name": "read",
+              "arguments": "{\"path\":\"src/daemon/http/index.ts\",\"offset\":200,\"limit\":120}"
+            }
+          },
+          {
+            "id": "call_Elw3ZZ3NoGVJvEUgbeFnoAyz",
+            "type": "function",
+            "function": {
+              "name": "read",
+              "arguments": "{\"path\":\"src/daemon/http/index.ts\",\"offset\":1180,\"limit\":80}"
+            }
+          },
+          {
+            "id": "call_EgQ5ImfTEeARDMQLyH0ZfsT3",
+            "type": "function",
+            "function": {
+              "name": "read",
+              "arguments": "{\"path\":\"src/utils/logger.ts\",\"offset\":1}"
+            }
+          },
+          {
+            "id": "call_zJIzUBNeUygpLRCktOG2mtHx",
+            "type": "function",
+            "function": {
+              "name": "read",
+              "arguments": "{\"path\":\"src/daemon/index.ts\",\"offset\":1,\"limit\":220}"
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "content": "\nfunction optionalStringField(\n  body: Record<string, unknown>,\n  field: string,\n): string | undefined {\n  const value = body[field];\n  return typeof value === \"string\" && value.trim() ? value.trim() : undefined;\n}\n\nfunction getCurrentMode(deps: DaemonDeps): ClientMode {\n  const stateMode = deps.store.getState()?.mode;\n  return stateMode || deps.mode || \"apikeys\";\n}\n\nasync function logRoutedRequest(payload: Record<string, unknown>): Promise<void> {\n  const requestDir = join(homedir(), \".routstrd\", \"request\");\n  const fileName = `${Date.now()}-${randomBytes(8).toString(\"hex\")}.json`;\n\n  await mkdir(requestDir, { recursive: true });\n  await writeFile(join(requestDir, fileName), JSON.stringify(payload, null, 2));\n}\n\nasync function buildStatusOutput(\n  deps: DaemonDeps,\n): Promise<WalletStatusOutput> {\n  const mode = getCurrentMode(deps);\n\n  try {\n    const walletState = await deps.walletClient.getStatus();\n    if (walletState !== \"UNLOCKED\") {\n      return {\n        daemon: \"running\",\n        wallet: \"error\",\n        walletState,\n        mode,\n        error: getWalletStateMessage(walletState),\n      };\n    }\n\n    const balances = await deps.walletAdapter.getBalances();\n    return {\n      daemon: \"running\",\n      wallet: \"connected\",\n      walletState,\n      balances,\n      mode,\n    };\n  } catch (error) {\n    return {\n      daemon: \"running\",\n      wallet: \"error\",\n      walletState: \"ERROR\",\n      mode,\n      error: toErrorMessage(error),\n    };\n  }\n}\n\nasync function buildWalletDetails(deps: DaemonDeps): Promise<{\n  state: CocodState;\n  ready: boolean;\n  balances?: Record<string, number>;\n  unit?: \"sat\";\n  activeMint?: string | null;\n}> {\n  const state = await deps.walletClient.getStatus();\n  if (state !== \"UNLOCKED\") {\n    return { state, ready: false };\n  }\n\n  const balances = await deps.walletAdapter.getBalances();\n  return {\n    state,\n    ready: true,\n    balances,\n    unit: \"sat\",\n    activeMint: deps.walletAdapter.getActiveMintUrl(),\n  };\n}\n\nexport function createDaemonRequestHandler(deps: {\n  provider: string | null;\n  server: { close(cb?: () => void): void };\n  store: any;\n  walletClient: CocodClient;\n  walletAdapter: any;\n  storageAdapter: any;\n  providerRegistry: any;\n  discoveryAdapter: any;\n  modelManager: any;\n  ensureProvidersBootstrapped: () => Promise<void>;\n  getRoutstr21Models: (forceRefresh?: boolean) => Promise<any[]>;\n  getModelProviders: (modelId: string) => Promise<any>;\n  mode?: \"xcashu\" | \"apikeys\";\n  usageTrackingDriver: UsageTrackingDriver;\n  providerManager: ProviderManager;\n}) {\n  return async function handler(req: IncomingMessage, res: ServerResponse) {\n    const host = req.headers.host || \"localhost\";\n    const url = new URL(req.url || \"/\", `http://${host}`);\n\n    if (req.method === \"GET\" && url.pathname === \"/health\") {\n      sendJson(res, 200, { ok: true });\n      return;\n    }\n\n    if (req.method === \"GET\" && url.pathname === \"/ping\") {\n      sendJson(res, 200, { output: \"pong\" });\n      return;\n    }\n\n    if (req.method === \"GET\" && url.pathname === \"/status\") {\n      const output = await buildStatusOutput(deps);\n      sendJson(res, 200, { output });\n      return;\n    }\n\n    if (req.method === \"GET\" && url.pathname === \"/wallet/status\") {\n      await respond(res, async () => ({\n        output: await buildWalletDetails(deps),\n\n[722 more lines in file. Use offset=320 to continue.]",
+        "tool_call_id": "call_s9hnIySr5UEeRVgHIkBg5sUD"
+      },
+      {
+        "role": "tool",
+        "content": "Offset 1180 is beyond end of file (1041 lines total)",
+        "tool_call_id": "call_Elw3ZZ3NoGVJvEUgbeFnoAyz"
+      },
+      {
+        "role": "tool",
+        "content": "import { appendFile, mkdir } from \"fs/promises\";\nimport { existsSync } from \"fs\";\nimport { join } from \"path\";\n\nconst HOME = process.env.HOME || process.env.USERPROFILE || \"\";\nconst LOG_DIR = process.env.ROUTSTRD_DIR || `${HOME}/.routstrd`;\nconst LOGS_DIR = join(LOG_DIR, \"logs\");\n\nfunction getLogFileForDate(date: Date = new Date()): string {\n  const year = date.getFullYear();\n  const month = String(date.getMonth() + 1).padStart(2, \"0\");\n  const day = String(date.getDate()).padStart(2, \"0\");\n  return join(LOGS_DIR, `${year}-${month}-${day}.log`);\n}\n\nasync function ensureLogDir() {\n  if (!existsSync(LOGS_DIR)) {\n    await mkdir(LOGS_DIR, { recursive: true });\n  }\n}\n\nasync function writeLog(level: string, ...args: unknown[]) {\n  await ensureLogDir();\n  const timestamp = new Date().toISOString();\n  const message = args\n    .map((a) => {\n      if (a instanceof Error) {\n        return `${a.message}${a.stack ? `\\n${a.stack}` : \"\"}`;\n      }\n      if (typeof a === \"object\") {\n        try {\n          return JSON.stringify(a);\n        } catch {\n          return String(a);\n        }\n      }\n      return String(a);\n    })\n    .join(\" \");\n  const line = `[${timestamp}] [${level}] ${message}\\n`;\n  const logFile = getLogFileForDate(new Date(timestamp));\n  try {\n    await appendFile(logFile, line);\n  } catch (error) {\n    console.error(\"Failed to write log:\", error);\n  }\n}\n\nexport const logger = {\n  log: (...args: unknown[]) => {\n    console.log(...args);\n    writeLog(\"INFO\", ...args);\n  },\n  debug: (...args: unknown[]) => {\n    writeLog(\"DEBUG\", ...args);\n  },\n  error: (...args: unknown[]) => {\n    console.error(...args);\n    writeLog(\"ERROR\", ...args);\n  },\n  info: (...args: unknown[]) => {\n    console.log(...args);\n    writeLog(\"INFO\", ...args);\n  },\n};\n",
+        "tool_call_id": "call_EgQ5ImfTEeARDMQLyH0ZfsT3"
+      },
+      {
+        "role": "tool",
+        "content": "import { createServer } from \"http\";\nimport { existsSync } from \"fs\";\nimport {\n  ModelManager,\n  ProviderManager,\n  createDiscoveryAdapterFromStore,\n  createProviderRegistryFromStore,\n  createStorageAdapterFromStore,\n  createSdkStore,\n} from \"@routstr/sdk\";\nimport { DB_PATH, SOCKET_PATH, PID_FILE } from \"../utils/config\";\nimport { logger } from \"../utils/logger\";\nimport { parseArgs } from \"./args\";\nimport { ensureDirs, loadDaemonConfig, saveDaemonConfig } from \"./config-store\";\nimport {\n  createBunSqliteDriver,\n  createBunSqliteUsageTrackingDriver,\n} from \"@routstr/sdk/storage\";\nimport { createWalletAdapter } from \"./wallet\";\nimport { createCocodClient } from \"./wallet/cocod-client\";\nimport { createModelService } from \"./models\";\nimport { createDaemonRequestHandler } from \"./http\";\nimport { runIntegrationsForClients } from \"../integrations\";\nimport { RoutstrClient } from \"@routstr/sdk\";\n\nasync function main(): Promise<void> {\n  const args = parseArgs(process.argv);\n  const config = await loadDaemonConfig();\n\n  const port = args.port;\n  const provider = args.provider || config.provider;\n\n  await ensureDirs();\n\n  const updatedConfig = { ...config, port, provider };\n  saveDaemonConfig(updatedConfig);\n\n  const sqliteDriver = await createBunSqliteDriver(DB_PATH);\n  const { store } = await createSdkStore({ driver: sqliteDriver });\n  const { Database } = await import(\"bun:sqlite\");\n  const usageTrackingDriver = createBunSqliteUsageTrackingDriver({\n    dbPath: DB_PATH,\n    sqlite: { Database },\n    legacyStorageDriver: sqliteDriver,\n  });\n\n  const discoveryAdapter = createDiscoveryAdapterFromStore(store);\n  const providerRegistry = createProviderRegistryFromStore(store);\n  const storageAdapter = createStorageAdapterFromStore(store);\n  const modelManager = new ModelManager(discoveryAdapter);\n  // Create shared ProviderManager for consistent failure tracking across all requests\n  const providerManager = new ProviderManager(providerRegistry, store);\n  const { ensureProvidersBootstrapped, getRoutstr21Models, getModelProviders } =\n    createModelService(modelManager);\n\n  const walletClient = createCocodClient({ cocodPath: config.cocodPath });\n  const walletAdapter = await createWalletAdapter({\n    cocodPath: config.cocodPath,\n    walletClient,\n  });\n\n  const server = createServer();\n  server.on(\n    \"request\",\n    createDaemonRequestHandler({\n      provider,\n      server,\n      store,\n      walletClient,\n      walletAdapter,\n      storageAdapter,\n      providerRegistry,\n      discoveryAdapter,\n      modelManager,\n      ensureProvidersBootstrapped,\n      getRoutstr21Models,\n      getModelProviders,\n      mode: config.mode || \"apikeys\",\n      usageTrackingDriver,\n      providerManager,\n    }),\n  );\n\n  Bun.write(PID_FILE, String(process.pid));\n\n  try {\n    if (existsSync(SOCKET_PATH)) {\n      Bun.spawn([\"rm\", SOCKET_PATH]);\n    }\n  } catch {\n    // Ignore\n  }\n\n  const REFRESH_INTERVAL_MS = 21 * 60 * 1000; // 21 mins\n\n  // Recurring job to refresh routstr21 models\n  let refreshInterval: ReturnType<typeof setInterval> | null = null;\n\n  const startModelRefreshJob = () => {\n    logger.log(\n      `Starting recurring model refresh job (every ${REFRESH_INTERVAL_MS / 1000 / 60 / 60} hours)`,\n    );\n\n    refreshInterval = setInterval(async () => {\n      logger.log(\"Running scheduled model refresh...\");\n      try {\n        await getRoutstr21Models(true);\n        logger.log(\"Scheduled model refresh completed successfully.\");\n\n        // Refresh integrations for all registered clients\n        const state = store.getState();\n        const clientIds = state.clientIds || [];\n        if (clientIds.length > 0) {\n          logger.log(`Refreshing ${clientIds.length} client integration(s)...`);\n          await runIntegrationsForClients(clientIds, updatedConfig, store);\n          logger.log(\"Client integrations refreshed.\");\n        }\n      } catch (error) {\n        logger.error(\"Scheduled model refresh failed:\", error);\n      }\n    }, REFRESH_INTERVAL_MS);\n  };\n\n  const stopModelRefreshJob = () => {\n    if (refreshInterval) {\n      clearInterval(refreshInterval);\n      refreshInterval = null;\n      logger.log(\"Stopped recurring model refresh job.\");\n    }\n  };\n\n  // Recurring job to refund pending tokens every 10 minutes\n  const REFUND_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes\n  let refundInterval: ReturnType<typeof setInterval> | null = null;\n\n  const startRefundJob = async () => {\n    logger.log(\n      `Starting recurring refund job (every ${REFUND_INTERVAL_MS / 1000 / 60} minutes)`,\n    );\n\n    refundInterval = setInterval(async () => {\n      logger.log(\"Running scheduled refund...\");\n      try {\n        const state = store.getState() as any;\n        const pendingDistribution = (state.cachedTokens || []).map(\n          (t: { baseUrl: string; balance?: number }) => ({\n            baseUrl: t.baseUrl,\n            amount: t.balance || 0,\n          }),\n        );\n        const apiKeysStored = (state.apiKeys || []).map(\n          (k: { baseUrl: string; balance?: number }) => ({\n            baseUrl: k.baseUrl,\n            amount: k.balance || 0,\n          }),\n        );\n\n        if (pendingDistribution.length === 0 && apiKeysStored.length === 0) {\n          logger.log(\"No pending tokens to refund.\");\n          return;\n        }\n\n        const mintUrl = walletAdapter.getActiveMintUrl();\n        if (!mintUrl) {\n          logger.log(\"No active mint URL for refund.\");\n          return;\n        }\n\n        const client = new RoutstrClient(\n          walletAdapter,\n          storageAdapter,\n          providerRegistry,\n          \"min\",\n          \"apikeys\",\n        );\n\n        const spender = client.getCashuSpender();\n        const results = await spender.refundProviders(mintUrl);\n\n        const successCount = results.filter(\n          (r: { success: boolean }) => r.success,\n        ).length;\n        logger.log(\n          `Scheduled refund completed: ${successCount}/${results.length} providers refunded.`,\n        );\n      } catch (error) {\n        logger.error(\"Scheduled refund failed:\", error);\n      }\n    }, REFUND_INTERVAL_MS);\n  };\n\n  const stopRefundJob = () => {\n    if (refundInterval) {\n      clearInterval(refundInterval);\n      refundInterval = null;\n      logger.log(\"Stopped recurring refund job.\");\n    }\n  };\n\n  server.on(\"close\", () => {\n    stopModelRefreshJob();\n    stopRefundJob();\n  });\n\n  server.listen(port, async () => {\n    logger.log(`Routstr daemon listening on http://localhost:${port}`);\n\n    // Start the recurring model refresh job after initial bootstrap\n    void ensureProvidersBootstrapped()\n      .then(() => {\n        startModelRefreshJob();\n        // startRefundJob(); DISABLING refund job for now.\n        // Run an immediate refresh to populate models right away\n        logger.log(\"Running initial model refresh...\");\n        return getRoutstr21Models(true);\n      })\n      .then(async () => {\n        logger.log(\"Initial model refresh completed.\");\n        // Refresh integrations for all registered clients after initial bootstrap\n        const state = store.getState();\n\n[23 more lines in file. Use offset=221 to continue.]",
+        "tool_call_id": "call_zJIzUBNeUygpLRCktOG2mtHx"
+      },
+      {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_c566RPErYojOkVsIqd4NsJU5",
+            "type": "function",
+            "function": {
+              "name": "bash",
+              "arguments": "{\"command\":\"rg -n \\\"logRoutedRequest\\\\(|requestDir|\\\\.routstrd\\\\\\\", \\\\\\\"request\\\\\\\"|ROUTSTRD_DIR|ensureDirs\\\\(|mkdir\\\\(\\\" src\",\"timeout\":20}"
+            }
+          },
+          {
+            "id": "call_0pR0hw4KHlVkY6egbNMfmeJA",
+            "type": "function",
+            "function": {
+              "name": "read",
+              "arguments": "{\"path\":\"src/daemon/config-store.ts\",\"offset\":1,\"limit\":220}"
+            }
+          },
+          {
+            "id": "call_SPKaKn0eXMlG8uN4r99iSje1",
+            "type": "function",
+            "function": {
+              "name": "read",
+              "arguments": "{\"path\":\"src/utils/config.ts\",\"offset\":1,\"limit\":220}"
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "content": "src/daemon/config-store.ts:13:export async function ensureDirs(): Promise<void> {\nsrc/daemon/config-store.ts:15:    await mkdir(CONFIG_DIR, { recursive: true });\nsrc/daemon/config-store.ts:16:    await mkdir(REQUESTS_DIR, { recursive: true });\nsrc/daemon/index.ts:33:  await ensureDirs();\nsrc/utils/config.ts:3:export const CONFIG_DIR = process.env.ROUTSTRD_DIR || `${HOME}/.routstrd`;\nsrc/utils/logger.ts:6:const LOG_DIR = process.env.ROUTSTRD_DIR || `${HOME}/.routstrd`;\nsrc/utils/logger.ts:18:    await mkdir(LOGS_DIR, { recursive: true });\nsrc/daemon/http/index.ts:214:async function logRoutedRequest(payload: Record<string, unknown>): Promise<void> {\nsrc/daemon/http/index.ts:215:  const requestDir = join(homedir(), \".routstrd\", \"request\");\nsrc/daemon/http/index.ts:218:  await mkdir(requestDir, { recursive: true });\nsrc/daemon/http/index.ts:219:  await writeFile(join(requestDir, fileName), JSON.stringify(payload, null, 2));\nsrc/daemon/http/index.ts:982:      await logRoutedRequest({\n",
+        "tool_call_id": "call_c566RPErYojOkVsIqd4NsJU5"
+      },
+      {
+        "role": "tool",
+        "content": "import { mkdir } from \"fs/promises\";\nimport { existsSync } from \"fs\";\nimport {\n  CONFIG_DIR,\n  CONFIG_FILE,\n  DEFAULT_CONFIG,\n  type RoutstrdConfig,\n} from \"../utils/config\";\nimport { logger } from \"../utils/logger\";\n\nexport const REQUESTS_DIR = `${CONFIG_DIR}/requests`;\n\nexport async function ensureDirs(): Promise<void> {\n  try {\n    await mkdir(CONFIG_DIR, { recursive: true });\n    await mkdir(REQUESTS_DIR, { recursive: true });\n  } catch {\n    // Directory may already exist\n  }\n}\n\nexport async function loadDaemonConfig(): Promise<RoutstrdConfig> {\n  try {\n    if (existsSync(CONFIG_FILE)) {\n      const content = await Bun.file(CONFIG_FILE).text();\n      return { ...DEFAULT_CONFIG, ...JSON.parse(content) };\n    }\n  } catch (error) {\n    logger.error(\"Failed to load config:\", error);\n  }\n  return DEFAULT_CONFIG;\n}\n\nexport function saveDaemonConfig(config: RoutstrdConfig): void {\n  Bun.write(CONFIG_FILE, JSON.stringify(config, null, 2));\n}\n",
+        "tool_call_id": "call_0pR0hw4KHlVkY6egbNMfmeJA"
+      },
+      {
+        "role": "tool",
+        "content": "const HOME = process.env.HOME || process.env.USERPROFILE || \"\";\n\nexport const CONFIG_DIR = process.env.ROUTSTRD_DIR || `${HOME}/.routstrd`;\nexport const SOCKET_PATH = process.env.ROUTSTRD_SOCKET || `${CONFIG_DIR}/routstrd.sock`;\nexport const PID_FILE = process.env.ROUTSTRD_PID || `${CONFIG_DIR}/routstrd.pid`;\nexport const DB_PATH = `${CONFIG_DIR}/routstr.db`;\nexport const CONFIG_FILE = `${CONFIG_DIR}/config.json`;\nexport const LOGS_DIR = `${CONFIG_DIR}/logs`;\n\nexport interface RoutstrdConfig {\n  port: number;\n  provider: string | null;\n  cocodPath: string | null;\n  mode?: \"xcashu\" | \"apikeys\";\n}\n\nexport const DEFAULT_CONFIG: RoutstrdConfig = {\n  port: 8008,\n  provider: null,\n  cocodPath: null,\n  mode: \"apikeys\",\n};\n",
+        "tool_call_id": "call_SPKaKn0eXMlG8uN4r99iSje1"
+      }
+    ],
+    "stream": true,
+    "stream_options": {
+      "include_usage": true
+    },
+    "store": false,
+    "max_completion_tokens": 16384,
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "read",
+          "description": "Read the contents of a file. Supports text files and images (jpg, png, gif, webp). Images are sent as attachments. For text files, output is truncated to 2000 lines or 50KB (whichever is hit first). Use offset/limit for large files. When you need the full file, continue with offset until complete.",
+          "parameters": {
+            "type": "object",
+            "required": [
+              "path"
+            ],
+            "properties": {
+              "path": {
+                "description": "Path to the file to read (relative or absolute)",
+                "type": "string"
+              },
+              "offset": {
+                "description": "Line number to start reading from (1-indexed)",
+                "type": "number"
+              },
+              "limit": {
+                "description": "Maximum number of lines to read",
+                "type": "number"
+              }
+            }
+          },
+          "strict": false
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "bash",
+          "description": "Execute a bash command in the current working directory. Returns stdout and stderr. Output is truncated to last 2000 lines or 50KB (whichever is hit first). If truncated, full output is saved to a temp file. Optionally provide a timeout in seconds.",
+          "parameters": {
+            "type": "object",
+            "required": [
+              "command"
+            ],
+            "properties": {
+              "command": {
+                "description": "Bash command to execute",
+                "type": "string"
+              },
+              "timeout": {
+                "description": "Timeout in seconds (optional, no default timeout)",
+                "type": "number"
+              }
+            }
+          },
+          "strict": false
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "edit",
+          "description": "Edit a single file using exact text replacement. Every edits[].oldText must match a unique, non-overlapping region of the original file. If two changes affect the same block or nearby lines, merge them into one edit instead of emitting overlapping edits. Do not include large unchanged regions just to connect distant changes.",
+          "parameters": {
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "path",
+              "edits"
+            ],
+            "properties": {
+              "path": {
+                "description": "Path to the file to edit (relative or absolute)",
+                "type": "string"
+              },
+              "edits": {
+                "description": "One or more targeted replacements. Each edit is matched against the original file, not incrementally. Do not include overlapping or nested edits. If two changes touch the same block or nearby lines, merge them into one edit instead.",
+                "type": "array",
+                "items": {
+                  "additionalProperties": false,
+                  "type": "object",
+                  "required": [
+                    "oldText",
+                    "newText"
+                  ],
+                  "properties": {
+                    "oldText": {
+                      "description": "Exact text for one targeted replacement. It must be unique in the original file and must not overlap with any other edits[].oldText in the same call.",
+                      "type": "string"
+                    },
+                    "newText": {
+                      "description": "Replacement text for this targeted edit.",
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "strict": false
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "write",
+          "description": "Write content to a file. Creates the file if it doesn't exist, overwrites if it does. Automatically creates parent directories.",
+          "parameters": {
+            "type": "object",
+            "required": [
+              "path",
+              "content"
+            ],
+            "properties": {
+              "path": {
+                "description": "Path to the file to write (relative or absolute)",
+                "type": "string"
+              },
+              "content": {
+                "description": "Content to write to the file",
+                "type": "string"
+              }
+            }
+          },
+          "strict": false
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "subagent",
+          "description": "Delegate tasks to specialized subagents with isolated context. Modes: single (agent + task), parallel (tasks array), chain (sequential with {previous} placeholder). Default agent scope is \"user\" (from ~/.pi/agent/agents). To enable project-local agents in .pi/agents, set agentScope: \"both\" (or \"project\").",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "agent": {
+                "description": "Name of the agent to invoke (for single mode)",
+                "type": "string"
+              },
+              "task": {
+                "description": "Task to delegate (for single mode)",
+                "type": "string"
+              },
+              "tasks": {
+                "description": "Array of {agent, task} for parallel execution",
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "agent",
+                    "task"
+                  ],
+                  "properties": {
+                    "agent": {
+                      "description": "Name of the agent to invoke",
+                      "type": "string"
+                    },
+                    "task": {
+                      "description": "Task to delegate to the agent",
+                      "type": "string"
+                    },
+                    "cwd": {
+                      "description": "Working directory for the agent process",
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "chain": {
+                "description": "Array of {agent, task} for sequential execution",
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "agent",
+                    "task"
+                  ],
+                  "properties": {
+                    "agent": {
+                      "description": "Name of the agent to invoke",
+                      "type": "string"
+                    },
+                    "task": {
+                      "description": "Task with optional {previous} placeholder for prior output",
+                      "type": "string"
+                    },
+                    "cwd": {
+                      "description": "Working directory for the agent process",
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "agentScope": {
+                "type": "string",
+                "enum": [
+                  "user",
+                  "project",
+                  "both"
+                ],
+                "description": "Which agent directories to use. Default: \"user\". Use \"both\" to include project-local agents.",
+                "default": "user"
+              },
+              "confirmProjectAgents": {
+                "description": "Prompt before running project-local agents. Default: true.",
+                "default": true,
+                "type": "boolean"
+              },
+              "cwd": {
+                "description": "Working directory for the agent process (single mode)",
+                "type": "string"
+              }
+            }
+          },
+          "strict": false
+        }
+      }
+    ]
+  }
+}
