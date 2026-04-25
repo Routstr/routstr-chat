@@ -782,13 +782,17 @@ export class RoutstrClient {
           currentBalanceInfo.unit === "msat"
             ? currentBalanceInfo.amount / 1000
             : currentBalanceInfo.amount;
+        const reservedBalance =
+          currentBalanceInfo.unit === "msat"
+            ? (currentBalanceInfo.reserved ?? 0) / 1000
+            : (currentBalanceInfo.reserved ?? 0);
 
-        const shortfall = Math.max(0, params.requiredSats - currentBalance);
+        const shortfall = Math.max(0, params.requiredSats - currentBalance + reservedBalance);
         topupAmount = shortfall > (0.21 * params.requiredSats) ? shortfall : (0.21 * params.requiredSats);
 
         this._log(
           "DEBUG",
-          `The shortfall is: ${shortfall}. requiredSats: ${params.requiredSats}. Current Balance: ${currentBalance} `
+          `The shortfall is: ${shortfall}. requiredSats: ${params.requiredSats}. Current Balance: ${currentBalance}. Reserved Balance: ${reservedBalance}. Available Balance: ${currentBalance - reservedBalance}`
         );
       } catch (e) {
         this._log(
