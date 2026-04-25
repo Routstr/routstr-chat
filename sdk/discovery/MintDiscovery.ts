@@ -201,6 +201,7 @@ export class MintDiscovery {
     if (!(error instanceof Error)) return false;
     const msg = error.message.toLowerCase();
     if (msg.includes("fetch failed")) return true;
+    if (msg.includes("429")) return true;
     if (msg.includes("502")) return true;
     if (msg.includes("503")) return true;
     if (msg.includes("504")) return true;

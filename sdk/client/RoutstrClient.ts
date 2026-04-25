@@ -960,6 +960,7 @@ export class RoutstrClient {
         status === 403 ||
         status === 413 ||
         status === 400 ||
+        status === 429 ||
         status === 500 ||
         status === 502 ||
         status === 503 ||
@@ -969,7 +970,7 @@ export class RoutstrClient {
     ) {
       this._log(
         "DEBUG",
-        `[RoutstrClient] _handleErrorResponse: Status ${status} (auth/server error), attempting refund for ${baseUrl}, mode=${this.mode}`
+        `[RoutstrClient] _handleErrorResponse: Status ${status} (${status === 429 ? "rate limited" : "auth/server error"}), attempting refund for ${baseUrl}, mode=${this.mode}`
       );
       if (this.mode === "apikeys") {
         this._log(
