@@ -267,7 +267,8 @@ export class BalanceManager {
       }
 
       if (fetchResult.error === "No balance to refund") {
-        return { success: false, message: "No balance to refund" };
+        this.storageAdapter.removeApiKey(baseUrl);
+        return { success: true, message: "No balance to refund, key cleaned up" };
       }
 
       const receiveResult = await this.cashuSpender.receiveToken(

@@ -629,25 +629,66 @@ export class CashuSpender {
 
     const apiKeyDistribution = this.storageAdapter.getApiKeyDistribution();
 
+    // Refresh balances from providers before refunding
     for (const apiKeyEntry of apiKeyDistribution) {
       const apiKeyEntryFull = this.storageAdapter.getApiKey(
         apiKeyEntry.baseUrl
       );
       if (apiKeyEntryFull && this.balanceManager) {
+        try {
+          const balanceResult = await this.balanceManager.getTokenBalance(
+            apiKeyEntryFull.key,
+            apiKeyEntry.baseUrl
+          );
+
+          if (balanceResult.isInvalidApiKey) {
+            // Key is invalid/expired on the provider side — clean it up
+            this.storageAdapter.removeApiKey(apiKeyEntry.baseUrl);
+            results.push({
+              baseUrl: apiKeyEntry.baseUrl,
+              success: true,
+            });
+            continue;
+          }
+
+          if (balanceResult.amount >= 0) {
+            const balanceSat = balanceResult.unit === "msat"
+              ? Math.floor(balanceResult.amount / 1000)
+              : balanceResult.amount;
+            this.storageAdapter.updateApiKeyBalance(
+              apiKeyEntry.baseUrl,
+              balanceSat
+            );
+          }
+        } catch {
+          // Balance check failed — proceed with stale local balance
+        }
+
+        // Re-read the entry after balance refresh (may have been removed above)
+        const refreshedEntry = this.storageAdapter.getApiKey(
+          apiKeyEntry.baseUrl
+        );
+        if (!refreshedEntry) continue;
+
         const refundResult = await this.balanceManager.refundApiKey({
           mintUrl,
           baseUrl: apiKeyEntry.baseUrl,
-          apiKey: apiKeyEntryFull.key,
+          apiKey: refreshedEntry.key,
           forceRefund,
         });
 
         if (refundResult.success) {
           this.storageAdapter.removeApiKey(apiKeyEntry.baseUrl);
         } else {
-          this.storageAdapter.updateApiKeyBalance(
-            apiKeyEntry.baseUrl,
-            apiKeyEntry.amount
-          ); // just so that we only try to refund every 5 mins.
+          const currentEntry = this.storageAdapter.getApiKey(
+            apiKeyEntry.baseUrl
+          );
+          if (currentEntry) {
+            this.storageAdapter.updateApiKeyBalance(
+              apiKeyEntry.baseUrl,
+              currentEntry.balance
+            ); // update lastUsed so we only try to refund every 5 mins.
+          }
         }
 
         results.push({

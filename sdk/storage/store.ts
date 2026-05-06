@@ -607,10 +607,8 @@ export const createStorageAdapterFromStore = (
 
     for (const entry of apiKeys) {
       const sum = entry.balance || 0;
-      if (sum > 0) {
-        distributionMap[entry.baseUrl] =
-          (distributionMap[entry.baseUrl] || 0) + sum;
-      }
+      distributionMap[entry.baseUrl] =
+        (distributionMap[entry.baseUrl] || 0) + sum;
     }
 
     return Object.entries(distributionMap)
