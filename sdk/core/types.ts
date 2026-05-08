@@ -3,6 +3,35 @@
  * These types are shared across wallet and client modules
  */
 
+export interface SdkLogger {
+  log(...args: unknown[]): void;
+  warn(...args: unknown[]): void;
+  error(...args: unknown[]): void;
+  debug(...args: unknown[]): void;
+  child(prefix: string): SdkLogger;
+}
+
+function makeConsoleLogger(prefix?: string): SdkLogger {
+  const fmt = (args: unknown[]) => (prefix ? [prefix, ...args] : args);
+  return {
+    log: (...args) => console.log(...fmt(args)),
+    warn: (...args) => console.warn(...fmt(args)),
+    error: (...args) => console.error(...fmt(args)),
+    debug: (...args) => console.log(...fmt(args)),
+    child: (p) => makeConsoleLogger(prefix ? `${prefix}:${p}` : p),
+  };
+}
+
+export const consoleLogger: SdkLogger = makeConsoleLogger();
+
+export const noopLogger: SdkLogger = {
+  log: () => {},
+  warn: () => {},
+  error: () => {},
+  debug: () => {},
+  child: () => noopLogger,
+};
+
 export interface MessageContentType {
   type: "text" | "image_url" | "file";
   text?: string;

@@ -4,6 +4,8 @@
  */
 
 import type { DiscoveryAdapter, ProviderInfo } from "./interfaces";
+import type { SdkLogger } from "../core/types";
+import { consoleLogger } from "../core/types";
 
 /**
  * Configuration for MintDiscovery
@@ -11,6 +13,8 @@ import type { DiscoveryAdapter, ProviderInfo } from "./interfaces";
 export interface MintDiscoveryConfig {
   /** Cache TTL in milliseconds (default: 21 minutes) */
   cacheTTL?: number;
+  /** Optional injectable logger */
+  logger?: SdkLogger;
 }
 
 /**
@@ -19,12 +23,14 @@ export interface MintDiscoveryConfig {
  */
 export class MintDiscovery {
   private readonly cacheTTL: number;
+  private readonly logger: SdkLogger;
 
   constructor(
     private adapter: DiscoveryAdapter,
     config: MintDiscoveryConfig = {}
   ) {
     this.cacheTTL = config.cacheTTL || 21 * 60 * 1000; // 21 minutes
+    this.logger = (config.logger ?? consoleLogger).child("MintDiscovery");
   }
 
   /**
@@ -96,9 +102,9 @@ export class MintDiscovery {
       } catch (error) {
         this.adapter.setProviderLastUpdate(base, Date.now());
         if (this.isProviderDownError(error)) {
-          console.warn(`Provider ${base} is down right now.`);
+          this.logger.warn(`Provider ${base} is down right now.`);
         } else {
-          console.warn(`Failed to fetch mints from ${base}:`, error);
+          this.logger.warn(`Failed to fetch mints from ${base}:`, error);
         }
         return { success: false, base, mints: [], info: null };
       }
@@ -116,8 +122,7 @@ export class MintDiscovery {
           infoFromAllProviders[base] = info;
         }
       } else {
-        // Log but don't throw - continue with partial results
-        console.error("Mint discovery error:", result.reason);
+        this.logger.error("Mint discovery error:", result.reason);
       }
     }
 
@@ -126,7 +131,7 @@ export class MintDiscovery {
       this.adapter.setCachedMints(mintsFromAllProviders);
       this.adapter.setCachedProviderInfo(infoFromAllProviders);
     } catch (error) {
-      console.error("Error caching mint discovery results:", error);
+      this.logger.error("Error caching mint discovery results:", error);
     }
 
     return {

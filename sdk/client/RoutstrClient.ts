@@ -11,8 +11,9 @@
  * Extracted from utils/apiUtils.ts
  */
 
-import type { Message, TransactionHistory } from "../core/types";
+import type { Message, TransactionHistory, SdkLogger } from "../core/types";
 import type { Model } from "../core/types";
+import { consoleLogger } from "../core/types";
 import type {
   WalletAdapter,
   StorageAdapter,
@@ -79,6 +80,8 @@ export interface RoutstrClientConfig {
   sdkStore?: SdkStore;
   /** Optional: shared ProviderManager instance for consistent failure tracking across requests */
   providerManager?: ProviderManager;
+  /** Optional: injectable logger (defaults to consoleLogger) */
+  logger?: SdkLogger;
 }
 
 export class RoutstrClient {
@@ -91,6 +94,7 @@ export class RoutstrClient {
   private debugLevel: DebugLevel = "WARN";
   private usageTrackingDriver?: UsageTrackingDriver;
   private sdkStore?: SdkStore;
+  private logger: SdkLogger;
 
   constructor(
     private walletAdapter: WalletAdapter,
@@ -100,6 +104,7 @@ export class RoutstrClient {
     mode: RoutstrClientMode = "xcashu",
     options: RoutstrClientConfig = {}
   ) {
+    this.logger = (options.logger ?? consoleLogger).child("RoutstrClient");
     this.balanceManager = new BalanceManager(
       walletAdapter,
       storageAdapter,
@@ -119,7 +124,7 @@ export class RoutstrClient {
     // Use provided ProviderManager or create a new one
     this.providerManager =
       options.providerManager ??
-      new ProviderManager(providerRegistry, this.sdkStore);
+      new ProviderManager(providerRegistry, this.sdkStore, this.logger);
   }
 
   /**
@@ -147,13 +152,13 @@ export class RoutstrClient {
     if (levelPriority[level] >= levelPriority[this.debugLevel]) {
       switch (level) {
         case "DEBUG":
-          console.log(...args);
+          this.logger.log(...args);
           break;
         case "WARN":
-          console.warn(...args);
+          this.logger.warn(...args);
           break;
         case "ERROR":
-          console.error(...args);
+          this.logger.error(...args);
           break;
       }
     }

@@ -1,4 +1,6 @@
 import type { StorageDriver } from "../types";
+import type { SdkLogger } from "../../core/types";
+import { consoleLogger } from "../../core/types";
 
 type BetterSqlite3Database = {
   prepare: (sql: string) => {
@@ -113,8 +115,10 @@ export const createSqliteDriver = (
 // Bun-specific SQLite driver - requires bun:sqlite at runtime
 // This function is only meant to be used in Bun environments
 export async function createBunSqliteDriver(
-  dbPath: string
+  dbPath: string,
+  options?: { logger?: SdkLogger }
 ): Promise<StorageDriver> {
+  const logger = (options?.logger ?? consoleLogger).child("BunSqliteDriver");
   // @ts-ignore - bun:sqlite is only available at runtime in Bun environments
   // eslint-disable-next-line @typescript-eslint/ban-ts-comment
   // @ts-ignore
@@ -144,7 +148,7 @@ export async function createBunSqliteDriver(
           throw parseError;
         }
       } catch (error) {
-        console.error(`SQLite getItem failed for key "${key}":`, error);
+        logger.error(`getItem failed for key "${key}":`, error);
         return defaultValue;
       }
     },
@@ -154,14 +158,14 @@ export async function createBunSqliteDriver(
           "INSERT INTO sdk_storage (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
         ).run(key, JSON.stringify(value));
       } catch (error) {
-        console.error(`SQLite setItem failed for key "${key}":`, error);
+        logger.error(`setItem failed for key "${key}":`, error);
       }
     },
     async removeItem(key: string): Promise<void> {
       try {
         db.query("DELETE FROM sdk_storage WHERE key = ?").run(key);
       } catch (error) {
-        console.error(`SQLite removeItem failed for key "${key}":`, error);
+        logger.error(`removeItem failed for key "${key}":`, error);
       }
     },
   };

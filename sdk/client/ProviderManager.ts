@@ -11,7 +11,8 @@
  */
 
 import type { ProviderRegistry } from "../wallet/interfaces";
-import type { Model } from "../core/types";
+import type { Model, SdkLogger } from "../core/types";
+import { consoleLogger } from "../core/types";
 import type { SdkStore } from "../storage/store";
 import { isOnionUrl, isTorContext } from "../utils/torUtils";
 
@@ -193,12 +194,15 @@ export class ProviderManager {
   private store: SdkStore | null = null;
   /** Instance ID for debugging */
   private readonly instanceId: string;
+  private readonly logger: SdkLogger;
 
   constructor(
     private providerRegistry: ProviderRegistry,
-    store?: SdkStore
+    store?: SdkStore,
+    logger?: SdkLogger
   ) {
     this.instanceId = `pm_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    this.logger = (logger ?? consoleLogger).child(`ProviderManager:${this.instanceId}`);
     if (store) {
       this.store = store;
       this.hydrateFromStore();
@@ -226,10 +230,7 @@ export class ProviderManager {
       )
       .map((entry) => [entry.baseUrl, entry.timestamp] as [string, number]);
 
-    console.log(`[ProviderManager:${this.instanceId}] Hydrated from store:`);
-    console.log(`  failedProviders: ${this.failedProviders.size}`);
-    console.log(`  lastFailed: ${this.lastFailed.size}`);
-    console.log(`  providersOnCooldown: ${this.providersOnCoolDown.length}`);
+    this.logger.log(`Hydrated from store: failedProviders=${this.failedProviders.size} lastFailed=${this.lastFailed.size} providersOnCooldown=${this.providersOnCoolDown.length}`);
   }
 
   /**
@@ -251,9 +252,7 @@ export class ProviderManager {
         const age = now - timestamp;
         const isExpired = age >= ProviderManager.COOLDOWN_DURATION_MS;
         if (isExpired) {
-          console.log(
-            `[cleanupExpiredCooldowns:${this.instanceId}] Removing expired cooldown for ${url} (age: ${age}ms, cooldown: ${ProviderManager.COOLDOWN_DURATION_MS}ms)`
-          );
+          this.logger.log(`Removing expired cooldown for ${url} (age: ${age}ms)`);
           // Also remove from failedProviders so the provider can be retried
           this.failedProviders.delete(url);
           // Persist to store
@@ -266,9 +265,7 @@ export class ProviderManager {
     );
     const after = this.providersOnCoolDown.length;
     if (before !== after) {
-      console.log(
-        `[cleanupExpiredCooldowns:${this.instanceId}] Cleaned up ${before - after} expired cooldown(s), ${after} remaining`
-      );
+      this.logger.log(`Cleaned up ${before - after} expired cooldown(s), ${after} remaining`);
     }
   }
 
@@ -330,25 +327,11 @@ export class ProviderManager {
     const now = Date.now();
     const lastFailure = this.lastFailed.get(baseUrl);
 
-    console.log(`[markFailed:${this.instanceId}] baseUrl: ${baseUrl}`);
-    console.log(
-      `[markFailed:${this.instanceId}] lastFailure from map: ${lastFailure}`
-    );
-    console.log(
-      `[markFailed:${this.instanceId}] current timestamp (now): ${now}`
-    );
-    console.log(
-      `[markFailed:${this.instanceId}] COOLDOWN_DURATION_MS: ${ProviderManager.COOLDOWN_DURATION_MS}`
-    );
+    this.logger.log(`markFailed: ${baseUrl} lastFailure=${lastFailure} now=${now}`);
 
     if (lastFailure !== undefined) {
       const timeSinceLastFailure = now - lastFailure;
-      console.log(
-        `[markFailed:${this.instanceId}] timeSinceLastFailure: ${timeSinceLastFailure}ms`
-      );
-      console.log(
-        `[markFailed:${this.instanceId}] isWithinCooldownWindow: ${timeSinceLastFailure < ProviderManager.COOLDOWN_DURATION_MS}`
-      );
+      this.logger.log(`markFailed: timeSinceLastFailure=${timeSinceLastFailure}ms withinCooldown=${timeSinceLastFailure < ProviderManager.COOLDOWN_DURATION_MS}`);
     }
 
     // Track this failure in memory
@@ -361,12 +344,7 @@ export class ProviderManager {
       this.store.getState().addFailedProvider(baseUrl);
     }
 
-    console.log(
-      `[markFailed:${this.instanceId}] Updated lastFailed map for ${baseUrl} to ${now}`
-    );
-    console.log(
-      `[markFailed:${this.instanceId}] failedProviders set size: ${this.failedProviders.size}`
-    );
+    this.logger.log(`markFailed: updated ${baseUrl} to ${now}, failedProviders=${this.failedProviders.size}`);
 
     // Check if this is a second failure within the cooldown window
     if (
@@ -374,32 +352,22 @@ export class ProviderManager {
       now - lastFailure < ProviderManager.COOLDOWN_DURATION_MS
     ) {
       // Second failure within 5 minutes - add to cooldown
-      console.log(
-        `[markFailed:${this.instanceId}] Second failure detected within cooldown window for ${baseUrl}`
-      );
+      this.logger.log(`markFailed: second failure within cooldown window for ${baseUrl}`);
       if (!this.isOnCooldown(baseUrl)) {
         this.providersOnCoolDown.push([baseUrl, now]);
         // Persist to store
         if (this.store) {
           this.store.getState().addProviderOnCooldown(baseUrl, now);
         }
-        console.log(
-          `[markFailed:${this.instanceId}] Provider ${baseUrl} added to cooldown after second failure within 5 minutes`
-        );
+        this.logger.log(`markFailed: ${baseUrl} added to cooldown`);
       } else {
-        console.log(
-          `[markFailed:${this.instanceId}] Provider ${baseUrl} is already on cooldown`
-        );
+        this.logger.log(`markFailed: ${baseUrl} already on cooldown`);
       }
     } else {
       if (lastFailure === undefined) {
-        console.log(
-          `[markFailed:${this.instanceId}] First failure for ${baseUrl} - not adding to cooldown yet`
-        );
+        this.logger.log(`markFailed: first failure for ${baseUrl}`);
       } else {
-        console.log(
-          `[markFailed:${this.instanceId}] Failure outside cooldown window for ${baseUrl} (timeSinceLastFailure: ${now - lastFailure}ms)`
-        );
+        this.logger.log(`markFailed: failure outside cooldown window for ${baseUrl} (${now - lastFailure}ms ago)`);
       }
     }
   }
@@ -466,21 +434,11 @@ export class ProviderManager {
         this.providerRegistry.getDisabledProviders()
       );
 
-      console.log(
-        `[findNextBestProvider:${this.instanceId}] Starting search for model: ${modelId}`
-      );
-      console.log(
-        `[findNextBestProvider:${this.instanceId}] disabledProviders: ${[...disabledProviders]}`
-      );
-      console.log(
-        `[findNextBestProvider:${this.instanceId}] providersOnCooldown: ${this.providersOnCoolDown.map(([url]) => url)}`
-      );
+      this.logger.log(`findNextBestProvider: model=${modelId} disabled=${[...disabledProviders].length} onCooldown=${this.providersOnCoolDown.length}`);
 
       // Get all providers with their models
       const allProviders = this.providerRegistry.getAllProvidersModels();
-      console.log(
-        `[findNextBestProvider:${this.instanceId}] Total providers in registry: ${Object.keys(allProviders).length}`
-      );
+      this.logger.log(`findNextBestProvider: total providers=${Object.keys(allProviders).length}`);
 
       // Find all candidate providers
       const candidates: CandidateProvider[] = [];
@@ -488,9 +446,6 @@ export class ProviderManager {
       for (const [baseUrl, models] of Object.entries(allProviders)) {
         // Skip current, failed, disabled, and cooldown providers
         if (baseUrl === currentBaseUrl) {
-          console.log(
-            `[findNextBestProvider:${this.instanceId}] SKIP (current): ${baseUrl}`
-          );
           continue;
         }
         // if (this.failedProviders.has(baseUrl)) {
@@ -530,7 +485,7 @@ export class ProviderManager {
         return null;
       }
     } catch (error) {
-      console.error("Error finding next best provider:", error);
+      this.logger.error("findNextBestProvider error:", error);
       return null;
     }
   }
@@ -714,16 +669,9 @@ export class ProviderManager {
                   // const patchesH = Math.floor((res.height + patchSize - 1) / patchSize);
                   // const tokensFromImage = patchesW * patchesH;
                   imageTokens += tokensFromImage;
-                  console.log("IMAGE INPUT RESOLUTION", {
-                    width: res.width,
-                    height: res.height,
-                    tokensFromImage,
-                  });
+                  this.logger.log(`IMAGE INPUT RESOLUTION width=${res.width} height=${res.height} tokens=${tokensFromImage}`);
                 } else {
-                  console.log(
-                    "IMAGE INPUT RESOLUTION",
-                    "unknown (unsupported format or parse failure)"
-                  );
+                  this.logger.log("IMAGE INPUT RESOLUTION: unknown format");
                 }
               }
             }
@@ -771,7 +719,7 @@ export class ProviderManager {
       // return totalEstimatedCosts > sp.max_cost ? sp.max_cost : totalEstimatedCosts; // in some image input calculations, this cost balloons up. Now includes image tokens via 32px patches.
       return totalEstimatedCosts; // Backend has a bug here.it's calculating image tokens wrong. gotta switch to different logic once its fixed
     } catch (e) {
-      console.error(e);
+      this.logger.error("getRequiredSatsForModel error:", e);
       return 0;
     }
   }

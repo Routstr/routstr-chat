@@ -5,7 +5,7 @@
  * provider based on model pricing, with automatic Cashu token handling.
  */
 
-import type { Model, Message } from "./core/types";
+import type { Model, Message, SdkLogger } from "./core/types";
 import type { DiscoveryAdapter } from "./discovery/interfaces";
 import type {
   ProviderRegistry,
@@ -58,6 +58,8 @@ export interface RouteRequestOptions {
   sdkStore?: SdkStore;
   /** Optional: shared ProviderManager instance for consistent failure tracking */
   providerManager?: ProviderManager;
+  /** Optional: injectable logger for structured/prefixed logging */
+  logger?: SdkLogger;
 }
 
 /**
@@ -111,6 +113,7 @@ async function resolveRouteRequestContext(options: RouteRequestOptions): Promise
     usageTrackingDriver,
     sdkStore,
     providerManager: providedProviderManager,
+    logger,
   } = options;
 
   let modelManager: ModelManager;
@@ -127,6 +130,7 @@ async function resolveRouteRequestContext(options: RouteRequestOptions): Promise
       includeProviderUrls: forcedProvider
         ? [forcedProvider, ...includeProviderUrls]
         : includeProviderUrls,
+      logger,
     });
 
     providers = await modelManager.bootstrapProviders(torMode);
@@ -138,7 +142,7 @@ async function resolveRouteRequestContext(options: RouteRequestOptions): Promise
   }
 
   // Use provided ProviderManager or create a new one
-  const providerManager = providedProviderManager ?? new ProviderManager(providerRegistry, sdkStore);
+  const providerManager = providedProviderManager ?? new ProviderManager(providerRegistry, sdkStore, logger);
 
   let baseUrl: string;
   let selectedModel: Model;
@@ -195,7 +199,7 @@ async function resolveRouteRequestContext(options: RouteRequestOptions): Promise
     providerRegistry,
     "min",
     mode,
-    { usageTrackingDriver, sdkStore, providerManager }
+    { usageTrackingDriver, sdkStore, providerManager, logger }
   );
 
   if (debugLevel) {

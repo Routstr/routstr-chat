@@ -1,7 +1,8 @@
 import { createStore, type StoreApi } from "zustand/vanilla";
 import type { DiscoveryAdapter } from "../discovery/interfaces";
 import type { StorageAdapter, ProviderRegistry } from "../wallet/interfaces";
-import type { ProviderInfo, Model } from "../core";
+import type { ProviderInfo, Model, SdkLogger } from "../core";
+import { consoleLogger } from "../core/types";
 import { SDK_STORAGE_KEYS } from "./keys";
 import type { StorageDriver, SdkStorageState } from "./types";
 
@@ -831,8 +832,11 @@ export const createStorageAdapterFromStore = (
 });
 
 export const createProviderRegistryFromStore = (
-  store: SdkStore
-): ProviderRegistry => ({
+  store: SdkStore,
+  logger?: SdkLogger
+): ProviderRegistry => {
+  const log = (logger ?? consoleLogger).child("ProviderRegistry");
+  return ({
   getModelsForProvider: (baseUrl) => {
     const normalized = normalizeBaseUrl(baseUrl);
     return store.getState().modelsFromAllProviders[normalized] || [];
@@ -857,9 +861,10 @@ export const createProviderRegistryFromStore = (
       store.getState().setInfoFromAllProviders(next);
       return info;
     } catch (error) {
-      console.warn(`Failed to fetch provider info from ${normalized}:`, error);
+      log.warn(`Failed to fetch provider info from ${normalized}:`, error);
       return null;
     }
   },
   getAllProvidersModels: () => store.getState().modelsFromAllProviders,
 });
+};

@@ -15,7 +15,8 @@ import type {
   StorageAdapter,
   ProviderRegistry,
 } from "./interfaces";
-import type { RefundResult, TopUpResult } from "../core/types";
+import type { RefundResult, TopUpResult, SdkLogger } from "../core/types";
+import { consoleLogger } from "../core/types";
 import { InsufficientBalanceError } from "../core/errors";
 import { CashuSpender } from "./CashuSpender";
 import {
@@ -93,13 +94,16 @@ export class BalanceManager {
   > = new Map();
   /** Cooldown (ms) between opposite operations on the same provider */
   private static readonly PROVIDER_WALLET_COOLDOWN_MS = 10_000;
+  private readonly logger: SdkLogger;
 
   constructor(
     private walletAdapter: WalletAdapter,
     private storageAdapter: StorageAdapter,
     private providerRegistry?: ProviderRegistry,
-    cashuSpender?: CashuSpender
+    cashuSpender?: CashuSpender,
+    logger?: SdkLogger
   ) {
+    this.logger = (logger ?? consoleLogger).child("BalanceManager");
     if (cashuSpender) {
       this.cashuSpender = cashuSpender;
     } else {
@@ -206,7 +210,7 @@ export class BalanceManager {
 
     const guard = this._canRunProviderWalletOperation(baseUrl, "refund");
     if (!guard.allowed) {
-      console.log(`[BalanceManager] Skipping refund for ${baseUrl} - ${guard.reason}`);
+      this.logger.log(`Skipping refund for ${baseUrl} - ${guard.reason}`);
       return { success: false, message: guard.reason };
     }
 
@@ -232,9 +236,7 @@ export class BalanceManager {
       if (apiKeyEntry?.lastUsed) {
         const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
         if (apiKeyEntry.lastUsed > fiveMinutesAgo) {
-          console.log(
-            `[BalanceManager] Skipping refund for ${baseUrl} - used ${Math.round((Date.now() - apiKeyEntry.lastUsed) / 1000)}s ago`
-          );
+          this.logger.log(`Skipping refund for ${baseUrl} - used ${Math.round((Date.now() - apiKeyEntry.lastUsed) / 1000)}s ago`);
           return {
             success: false,
             message: "API key was used recently, skipping refund",
@@ -289,7 +291,7 @@ export class BalanceManager {
         requestId: fetchResult.requestId,
       };
     } catch (error) {
-      console.error("[BalanceManager] API key refund error", error);
+      this.logger.error("API key refund error", error);
       return this._handleRefundError(error, mintUrl, fetchResult?.requestId);
     }
   }
@@ -362,7 +364,7 @@ export class BalanceManager {
       };
     } catch (error) {
       clearTimeout(timeoutId);
-      console.error("[BalanceManager.fetchRefundToken] Fetch error", error);
+      this.logger.error("fetchRefundToken fetch error", error);
 
       if (error instanceof Error) {
         if (error.name === "AbortError") {
@@ -392,7 +394,7 @@ export class BalanceManager {
 
     const guard = this._canRunProviderWalletOperation(baseUrl, "topup");
     if (!guard.allowed) {
-      console.log(`[BalanceManager] Skipping topup for ${baseUrl} - ${guard.reason}`);
+      this.logger.log(`Skipping topup for ${baseUrl} - ${guard.reason}`);
       return { success: false, message: guard.reason };
     }
 
@@ -442,7 +444,7 @@ export class BalanceManager {
 
       const topUpResult = await this._postTopUp(baseUrl, apiKey, cashuToken);
       requestId = topUpResult.requestId;
-      console.log(topUpResult);
+      this.logger.log("topUpResult:", topUpResult);
 
       if (!topUpResult.success) {
         await this._recoverFailedTopUp(cashuToken);
@@ -460,10 +462,7 @@ export class BalanceManager {
         requestId,
       };
     } catch (error) {
-      console.log(
-        "DEBUG",
-        `[TopuPU] topup: Topup result for ${baseUrl}: error=${error}`
-      );
+      this.logger.log(`topup error for ${baseUrl}: ${error}`);
       if (cashuToken) {
         await this._recoverFailedTopUp(cashuToken);
       }
@@ -485,13 +484,9 @@ export class BalanceManager {
     } = options;
 
     const adjustedAmount = Math.ceil(amount);
-    console.log(
-      `[BalanceManager.createProviderToken] Starting: baseUrl=${baseUrl}, mintUrl=${mintUrl}, amount=${amount}, adjustedAmount=${adjustedAmount}, retryCount=${retryCount}`
-    );
+    this.logger.log(`createProviderToken: baseUrl=${baseUrl} mintUrl=${mintUrl} amount=${amount} adjustedAmount=${adjustedAmount} retryCount=${retryCount}`);
     if (!adjustedAmount || isNaN(adjustedAmount)) {
-      console.error(
-        `[BalanceManager.createProviderToken] FAILURE: Invalid amount - amount=${amount}, adjustedAmount=${adjustedAmount}`
-      );
+      this.logger.error(`createProviderToken: invalid amount=${amount}`);
       return { success: false, error: "Invalid top up amount" };
     }
 
@@ -534,9 +529,7 @@ export class BalanceManager {
           { url: "", balance: 0 }
         ).url
       );
-      console.error(
-        `[BalanceManager.createProviderToken] FAILURE: Insufficient balance - required=${adjustedAmount}, available=${totalMintBalance + targetProviderBalance}, totalMintBalance=${totalMintBalance}, targetProviderBalance=${targetProviderBalance}, refundableProviderBalance=${refundableProviderBalance}`
-      );
+      this.logger.error(`createProviderToken: insufficient balance required=${adjustedAmount} available=${totalMintBalance + targetProviderBalance} totalMint=${totalMintBalance} targetProvider=${targetProviderBalance}`);
       return { success: false, error: error.message };
     }
 
@@ -581,9 +574,7 @@ export class BalanceManager {
         }
       }
 
-      console.error(
-        `[BalanceManager.createProviderToken] FAILURE: No candidate mints found - requiredAmount=${requiredAmount}, totalMintBalance=${totalMintBalance}, maxBalance=${maxBalance}, maxMintUrl=${maxMintUrl}, providerMints=${JSON.stringify(providerMints)}`
-      );
+      this.logger.error(`createProviderToken: no candidate mints required=${requiredAmount} totalMint=${totalMintBalance} maxBalance=${maxBalance} maxMint=${maxMintUrl}`);
       const error = new InsufficientBalanceError(
         adjustedAmount,
         totalMintBalance,
@@ -597,17 +588,13 @@ export class BalanceManager {
     let lastError: string | undefined;
     for (const candidateMint of candidates) {
       try {
-        console.log(
-          `[BalanceManager.createProviderToken] Attempting mint: ${candidateMint}, amount: ${requiredAmount}`
-        );
+        this.logger.log(`createProviderToken: attempting mint=${candidateMint} amount=${requiredAmount}`);
         const token = await this.walletAdapter.sendToken(
           candidateMint,
           requiredAmount,
           p2pkPubkey
         );
-        console.log(
-          `[BalanceManager.createProviderToken] SUCCESS: Token created from mint ${candidateMint}, all mint balances: ${JSON.stringify(Object.fromEntries(Object.entries(balances).map(([mint, balance]) => [mint, getBalanceInSats(balance, units[mint])])))}`
-        );
+        this.logger.log(`createProviderToken: success from mint=${candidateMint}`);
         return {
           success: true,
           token,
@@ -616,16 +603,12 @@ export class BalanceManager {
         };
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
-        console.error(
-          `[BalanceManager.createProviderToken] FAILURE: Mint ${candidateMint} failed with error: ${errorMsg}`
-        );
+        this.logger.error(`createProviderToken: mint=${candidateMint} failed: ${errorMsg}`);
         if (error instanceof Error) {
           lastError = errorMsg;
 
           if (isNetworkErrorMessage(error.message)) {
-            console.warn(
-              `[BalanceManager.createProviderToken] Network error from ${candidateMint}, trying next mint...`
-            );
+            this.logger.warn(`createProviderToken: network error from ${candidateMint}, trying next mint...`);
             continue;
           }
         }
@@ -637,9 +620,7 @@ export class BalanceManager {
       }
     }
 
-    console.error(
-      `[BalanceManager.createProviderToken] FAILURE: All candidate mints exhausted - lastError=${lastError}, candidates=${JSON.stringify(candidates)}`
-    );
+    this.logger.error(`createProviderToken: all candidate mints exhausted lastError=${lastError}`);
     return {
       success: false,
       error:
@@ -813,7 +794,7 @@ export class BalanceManager {
       return { success: true, requestId };
     } catch (error) {
       clearTimeout(timeoutId);
-      console.error("[BalanceManager._postTopUp] Fetch error", error);
+      this.logger.error("_postTopUp fetch error", error);
 
       if (error instanceof Error) {
         if (error.name === "AbortError") {
@@ -842,10 +823,7 @@ export class BalanceManager {
     try {
       await this.cashuSpender.receiveToken(cashuToken);
     } catch (error) {
-      console.error(
-        "[BalanceManager._recoverFailedTopUp] Failed to recover token",
-        error
-      );
+      this.logger.error("_recoverFailedTopUp: failed to recover token", error);
     }
   }
 
@@ -919,9 +897,9 @@ export class BalanceManager {
           apiKey: data.api_key,
         };
       } else {
-        console.log(response.status);
+        this.logger.warn(`getTokenBalance: status=${response.status}`);
         const data = await response.json();
-        console.log("FAILED ", data);
+        this.logger.warn("getTokenBalance: FAILED", data);
 
         // Check for invalid/expired API key error (proofs already spent)
         const isInvalidApiKey =
@@ -938,7 +916,7 @@ export class BalanceManager {
         };
       }
     } catch (error) {
-      console.error("ERRORR IN RESTPONSE", error);
+      this.logger.error("getTokenBalance error", error);
       // Fall through to default
     }
 

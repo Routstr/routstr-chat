@@ -11,7 +11,8 @@
  */
 
 import type { WalletAdapter, StorageAdapter } from "./interfaces";
-import type { SpendResult } from "../core/types";
+import type { SpendResult, SdkLogger } from "../core/types";
+import { consoleLogger } from "../core/types";
 import { InsufficientBalanceError } from "../core/errors";
 import { BalanceManager } from "./BalanceManager";
 import { auditLogger } from "./AuditLogger";
@@ -55,13 +56,17 @@ type DebugLevel = "DEBUG" | "WARN" | "ERROR";
 export class CashuSpender {
   private _isBusy = false;
   private debugLevel: DebugLevel = "WARN";
+  private readonly logger: SdkLogger;
 
   constructor(
     private walletAdapter: WalletAdapter,
     private storageAdapter: StorageAdapter,
     private _providerRegistry?: unknown,
-    private balanceManager?: BalanceManager
-  ) {}
+    private balanceManager?: BalanceManager,
+    logger?: SdkLogger
+  ) {
+    this.logger = (logger ?? consoleLogger).child("CashuSpender");
+  }
 
   async receiveToken(token: string): Promise<{
     success: boolean;
@@ -195,13 +200,13 @@ export class CashuSpender {
     if (levelPriority[level] >= levelPriority[this.debugLevel]) {
       switch (level) {
         case "DEBUG":
-          console.log(...args);
+          this.logger.log(...args);
           break;
         case "WARN":
-          console.warn(...args);
+          this.logger.warn(...args);
           break;
         case "ERROR":
-          console.error(...args);
+          this.logger.error(...args);
           break;
       }
     }

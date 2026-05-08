@@ -4,7 +4,8 @@
  * (lowest cost) across multiple providers
  */
 
-import type { Model } from "../core/types";
+import type { Model, SdkLogger } from "../core/types";
+import { consoleLogger } from "../core/types";
 import type { DiscoveryAdapter, ProviderInfo } from "./interfaces";
 import {
   NoProvidersAvailableError,
@@ -26,6 +27,8 @@ export interface ModelManagerConfig {
   excludeProviderUrls?: string[];
   /** Cache TTL in milliseconds (default: 21 minutes) */
   cacheTTL?: number;
+  /** Optional injectable logger */
+  logger?: SdkLogger;
 }
 
 /**
@@ -37,6 +40,7 @@ export class ModelManager {
   private readonly providerDirectoryUrl: string;
   private readonly includeProviderUrls: string[];
   private readonly excludeProviderUrls: string[];
+  private readonly logger: SdkLogger;
 
   constructor(
     private adapter: DiscoveryAdapter,
@@ -47,6 +51,7 @@ export class ModelManager {
     this.cacheTTL = config.cacheTTL || 210 * 60 * 1000; // 21 minutes
     this.includeProviderUrls = config.includeProviderUrls || [];
     this.excludeProviderUrls = config.excludeProviderUrls || [];
+    this.logger = (config.logger ?? consoleLogger).child("ModelManager");
   }
 
   /**
@@ -107,7 +112,7 @@ export class ModelManager {
         return filtered;
       }
     } catch (e) {
-      console.warn("Nostr bootstrap failed, falling back to HTTP:", e);
+      this.logger.warn("Nostr bootstrap failed, falling back to HTTP:", e);
     }
 
     // Fall back to HTTP
@@ -205,10 +210,7 @@ export class ModelManager {
             }
           }
         } catch {
-          console.warn(
-            "[NostrBootstrap] Failed to parse Nostr event content:",
-            event.id
-          );
+          this.logger.warn("NostrBootstrap: failed to parse event content:", event.id);
         }
       }
     }
@@ -278,7 +280,7 @@ export class ModelManager {
 
       return list;
     } catch (e) {
-      console.error("Failed to bootstrap providers", e);
+      this.logger.error("Failed to bootstrap providers", e);
       throw new ProviderBootstrapError([], `Provider bootstrap failed: ${e}`);
     }
   }
@@ -372,9 +374,9 @@ export class ModelManager {
         return { success: true, base, list };
       } catch (error) {
         if (this.isProviderDownError(error)) {
-          console.warn(`Provider ${base} is down right now.`);
+          this.logger.warn(`Provider ${base} is down right now.`);
         } else {
-          console.warn(`Failed to fetch models from ${base}:`, error);
+          this.logger.warn(`Failed to fetch models from ${base}:`, error);
         }
         this.adapter.setProviderLastUpdate(base, Date.now());
         return { success: false, base };
@@ -564,10 +566,7 @@ export class ModelManager {
       this.adapter.setRoutstr21ModelsLastUpdate(Date.now());
       return models;
     } catch {
-      console.warn(
-        "[Routstr21Models] Failed to parse Nostr event content:",
-        event.id
-      );
+      this.logger.warn("Routstr21Models: failed to parse Nostr event content:", event.id);
       return cachedModels.length > 0 ? cachedModels : [];
     }
   }
