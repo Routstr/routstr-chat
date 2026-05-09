@@ -1,4 +1,4 @@
-import { createSqliteUsageTrackingDriver } from "@/sdk/storage/usageTracking/sqlite";
+import { createSqliteUsageTrackingDriver } from "@routstr/sdk/storage";
 
 async function main(): Promise<void> {
   const driver = createSqliteUsageTrackingDriver();

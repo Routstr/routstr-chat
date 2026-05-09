@@ -1,4 +1,4 @@
-import { createSdkStore, createSqliteDriver } from "@/sdk/storage";
+import { createSdkStore, createSqliteDriver } from "@routstr/sdk/storage";
 
 interface ClientIdEntry {
   clientId: string;

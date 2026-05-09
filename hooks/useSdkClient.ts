@@ -3,17 +3,17 @@ import {
   createProviderRegistryFromStore,
   createSdkStore,
   createStorageAdapterFromStore,
-} from "@/sdk/storage/store";
-import { createIndexedDBDriver } from "@/sdk/storage/drivers/indexedDB";
-import { createMemoryDriver } from "@/sdk/storage/drivers/memory";
+} from "@routstr/sdk/storage";
+import { createIndexedDBDriver } from "@routstr/sdk/storage";
+import { createMemoryDriver } from "@routstr/sdk/storage";
 
 const isBrowser = typeof window !== "undefined";
-import type { StorageAdapter, ProviderRegistry } from "@/sdk/wallet/interfaces";
+import type { StorageAdapter, ProviderRegistry } from "@routstr/sdk/wallet";
 import {
   RoutstrClient,
   type RoutstrClientMode,
-} from "@/sdk/client/RoutstrClient";
-import type { WalletAdapter } from "@/sdk/wallet/interfaces";
+} from "@routstr/sdk/client";
+import type { WalletAdapter } from "@routstr/sdk/wallet";
 
 interface UseSdkClientResult {
   client: RoutstrClient;

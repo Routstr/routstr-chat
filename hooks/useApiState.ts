@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
-import { ModelManager, MintDiscovery } from "@/sdk";
+import { ModelManager, MintDiscovery } from "@routstr/sdk";
 import { Model } from "@/types/models";
 import {
   loadBaseUrl,

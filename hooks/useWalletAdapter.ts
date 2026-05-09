@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import { getDecodedToken } from "@cashu/cashu-ts";
-import type { WalletAdapter } from "@/sdk/wallet/interfaces";
+import type { WalletAdapter } from "@routstr/sdk/wallet";
 import { DEFAULT_MINT_URL } from "@/lib/utils";
 
 interface WalletAdapterSource {

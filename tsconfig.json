@@ -33,5 +33,5 @@
     ".next/dev/types/**/*.ts",
     "scripts/**/*.ts"
   ],
-  "exclude": ["node_modules", "sdk"]
+  "exclude": ["node_modules"]
 }

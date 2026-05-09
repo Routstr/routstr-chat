@@ -1,9 +1,9 @@
-import { RoutstrClient, WalletAdapter } from "@/sdk";
-import { createSdkStore, createSqliteDriver } from "@/sdk/storage";
+import { RoutstrClient, WalletAdapter } from "@routstr/sdk";
+import { createSdkStore, createSqliteDriver } from "@routstr/sdk/storage";
 import {
   createProviderRegistryFromStore,
   createStorageAdapterFromStore,
-} from "@/sdk/storage/store";
+} from "@routstr/sdk/storage";
 import { spawn } from "child_process";
 import { getDecodedToken } from "@cashu/cashu-ts";
 

@@ -1,9 +1,9 @@
-import { createSdkStore, createSqliteDriver } from "@/sdk/storage";
+import { createSdkStore, createSqliteDriver } from "@routstr/sdk/storage";
 import {
   createDiscoveryAdapterFromStore,
   createStorageAdapterFromStore,
-} from "@/sdk/storage/store";
-import { ModelManager } from "@/sdk/discovery/ModelManager";
+} from "@routstr/sdk/storage";
+import { ModelManager } from "@routstr/sdk/discovery";
 
 const MODEL_ID = process.argv[2];
 

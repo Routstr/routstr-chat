@@ -6,12 +6,12 @@ import {
   createSqliteDriver,
   ModelManager,
   InsufficientBalanceError,
-} from "@/sdk";
+} from "@routstr/sdk";
 import {
   createDiscoveryAdapterFromStore,
   createProviderRegistryFromStore,
   createStorageAdapterFromStore,
-} from "@/sdk/storage/store";
+} from "@routstr/sdk/storage";
 import { spawn } from "child_process";
 import { getDecodedToken } from "@cashu/cashu-ts";
 import { writeFile, mkdir } from "fs/promises";

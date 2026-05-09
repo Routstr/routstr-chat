@@ -4,14 +4,14 @@ import {
   MintDiscovery,
   ProviderManager,
   RoutstrClient,
-} from "@/sdk";
+} from "@routstr/sdk";
 import { getDecodedToken } from "@cashu/cashu-ts";
-import { createSdkStore, createSqliteDriver } from "@/sdk/storage";
+import { createSdkStore, createSqliteDriver } from "@routstr/sdk/storage";
 import {
   createDiscoveryAdapterFromStore,
   createProviderRegistryFromStore,
   createStorageAdapterFromStore,
-} from "@/sdk/storage/store";
+} from "@routstr/sdk/storage";
 import { spawn } from "child_process";
 
 function parseArgs(argv: string[]): {

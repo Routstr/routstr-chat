@@ -1,9 +1,9 @@
-import { ModelManager, ProviderManager } from "@/sdk";
-import { createSdkStore, createSqliteDriver } from "@/sdk/storage";
+import { ModelManager, ProviderManager } from "@routstr/sdk";
+import { createSdkStore, createSqliteDriver } from "@routstr/sdk/storage";
 import {
   createDiscoveryAdapterFromStore,
   createProviderRegistryFromStore,
-} from "@/sdk/storage/store";
+} from "@routstr/sdk/storage";
 
 async function main(): Promise<void> {
   const modelId = process.argv[2]?.trim();

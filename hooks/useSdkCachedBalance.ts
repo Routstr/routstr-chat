@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import { createSdkStore, type SdkStore } from "@/sdk/storage/store";
-import { localStorageDriver } from "@/sdk/storage/drivers/localStorage";
+import { createSdkStore, type SdkStore } from "@routstr/sdk/storage";
+import { localStorageDriver } from "@routstr/sdk/storage";
 
 let globalStore: ReturnType<typeof createSdkStore> | null = null;
 

@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from "react";
-import type { DiscoveryAdapter } from "@/sdk/discovery";
+import type { DiscoveryAdapter } from "@routstr/sdk/discovery";
 import {
   createDiscoveryAdapterFromStore,
   createSdkStore,
-} from "@/sdk/storage/store";
-import { localStorageDriver } from "@/sdk/storage/drivers/localStorage";
+} from "@routstr/sdk/storage";
+import { localStorageDriver } from "@routstr/sdk/storage";
 
 let browserDiscoveryStore: ReturnType<typeof createSdkStore> | null = null;
 

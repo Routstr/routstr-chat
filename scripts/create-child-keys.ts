@@ -1,9 +1,9 @@
-import { createSdkStore, createSqliteDriver } from "@/sdk/storage";
+import { createSdkStore, createSqliteDriver } from "@routstr/sdk/storage";
 import {
   createDiscoveryAdapterFromStore,
   createStorageAdapterFromStore,
-} from "@/sdk/storage/store";
-import { ModelManager } from "@/sdk";
+} from "@routstr/sdk/storage";
+import { ModelManager } from "@routstr/sdk";
 
 async function createChildKeys(
   baseUrl: string,
