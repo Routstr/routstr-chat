@@ -967,6 +967,7 @@ export class RoutstrClient {
     if (
       (status === 401 ||
         status === 403 ||
+        status === 404 ||
         status === 413 ||
         status === 400 ||
         status === 429 ||
