@@ -94,3 +94,5 @@ const nextConfig: NextConfig = {
 };
 
 export default withPWACfg(nextConfig);
+
+import('@opennextjs/cloudflare').then(m => m.initOpenNextCloudflareForDev());

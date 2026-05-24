@@ -4,10 +4,10 @@
   "private": true,
   "workspaces": [],
   "scripts": {
+    "build": "next build",
     "dev": "next dev -p 3001",
     "dev:clean": "npm run clean:sw && next dev",
     "clean:sw": "node -e \"if (typeof window !== 'undefined') { navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(reg => reg.unregister())) }\" || echo 'SW cleanup completed'",
-    "build": "next build",
     "start": "npx --yes serve -s out -l 3000",
     "lint": "next lint",
     "format": "prettier --write .",
@@ -23,7 +23,11 @@
     "test:e2e:onboarding": "playwright test tests/e2e/onboarding.spec.ts",
     "test:e2e:features": "playwright test tests/e2e/basic-features.spec.ts",
     "test:e2e:headed": "playwright test --headed --workers=1",
-    "test:e2e:debug": "playwright test --debug"
+    "test:e2e:debug": "playwright test --debug",
+    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",
+    "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"
   },
   "dependencies": {
     "@cashu/cashu-ts": "^3.6.2",
@@ -32,6 +36,9 @@
     "@ducanh2912/next-pwa": "^10.2.9",
     "@getalby/bitcoin-connect-react": "^3.10.0",
     "@modelcontextprotocol/sdk": "^1.12.0",
+    "@noble/ciphers": "^2.1.1",
+    "@noble/hashes": "^2.2.0",
+    "@opennextjs/cloudflare": "^1.19.11",
     "@radix-ui/react-avatar": "^1.1.9",
     "@radix-ui/react-checkbox": "^1.3.3",
     "@radix-ui/react-dialog": "^1.1.13",
@@ -81,8 +88,6 @@
     "tw-animate-css": "^1.2.8",
     "vaul": "^1.1.2",
     "workbox-window": "^7.1.0",
-    "@noble/ciphers": "^2.1.1",
-    "@noble/hashes": "^2.2.0",
     "zod": "^4.4.3",
     "zustand": "^5.0.5"
   },
@@ -109,7 +114,8 @@
     "tailwindcss": "^4",
     "tsx": "^4.21.0",
     "typescript": "^5",
-    "vitest": "^2.1.8"
+    "vitest": "^2.1.8",
+    "wrangler": "^4.94.0"
   },
   "msw": {
     "workerDirectory": [
