@@ -4,14 +4,16 @@ import {
   useState,
   useCallback,
   useLayoutEffect,
+  useMemo,
 } from "react";
 import { ArrowRight, FileText, Loader2, Paperclip, X } from "lucide-react";
 import { motion } from "motion/react";
-import { MessageAttachment } from "@/types/chat";
+import { MessageAttachment, Model } from "@/types/chat";
 import { extractTextFromPdf } from "@/utils/pdfUtils";
 import { saveFile } from "@/utils/indexedDb";
 import { useBlossomSync } from "@/hooks/useBlossomSync";
 import { usePnsKeys } from "@/hooks/usePnsKeys";
+import { normalizeModality } from "@/utils/modelUtils";
 
 // File upload constants
 const MAX_FILE_SIZE_MB = 10;
@@ -128,6 +130,7 @@ interface ChatInputProps {
   isLoadingModels: boolean;
   isWalletLoading: boolean;
   isLoadingChatFromUrl?: boolean;
+  selectedModel: Model | null;
 }
 
 export default function ChatInput({
@@ -145,6 +148,7 @@ export default function ChatInput({
   isLoadingModels,
   isWalletLoading,
   isLoadingChatFromUrl,
+  selectedModel,
 }: ChatInputProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -186,6 +190,13 @@ export default function ChatInput({
       }
     };
   }, []);
+
+  const modelSupportsImages = useMemo<boolean>(() => {
+    if (!selectedModel) return false;
+    return selectedModel?.architecture?.input_modalities?.some(
+      modality => normalizeModality(modality) === "image"
+    ) ?? false;
+  }, [selectedModel]);
 
   const lockMinHeight = useCallback(() => {
     layoutLockRef.current = true;
@@ -460,7 +471,7 @@ export default function ChatInput({
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       const validation = validateFile(file, {
-        allowImages: true,
+        allowImages: modelSupportsImages,
         allowPdf: true,
         onTypeError: () =>
           alert(
@@ -525,7 +536,7 @@ export default function ChatInput({
       if (!file) continue;
 
       const validation = validateFile(file, {
-        allowImages: true,
+        allowImages: modelSupportsImages,
         allowPdf: false,
         onTypeError: () => {},
         onSizeError: () =>
@@ -585,12 +596,12 @@ export default function ChatInput({
 
   const processImageFile = async (file: File) => {
     const validation = validateFile(file, {
-      allowImages: true,
+      allowImages: modelSupportsImages,
       allowPdf: true,
       rejectSvg: true,
       onSvgError: () =>
         alert("SVG files are not supported. Please use PNG, JPG, or WebP"),
-      onTypeError: () => alert("Please select an image or PDF file"),
+      onTypeError: () => alert("Unsupported file type"),
       onSizeError: () =>
         alert(
           `File "${file.name}" is too large. Maximum size is ${MAX_FILE_SIZE_MB}MB.`
@@ -710,7 +721,7 @@ export default function ChatInput({
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/*,application/pdf"
+              accept={modelSupportsImages ? "image/*,application/pdf" : "application/pdf"}
               multiple
               onChange={handleFileUpload}
               className="hidden"
