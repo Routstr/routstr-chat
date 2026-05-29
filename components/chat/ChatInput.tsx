@@ -14,6 +14,7 @@ import { saveFile } from "@/utils/indexedDb";
 import { useBlossomSync } from "@/hooks/useBlossomSync";
 import { usePnsKeys } from "@/hooks/usePnsKeys";
 import { normalizeModality } from "@/utils/modelUtils";
+import { toast } from "sonner";
 
 // File upload constants
 const MAX_FILE_SIZE_MB = 10;
@@ -197,6 +198,21 @@ export default function ChatInput({
       modality => normalizeModality(modality) === "image"
     ) ?? false;
   }, [selectedModel]);
+
+  // Drop already-attached images when switching to a model that can't accept them
+  useEffect(() => {
+    if (modelSupportsImages) return;
+    const imageCount = uploadedAttachments.filter(
+      (att) => att.type === "image"
+    ).length;
+    if (imageCount === 0) return;
+    setUploadedAttachments((prev) => prev.filter((att) => att.type !== "image"));
+    toast.info(
+      imageCount === 1
+        ? "Removed an image attachment — the selected model doesn't support image input."
+        : `Removed ${imageCount} image attachments — the selected model doesn't support image input.`
+    );
+  }, [modelSupportsImages, uploadedAttachments, setUploadedAttachments]);
 
   const lockMinHeight = useCallback(() => {
     layoutLockRef.current = true;
