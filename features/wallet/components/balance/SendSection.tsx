@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Copy, Check, Zap } from "lucide-react";
+import { Copy, Check, Zap, Undo2 } from "lucide-react";
 import { useChat } from "@/context/ChatProvider";
 import { useCashuStore } from "@/features/wallet";
 import { getCurrentMintBalance as utilGetCurrentMintBalance } from "@/utils/walletUtils";
@@ -155,32 +155,90 @@ const SendSection: React.FC<SendSectionProps> = ({
             )}
           </button>
 
-          {send.generatedToken && (
+          {send.unclaimedTokens.length > 0 && (
             <div className="space-y-2">
-              <div className="text-muted-foreground text-xs font-medium">Generated Token:</div>
-              <div className="bg-muted/50 border border-border rounded-lg p-2">
-                <div className="font-mono text-xs text-muted-foreground break-all mb-2 max-h-20 overflow-y-auto">
-                  {send.generatedToken}
-                </div>
-                <button
-                  onClick={() => send.copyToClipboard(send.generatedToken, "Token")}
-                  className="w-full bg-muted hover:bg-muted/80 border border-border text-foreground py-1.5 px-3 rounded-md text-xs font-medium transition-colors flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  {send.copySuccess ? (
-                    <>
-                      <Check className="h-3 w-3" />
-                      Copied!
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="h-3 w-3" />
-                      Copy Token
-                    </>
-                  )}
-                </button>
+              <div className="text-muted-foreground text-xs font-medium">
+                {send.unclaimedTokens.length === 1
+                  ? "Generated Token:"
+                  : "Generated Tokens:"}
               </div>
+              {send.unclaimedTokens.map((entry) => (
+                <div
+                  key={entry.id}
+                  className="bg-muted/50 border border-border rounded-lg p-2"
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs text-foreground font-medium">
+                      {entry.amount} {entry.unit}s
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(entry.createdAt).toLocaleString([], {
+                        month: "short",
+                        day: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                  </div>
+                  <div className="font-mono text-xs text-muted-foreground break-all mb-2 max-h-20 overflow-y-auto">
+                    {entry.token}
+                  </div>
+                  <div className="flex gap-1.5">
+                    <button
+                      onClick={() => send.copyToClipboard(entry.token, "Token", entry.id)}
+                      className="flex-1 bg-muted hover:bg-muted/80 border border-border text-foreground py-1.5 px-2 rounded-md text-xs font-medium transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      {send.copiedTokenId === entry.id ? (
+                        <>
+                          <Check className="h-3 w-3" />
+                          Copied!
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="h-3 w-3" />
+                          Copy
+                        </>
+                      )}
+                    </button>
+                    <button
+                      onClick={() => void send.reclaimUnclaimedToken(entry)}
+                      disabled={send.reclaimingTokenId !== null}
+                      title="Receive this token back into your own wallet"
+                      className="flex-1 bg-muted hover:bg-muted/80 disabled:opacity-50 disabled:cursor-not-allowed border border-border text-foreground py-1.5 px-2 rounded-md text-xs font-medium transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      {send.reclaimingTokenId === entry.id ? (
+                        <>
+                          <div className="animate-spin rounded-full h-3 w-3 border-2 border-foreground/30 border-t-foreground" />
+                          Reclaiming...
+                        </>
+                      ) : (
+                        <>
+                          <Undo2 className="h-3 w-3" />
+                          Reclaim
+                        </>
+                      )}
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            "Dismiss this token? If nobody has redeemed it yet, the funds will be unrecoverable. Use Reclaim to take the funds back instead."
+                          )
+                        ) {
+                          send.dismissUnclaimedToken(entry.id);
+                        }
+                      }}
+                      title="Dismiss this token (after the recipient has redeemed it)"
+                      className="px-2 py-1.5 bg-muted hover:bg-muted/80 border border-border text-muted-foreground hover:text-foreground rounded-md text-xs font-medium transition-colors cursor-pointer"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              ))}
               <div className="text-muted-foreground text-xs text-center">
-                Share this token to send {send.sendAmount} {currentMintUnit}s
+                Tokens stay here until claimed — copy to share, or reclaim to
+                take the funds back.
               </div>
             </div>
           )}

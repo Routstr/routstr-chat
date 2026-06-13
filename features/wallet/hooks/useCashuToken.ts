@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useCashuStore } from "../state/cashuStore";
+import { useUnclaimedTokensStore } from "../state/unclaimedTokensStore";
 import { useCashuWallet } from "./useCashuWallet";
 import { useCashuHistory } from "./useCashuHistory";
 import {
@@ -35,50 +36,62 @@ export function useCashuToken() {
    */
   const recoverPendingProofs = async () => {
     try {
-      const keys = Object.keys(localStorage).filter((key) =>
-        key.startsWith("pending_send_proofs_")
+      const keys = Object.keys(localStorage).filter(
+        (key) =>
+          key.startsWith("pending_send_proofs_") ||
+          key.startsWith("pending_receive_proofs_")
       );
 
       for (const key of keys) {
+        const recoveryKey = `recovery_processed_${key}`;
+        if (sessionStorage.getItem(recoveryKey)) {
+          console.log("rdlogs: Skipping already processed pending proof:", key);
+          continue;
+        }
+
+        let mintUrl: string | undefined;
+        let proofsToSend: Proof[] | undefined;
+        let timestamp = 0;
         try {
-          // Check if this specific proof has already been processed
-          const recoveryKey = `recovery_processed_${key}`;
-          if (sessionStorage.getItem(recoveryKey)) {
-            console.log(
-              "rdlogs: Skipping already processed pending proof:",
-              key
-            );
-            continue;
-          }
-
           const pendingData = JSON.parse(localStorage.getItem(key) || "{}");
-          const { mintUrl, proofsToSend, timestamp } = pendingData;
+          ({ proofsToSend, timestamp } = pendingData);
+          mintUrl = pendingData.mintUrl ?? pendingData.normalizedMintUrl;
+        } catch (error) {
+          console.error("Removing malformed pending proofs entry:", key, error);
+          localStorage.removeItem(key);
+          continue;
+        }
 
-          // Only recover proofs that are less than 1 hour old to avoid stale data
-          if (
-            Date.now() - timestamp < 60 * 60 * 1000 &&
-            mintUrl &&
-            proofsToSend
-          ) {
-            console.log("rdlogs: Recovering pending proofs:", key);
+        if (!mintUrl || !proofsToSend) {
+          localStorage.removeItem(key);
+          continue;
+        }
 
-            // Mark this proof as being processed
-            sessionStorage.setItem(recoveryKey, "true");
+        // Interrupted sends are only restored while fresh (the token may have
+        // been delivered to someone in the meantime); interrupted receives are
+        // restored at any age because those proofs are the only copy left.
+        const isStaleSend =
+          key.startsWith("pending_send_proofs_") &&
+          Date.now() - timestamp >= 60 * 60 * 1000;
+        if (isStaleSend) {
+          localStorage.removeItem(key);
+          continue;
+        }
 
-            // Add the proofs back to the wallet
-            await updateProofs({
-              mintUrl,
-              proofsToAdd: proofsToSend,
-              proofsToRemove: [],
-            });
-          }
-
-          // Clean up the pending entry regardless
+        console.log("rdlogs: Recovering pending proofs:", key);
+        sessionStorage.setItem(recoveryKey, "true");
+        try {
+          await updateProofs({
+            mintUrl,
+            proofsToAdd: proofsToSend,
+            proofsToRemove: [],
+          });
+          // Only drop the backup once the proofs are durably stored
           localStorage.removeItem(key);
         } catch (error) {
           console.error("Error recovering pending proofs for key:", key, error);
-          // Clean up corrupted entries
-          localStorage.removeItem(key);
+          // Keep the backup and allow a retry on the next startup
+          sessionStorage.removeItem(recoveryKey);
         }
       }
     } catch (error) {
@@ -119,13 +132,17 @@ export function useCashuToken() {
    * @param mintUrl The URL of the mint to use
    * @param amount Amount to send in satoshis
    * @param p2pkPubkey The P2PK pubkey to lock the proofs to
+   * @param unit Optional unit override
+   * @param trackUnclaimed Persist the token to unclaimedTokensStore (wallet
+   *   UI sends) so it stays recoverable until the user claims/dismisses it
    * @returns Encoded token string
    */
   const sendToken = async (
     mintUrl: string,
     amount: number,
     p2pkPubkey?: string,
-    unit?: string
+    unit?: string,
+    trackUnclaimed = false
   ): Promise<string> => {
     setIsLoading(true);
     setError(null);
@@ -228,7 +245,7 @@ export function useCashuToken() {
       localStorage.setItem(
         pendingProofsKey,
         JSON.stringify({
-          normalizedMintUrl,
+          mintUrl: normalizedMintUrl,
           proofsToSend: proofsToSend.map((p) => ({
             id: p.id || "",
             amount: p.amount,
@@ -239,21 +256,20 @@ export function useCashuToken() {
           tokenAmount: amount,
         })
       );
-      // Create new token for the proofs we're keeping
-      if (proofsToKeep.length > 0) {
-        // update proofs
-        await updateProofs({
-          mintUrl: normalizedMintUrl,
-          proofsToAdd: proofsToKeep,
-          proofsToRemove: [...proofsToSend, ...proofs],
-        });
+      // Remove the spent inputs even when the swap produced no change
+      // (proofsToKeep empty), otherwise stale proofs linger in the store,
+      // inflating the balance and causing later "Token already spent" errors.
+      await updateProofs({
+        mintUrl: normalizedMintUrl,
+        proofsToAdd: proofsToKeep,
+        proofsToRemove: [...proofsToSend, ...proofs],
+      });
 
-        // Create history event
-        await createHistory({
-          direction: "out",
-          amount: amount.toString(),
-        });
-      }
+      // Create history event
+      await createHistory({
+        direction: "out",
+        amount: amount.toString(),
+      });
 
       // Create encoded token from proofs
       const token = getEncodedTokenV4({
@@ -267,6 +283,15 @@ export function useCashuToken() {
         unit: preferredUnit,
       });
       console.log("rdlogs: token", token);
+      // Wallet-send tokens must be stored before dropping the proof backup.
+      if (trackUnclaimed) {
+        useUnclaimedTokensStore.getState().addUnclaimedToken({
+          token,
+          amount,
+          unit: preferredUnit,
+          mintUrl: normalizedMintUrl,
+        });
+      }
       // Clean up pending proofs after successful token creation
       localStorage.removeItem(pendingProofsKey);
 
@@ -366,9 +391,15 @@ export function useCashuToken() {
   /**
    * Receive a token
    * @param token The encoded token string
+   * @param requirePersisted Throw if the received proofs could not be stored
+   *   (instead of relying on startup recovery), so callers like reclaim
+   *   don't report success on unpersisted funds
    * @returns The received proofs
    */
-  const receiveToken = async (token: string): Promise<Proof[]> => {
+  const receiveToken = async (
+    token: string,
+    requirePersisted = false
+  ): Promise<Proof[]> => {
     setIsLoading(true);
     setError(null);
 
@@ -406,6 +437,21 @@ export function useCashuToken() {
 
       // Receive proofs from token
       const receivedProofs = await wallet.receive(token);
+      // After wallet.receive, these proofs are the only recoverable copy.
+      const pendingReceiveKey = `pending_receive_proofs_${Date.now()}`;
+      localStorage.setItem(
+        pendingReceiveKey,
+        JSON.stringify({
+          mintUrl: normalizedMintUrl,
+          proofsToSend: receivedProofs.map((p) => ({
+            id: p.id || "",
+            amount: p.amount,
+            secret: p.secret || "",
+            C: p.C || "",
+          })),
+          timestamp: Date.now(),
+        })
+      );
       // Create token event in Nostr
       try {
         // Attempt to create token in Nostr, but don't rely on the return value
@@ -414,8 +460,16 @@ export function useCashuToken() {
           proofsToAdd: receivedProofs,
           proofsToRemove: [],
         });
+        localStorage.removeItem(pendingReceiveKey);
       } catch (err) {
+        // Keep the backup so startup recovery can restore the proofs.
         console.error("Error storing token in Nostr:", err);
+        if (requirePersisted) {
+          throw new Error(
+            "Token redeemed, but storing the funds failed - they will be restored on next app start. " +
+              (err instanceof Error ? err.message : String(err))
+          );
+        }
       }
 
       // Create history event
