@@ -297,7 +297,7 @@ const BalanceDisplay: React.FC<BalanceDisplayProps> = ({
               )}
 
               {activeTab === "receive" && (
-                <ReceiveSection navigateToTab={(tab) => navigateToTab(tab)} />
+                <ReceiveSection receive={receive} />
               )}
 
               {activeTab === "activity" && (
