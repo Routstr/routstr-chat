@@ -8,7 +8,7 @@ import { useWalletReceive } from "@/features/wallet/hooks/useWalletReceive";
 import { toast } from "sonner";
 
 interface ReceiveSectionProps {
-  navigateToTab: (tab: "overview" | "invoice") => void;
+  receive: ReturnType<typeof useWalletReceive>;
 }
 
 const subTabBase =
@@ -20,9 +20,8 @@ const getSubTabClass = (isActive: boolean, extra = "") =>
       : "text-muted-foreground hover:text-foreground/80"
   } ${extra}`.trim();
 
-const ReceiveSection: React.FC<ReceiveSectionProps> = ({ navigateToTab }) => {
+const ReceiveSection: React.FC<ReceiveSectionProps> = ({ receive }) => {
   const { currentMintUnit } = useChat();
-  const receive = useWalletReceive(navigateToTab);
 
   const isValidReceiveAmount = receive.mintAmount && parseInt(receive.mintAmount) > 0;
 

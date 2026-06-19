@@ -47,9 +47,6 @@ export function useSdkCachedBalance(): number {
         (sum, k) => sum + (k.balance || 0),
         0,
       );
-      console.log(
-        `[useSdkCachedBalance] apiKeys: ${apiKeyTotal} sats | childKeys: ${childKeyTotal} sats | total: ${apiKeyTotal + childKeyTotal} sats`,
-      );
     }, 5000);
 
     return () => clearInterval(interval);

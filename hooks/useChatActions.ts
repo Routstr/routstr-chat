@@ -179,7 +179,7 @@ export const useChatActions = ({
     sendToken,
     receiveToken,
   });
-  const { client } = useSdkClient(walletAdapter, "apikeys");
+  const { client } = useSdkClient(walletAdapter, "xcashu");
 
   const dataUrlToFile = useCallback(
     (dataUrl: string, filename: string): File => {
