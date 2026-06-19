@@ -68,6 +68,10 @@ export interface Model {
   id: string;
   name: string;
   description?: string;
+  architecture?: {
+    input_modalities?: string[];
+    output_modalities?: string[];
+  };
   sats_pricing: {
     completion: number;
     max_cost: number;

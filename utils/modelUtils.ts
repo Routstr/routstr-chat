@@ -450,3 +450,24 @@ export const modelSelectionStrategy = async (
 
   return modelToSelect;
 };
+
+// Normalize provider modality strings to canonical categories used for icons/filters
+export const normalizeModality = (
+  value: unknown
+): "text" | "image" | "audio" | "video" => {
+  const k = String(value ?? "").toLowerCase();
+  if (
+    k === "image" ||
+    k === "images" ||
+    k === "img" ||
+    k === "vision" ||
+    k === "picture" ||
+    k === "photo"
+  )
+    return "image";
+  if (k === "audio" || k === "sound" || k === "speech" || k === "voice")
+    return "audio";
+  if (k === "video" || k === "videos") return "video";
+  // Treat unknowns (e.g., "file", "document", "json") as text for display purposes
+  return "text";
+};

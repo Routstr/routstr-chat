@@ -22,6 +22,7 @@ import { Model } from "@/types/models";
 import {
   getModelNameWithoutProvider,
   getProviderFromModelName,
+  normalizeModality,
 } from "@/utils/modelUtils";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import {
@@ -141,27 +142,6 @@ export default function ModelSelector({
     }
     return null;
   }, [baseUrl, currentConfiguredKeyMemo, selectedModel, modelProviderMap]);
-
-  // Normalize provider modality strings to canonical categories used for icons/filters
-  const normalizeModality = (
-    value: unknown
-  ): "text" | "image" | "audio" | "video" => {
-    const k = String(value ?? "").toLowerCase();
-    if (
-      k === "image" ||
-      k === "images" ||
-      k === "img" ||
-      k === "vision" ||
-      k === "picture" ||
-      k === "photo"
-    )
-      return "image";
-    if (k === "audio" || k === "sound" || k === "speech" || k === "voice")
-      return "audio";
-    if (k === "video" || k === "videos") return "video";
-    // Treat unknowns (e.g., "file", "document", "json") as text for display purposes
-    return "text";
-  };
 
   // Collect available input->output pairs dynamically from real model data
   const availablePairs: readonly {

@@ -7,6 +7,7 @@ import { useAuth } from "@/context/AuthProvider";
 import ChatMessages from "./ChatMessages";
 import ChatInput from "./ChatInput";
 import { getTextFromContent } from "@/utils/messageUtils";
+import { Model } from "@/types/chat";
 
 /**
  * Central chat interface component
@@ -153,6 +154,7 @@ const MainChatArea: React.FC = () => {
         isLoadingModels={isLoadingModels}
         isWalletLoading={isWalletLoading}
         isLoadingChatFromUrl={isLoadingChatFromUrl}
+        selectedModel={selectedModel as Model | null}
       />
     </>
   );
