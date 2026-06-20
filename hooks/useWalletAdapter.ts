@@ -13,7 +13,9 @@ interface WalletAdapterSource {
   sendToken: (
     mintUrl: string,
     amount: number,
-    p2pkPubkey?: string
+    p2pkPubkey?: string,
+    unit?: string,
+    options?: { isUserSend?: boolean }
   ) => Promise<string>;
   receiveToken: (token: string) => Promise<{ amount: number }[]>;
 }
@@ -53,7 +55,14 @@ export function useWalletAdapter(
         if (!activeSource) {
           throw new Error("Wallet adapter is not initialized");
         }
-        return activeSource.sendToken(mintUrl, amount, p2pkPubkey);
+        // The adapter's sendToken is consumed by the Routstr SDK client to mint
+        // tokens that pay the API (an API spend): the SDK owns the token and its
+        // refund/recovery. Mark it isUserSend:false so no recoverable
+        // pending_send_proofs_* backup is left behind for recoverPendingProofs()
+        // to re-credit on reload (double-credit / "proofs already spent").
+        return activeSource.sendToken(mintUrl, amount, p2pkPubkey, undefined, {
+          isUserSend: false,
+        });
       },
       async receiveToken(token: string) {
         const activeSource = sourceRef.current;

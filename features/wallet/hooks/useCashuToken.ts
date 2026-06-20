@@ -13,6 +13,12 @@ import {
 import { calculateInactiveKeysetBalances } from "../core/utils/balance";
 import { MintService } from "../core/services/MintService";
 import { hashToCurve } from "@cashu/crypto/modules/common";
+import {
+  savePendingSendProofs,
+  markPendingSendProofsSent,
+  clearPendingSendProofs as clearPendingSendProofsBackup,
+  recoverPendingSendProofs,
+} from "../core/utils/pendingSendProofs";
 
 // Global flag to track if recovery has been initiated in this session
 let recoveryInitiated = false;
@@ -20,6 +26,12 @@ let recoveryPromise: Promise<void> | null = null;
 
 // Global map to track active cleanSpentProofs operations per mint
 const activeCleanupPromises = new Map<string, Promise<Proof[]>>();
+
+// Maps a generated send-token string to its pending-proof backup key, so the UI
+// can later confirm (the user copied/sent the token) or discard the send and the
+// correct localStorage backup is cleared. Without this mapping the backup would
+// linger until recovery re-credits it on the next load.
+const pendingKeyByToken = new Map<string, string>();
 
 export function useCashuToken() {
   const [isLoading, setIsLoading] = useState(false);
@@ -34,52 +46,35 @@ export function useCashuToken() {
    * This should be called on app startup
    */
   const recoverPendingProofs = async () => {
+    const runRecovery = () =>
+      recoverPendingSendProofs(localStorage, sessionStorage, {
+        restore: async ({ mintUrl, proofsToAdd }) => {
+          console.log("rdlogs: Recovering abandoned send proofs for", mintUrl);
+          // Re-credit the abandoned send back into the wallet.
+          await updateProofs({
+            mintUrl,
+            proofsToAdd,
+            proofsToRemove: [],
+          });
+        },
+      });
+
     try {
-      const keys = Object.keys(localStorage).filter((key) =>
-        key.startsWith("pending_send_proofs_")
-      );
-
-      for (const key of keys) {
-        try {
-          // Check if this specific proof has already been processed
-          const recoveryKey = `recovery_processed_${key}`;
-          if (sessionStorage.getItem(recoveryKey)) {
-            console.log(
-              "rdlogs: Skipping already processed pending proof:",
-              key
-            );
-            continue;
-          }
-
-          const pendingData = JSON.parse(localStorage.getItem(key) || "{}");
-          const { mintUrl, proofsToSend, timestamp } = pendingData;
-
-          // Only recover proofs that are less than 1 hour old to avoid stale data
-          if (
-            Date.now() - timestamp < 60 * 60 * 1000 &&
-            mintUrl &&
-            proofsToSend
-          ) {
-            console.log("rdlogs: Recovering pending proofs:", key);
-
-            // Mark this proof as being processed
-            sessionStorage.setItem(recoveryKey, "true");
-
-            // Add the proofs back to the wallet
-            await updateProofs({
-              mintUrl,
-              proofsToAdd: proofsToSend,
-              proofsToRemove: [],
-            });
-          }
-
-          // Clean up the pending entry regardless
-          localStorage.removeItem(key);
-        } catch (error) {
-          console.error("Error recovering pending proofs for key:", key, error);
-          // Clean up corrupted entries
-          localStorage.removeItem(key);
-        }
+      // Cross-tab guard (HOLE-1): the per-record claim inside
+      // recoverPendingSendProofs already lives in shared localStorage so a backup
+      // is restored exactly once across tabs. When available, navigator.locks
+      // gives us an additional outer mutex so only one tab runs the whole pass at
+      // a time, closing the microsecond read-modify-write window entirely.
+      const locks = (
+        globalThis as { navigator?: { locks?: LockManager } }
+      ).navigator?.locks;
+      if (locks?.request) {
+        await locks.request(
+          "routstr:pending-send-proofs-recovery",
+          runRecovery
+        );
+      } else {
+        await runRecovery();
       }
     } catch (error) {
       console.error("Error during pending proofs recovery:", error);
@@ -119,14 +114,29 @@ export function useCashuToken() {
    * @param mintUrl The URL of the mint to use
    * @param amount Amount to send in satoshis
    * @param p2pkPubkey The P2PK pubkey to lock the proofs to
+   * @param unit Optional unit override ("sat" | "msat")
+   * @param options.isUserSend When true (the default), this is an interactive
+   *   "Send > eCash token" flow where the token string is NOT persisted anywhere
+   *   except React state. We therefore keep a recoverable localStorage backup of
+   *   the swapped-out proofs until the user explicitly confirms/discards the send
+   *   (see confirmTokenSent / discardToken) so an accidental modal-close cannot
+   *   lose funds. When false (paid-API spend, baseUrl != ''), the caller —
+   *   spendCashu — persists the token itself and owns refund/recovery, so we must
+   *   NOT leave a recoverable backup behind: it would be re-credited by
+   *   recoverPendingProofs() on the next load, double-crediting the wallet and
+   *   invalidating the token the provider is about to redeem ("proofs already
+   *   spent"). For that path the backup is deleted immediately.
    * @returns Encoded token string
    */
   const sendToken = async (
     mintUrl: string,
     amount: number,
     p2pkPubkey?: string,
-    unit?: string
+    unit?: string,
+    options?: { isUserSend?: boolean }
   ): Promise<string> => {
+    // Default to the safe interactive behaviour; only the paid-API path opts out.
+    const isUserSend = options?.isUserSend ?? true;
     setIsLoading(true);
     setError(null);
     try {
@@ -223,22 +233,22 @@ export function useCashuToken() {
         }
       }
 
-      // Store proofs temporarily before updating wallet state
-      const pendingProofsKey = `pending_send_proofs_${Date.now()}`;
-      localStorage.setItem(
-        pendingProofsKey,
-        JSON.stringify({
-          normalizedMintUrl,
-          proofsToSend: proofsToSend.map((p) => ({
-            id: p.id || "",
-            amount: p.amount,
-            secret: p.secret || "",
-            C: p.C || "",
-          })),
-          timestamp: Date.now(),
-          tokenAmount: amount,
-        })
-      );
+      // Store proofs temporarily before updating wallet state. This backup is the
+      // ONLY persisted copy of the sats for a user send (the token string lives in
+      // React state). It MUST survive until the user explicitly copies/sends the
+      // token; otherwise an accidental modal-close would lose the funds.
+      // recoverPendingProofs() re-credits the wallet from this backup on next load.
+      //
+      // For the paid-API spend path (isUserSend === false) the caller persists the
+      // token and owns refund/recovery, so a recoverable backup here would be
+      // double-credited on the next load. We still write the backup as a short-lived
+      // crash guard across the updateProofs() swap below, then delete it before
+      // returning so nothing recoverable is left behind.
+      const pendingProofsKey = savePendingSendProofs(localStorage, {
+        mintUrl: normalizedMintUrl,
+        proofsToSend,
+        tokenAmount: amount,
+      });
       // Create new token for the proofs we're keeping
       if (proofsToKeep.length > 0) {
         // update proofs
@@ -267,8 +277,24 @@ export function useCashuToken() {
         unit: preferredUnit,
       });
       console.log("rdlogs: token", token);
-      // Clean up pending proofs after successful token creation
-      localStorage.removeItem(pendingProofsKey);
+
+      if (isUserSend) {
+        // USER SEND: do NOT delete the pending-proof backup here. At this point the
+        // token has not yet reached the UI, let alone been copied/sent. Deleting now
+        // re-opens the original fund-loss window (modal closed before copy => funds
+        // gone with no backup to recover from). The backup is cleared only when the
+        // caller explicitly confirms the send via confirmTokenSent()/discardToken(),
+        // or auto-recovered by recoverPendingProofs() if the send is abandoned.
+        // Remember which backup belongs to this token so the UI can confirm/discard it.
+        pendingKeyByToken.set(token, pendingProofsKey);
+      } else {
+        // PAID-API SPEND: the token is returned to spendCashu, which persists it and
+        // owns refund/recovery. There is no interactive copy step to confirm, so the
+        // recoverable backup MUST be removed now. Leaving it would cause
+        // recoverPendingProofs() to re-credit these proofs on the next load while the
+        // provider also redeems the token => double-credit / "proofs already spent".
+        cleanupPendingProofs(pendingProofsKey);
+      }
 
       return token;
     } catch (error) {
@@ -477,13 +503,17 @@ export function useCashuToken() {
         // Get preferred unit: msat over sat if both are active
         let keysets = mintDetails?.keysets;
 
-        const activeKeysets = keysets?.filter((k) => k.active || (k as any)._active);
-        const units = [...new Set(activeKeysets?.map((k) => k.unit || (k as any)._unit))];
+        const activeKeysets = keysets?.filter(
+          (k) => k.active || (k as any)._active
+        );
+        const units = [
+          ...new Set(activeKeysets?.map((k) => k.unit || (k as any)._unit)),
+        ];
         const preferredUnit = units?.includes("msat")
           ? "msat"
           : units?.includes("sat")
             ? "sat"
-            : (units?.[0] || "sat");
+            : units?.[0] || "sat";
 
         const wallet = new Wallet(mint, {
           unit: preferredUnit,
@@ -713,6 +743,53 @@ export function useCashuToken() {
   };
 
   /**
+   * Confirm that a generated send token was explicitly copied/sent by the user.
+   * Drops the pending-proof backup so recovery will not re-credit (and thereby
+   * invalidate) the token the user now holds.
+   * @param token The encoded token string returned by sendToken()
+   */
+  const confirmTokenSent = (token: string) => {
+    const key = pendingKeyByToken.get(token);
+    if (!key) return;
+    try {
+      markPendingSendProofsSent(localStorage, key);
+    } catch (error) {
+      console.error("Error confirming sent token:", error);
+    } finally {
+      pendingKeyByToken.delete(token);
+    }
+  };
+
+  /**
+   * Discard a generated send token the user chose not to use, re-crediting the
+   * swapped-out proofs back into the wallet and clearing the backup. Safe to call
+   * even if recovery already restored the proofs (the backup is read first).
+   * @param token The encoded token string returned by sendToken()
+   */
+  const discardToken = async (token: string) => {
+    const key = pendingKeyByToken.get(token);
+    if (!key) return;
+    pendingKeyByToken.delete(token);
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw) {
+        const record = JSON.parse(raw);
+        if (record?.mintUrl && record?.proofsToSend?.length) {
+          await updateProofs({
+            mintUrl: record.mintUrl,
+            proofsToAdd: record.proofsToSend,
+            proofsToRemove: [],
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Error discarding send token:", error);
+    } finally {
+      clearPendingSendProofsBackup(localStorage, key);
+    }
+  };
+
+  /**
    * Reset the recovery state to allow re-running recovery
    * Useful for testing or manual recovery triggers
    */
@@ -728,6 +805,9 @@ export function useCashuToken() {
 
   return {
     sendToken,
+    confirmTokenSent,
+    discardToken,
+    recoverPendingProofs,
     receiveToken,
     cleanSpentProofs,
     cleanupPendingProofs,

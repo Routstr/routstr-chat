@@ -261,6 +261,7 @@ const SixtyWallet: React.FC<{
     receiveToken,
     cleanSpentProofs,
     cleanupPendingProofs,
+    confirmTokenSent,
     isLoading: isTokenLoading,
     error: hookError,
     addMintIfNotExists,
@@ -626,6 +627,10 @@ const SixtyWallet: React.FC<{
   const copyTokenToClipboard = () => {
     if (generatedToken) {
       navigator.clipboard.writeText(generatedToken);
+      // The user has now taken custody of the token: confirm the send so the
+      // pending-proof backup is cleared and recovery won't re-credit (and thus
+      // invalidate) the token they just copied.
+      confirmTokenSent(generatedToken);
       setSuccessMessage("Token copied to clipboard");
       setTimeout(() => setSuccessMessage(null), 3000);
     }

@@ -6,3 +6,4 @@
 export * from "./balance";
 export * from "./fees";
 export * from "./formatting";
+export * from "./pendingSendProofs";

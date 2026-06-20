@@ -19,7 +19,7 @@ import { toast } from "sonner";
 export function useWalletSend() {
   const { currentMintUnit } = useChat();
   const { addInvoice, updateInvoice } = useInvoiceSync();
-  const { cleanSpentProofs } = useCashuToken();
+  const { cleanSpentProofs, confirmTokenSent } = useCashuToken();
   const cashuStore = useCashuStore();
   const { wallet, updateProofs } = useCashuWallet();
   const { spendCashu } = useCashuWithXYZ();
@@ -62,6 +62,12 @@ export function useWalletSend() {
   const copyToClipboard = useCallback(async (text: string, label = "Text") => {
     try {
       await navigator.clipboard.writeText(text);
+      // When the copied text is the generated send token, the user has taken
+      // custody of it: confirm the send so the pending-proof backup is cleared
+      // and recovery won't re-credit (and thus invalidate) it.
+      if (text && text === generatedToken) {
+        confirmTokenSent(text);
+      }
       setCopySuccess(true);
       setSuccessMessage(`${label} copied to clipboard!`);
       setTimeout(() => {
@@ -71,7 +77,7 @@ export function useWalletSend() {
     } catch {
       setError("Failed to copy to clipboard");
     }
-  }, []);
+  }, [generatedToken, confirmTokenSent]);
 
   const generateSendToken = useCallback(async () => {
     if (!sendAmount || isNaN(parseInt(sendAmount))) {

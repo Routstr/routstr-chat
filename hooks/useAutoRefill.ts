@@ -157,10 +157,18 @@ export function useAutoRefill({
 
         toast.info(`Auto-topping up API key with ${settings.amount} sats...`);
 
-        // Generate Cashu token for topup using sendToken
+        // Generate Cashu token for topup using sendToken. This is an API spend
+        // (the token is handed to the provider's /v1/wallet/topup endpoint, not
+        // shown to the user for copy), so mark it isUserSend:false: no recoverable
+        // pending_send_proofs_* backup must be left behind, otherwise
+        // recoverPendingProofs() would re-credit it on the next load while the
+        // provider has already redeemed it (double-credit / "proofs already spent").
         const cashuToken = await sendToken(
           cashuStore.activeMintUrl,
-          settings.amount
+          settings.amount,
+          undefined,
+          undefined,
+          { isUserSend: false }
         );
 
         if (!cashuToken) {
