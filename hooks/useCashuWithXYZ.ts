@@ -540,7 +540,21 @@ export function useCashuWithXYZ() {
         // Enter critical section - prevent accidental refresh
         isSpendingCritical.current = true;
         try {
-          token = await sendToken(mintUrl, adjustedAmount, p2pkPubkey);
+          // baseUrl === "" is an interactive user send (the token is shown in the UI
+          // and confirmed on copy) => keep the recoverable backup. baseUrl !== "" is
+          // a paid-API spend: spendCashu persists the token and owns refund/recovery,
+          // so sendToken must NOT leave a recoverable pending_send_proofs_* backup
+          // (recoverPendingProofs() would otherwise re-credit it on reload =>
+          // double-credit / "proofs already spent").
+          token = await sendToken(
+            mintUrl,
+            adjustedAmount,
+            p2pkPubkey,
+            undefined,
+            {
+              isUserSend: baseUrl === "",
+            }
+          );
         } catch (error) {
           const errorMsg =
             error instanceof Error ? error.message : String(error);
@@ -601,7 +615,15 @@ export function useCashuWithXYZ() {
           `Active mint insufficient. Using mint ${selectedMintUrl} with balance ${selectedMintBalance} sats instead`
         );
         try {
-          token = await sendToken(selectedMintUrl, adjustedAmount, p2pkPubkey);
+          // Paid-API spend via the alternate mint: same rationale as above — no
+          // recoverable backup must be left behind.
+          token = await sendToken(
+            selectedMintUrl,
+            adjustedAmount,
+            p2pkPubkey,
+            undefined,
+            { isUserSend: false }
+          );
         } catch (error) {
           if (
             error instanceof Error &&

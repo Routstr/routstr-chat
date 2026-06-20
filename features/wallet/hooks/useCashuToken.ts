@@ -96,14 +96,29 @@ export function useCashuToken() {
    * @param mintUrl The URL of the mint to use
    * @param amount Amount to send in satoshis
    * @param p2pkPubkey The P2PK pubkey to lock the proofs to
+   * @param unit Optional unit override ("sat" | "msat")
+   * @param options.isUserSend When true (the default), this is an interactive
+   *   "Send > eCash token" flow where the token string is NOT persisted anywhere
+   *   except React state. We therefore keep a recoverable localStorage backup of
+   *   the swapped-out proofs until the user explicitly confirms/discards the send
+   *   (see confirmTokenSent / discardToken) so an accidental modal-close cannot
+   *   lose funds. When false (paid-API spend, baseUrl != ''), the caller —
+   *   spendCashu — persists the token itself and owns refund/recovery, so we must
+   *   NOT leave a recoverable backup behind: it would be re-credited by
+   *   recoverPendingProofs() on the next load, double-crediting the wallet and
+   *   invalidating the token the provider is about to redeem ("proofs already
+   *   spent"). For that path the backup is deleted immediately.
    * @returns Encoded token string
    */
   const sendToken = async (
     mintUrl: string,
     amount: number,
     p2pkPubkey?: string,
-    unit?: string
+    unit?: string,
+    options?: { isUserSend?: boolean }
   ): Promise<string> => {
+    // Default to the safe interactive behaviour; only the paid-API path opts out.
+    const isUserSend = options?.isUserSend ?? true;
     setIsLoading(true);
     setError(null);
     try {
@@ -205,6 +220,12 @@ export function useCashuToken() {
       // React state). It MUST survive until the user explicitly copies/sends the
       // token; otherwise an accidental modal-close would lose the funds.
       // recoverPendingProofs() re-credits the wallet from this backup on next load.
+      //
+      // For the paid-API spend path (isUserSend === false) the caller persists the
+      // token and owns refund/recovery, so a recoverable backup here would be
+      // double-credited on the next load. We still write the backup as a short-lived
+      // crash guard across the updateProofs() swap below, then delete it before
+      // returning so nothing recoverable is left behind.
       const pendingProofsKey = savePendingSendProofs(localStorage, {
         mintUrl: normalizedMintUrl,
         proofsToSend,
@@ -238,14 +259,24 @@ export function useCashuToken() {
         unit: preferredUnit,
       });
       console.log("rdlogs: token", token);
-      // IMPORTANT: do NOT delete the pending-proof backup here. At this point the
-      // token has not yet reached the UI, let alone been copied/sent. Deleting now
-      // re-opens the original fund-loss window (modal closed before copy => funds
-      // gone with no backup to recover from). The backup is cleared only when the
-      // caller explicitly confirms the send via confirmTokenSent()/discardToken(),
-      // or auto-recovered by recoverPendingProofs() if the send is abandoned.
-      // Remember which backup belongs to this token so the UI can confirm/discard it.
-      pendingKeyByToken.set(token, pendingProofsKey);
+
+      if (isUserSend) {
+        // USER SEND: do NOT delete the pending-proof backup here. At this point the
+        // token has not yet reached the UI, let alone been copied/sent. Deleting now
+        // re-opens the original fund-loss window (modal closed before copy => funds
+        // gone with no backup to recover from). The backup is cleared only when the
+        // caller explicitly confirms the send via confirmTokenSent()/discardToken(),
+        // or auto-recovered by recoverPendingProofs() if the send is abandoned.
+        // Remember which backup belongs to this token so the UI can confirm/discard it.
+        pendingKeyByToken.set(token, pendingProofsKey);
+      } else {
+        // PAID-API SPEND: the token is returned to spendCashu, which persists it and
+        // owns refund/recovery. There is no interactive copy step to confirm, so the
+        // recoverable backup MUST be removed now. Leaving it would cause
+        // recoverPendingProofs() to re-credit these proofs on the next load while the
+        // provider also redeems the token => double-credit / "proofs already spent".
+        cleanupPendingProofs(pendingProofsKey);
+      }
 
       return token;
     } catch (error) {
@@ -454,13 +485,17 @@ export function useCashuToken() {
         // Get preferred unit: msat over sat if both are active
         let keysets = mintDetails?.keysets;
 
-        const activeKeysets = keysets?.filter((k) => k.active || (k as any)._active);
-        const units = [...new Set(activeKeysets?.map((k) => k.unit || (k as any)._unit))];
+        const activeKeysets = keysets?.filter(
+          (k) => k.active || (k as any)._active
+        );
+        const units = [
+          ...new Set(activeKeysets?.map((k) => k.unit || (k as any)._unit)),
+        ];
         const preferredUnit = units?.includes("msat")
           ? "msat"
           : units?.includes("sat")
             ? "sat"
-            : (units?.[0] || "sat");
+            : units?.[0] || "sat";
 
         const wallet = new Wallet(mint, {
           unit: preferredUnit,

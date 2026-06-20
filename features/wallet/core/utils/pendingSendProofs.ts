@@ -141,38 +141,53 @@ export async function recoverPendingSendProofs(
   const maxAgeMs = options.maxAgeMs ?? DEFAULT_RECOVERY_WINDOW_MS;
 
   for (const key of listPendingKeys(storage)) {
-    try {
-      const recoveryKey = `recovery_processed_${key}`;
-      if (session.getItem(recoveryKey)) {
-        continue;
-      }
+    const recoveryKey = `recovery_processed_${key}`;
+    if (session.getItem(recoveryKey)) {
+      continue;
+    }
 
+    // Phase 1: read + parse the record. A corrupt/unparseable entry can never be
+    // recovered, so it is pruned and we move on. We deliberately do NOT wrap the
+    // restore() call in this catch — a genuine restore failure must keep its
+    // backup (see phase 2) so the funds remain recoverable on a later attempt.
+    let record: Partial<PendingSendProofsRecord>;
+    try {
       const raw = storage.getItem(key);
       if (!raw) continue;
-      const record = JSON.parse(raw) as Partial<PendingSendProofsRecord>;
-      const { mintUrl, proofsToSend, timestamp, sent } = record;
-
-      const fresh = typeof timestamp === "number" && now - timestamp < maxAgeMs;
-
-      if (
-        !sent &&
-        fresh &&
-        mintUrl &&
-        proofsToSend &&
-        proofsToSend.length > 0
-      ) {
-        // Mark as being processed BEFORE restoring so a concurrent mount does
-        // not re-credit the same proofs.
-        session.setItem(recoveryKey, "true");
-        await options.restore({ mintUrl, proofsToAdd: proofsToSend });
-      }
-
-      // Clean up the backup regardless of whether it was recovered, stale, or
-      // already confirmed.
-      storage.removeItem(key);
+      record = JSON.parse(raw) as Partial<PendingSendProofsRecord>;
     } catch {
-      // Corrupt entry — remove it so it does not block future recoveries.
       storage.removeItem(key);
+      continue;
     }
+
+    const { mintUrl, proofsToSend, timestamp, sent } = record;
+    const fresh = typeof timestamp === "number" && now - timestamp < maxAgeMs;
+    const shouldRecover =
+      !sent && fresh && !!mintUrl && !!proofsToSend && proofsToSend.length > 0;
+
+    // Phase 2: restore (if needed), then clean up ONLY on success.
+    if (shouldRecover) {
+      // Mark as being processed BEFORE restoring so a concurrent mount does not
+      // re-credit the same proofs.
+      session.setItem(recoveryKey, "true");
+      try {
+        await options.restore({
+          mintUrl: mintUrl!,
+          proofsToAdd: proofsToSend!,
+        });
+      } catch (err) {
+        // restore() failed (e.g. the wallet failed to persist the re-credit).
+        // Do NOT delete the backup — it is the only surviving copy of the funds.
+        // Roll back the de-dupe marker so a later recovery attempt can retry, and
+        // propagate so the caller (recoverPendingProofs) can log it.
+        session.setItem(recoveryKey, "");
+        throw err;
+      }
+    }
+
+    // Clean up the backup only on a successful outcome: recovered, stale, or
+    // already confirmed. A restore failure re-throws above and never reaches here,
+    // so the backup is preserved for a future retry.
+    storage.removeItem(key);
   }
 }

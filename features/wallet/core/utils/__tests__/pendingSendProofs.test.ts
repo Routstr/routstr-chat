@@ -163,6 +163,59 @@ describe("pendingSendProofs (NIP-60 send recovery)", () => {
     ).toHaveLength(0);
   });
 
+  it("HARDENING: a restore() failure does NOT delete the backup (funds stay recoverable)", async () => {
+    const key = savePendingSendProofs(local, {
+      mintUrl: MINT,
+      proofsToSend: [proof(8, "a"), proof(2, "b")],
+      tokenAmount: 10,
+      now: Date.now(),
+    });
+
+    // First recovery attempt: restore throws (e.g. wallet failed to persist).
+    await expect(
+      recoverPendingSendProofs(local, session, {
+        now: Date.now(),
+        restore: async () => {
+          throw new Error("wallet update failed");
+        },
+      })
+    ).rejects.toThrow("wallet update failed");
+
+    // The backup MUST still exist — deleting it would lose the only copy of the funds.
+    expect(local.getItem(key)).not.toBeNull();
+
+    // The session de-dupe marker must be rolled back so a retry is allowed.
+    expect(session.getItem(`recovery_processed_${key}`)).toBeFalsy();
+
+    // Second attempt succeeds and now the backup is cleaned up.
+    const restored: Proof[] = [];
+    await recoverPendingSendProofs(local, session, {
+      now: Date.now(),
+      restore: async ({ proofsToAdd }) => {
+        restored.push(...(proofsToAdd as unknown as Proof[]));
+      },
+    });
+    expect(restored.map((p) => p.secret).sort()).toEqual(["a", "b"]);
+    expect(local.getItem(key)).toBeNull();
+  });
+
+  it("HARDENING: a corrupt/unparseable entry IS removed (it can never be recovered)", async () => {
+    const key = `${PENDING_SEND_PROOFS_PREFIX}corrupt`;
+    local.setItem(key, "{ not valid json");
+
+    let restoreCalled = false;
+    await recoverPendingSendProofs(local, session, {
+      now: Date.now(),
+      restore: async () => {
+        restoreCalled = true;
+      },
+    });
+
+    expect(restoreCalled).toBe(false);
+    // Corrupt entries are pruned so they don't block future recoveries.
+    expect(local.getItem(key)).toBeNull();
+  });
+
   it("clearPendingSendProofs (discard) removes the backup without recovery", async () => {
     const key = savePendingSendProofs(local, {
       mintUrl: MINT,
