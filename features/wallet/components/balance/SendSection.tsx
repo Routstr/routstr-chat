@@ -162,6 +162,11 @@ const SendSection: React.FC<SendSectionProps> = ({
                   ? "Generated Token:"
                   : "Generated Tokens:"}
               </div>
+              <div className="bg-yellow-500/10 border border-yellow-500/30 text-yellow-700 dark:text-yellow-200 p-2 rounded-lg text-xs">
+                Stored only in this browser profile and not synced to Nostr.
+                Copy or reclaim before signing out, clearing site data, or
+                switching devices.
+              </div>
               {send.unclaimedTokens.map((entry) => (
                 <div
                   key={entry.id}
@@ -326,11 +331,16 @@ const SendSection: React.FC<SendSectionProps> = ({
         </div>
       )}
 
-      {(send.error || send.successMessage) && (
+      {(send.error || send.warningMessage || send.successMessage) && (
         <div>
           {send.error && (
             <div className="bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-200 p-2 rounded-lg text-xs">
               {send.error}
+            </div>
+          )}
+          {send.warningMessage && (
+            <div className="bg-yellow-500/10 border border-yellow-500/30 text-yellow-700 dark:text-yellow-200 p-2 rounded-lg text-xs">
+              {send.warningMessage}
             </div>
           )}
           {send.successMessage && (
