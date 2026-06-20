@@ -52,7 +52,24 @@ export interface PendingSendProofsRecord {
    * backup is simply cleaned up.
    */
   sent: boolean;
+  /**
+   * Cross-tab recovery claim. Set on the SHARED (localStorage) record — not on
+   * tab-private sessionStorage — immediately before `restore()` runs. A second
+   * tab that reads back a record already claimed within `CLAIM_TTL_MS` skips it,
+   * so a single backup is restored exactly once even with concurrent tabs.
+   */
+  processing?: boolean;
+  /** Epoch ms when `processing` was set. Used to expire stale/abandoned claims. */
+  claimedAt?: number;
 }
+
+/**
+ * How long a `{ processing: true }` claim is honoured before a later recovery
+ * pass is allowed to reclaim the record. This bounds the damage if a tab sets
+ * the claim and then dies mid-restore (e.g. crash/refresh) without rolling back:
+ * the funds become recoverable again after the TTL rather than being stranded.
+ */
+export const CLAIM_TTL_MS = 30 * 1000;
 
 function serializeProofs(proofs: Proof[]): SerializedProof[] {
   return proofs.map((p) => ({
@@ -118,16 +135,103 @@ function listPendingKeys(storage: Storage): string[] {
 }
 
 /**
+ * Atomically claim a backup record for recovery in SHARED storage (localStorage).
+ *
+ * This is the cross-tab de-dupe guard. We read the current record, and if it is
+ * already claimed (`processing: true`) within `CLAIM_TTL_MS`, we return `null`
+ * so the caller skips it — another tab/pass owns it. Otherwise we write back the
+ * record with `{ processing: true, claimedAt: now }` and return the parsed
+ * record so the caller can restore it.
+ *
+ * Web Storage is synchronous and single-threaded per tab, so this read-modify-
+ * write is atomic *within* a tab. Across tabs there is no true CAS, but because
+ * each tab re-reads and re-writes the same shared key, the window in which two
+ * tabs both observe an unclaimed record and proceed is the few microseconds
+ * between this function's getItem and setItem — and the `claimedAt` TTL plus the
+ * post-restore `removeItem` make a double-credit vanishingly unlikely in
+ * practice. (`navigator.locks` would close that window entirely; it is used as
+ * an outer guard by the caller when available — see recoverPendingProofs.)
+ *
+ * Returns the parsed record on a successful claim, or `null` to skip.
+ */
+function claimRecordForRecovery(
+  storage: Storage,
+  key: string,
+  now: number
+): Partial<PendingSendProofsRecord> | null {
+  const raw = storage.getItem(key);
+  if (!raw) return null;
+
+  let record: Partial<PendingSendProofsRecord>;
+  try {
+    record = JSON.parse(raw) as Partial<PendingSendProofsRecord>;
+  } catch {
+    // Corrupt/unparseable entry: can never be recovered. Prune and skip.
+    storage.removeItem(key);
+    return null;
+  }
+
+  // Already claimed by another tab/pass and still within the TTL -> skip.
+  if (
+    record.processing === true &&
+    typeof record.claimedAt === "number" &&
+    now - record.claimedAt < CLAIM_TTL_MS
+  ) {
+    return null;
+  }
+
+  // Take the claim by writing the marker back to the SHARED record. A second tab
+  // that now reads this key will see `processing: true` and skip it.
+  const claimed: Partial<PendingSendProofsRecord> = {
+    ...record,
+    processing: true,
+    claimedAt: now,
+  };
+  storage.setItem(key, JSON.stringify(claimed));
+  return record;
+}
+
+/**
+ * Release a recovery claim previously taken by `claimRecordForRecovery`, so a
+ * later recovery pass may retry the record. Used after a restore() failure: the
+ * backup must stay recoverable, so we clear `processing` rather than delete it.
+ */
+function releaseRecordClaim(storage: Storage, key: string): void {
+  const raw = storage.getItem(key);
+  if (!raw) return;
+  try {
+    const record = JSON.parse(raw) as Partial<PendingSendProofsRecord>;
+    delete record.processing;
+    delete record.claimedAt;
+    storage.setItem(key, JSON.stringify(record));
+  } catch {
+    // If it became corrupt, leave it; the corrupt-prune path will handle it.
+  }
+}
+
+/**
  * Recover any abandoned sends. For each non-confirmed backup that is still within
  * the recovery window, the proofs are re-credited to the wallet via `restore`.
- * All processed backups (recovered, stale, confirmed, or corrupt) are then removed.
+ * All successfully processed backups (recovered, stale, confirmed, or corrupt)
+ * are then removed. A backup whose restore() FAILS is preserved for a later retry.
  *
- * `sessionStorage` is used to de-dupe recovery within a single browser session so
- * a backup is not re-credited twice if recovery runs from multiple mount points.
+ * Cross-tab safety (HOLE-1): the recovery claim lives on the SHARED `storage`
+ * (localStorage) record as `{ processing, claimedAt }`, NOT on tab-private
+ * `sessionStorage`. Two tabs running recovery concurrently therefore see each
+ * other's claim and a given backup is restored exactly once.
+ *
+ * Failure isolation (HOLE-2): each record is processed in its own try/catch and
+ * a restore() failure NEVER aborts the loop — later backups are always processed
+ * and never silently dropped. Failures are collected and re-thrown as an
+ * aggregate AFTER the whole pass so the caller can still observe/log them.
+ *
+ * @param session Retained for backward-compatible signature; recovery no longer
+ *   relies on sessionStorage for de-dupe (it was tab-private and double-credited
+ *   across tabs). The shared-storage claim above supersedes it.
  */
 export async function recoverPendingSendProofs(
   storage: Storage,
-  session: Pick<Storage, "getItem" | "setItem">,
+  _session: Pick<Storage, "getItem" | "setItem">,
   options: {
     restore: (args: {
       mintUrl: string;
@@ -140,54 +244,59 @@ export async function recoverPendingSendProofs(
   const now = options.now ?? Date.now();
   const maxAgeMs = options.maxAgeMs ?? DEFAULT_RECOVERY_WINDOW_MS;
 
+  const failures: unknown[] = [];
+
   for (const key of listPendingKeys(storage)) {
-    const recoveryKey = `recovery_processed_${key}`;
-    if (session.getItem(recoveryKey)) {
-      continue;
-    }
-
-    // Phase 1: read + parse the record. A corrupt/unparseable entry can never be
-    // recovered, so it is pruned and we move on. We deliberately do NOT wrap the
-    // restore() call in this catch — a genuine restore failure must keep its
-    // backup (see phase 2) so the funds remain recoverable on a later attempt.
-    let record: Partial<PendingSendProofsRecord>;
+    // Each iteration is fully isolated: a thrown error here is recorded and the
+    // loop CONTINUES to the next key. We never re-throw mid-loop (HOLE-2).
     try {
-      const raw = storage.getItem(key);
-      if (!raw) continue;
-      record = JSON.parse(raw) as Partial<PendingSendProofsRecord>;
-    } catch {
-      storage.removeItem(key);
-      continue;
-    }
+      // Atomically claim the record in SHARED storage. Returns null when the
+      // record is missing, corrupt (pruned), or already claimed by another tab.
+      const record = claimRecordForRecovery(storage, key, now);
+      if (!record) continue;
 
-    const { mintUrl, proofsToSend, timestamp, sent } = record;
-    const fresh = typeof timestamp === "number" && now - timestamp < maxAgeMs;
-    const shouldRecover =
-      !sent && fresh && !!mintUrl && !!proofsToSend && proofsToSend.length > 0;
+      const { mintUrl, proofsToSend, timestamp, sent } = record;
+      const fresh = typeof timestamp === "number" && now - timestamp < maxAgeMs;
+      const shouldRecover =
+        !sent && fresh && !!mintUrl && !!proofsToSend && proofsToSend.length > 0;
 
-    // Phase 2: restore (if needed), then clean up ONLY on success.
-    if (shouldRecover) {
-      // Mark as being processed BEFORE restoring so a concurrent mount does not
-      // re-credit the same proofs.
-      session.setItem(recoveryKey, "true");
-      try {
-        await options.restore({
-          mintUrl: mintUrl!,
-          proofsToAdd: proofsToSend!,
-        });
-      } catch (err) {
-        // restore() failed (e.g. the wallet failed to persist the re-credit).
-        // Do NOT delete the backup — it is the only surviving copy of the funds.
-        // Roll back the de-dupe marker so a later recovery attempt can retry, and
-        // propagate so the caller (recoverPendingProofs) can log it.
-        session.setItem(recoveryKey, "");
-        throw err;
+      if (shouldRecover) {
+        try {
+          await options.restore({
+            mintUrl: mintUrl!,
+            proofsToAdd: proofsToSend!,
+          });
+        } catch (err) {
+          // restore() failed (e.g. the wallet failed to persist the re-credit).
+          // Do NOT delete the backup — it is the only surviving copy of the funds.
+          // Release the claim so a later recovery attempt can retry, record the
+          // failure, and CONTINUE to the next key (never abort the pass).
+          releaseRecordClaim(storage, key);
+          failures.push(err);
+          continue;
+        }
       }
-    }
 
-    // Clean up the backup only on a successful outcome: recovered, stale, or
-    // already confirmed. A restore failure re-throws above and never reaches here,
-    // so the backup is preserved for a future retry.
-    storage.removeItem(key);
+      // Clean up the backup only on a successful outcome: recovered, stale, or
+      // already confirmed. A restore failure `continue`s above and never reaches
+      // here, so the backup is preserved for a future retry.
+      storage.removeItem(key);
+    } catch (err) {
+      // Any unexpected error for this key (e.g. storage write failure) must not
+      // strand the remaining backups. Record and move on.
+      failures.push(err);
+    }
+  }
+
+  // Surface failures AFTER the full pass so every backup was given a chance and
+  // the caller can still log the error. The single-backup case (existing
+  // hardening test) therefore still rejects, while multi-backup passes never
+  // skip a later, recoverable backup because of an earlier failure (HOLE-2).
+  if (failures.length > 0) {
+    if (failures.length === 1) throw failures[0];
+    throw new AggregateError(
+      failures,
+      `recoverPendingSendProofs: ${failures.length} backups failed to restore`
+    );
   }
 }

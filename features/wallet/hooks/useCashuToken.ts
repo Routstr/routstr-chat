@@ -46,8 +46,8 @@ export function useCashuToken() {
    * This should be called on app startup
    */
   const recoverPendingProofs = async () => {
-    try {
-      await recoverPendingSendProofs(localStorage, sessionStorage, {
+    const runRecovery = () =>
+      recoverPendingSendProofs(localStorage, sessionStorage, {
         restore: async ({ mintUrl, proofsToAdd }) => {
           console.log("rdlogs: Recovering abandoned send proofs for", mintUrl);
           // Re-credit the abandoned send back into the wallet.
@@ -58,6 +58,24 @@ export function useCashuToken() {
           });
         },
       });
+
+    try {
+      // Cross-tab guard (HOLE-1): the per-record claim inside
+      // recoverPendingSendProofs already lives in shared localStorage so a backup
+      // is restored exactly once across tabs. When available, navigator.locks
+      // gives us an additional outer mutex so only one tab runs the whole pass at
+      // a time, closing the microsecond read-modify-write window entirely.
+      const locks = (
+        globalThis as { navigator?: { locks?: LockManager } }
+      ).navigator?.locks;
+      if (locks?.request) {
+        await locks.request(
+          "routstr:pending-send-proofs-recovery",
+          runRecovery
+        );
+      } else {
+        await runRecovery();
+      }
     } catch (error) {
       console.error("Error during pending proofs recovery:", error);
     }
