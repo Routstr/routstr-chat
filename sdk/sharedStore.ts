@@ -11,10 +11,12 @@ import {
   createStorageAdapterFromStore,
   createProviderRegistryFromStore,
   createIndexedDBDriver,
+  createIndexedDBUsageTrackingDriver,
   createMemoryDriver,
+  createMemoryUsageTrackingDriver,
 } from "@routstr/sdk/storage";
 
-import type { SdkStore } from "@routstr/sdk/storage";
+import type { SdkStore, UsageTrackingDriver } from "@routstr/sdk/storage";
 import type { DiscoveryAdapter } from "@routstr/sdk/discovery";
 import type { StorageAdapter, ProviderRegistry } from "@routstr/sdk/wallet";
 
@@ -28,6 +30,12 @@ const isBrowser = typeof window !== "undefined";
  * metadata) and an in-memory driver during SSR / edge rendering.
  */
 const driver = isBrowser ? createIndexedDBDriver() : createMemoryDriver();
+
+// Keep usage in a separate database: the SDK's two IndexedDB drivers use
+// independent schemas and cannot safely share the default database.
+const usageTrackingDriver: UsageTrackingDriver = isBrowser
+  ? createIndexedDBUsageTrackingDriver({ dbName: "routstr-chat-usage" })
+  : createMemoryUsageTrackingDriver();
 
 // ---------------------------------------------------------------------------
 // Singleton store
@@ -48,5 +56,12 @@ const providerRegistry: ProviderRegistry =
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
-export { store, hydrate, discoveryAdapter, storageAdapter, providerRegistry };
+export {
+  store,
+  hydrate,
+  discoveryAdapter,
+  storageAdapter,
+  providerRegistry,
+  usageTrackingDriver,
+};
 export type { SdkStore, DiscoveryAdapter, StorageAdapter, ProviderRegistry };
