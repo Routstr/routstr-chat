@@ -1,9 +1,12 @@
 import React, { useEffect, useState, useMemo } from "react";
+import { Copy } from "lucide-react";
+import { toast } from "sonner";
 import { TransactionHistory } from "@/types/chat";
 import {
   getPendingCashuTokenAmount,
   getPendingCashuTokenDistribution,
 } from "../../utils/cashuUtils";
+import { getLocalCashuTokens } from "@/utils/storageUtils";
 import { useTransactionHistoryStore } from "@/features/wallet/state/transactionHistoryStore";
 
 type ViewMode = "combined" | "separate";
@@ -30,6 +33,7 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
     { baseUrl: string; amount: number }[]
   >([]);
   const [viewMode, setViewMode] = useState<ViewMode>("combined");
+  const [copiedPending, setCopiedPending] = useState(false);
 
   // Get transaction history from the store
   const getHistoryEntries = useTransactionHistoryStore(
@@ -126,6 +130,23 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
     };
   }, []);
 
+  const handleCopyPendingToken = async () => {
+    const tokens = getLocalCashuTokens();
+    if (tokens.length === 0) {
+      toast.error("No pending token to copy");
+      return;
+    }
+    const tokenString = tokens.map((t) => t.token).join("\n");
+    try {
+      await navigator.clipboard.writeText(tokenString);
+      setCopiedPending(true);
+      toast.success("Pending token copied to clipboard!");
+      setTimeout(() => setCopiedPending(false), 2000);
+    } catch (err) {
+      toast.error("Failed to copy token");
+    }
+  };
+
   const handleClearTransactions = () => {
     if (
       window.confirm(
@@ -200,8 +221,16 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
               <div className="flex items-center gap-3">
                 <div className="w-2 h-2 rounded-full bg-yellow-500" />
                 <div>
-                  <div className="text-sm font-medium text-foreground">
+                  <div className="text-sm font-medium text-foreground flex items-center gap-2">
                     Pending
+                    <button
+                      type="button"
+                      onClick={handleCopyPendingToken}
+                      title={copiedPending ? "Copied!" : "Copy pending token"}
+                      className="inline-flex items-center p-1 rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                    </button>
                   </div>
                   {pendingDistribution.length > 0 && (
                     <div className="mt-0.5 space-y-0.5">
