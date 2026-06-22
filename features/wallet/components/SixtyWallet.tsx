@@ -451,6 +451,9 @@ const SixtyWallet: React.FC<{
 
       if (result.status === "success" && result.token) {
         setGeneratedToken(result.token);
+        // sendToken already persisted this token to unclaimedTokensStore,
+        // so it stays recoverable from the balance popover's send tab even
+        // if this view is closed before copying.
         setSuccessMessage(
           `Token generated for ${formatBalance(amountValue, currentMintUnit)}`
         );

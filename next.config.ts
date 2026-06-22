@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import withPWA from "@ducanh2912/next-pwa";
+import pkg from "./package.json";
 
 const withPWACfg = withPWA({
   dest: "public",
@@ -48,6 +49,10 @@ const withPWACfg = withPWA({
 });
 
 const nextConfig: NextConfig = {
+  // Inline the version at build time so package.json never reaches the client bundle.
+  env: {
+    NEXT_PUBLIC_APP_VERSION: pkg.version,
+  },
   output: "export",
   images: {
     unoptimized: true,

@@ -7,8 +7,10 @@ import { useChat } from "@/context/ChatProvider";
 import {
   useCashuToken,
   useCashuStore,
+  useUnclaimedTokensStore,
   formatBalance,
   calculateBalanceByMint,
+  type UnclaimedToken,
 } from "@/features/wallet";
 import { getCurrentMintBalance as utilGetCurrentMintBalance } from "@/utils/walletUtils";
 import { payMeltQuote, createMeltQuote } from "@/lib/cashuLightning";
@@ -19,8 +21,9 @@ import { toast } from "sonner";
 export function useWalletSend() {
   const { currentMintUnit } = useChat();
   const { addInvoice, updateInvoice } = useInvoiceSync();
-  const { cleanSpentProofs } = useCashuToken();
+  const { cleanSpentProofs, receiveToken } = useCashuToken();
   const cashuStore = useCashuStore();
+  const unclaimedTokensStore = useUnclaimedTokensStore();
   const { wallet, updateProofs } = useCashuWallet();
   const { spendCashu } = useCashuWithXYZ();
 
@@ -28,10 +31,11 @@ export function useWalletSend() {
   const [sendTab, setSendTab] = useState<"token" | "lightning">("token");
   const [sendAmount, setSendAmount] = useState("");
   const [isGeneratingSendToken, setIsGeneratingSendToken] = useState(false);
-  const [generatedToken, setGeneratedToken] = useState("");
-  const [copySuccess, setCopySuccess] = useState(false);
+  const [copiedTokenId, setCopiedTokenId] = useState<string | null>(null);
+  const [reclaimingTokenId, setReclaimingTokenId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [warningMessage, setWarningMessage] = useState("");
 
   // Lightning send state
   const [nip60SendInvoice, setNip60SendInvoice] = useState("");
@@ -41,14 +45,16 @@ export function useWalletSend() {
   const [isNip60Processing, setIsNip60Processing] = useState(false);
   const [isNip60LoadingInvoice, setIsNip60LoadingInvoice] = useState(false);
   const nip60ProcessingInvoiceRef = useRef<string | null>(null);
+  const reclaimsInFlightRef = useRef<Set<string>>(new Set());
 
+  // Unclaimed send tokens live in the persisted store, not this resettable UI state.
   const reset = useCallback(() => {
     setSendAmount("");
-    setGeneratedToken("");
     setSendTab("token");
     setError("");
     setSuccessMessage("");
-    setCopySuccess(false);
+    setWarningMessage("");
+    setCopiedTokenId(null);
     setIsGeneratingSendToken(false);
     setNip60SendInvoice("");
     setNip60MeltQuoteId("");
@@ -59,19 +65,23 @@ export function useWalletSend() {
     nip60ProcessingInvoiceRef.current = null;
   }, []);
 
-  const copyToClipboard = useCallback(async (text: string, label = "Text") => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopySuccess(true);
-      setSuccessMessage(`${label} copied to clipboard!`);
-      setTimeout(() => {
-        setCopySuccess(false);
-        setSuccessMessage("");
-      }, 2000);
-    } catch {
-      setError("Failed to copy to clipboard");
-    }
-  }, []);
+  const copyToClipboard = useCallback(
+    async (text: string, label = "Text", tokenId: string | null = null) => {
+      try {
+        await navigator.clipboard.writeText(text);
+        setCopiedTokenId(tokenId);
+        setWarningMessage("");
+        setSuccessMessage(`${label} copied to clipboard!`);
+        setTimeout(() => {
+          setCopiedTokenId(null);
+          setSuccessMessage("");
+        }, 2000);
+      } catch {
+        setError("Failed to copy to clipboard");
+      }
+    },
+    []
+  );
 
   const generateSendToken = useCallback(async () => {
     if (!sendAmount || isNaN(parseInt(sendAmount))) {
@@ -86,13 +96,13 @@ export function useWalletSend() {
     try {
       setError("");
       setSuccessMessage("");
-      setGeneratedToken("");
+      setWarningMessage("");
       setIsGeneratingSendToken(true);
       const amountValue =
         currentMintUnit === "msat" ? parseInt(sendAmount) / 1000 : parseInt(sendAmount);
       const result = await spendCashu(mintUrl, amountValue, "");
       if (result.status === "success" && result.token) {
-        setGeneratedToken(result.token);
+        setSendAmount("");
         setSuccessMessage(`Token generated for ${formatBalance(amountValue, currentMintUnit)}`);
       } else {
         setError(result.error || "Failed to generate token");
@@ -103,6 +113,50 @@ export function useWalletSend() {
       setIsGeneratingSendToken(false);
     }
   }, [sendAmount, cashuStore.activeMintUrl, currentMintUnit, spendCashu]);
+
+  const dismissUnclaimedToken = useCallback(
+    (id: string) => {
+      unclaimedTokensStore.removeUnclaimedToken(id);
+    },
+    [unclaimedTokensStore]
+  );
+
+  const reclaimUnclaimedToken = useCallback(
+    async (entry: UnclaimedToken) => {
+      // Synchronous guard: the disabled prop renders too late to stop a
+      // fast double-click from receiving the same token twice.
+      if (reclaimsInFlightRef.current.has(entry.id)) return;
+      reclaimsInFlightRef.current.add(entry.id);
+      try {
+        setReclaimingTokenId(entry.id);
+        setError("");
+        setWarningMessage("");
+        // Strict: only counts as reclaimed once the proofs are stored, so
+        // the entry is never removed while the funds are in limbo.
+        const proofs = await receiveToken(entry.token, true);
+        const total = proofs.reduce((sum, p) => sum + p.amount, 0);
+        unclaimedTokensStore.removeUnclaimedToken(entry.id);
+        setSuccessMessage(`Reclaimed ${formatBalance(total, entry.unit)} back to your wallet`);
+        setTimeout(() => setSuccessMessage(""), 5000);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (/already spent|already claimed|already redeemed/i.test(msg)) {
+          // Redeemed by the recipient, or by an earlier reclaim whose
+          // storage failed (those funds restore from backup on next start).
+          unclaimedTokensStore.removeUnclaimedToken(entry.id);
+          setSuccessMessage("");
+          setWarningMessage("Token was already redeemed.");
+          setTimeout(() => setWarningMessage(""), 5000);
+        } else {
+          setError(`Failed to reclaim token: ${msg}`);
+        }
+      } finally {
+        reclaimsInFlightRef.current.delete(entry.id);
+        setReclaimingTokenId(null);
+      }
+    },
+    [receiveToken, unclaimedTokensStore]
+  );
 
   const handleNip60InvoiceInput = useCallback(
     async (value: string) => {
@@ -172,6 +226,7 @@ export function useWalletSend() {
     try {
       setIsNip60Processing(true);
       setError("");
+      setWarningMessage("");
       const mintUrl = cashuStore.activeMintUrl;
       const selectedProofs = await cashuStore.getMintProofs(mintUrl);
       const totalProofsAmount = selectedProofs.reduce((sum, p) => sum + p.amount, 0);
@@ -220,10 +275,12 @@ export function useWalletSend() {
     sendTab, setSendTab,
     sendAmount, setSendAmount,
     isGeneratingSendToken,
-    generatedToken,
-    copySuccess,
+    unclaimedTokens: unclaimedTokensStore.unclaimedTokens,
+    copiedTokenId,
+    reclaimingTokenId,
     error, setError,
     successMessage,
+    warningMessage,
     nip60SendInvoice,
     nip60MeltQuoteId,
     invoiceAmount,
@@ -234,6 +291,8 @@ export function useWalletSend() {
     reset,
     copyToClipboard,
     generateSendToken,
+    dismissUnclaimedToken,
+    reclaimUnclaimedToken,
     handleNip60InvoiceInput,
     handleNip60PaymentCancel,
     handlePayLightningInvoice,

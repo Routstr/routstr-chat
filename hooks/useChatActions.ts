@@ -16,6 +16,7 @@ import { saveFile } from "@/utils/indexedDb";
 import { useWalletAdapter } from "./useWalletAdapter";
 import { useSdkClient } from "./useSdkClient";
 import { hydrate as hydrateStore } from "@/sdk/sharedStore";
+import { fetchAIResponse, consoleLogger } from "@routstr/sdk";
 
 export interface UseChatActionsReturn {
   inputMessage: string;
@@ -460,7 +461,7 @@ export const useChatActions = ({
           throw new Error("SDK client is not ready");
         }
 
-        await client.fetchAIResponse(
+        await fetchAIResponse(
           {
             messageHistory: messageHistory as any,
             selectedModel: selectedModel as any,
@@ -537,7 +538,8 @@ export const useChatActions = ({
             onLastMessageSatsUpdate: (satsSpent) => {
               updateLastMessageSatsSpent(originConversationId, satsSpent);
             },
-          }
+          },
+          { client, alertLevel: "min", logger: consoleLogger, getPendingCashuTokenAmount },
         );
         setPendingCashuAmountState(getPendingCashuTokenAmount());
       } finally {

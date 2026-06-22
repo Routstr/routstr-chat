@@ -31,8 +31,8 @@ const isBrowser = typeof window !== "undefined";
  */
 const driver = isBrowser ? createIndexedDBDriver() : createMemoryDriver();
 
-// Keep usage in a separate database: the SDK's two IndexedDB drivers use
-// independent schemas and cannot safely share the default database.
+// The SDK storage and usage drivers currently open the same default database
+// at different versions, so keep usage separate to avoid blocked upgrades.
 const usageTrackingDriver: UsageTrackingDriver = isBrowser
   ? createIndexedDBUsageTrackingDriver({ dbName: "routstr-chat-usage" })
   : createMemoryUsageTrackingDriver();

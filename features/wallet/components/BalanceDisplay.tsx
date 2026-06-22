@@ -14,6 +14,7 @@ import {
   useCashuWallet,
   useCreateCashuWallet,
   useCashuStore,
+  useUnclaimedTokensStore,
   calculateBalanceByMint,
 } from "@/features/wallet";
 import { isMintValid, getWalletMintData } from "@/utils/walletUtils";
@@ -86,6 +87,9 @@ const BalanceDisplay: React.FC<BalanceDisplayProps> = ({
     isPending: isCreatingWallet,
   } = useCreateCashuWallet();
   const cashuStore = useCashuStore();
+  const hasUnclaimedTokens = useUnclaimedTokensStore(
+    (state) => state.unclaimedTokens.length > 0
+  );
 
   const { availableMints, mintBalances, mintUnits } = React.useMemo(
     () => getWalletMintData(wallet, cashuStore, calculateBalanceByMint),
@@ -164,10 +168,12 @@ const BalanceDisplay: React.FC<BalanceDisplayProps> = ({
     }
   };
 
-  // Reset on popover open
+  // Reset on popover open. If there are generated-but-unclaimed eCash tokens,
+  // land on the send tab so the user finds their way back to them instead of
+  // the tokens silently disappearing behind the overview.
   React.useEffect(() => {
     if (isPopoverOpen) {
-      setActiveTab("overview");
+      setActiveTab(hasUnclaimedTokens ? "send" : "overview");
       setIsTransitioning(false);
       setIsMintSelectorOpen(false);
       receive.reset();

@@ -540,7 +540,14 @@ export function useCashuWithXYZ() {
         // Enter critical section - prevent accidental refresh
         isSpendingCritical.current = true;
         try {
-          token = await sendToken(mintUrl, adjustedAmount, p2pkPubkey);
+          // Only manual wallet sends opt into unclaimed-token recovery.
+          token = await sendToken(
+            mintUrl,
+            adjustedAmount,
+            p2pkPubkey,
+            undefined,
+            baseUrl === ""
+          );
         } catch (error) {
           const errorMsg =
             error instanceof Error ? error.message : String(error);
@@ -601,7 +608,13 @@ export function useCashuWithXYZ() {
           `Active mint insufficient. Using mint ${selectedMintUrl} with balance ${selectedMintBalance} sats instead`
         );
         try {
-          token = await sendToken(selectedMintUrl, adjustedAmount, p2pkPubkey);
+          token = await sendToken(
+            selectedMintUrl,
+            adjustedAmount,
+            p2pkPubkey,
+            undefined,
+            baseUrl === ""
+          );
         } catch (error) {
           if (
             error instanceof Error &&
