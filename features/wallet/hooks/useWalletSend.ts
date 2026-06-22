@@ -35,6 +35,7 @@ export function useWalletSend() {
   const [reclaimingTokenId, setReclaimingTokenId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [warningMessage, setWarningMessage] = useState("");
 
   // Lightning send state
   const [nip60SendInvoice, setNip60SendInvoice] = useState("");
@@ -52,6 +53,7 @@ export function useWalletSend() {
     setSendTab("token");
     setError("");
     setSuccessMessage("");
+    setWarningMessage("");
     setCopiedTokenId(null);
     setIsGeneratingSendToken(false);
     setNip60SendInvoice("");
@@ -68,6 +70,7 @@ export function useWalletSend() {
       try {
         await navigator.clipboard.writeText(text);
         setCopiedTokenId(tokenId);
+        setWarningMessage("");
         setSuccessMessage(`${label} copied to clipboard!`);
         setTimeout(() => {
           setCopiedTokenId(null);
@@ -93,6 +96,7 @@ export function useWalletSend() {
     try {
       setError("");
       setSuccessMessage("");
+      setWarningMessage("");
       setIsGeneratingSendToken(true);
       const amountValue =
         currentMintUnit === "msat" ? parseInt(sendAmount) / 1000 : parseInt(sendAmount);
@@ -126,6 +130,7 @@ export function useWalletSend() {
       try {
         setReclaimingTokenId(entry.id);
         setError("");
+        setWarningMessage("");
         // Strict: only counts as reclaimed once the proofs are stored, so
         // the entry is never removed while the funds are in limbo.
         const proofs = await receiveToken(entry.token, true);
@@ -139,8 +144,9 @@ export function useWalletSend() {
           // Redeemed by the recipient, or by an earlier reclaim whose
           // storage failed (those funds restore from backup on next start).
           unclaimedTokensStore.removeUnclaimedToken(entry.id);
-          setSuccessMessage("Token was already redeemed.");
-          setTimeout(() => setSuccessMessage(""), 5000);
+          setSuccessMessage("");
+          setWarningMessage("Token was already redeemed.");
+          setTimeout(() => setWarningMessage(""), 5000);
         } else {
           setError(`Failed to reclaim token: ${msg}`);
         }
@@ -220,6 +226,7 @@ export function useWalletSend() {
     try {
       setIsNip60Processing(true);
       setError("");
+      setWarningMessage("");
       const mintUrl = cashuStore.activeMintUrl;
       const selectedProofs = await cashuStore.getMintProofs(mintUrl);
       const totalProofsAmount = selectedProofs.reduce((sum, p) => sum + p.amount, 0);
@@ -273,6 +280,7 @@ export function useWalletSend() {
     reclaimingTokenId,
     error, setError,
     successMessage,
+    warningMessage,
     nip60SendInvoice,
     nip60MeltQuoteId,
     invoiceAmount,
