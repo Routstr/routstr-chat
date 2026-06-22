@@ -15,6 +15,8 @@ import {
   ChevronUp,
   Pencil,
   X,
+  AlertTriangle,
+  ExternalLink,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -988,6 +990,23 @@ const ApiKeysTab = ({
       {" "}
       {/* Added relative positioning back */}
       <h3 className="text-sm font-medium text-foreground/80">API Keys</h3>
+      <div className="flex items-start gap-2 p-3 rounded-md border border-yellow-500/30 bg-yellow-500/5 text-sm text-yellow-600 dark:text-yellow-400">
+        <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+        <span>
+          Deprecated in favor of{" "}
+          <a
+            href="https://routstr.com/routstrd"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium underline underline-offset-2 hover:text-yellow-600/80 dark:hover:text-yellow-400/80 inline-flex items-center gap-1"
+          >
+            Routstrd
+            <ExternalLink className="h-3 w-3" />
+          </a>{" "}
+          a local proxy that has NWC, local wallet, and decentralized
+          discovery!
+        </span>
+      </div>
       <div className="bg-muted/50 border border-border rounded-md p-4">
         <div className="flex items-center justify-between">
           <div>
