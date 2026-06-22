@@ -3,6 +3,7 @@ import { Switch } from "@/components/ui/switch";
 import { LogOut, XCircle, Copy } from "lucide-react";
 import { AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import { nip19 } from "nostr-tools";
+import { APP_VERSION } from "@/lib/version";
 import NostrRelayManager from "./NostrRelayManager"; // Import the new component
 import BlossomServerManager from "./BlossomServerManager"; // Import Blossom server manager
 import NWCWalletManager from "./NWCWalletManager"; // Import the NWC wallet manager
@@ -400,7 +401,7 @@ const GeneralTab: React.FC<GeneralTabProps> = ({
       {/* Version Information */}
       <div className="mt-8 pt-4 border-t border-border">
         <div className="text-xs text-muted-foreground text-center">
-          Version 0.3.0
+          Version {APP_VERSION}
         </div>
       </div>
     </>
