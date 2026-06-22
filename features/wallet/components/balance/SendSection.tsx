@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Copy, Check, Zap, Undo2 } from "lucide-react";
+import { Copy, Check, Zap, Undo2, Info } from "lucide-react";
 import { useChat } from "@/context/ChatProvider";
 import { useCashuStore } from "@/features/wallet";
 import { getCurrentMintBalance as utilGetCurrentMintBalance } from "@/utils/walletUtils";
@@ -162,10 +162,12 @@ const SendSection: React.FC<SendSectionProps> = ({
                   ? "Generated Token:"
                   : "Generated Tokens:"}
               </div>
-              <div className="bg-yellow-500/10 border border-yellow-500/30 text-yellow-700 dark:text-yellow-200 p-2 rounded-lg text-xs">
-                Stored only in this browser profile and not synced to Nostr.
-                Copy or reclaim before signing out, clearing site data, or
-                switching devices.
+              <div
+                className="bg-yellow-500/10 border border-yellow-500/30 text-yellow-700 dark:text-yellow-200 p-2 rounded-lg text-xs flex items-center gap-1"
+                title="Stored only in this browser profile and not synced to Nostr. Copy or reclaim before signing out, clearing site data, or switching devices."
+              >
+                <Info className="h-3.5 w-3.5 shrink-0" />
+                Stored only locally in the browser
               </div>
               {send.unclaimedTokens.map((entry) => (
                 <div
