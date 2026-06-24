@@ -1,42 +1,20 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Zap, RefreshCw, Info } from "lucide-react";
+import { Zap, Info } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import {
   loadAutoRefillNWCSettings,
   saveAutoRefillNWCSettings,
-  loadAutoTopupAPISettings,
-  saveAutoTopupAPISettings,
   AutoRefillNWCSettings,
-  AutoTopupAPISettings,
   DEFAULT_AUTO_REFILL_NWC_SETTINGS,
-  DEFAULT_AUTO_TOPUP_API_SETTINGS,
 } from "@/utils/storageUtils";
 import { isNWCConnected, getNWCBalance } from "@/lib/nwcPayment";
-import { useApiKeysSync } from "@/hooks/useApiKeysSync";
-
-interface StoredApiKey {
-  key: string;
-  balance: number | null;
-  label?: string;
-  baseUrl?: string;
-  isInvalid?: boolean;
-}
-
-interface AutoRefillSettingsProps {
-  apiKeys?: StoredApiKey[];
-}
 
 /**
- * Settings component for configuring NWC auto-refill and API auto-topup
+ * Settings component for configuring NWC auto-refill
  */
-const AutoRefillSettings: React.FC<AutoRefillSettingsProps> = ({
-  apiKeys = [],
-}) => {
-  // Get cloud-synced API keys
-  const { syncedApiKeys, isLoadingApiKeys } = useApiKeysSync();
-
+const AutoRefillSettings: React.FC = () => {
   // NWC Auto-Refill State
   const [nwcSettings, setNwcSettings] = useState<AutoRefillNWCSettings>(
     DEFAULT_AUTO_REFILL_NWC_SETTINGS
@@ -44,22 +22,12 @@ const AutoRefillSettings: React.FC<AutoRefillSettingsProps> = ({
   const [isNwcConnected, setIsNwcConnected] = useState(false);
   const [nwcBalance, setNwcBalance] = useState<number | null>(null);
 
-  // API Auto-Topup State
-  const [apiSettings, setApiSettings] = useState<AutoTopupAPISettings>(
-    DEFAULT_AUTO_TOPUP_API_SETTINGS
-  );
-
-  // Tooltip states
+  // Tooltip state
   const [showNwcTooltip, setShowNwcTooltip] = useState(false);
-  const [showApiTooltip, setShowApiTooltip] = useState(false);
-
-  // Loaded API keys state (load from localStorage if not passed as prop and not cloud synced)
-  const [loadedApiKeys, setLoadedApiKeys] = useState<StoredApiKey[]>([]);
 
   // Load settings from storage on mount
   useEffect(() => {
     setNwcSettings(loadAutoRefillNWCSettings());
-    setApiSettings(loadAutoTopupAPISettings());
 
     // Check NWC connection status
     const checkNwcStatus = async () => {
@@ -72,34 +40,7 @@ const AutoRefillSettings: React.FC<AutoRefillSettingsProps> = ({
     };
 
     checkNwcStatus();
-
-    // Load API keys from localStorage if not passed as prop
-    if (apiKeys.length === 0) {
-      try {
-        const possibleKeys = ["api_keys", "stored_api_keys"];
-        let foundKeys: StoredApiKey[] = [];
-
-        for (const key of possibleKeys) {
-          const storedKeys = localStorage.getItem(key);
-          if (storedKeys) {
-            foundKeys = JSON.parse(storedKeys);
-            break;
-          }
-        }
-
-        if (foundKeys.length > 0) {
-          setLoadedApiKeys(foundKeys);
-        }
-      } catch (e) {
-        console.error(
-          "[AutoRefillSettings] Error loading API keys from localStorage:",
-          e
-        );
-      }
-    } else {
-      // API keys passed via props, no need to load from localStorage
-    }
-  }, [apiKeys.length]);
+  }, []);
 
   // Save NWC settings when changed
   const updateNwcSettings = (updates: Partial<AutoRefillNWCSettings>) => {
@@ -107,23 +48,6 @@ const AutoRefillSettings: React.FC<AutoRefillSettingsProps> = ({
     setNwcSettings(newSettings);
     saveAutoRefillNWCSettings(newSettings);
   };
-
-  // Save API settings when changed
-  const updateApiSettings = (updates: Partial<AutoTopupAPISettings>) => {
-    const newSettings = { ...apiSettings, ...updates };
-    setApiSettings(newSettings);
-    saveAutoTopupAPISettings(newSettings);
-  };
-
-  // Get valid API keys for the dropdown
-  // Priority: 1) Props, 2) Cloud-synced, 3) localStorage
-  const effectiveApiKeys =
-    apiKeys.length > 0
-      ? apiKeys
-      : (syncedApiKeys ?? []).length > 0
-        ? (syncedApiKeys ?? [])
-        : loadedApiKeys;
-  const validApiKeys = effectiveApiKeys.filter((k) => !k.isInvalid);
 
   return (
     <div className="mb-6 space-y-4">
@@ -224,121 +148,6 @@ const AutoRefillSettings: React.FC<AutoRefillSettingsProps> = ({
                       value={nwcSettings.amount}
                       onChange={(e) =>
                         updateNwcSettings({
-                          amount: parseInt(e.target.value) || 100,
-                        })
-                      }
-                      className="w-20 bg-muted/50 border border-border rounded px-2 py-1 text-xs text-foreground text-right focus:outline-none focus:ring-1 focus:ring-ring"
-                    />
-                    <span className="text-xs text-muted-foreground">sats</span>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* API Auto-Topup Section */}
-      <div className="bg-muted/50 border border-border rounded-md p-3">
-        <div className="flex items-center gap-2 mb-3">
-          <RefreshCw className="h-4 w-4 text-blue-400" />
-          <span className="text-sm font-medium text-foreground/80">
-            API Auto-Topup
-          </span>
-          <div
-            className="relative inline-block"
-            onMouseEnter={() => setShowApiTooltip(true)}
-            onMouseLeave={() => setShowApiTooltip(false)}
-          >
-            <Info className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground cursor-pointer" />
-            {showApiTooltip && (
-              <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 p-2 bg-card border border-border rounded-md text-xs text-muted-foreground w-56 z-50">
-                Automatically topup your API key from your Cashu wallet when its
-                balance drops below the threshold.
-              </div>
-            )}
-          </div>
-        </div>
-
-        {validApiKeys.length === 0 ? (
-          <p className="text-xs text-muted-foreground">
-            Create an API key in the API Keys tab to enable auto-topup.
-          </p>
-        ) : (
-          <div className="space-y-3">
-            {/* Enable Toggle */}
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">
-                Enable Auto-Topup
-              </span>
-              <Switch
-                checked={apiSettings.enabled}
-                onCheckedChange={(checked) =>
-                  updateApiSettings({ enabled: checked })
-                }
-              />
-            </div>
-
-            {apiSettings.enabled && (
-              <>
-                {/* API Key Selector */}
-                <div className="flex items-center justify-between gap-3">
-                  <label className="text-xs text-muted-foreground shrink-0">
-                    API Key
-                  </label>
-                  <select
-                    value={apiSettings.apiKey || ""}
-                    onChange={(e) =>
-                      updateApiSettings({ apiKey: e.target.value || null })
-                    }
-                    className="flex-1 max-w-[180px] bg-muted/50 border border-border rounded px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                  >
-                    <option value="">Select API Key</option>
-                    {validApiKeys.map((key) => (
-                      <option key={key.key} value={key.key}>
-                        {key.label || "Unnamed"} (
-                        {key.balance !== null
-                          ? `${(key.balance / 1000).toFixed(0)} sats`
-                          : "N/A"}
-                        )
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Threshold Input */}
-                <div className="flex items-center justify-between gap-3">
-                  <label className="text-xs text-muted-foreground shrink-0">
-                    When balance drops below
-                  </label>
-                  <div className="flex items-center gap-1">
-                    <input
-                      type="number"
-                      min="0"
-                      value={Math.floor(apiSettings.threshold / 1000)} // Convert mSats to sats for display
-                      onChange={(e) =>
-                        updateApiSettings({
-                          threshold: (parseInt(e.target.value) || 0) * 1000,
-                        })
-                      }
-                      className="w-20 bg-muted/50 border border-border rounded px-2 py-1 text-xs text-foreground text-right focus:outline-none focus:ring-1 focus:ring-ring"
-                    />
-                    <span className="text-xs text-muted-foreground">sats</span>
-                  </div>
-                </div>
-
-                {/* Amount Input */}
-                <div className="flex items-center justify-between gap-3">
-                  <label className="text-xs text-muted-foreground shrink-0">
-                    Topup with
-                  </label>
-                  <div className="flex items-center gap-1">
-                    <input
-                      type="number"
-                      min="1"
-                      value={apiSettings.amount}
-                      onChange={(e) =>
-                        updateApiSettings({
                           amount: parseInt(e.target.value) || 100,
                         })
                       }

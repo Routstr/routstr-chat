@@ -793,33 +793,12 @@ export interface AutoRefillNWCSettings {
 }
 
 /**
- * Settings for API key auto-topup
- */
-export interface AutoTopupAPISettings {
-  enabled: boolean;
-  apiKey: string | null; // which API key to auto-topup (the key string)
-  threshold: number; // mSats - topup when balance drops below this
-  amount: number; // sats - amount to topup each time
-  lastTopupAt?: number; // timestamp of last topup (for cooldown)
-}
-
-/**
  * Default NWC auto-refill settings
  */
 export const DEFAULT_AUTO_REFILL_NWC_SETTINGS: AutoRefillNWCSettings = {
   enabled: false,
   threshold: 500, // refill when below 500 sats
   amount: 1000, // refill with 1000 sats
-};
-
-/**
- * Default API auto-topup settings
- */
-export const DEFAULT_AUTO_TOPUP_API_SETTINGS: AutoTopupAPISettings = {
-  enabled: false,
-  apiKey: null,
-  threshold: 500000, // 500 sats in mSats (API balances are in mSats)
-  amount: 1000, // topup with 1000 sats
 };
 
 /**
@@ -844,27 +823,6 @@ export const saveAutoRefillNWCSettings = (
 };
 
 /**
- * Load API auto-topup settings from localStorage
- * @returns API auto-topup settings
- */
-export const loadAutoTopupAPISettings = (): AutoTopupAPISettings => {
-  return getStorageItem<AutoTopupAPISettings>(
-    "auto_topup_api_settings",
-    DEFAULT_AUTO_TOPUP_API_SETTINGS
-  );
-};
-
-/**
- * Save API auto-topup settings to localStorage
- * @param settings API auto-topup settings
- */
-export const saveAutoTopupAPISettings = (
-  settings: AutoTopupAPISettings
-): void => {
-  setStorageItem("auto_topup_api_settings", settings);
-};
-
-/**
  * Update the last refill timestamp for NWC auto-refill
  * @param timestamp Timestamp in milliseconds
  */
@@ -873,17 +831,6 @@ export const updateNWCLastRefillTime = (
 ): void => {
   const settings = loadAutoRefillNWCSettings();
   saveAutoRefillNWCSettings({ ...settings, lastRefillAt: timestamp });
-};
-
-/**
- * Update the last topup timestamp for API auto-topup
- * @param timestamp Timestamp in milliseconds
- */
-export const updateAPILastTopupTime = (
-  timestamp: number = Date.now()
-): void => {
-  const settings = loadAutoTopupAPISettings();
-  saveAutoTopupAPISettings({ ...settings, lastTopupAt: timestamp });
 };
 
 // ============================================
