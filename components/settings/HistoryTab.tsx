@@ -8,8 +8,10 @@ import {
 } from "../../utils/cashuUtils";
 import { getLocalCashuTokens } from "@/utils/storageUtils";
 import { useTransactionHistoryStore } from "@/features/wallet/state/transactionHistoryStore";
+import UsageLogs from "./UsageLogs";
 
 type ViewMode = "combined" | "separate";
+type HistorySection = "usage" | "wallet";
 
 interface HistoryTabProps {
   setTransactionHistory: (
@@ -33,6 +35,7 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
     { baseUrl: string; amount: number }[]
   >([]);
   const [viewMode, setViewMode] = useState<ViewMode>("combined");
+  const [section, setSection] = useState<HistorySection>("usage");
   const [copiedPending, setCopiedPending] = useState(false);
 
   // Get transaction history from the store
@@ -175,6 +178,34 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
 
   return (
     <div className="space-y-6">
+      <div className="inline-flex items-center gap-1 p-1 rounded-full border border-border bg-muted/40 text-xs leading-none">
+        <button
+          type="button"
+          onClick={() => setSection("usage")}
+          className={`px-3 py-2 font-medium rounded-full transition-colors ${
+            section === "usage"
+              ? "bg-background text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          Usage Logs
+        </button>
+        <button
+          type="button"
+          onClick={() => setSection("wallet")}
+          className={`px-3 py-2 font-medium rounded-full transition-colors ${
+            section === "wallet"
+              ? "bg-background text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          Wallet Activity
+        </button>
+      </div>
+
+      {section === "usage" && <UsageLogs />}
+
+      <div className={section === "wallet" ? "space-y-6" : "hidden"}>
       {/* Transaction History */}
       <div>
         <div className="flex items-center justify-between mb-3">
@@ -367,6 +398,7 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
             </>
           )}
         </div>
+      </div>
       </div>
 
       {/* Data Management */}

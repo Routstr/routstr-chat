@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { storageAdapter, providerRegistry, hydrate } from "@/sdk/sharedStore";
+import {
+  storageAdapter,
+  providerRegistry,
+  usageTrackingDriver,
+  hydrate,
+} from "@/sdk/sharedStore";
 import type { StorageAdapter, ProviderRegistry } from "@routstr/sdk/wallet";
 import {
   RoutstrClient,
@@ -77,6 +82,7 @@ export function useSdkClient(
       providerRegistry,
       "min",
       mode,
+      { usageTrackingDriver },
     );
   }, [walletAdapter, mode]);
 

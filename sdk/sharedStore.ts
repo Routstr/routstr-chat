@@ -11,10 +11,12 @@ import {
   createStorageAdapterFromStore,
   createProviderRegistryFromStore,
   createIndexedDBDriver,
+  createIndexedDBUsageTrackingDriver,
   createMemoryDriver,
+  createMemoryUsageTrackingDriver,
 } from "@routstr/sdk/storage";
 
-import type { SdkStore } from "@routstr/sdk/storage";
+import type { SdkStore, UsageTrackingDriver } from "@routstr/sdk/storage";
 import type { DiscoveryAdapter } from "@routstr/sdk/discovery";
 import type { StorageAdapter, ProviderRegistry } from "@routstr/sdk/wallet";
 
@@ -28,6 +30,13 @@ const isBrowser = typeof window !== "undefined";
  * metadata) and an in-memory driver during SSR / edge rendering.
  */
 const driver = isBrowser ? createIndexedDBDriver() : createMemoryDriver();
+
+// Both drivers are at version 3 and share the same "routstr-sdk" database.
+// The main driver's cross-driver init already creates the usage_tracking
+// object store with all indexes.
+const usageTrackingDriver: UsageTrackingDriver = isBrowser
+  ? createIndexedDBUsageTrackingDriver()
+  : createMemoryUsageTrackingDriver();
 
 // ---------------------------------------------------------------------------
 // Singleton store
@@ -48,5 +57,12 @@ const providerRegistry: ProviderRegistry =
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
-export { store, hydrate, discoveryAdapter, storageAdapter, providerRegistry };
+export {
+  store,
+  hydrate,
+  discoveryAdapter,
+  storageAdapter,
+  providerRegistry,
+  usageTrackingDriver,
+};
 export type { SdkStore, DiscoveryAdapter, StorageAdapter, ProviderRegistry };
