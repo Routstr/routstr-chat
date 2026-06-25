@@ -31,10 +31,11 @@ const isBrowser = typeof window !== "undefined";
  */
 const driver = isBrowser ? createIndexedDBDriver() : createMemoryDriver();
 
-// The SDK storage and usage drivers currently open the same default database
-// at different versions, so keep usage separate to avoid blocked upgrades.
+// Both drivers are at version 3 and share the same "routstr-sdk" database.
+// The main driver's cross-driver init already creates the usage_tracking
+// object store with all indexes.
 const usageTrackingDriver: UsageTrackingDriver = isBrowser
-  ? createIndexedDBUsageTrackingDriver({ dbName: "routstr-chat-usage" })
+  ? createIndexedDBUsageTrackingDriver()
   : createMemoryUsageTrackingDriver();
 
 // ---------------------------------------------------------------------------
