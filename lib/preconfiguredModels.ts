@@ -1,25 +1,3 @@
-export const recommendedModels = [
-  "gemini-3.1-pro-preview",
-  "gpt-5.4",
-  "gemini-3.1-flash-image-preview",
-  "gpt-5.3-codex",
-  "qwen3.5-397b-a17b",
-  "claude-sonnet-4.6",
-  "minimax-m2.5",
-  "qwen3.5-plus-02-15",
-  "gpt-5.4-pro",
-  "sonar-pro-search",
-  "glm-5",
-  "claude-opus-4.6",
-  "gemini-3-flash-preview",
-  "kimi-k2.5",
-  "gpt-5-mini",
-  "deepseek-v3.2-speciale",
-  "kimi-k2-thinking",
-  "gpt-5-image",
-  "grok-4.1-fast",
-];
-
 export const webSearchModels = [
   "sonar-pro-search",
   "sonar-reasoning-pro",

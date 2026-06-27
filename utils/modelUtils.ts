@@ -21,7 +21,7 @@ export function normalizeBaseUrl(base?: string | null): string | null {
 // Provider models cache helpers shared across app
 // Kept here to avoid duplicating localStorage logic in components
 import type { Model } from "@/types/models";
-import { recommendedModels } from "@/lib/preconfiguredModels";
+import { discoveryAdapter } from "@/sdk/sharedStore";
 import {
   getStorageItem,
   loadLastUsedModel,
@@ -423,6 +423,7 @@ export const modelSelectionStrategy = async (
   }
 
   if (!modelToSelect) {
+    const recommendedModels = discoveryAdapter.getRoutstr21Models();
     const recommended = models
       .filter((m: Model) => recommendedModels.includes(m.id))
       .sort(

@@ -36,7 +36,8 @@ import {
   getRequiredSatsForModel,
   isModelAvailable,
 } from "@/utils/modelUtils";
-import { recommendedModels, webSearchModels } from "@/lib/preconfiguredModels";
+import { webSearchModels } from "@/lib/preconfiguredModels";
+import { discoveryAdapter } from "@/sdk/sharedStore";
 import { getPendingCashuTokenAmount } from "@/utils/cashuUtils";
 
 interface ModelSelectorProps {
@@ -393,6 +394,7 @@ export default function ModelSelector({
   const remainingModelsList = filteredModels.filter(
     (model) => !isConfiguredModel(model.id)
   );
+  const recommendedModels = discoveryAdapter.getRoutstr21Models();
   const recommendedModelsList = recommendedModels
     .map((modelId) => filteredModels.find((model) => model.id === modelId))
     .filter((model): model is Model => model !== undefined);
