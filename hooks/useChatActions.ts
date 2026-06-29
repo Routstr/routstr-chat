@@ -467,8 +467,6 @@ export const useChatActions = ({
             selectedModel: selectedModel as any,
             baseUrl,
             mintUrl,
-            balance,
-            transactionHistory: transactionHistory as any,
           },
           {
             onPaymentProcessing: setIsPaymentProcessing,
