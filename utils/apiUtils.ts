@@ -16,9 +16,9 @@ import {
   getLocalCashuToken,
   removeLocalCashuToken,
   getStorageItem,
-  loadDisabledProviders,
   getOrFetchProviderInfo,
 } from "./storageUtils";
+import { getDisabledProvidersSync } from "@/utils/disabledProviders";
 import { getDecodedToken } from "@cashu/cashu-ts";
 import { isThinkingCapableModel } from "./thinkingParser";
 import { SpendCashuResult } from "@/hooks/useCashuWithXYZ";
@@ -90,7 +90,7 @@ function findNextBestProvider(
       cost: number;
     }> = [];
 
-    const disabledProviders = new Set<string>(loadDisabledProviders());
+    const disabledProviders = new Set<string>(getDisabledProvidersSync());
 
     for (const [baseUrl, models] of Object.entries(modelsFromAllProviders)) {
       // Skip current provider and failed providers

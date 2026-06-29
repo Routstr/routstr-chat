@@ -14,6 +14,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import Kind1018ThemeBootstrap from "@/components/Kind1018ThemeBootstrap";
 import dynamic from "next/dynamic";
 import { migrateStorageItems, saveRelays } from "@/utils/storageUtils";
+import { migrateDisabledProvidersToSdk } from "@/utils/disabledProviders";
 import { InvoiceRecoveryProvider } from "@/components/InvoiceRecoveryProvider";
 import { AccountManager } from "applesauce-accounts";
 import { registerCommonAccountTypes } from "applesauce-accounts/accounts";
@@ -130,6 +131,9 @@ export default function ClientProviders({ children }: { children: ReactNode }) {
   // Run storage migration on app startup
   useEffect(() => {
     migrateStorageItems();
+    // Migrate the legacy localStorage `disabled_providers` list into the
+    // SDK store so the chat app and the SDK share a single source of truth.
+    void migrateDisabledProvidersToSdk();
   }, []);
 
   // Start MSW in development only

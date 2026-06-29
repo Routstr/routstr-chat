@@ -16,11 +16,8 @@ import {
   getCachedProviderModels,
   upsertCachedProviderModels,
 } from "@/utils/modelUtils";
-import {
-  loadDisabledProviders,
-  saveDisabledProviders,
-  setProviderLastUpdate,
-} from "@/utils/storageUtils";
+import { setProviderLastUpdate } from "@/utils/storageUtils";
+import { useDisabledProviders } from "@/hooks/useDisabledProviders";
 import {
   getProviderEndpoints,
   isOnionUrl,
@@ -62,13 +59,13 @@ const ModelsTab: React.FC<ModelsTabProps> = ({
   const [providerModels, setProviderModels] = useState<readonly Model[]>([]);
   const [isLoadingProviderModels, setIsLoadingProviderModels] = useState(false);
   const [isProviderPopoverOpen, setIsProviderPopoverOpen] = useState(false);
-  const [disabledProviders, setDisabledProviders] = useState<string[]>([]);
+  // Disabled providers come from the SDK store (single source of truth used
+  // for routing/price-ranking), not a separate localStorage list.
+  const {
+    disabledProviders,
+    setDisabledProviders: persistDisabledProviders,
+  } = useDisabledProviders();
   const torMode = isTorContext();
-
-  useEffect(() => {
-    // Load disabled providers from localStorage
-    setDisabledProviders(loadDisabledProviders());
-  }, []);
 
   useEffect(() => {
     const fetchProviders = async () => {
@@ -122,18 +119,11 @@ const ModelsTab: React.FC<ModelsTabProps> = ({
           );
         // Store all providers for Disable Providers section
         setAllProviders(sorted);
-        // Filter out disabled providers for dropdown
-        const disabled = loadDisabledProviders();
-        const filtered = sorted.filter((p) => {
-          const normalized = normalizeProviderUrl(p.endpoint_url, torMode);
-          if (!normalized) return false;
-          return !disabled.includes(normalized);
-        });
-        setProviders(filtered);
 
-        // Default selection: first entry only (no special host preference)
-        if (filtered.length > 0 && !selectedProvider) {
-          const baseUrlRaw = filtered[0].endpoint_url;
+        // Default selection: first entry only (no special host preference).
+        // The disabled-filtered dropdown is derived reactively below.
+        if (sorted.length > 0 && !selectedProvider) {
+          const baseUrlRaw = sorted[0].endpoint_url;
           const primary = normalizeProviderUrl(baseUrlRaw, torMode);
           if (primary) setSelectedProvider(primary);
         }
@@ -145,6 +135,18 @@ const ModelsTab: React.FC<ModelsTabProps> = ({
     };
     void fetchProviders();
   }, []);
+
+  // Derive the disabled-filtered provider dropdown from the SDK store's
+  // disabled list. Re-runs after hydration (when disabledProviders becomes
+  // populated) and whenever a provider is toggled on/off.
+  useEffect(() => {
+    const filtered = allProviders.filter((p) => {
+      const normalized = normalizeProviderUrl(p.endpoint_url, torMode);
+      if (!normalized) return false;
+      return !disabledProviders.includes(normalized);
+    });
+    setProviders(filtered);
+  }, [allProviders, disabledProviders, torMode]);
 
   useEffect(() => {
     const fetchProviderModels = async () => {
@@ -233,25 +235,16 @@ const ModelsTab: React.FC<ModelsTabProps> = ({
   const toggleProviderDisabled = (providerUrl: string) => {
     const normalized = normalizeProviderUrl(providerUrl, torMode);
     if (!normalized) return;
-    setDisabledProviders((prev) => {
-      const isDisabled = prev.includes(normalized);
-      // If re-enabling, expire cache to force fresh fetch
-      if (isDisabled) {
-        setProviderLastUpdate(normalized, 0);
-      }
-      const updated = isDisabled
-        ? prev.filter((url) => url !== normalized)
-        : [...prev, normalized];
-      saveDisabledProviders(updated);
-      // Update filtered providers list
-      const filtered = allProviders.filter((p) => {
-        const normalizedUrl = normalizeProviderUrl(p.endpoint_url, torMode);
-        if (!normalizedUrl) return false;
-        return !updated.includes(normalizedUrl);
-      });
-      setProviders(filtered);
-      return updated;
-    });
+    const isDisabled = disabledProviders.includes(normalized);
+    // If re-enabling, expire cache to force fresh fetch
+    if (isDisabled) {
+      setProviderLastUpdate(normalized, 0);
+    }
+    const updated = isDisabled
+      ? disabledProviders.filter((url) => url !== normalized)
+      : [...disabledProviders, normalized];
+    // Persist to the SDK store (single source of truth used for routing).
+    persistDisabledProviders(updated);
     // Trigger fetchModels to refresh available models (after state update)
     if (fetchModels) {
       setTimeout(() => {
@@ -355,16 +348,14 @@ const ModelsTab: React.FC<ModelsTabProps> = ({
                       disabledProviders.forEach((url) =>
                         setProviderLastUpdate(url, 0)
                       );
-                      setDisabledProviders([]);
-                      saveDisabledProviders([]);
+                      persistDisabledProviders([]);
                       setProviders(allProviders);
                     } else {
                       // Disable all providers
                       const allDisabled = allProviders
                         .map((p) => normalizeProviderUrl(p.endpoint_url, torMode))
                         .filter((value): value is string => Boolean(value));
-                      setDisabledProviders(allDisabled);
-                      saveDisabledProviders(allDisabled);
+                      persistDisabledProviders(allDisabled);
                       setProviders([]);
                     }
                     // Trigger fetchModels to refresh available models (after state update)

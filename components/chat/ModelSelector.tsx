@@ -26,9 +26,9 @@ import {
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import {
   loadModelProviderMap,
-  loadDisabledProviders,
   getStorageItem,
 } from "@/utils/storageUtils";
+import { useDisabledProviders } from "@/hooks/useDisabledProviders";
 import {
   parseModelKey,
   normalizeBaseUrl,
@@ -79,6 +79,9 @@ export default function ModelSelector({
   const toggleButtonRef = useRef<HTMLButtonElement>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
+  // Disabled providers come from the SDK store (single source of truth used
+  // for routing), not a separate localStorage list.
+  const { disabledProviders } = useDisabledProviders();
   const [hoveredModelId, setHoveredModelId] = useState<string | null>(null);
   const isMobile = useMediaQuery("(max-width: 768px)");
   const [activeView, setActiveView] = useState<"list" | "details">("list");
@@ -323,7 +326,7 @@ export default function ModelSelector({
       "modelsFromAllProviders",
       {}
     );
-    const disabledProviders = new Set(loadDisabledProviders());
+    const disabledProvidersSet = new Set(disabledProviders);
     const entriesMap = new Map<
       string,
       {
@@ -337,7 +340,7 @@ export default function ModelSelector({
 
     for (const [baseUrl, models] of Object.entries(allProviderModels)) {
       const normalized = normalizeBaseUrl(baseUrl);
-      if (!normalized || disabledProviders.has(normalized)) continue;
+      if (!normalized || disabledProvidersSet.has(normalized)) continue;
       const model = models.find((m) => m.id === modelId);
       if (!model) continue;
       const promptCost =
@@ -401,7 +404,7 @@ export default function ModelSelector({
 
   // Calculate unique models and providers for display (excluding disabled providers)
   const { uniqueModelCount, uniqueProviderCount } = useMemo(() => {
-    const disabledProviders = loadDisabledProviders();
+    const disabledProvidersSet = new Set(disabledProviders);
     const uniqueProviders = new Set<string>();
     const enabledModels = new Set<string>();
 
@@ -410,7 +413,7 @@ export default function ModelSelector({
       if (baseUrl) {
         const normalized = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
         // Only count if not disabled
-        if (!disabledProviders.includes(normalized)) {
+        if (!disabledProvidersSet.has(normalized)) {
           uniqueProviders.add(normalized);
           enabledModels.add(model.id);
         }
@@ -421,7 +424,7 @@ export default function ModelSelector({
       uniqueModelCount: enabledModels.size,
       uniqueProviderCount: uniqueProviders.size,
     };
-  }, [dedupedModels, modelProviderMap]);
+  }, [dedupedModels, modelProviderMap, disabledProviders]);
 
   // Build favorites entries with provider labels from configured keys
   const favoriteEntries = useMemo(() => {
