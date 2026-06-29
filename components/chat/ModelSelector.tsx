@@ -16,6 +16,7 @@ import {
   Check,
   Globe,
   Bitcoin,
+  Lock,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { Model } from "@/types/models";
@@ -96,6 +97,7 @@ export default function ModelSelector({
   const [detailsBaseUrl, setDetailsBaseUrl] = useState<string | null>(null);
   const [pairFilters, setPairFilters] = useState<Set<string>>(new Set());
   const [webSearchFilter, setWebSearchFilter] = useState<boolean>(false);
+  const [privateFilter, setPrivateFilter] = useState<boolean>(false);
   const [copiedModelId, setCopiedModelId] = useState<string | null>(null);
   // Drawer open/close animation state
   const [isDrawerVisible, setIsDrawerVisible] = useState(false);
@@ -216,6 +218,11 @@ export default function ModelSelector({
 
     // Apply web search filter
     if (webSearchFilter && !webSearchModels.includes(model.id)) {
+      return false;
+    }
+
+    // Apply private (E2EE) filter
+    if (privateFilter && !model.id.startsWith("tinfoil")) {
       return false;
     }
 
@@ -614,6 +621,22 @@ export default function ModelSelector({
           <span>Web Search</span>
         </button>
 
+        {/* Private (E2EE) Filter */}
+        <button
+          onClick={() => setPrivateFilter(!privateFilter)}
+          className={`shrink-0 h-6 inline-flex items-center gap-1 px-2 rounded-full text-[11px] border transition-colors cursor-pointer ${
+            privateFilter
+              ? "bg-primary/20 border-primary/30 text-foreground"
+              : "bg-muted/50 border-border text-muted-foreground hover:bg-muted"
+          }`}
+          title="Filter private (end-to-end encrypted) models"
+          type="button"
+          aria-pressed={privateFilter}
+        >
+          <Lock className="h-3.5 w-3.5" />
+          <span>Private (E2EE)</span>
+        </button>
+
         {quickPairOptions.map((opt) => {
           const isActive = pairFilters.has(opt.key);
           return (
@@ -638,11 +661,12 @@ export default function ModelSelector({
             </button>
           );
         })}
-        {(pairFilters.size > 0 || webSearchFilter) && (
+        {(pairFilters.size > 0 || webSearchFilter || privateFilter) && (
           <button
             onClick={() => {
               setPairFilters(new Set());
               setWebSearchFilter(false);
+              setPrivateFilter(false);
             }}
             className="shrink-0 h-6 text-[11px] px-2 rounded-full bg-transparent text-muted-foreground hover:text-foreground hover:bg-muted border border-border cursor-pointer"
             title="Clear filters"
