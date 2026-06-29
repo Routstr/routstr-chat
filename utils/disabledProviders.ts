@@ -11,11 +11,7 @@
  * `apiUtils.ts`). In React components use the `useDisabledProviders` hook
  * (`@/hooks/useDisabledProviders`) so the UI re-renders when the list changes.
  */
-import { store, discoveryAdapter, hydrate } from "@/sdk/sharedStore";
-import {
-  loadDisabledProviders,
-  STORAGE_KEYS,
-} from "@/utils/storageUtils";
+import { store, discoveryAdapter } from "@/sdk/sharedStore";
 
 /**
  * Synchronous read of the current disabled-providers list from the SDK store.
@@ -32,41 +28,4 @@ export function getDisabledProvidersSync(): string[] {
  */
 export function setDisabledProvidersSync(urls: string[]): void {
   discoveryAdapter.setDisabledProviders?.(urls);
-}
-
-/**
- * One-time migration of the legacy localStorage `disabled_providers` list into
- * the SDK store.
- *
- * Runs after `hydrate` so we merge with — rather than clobber — any
- * Nostr-review-derived disabled providers the SDK already populated. The
- * legacy localStorage key is removed afterwards so the two lists can never
- * drift again. Idempotent.
- */
-export async function migrateDisabledProvidersToSdk(): Promise<void> {
-  if (typeof window === "undefined" || typeof window.localStorage === "undefined")
-    return;
-  try {
-    await hydrate;
-    const legacy = loadDisabledProviders();
-    if (legacy.length === 0) {
-      // Nothing to migrate; clear any stale empty key just in case.
-      try {
-        localStorage.removeItem(STORAGE_KEYS.DISABLED_PROVIDERS);
-      } catch {}
-      return;
-    }
-
-    const merged = new Set(store.getState().disabledProviders);
-    for (const url of legacy) {
-      merged.add(url.endsWith("/") ? url : `${url}/`);
-    }
-    discoveryAdapter.setDisabledProviders?.(Array.from(merged));
-
-    try {
-      localStorage.removeItem(STORAGE_KEYS.DISABLED_PROVIDERS);
-    } catch {}
-  } catch (error) {
-    console.warn("migrateDisabledProvidersToSdk failed:", error);
-  }
 }
