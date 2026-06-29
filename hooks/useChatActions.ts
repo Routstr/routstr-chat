@@ -15,8 +15,13 @@ import { DEFAULT_MINT_URL } from "@/lib/utils";
 import { saveFile } from "@/utils/indexedDb";
 import { useWalletAdapter } from "./useWalletAdapter";
 import { useSdkClient } from "./useSdkClient";
-import { hydrate as hydrateStore } from "@/sdk/sharedStore";
-import { fetchAIResponse, consoleLogger } from "@routstr/sdk";
+import {
+  hydrate as hydrateStore,
+  discoveryAdapter,
+  storageAdapter,
+  providerRegistry,
+} from "@/sdk/sharedStore";
+import { fetchAIResponse, consoleLogger, isTorContext } from "@routstr/sdk";
 
 export interface UseChatActionsReturn {
   inputMessage: string;
@@ -455,18 +460,21 @@ export const useChatActions = ({
       }
 
       try {
-        const mintUrl = cashuStore.activeMintUrl || DEFAULT_MINT_URL;
-        if (!client || !selectedModel) {
-          console.log("NEW ERROR", client, selectedModel);
-          throw new Error("SDK client is not ready");
+        if (!walletAdapter) {
+          throw new Error("Wallet adapter is not ready");
         }
 
         await fetchAIResponse(
           {
             messageHistory: messageHistory as any,
-            selectedModel: selectedModel as any,
-            baseUrl,
-            mintUrl,
+            modelId: selectedModel.id,
+            forcedProvider: baseUrl || undefined,
+            torMode: isTorContext(),
+            mode: "xcashu",
+            discoveryAdapter,
+            walletAdapter,
+            storageAdapter,
+            providerRegistry,
           },
           {
             onPaymentProcessing: setIsPaymentProcessing,
@@ -537,7 +545,7 @@ export const useChatActions = ({
               updateLastMessageSatsSpent(originConversationId, satsSpent);
             },
           },
-          { client, alertLevel: "min", logger: consoleLogger, getPendingCashuTokenAmount },
+          { alertLevel: "min", logger: consoleLogger, getPendingCashuTokenAmount },
         );
         setPendingCashuAmountState(getPendingCashuTokenAmount());
       } finally {
@@ -563,14 +571,12 @@ export const useChatActions = ({
       }
     },
     [
-      balance,
       transactionHistory,
       setPendingCashuAmountState,
       updateLastMessageSatsSpent,
       getLastNonSystemMessageEventId,
       createAndStoreChatEvent,
-      cashuStore.activeMintUrl,
-      client,
+      walletAdapter,
       enrichAssistantImages,
     ]
   );
