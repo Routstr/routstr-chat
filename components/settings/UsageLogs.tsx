@@ -257,17 +257,17 @@ export default function UsageLogs() {
 
               <div className="md:hidden divide-y divide-border">
                 {entries.map((entry) => (
-                  <div key={entry.id} className="p-3 space-y-2">
+                  <div key={entry.id} className="px-3 py-2.5 space-y-1.5">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div
-                          className="text-sm font-medium text-foreground truncate"
+                          className="text-sm font-medium leading-tight text-foreground truncate"
                           title={entry.modelId}
                         >
                           {entry.modelId}
                         </div>
                         <div
-                          className="text-xs text-muted-foreground truncate"
+                          className="mt-0.5 text-xs leading-tight text-muted-foreground truncate"
                           title={entry.baseUrl}
                         >
                           {shortProvider(entry.baseUrl)}
@@ -285,12 +285,15 @@ export default function UsageLogs() {
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-baseline justify-between gap-3 rounded-md bg-background/70 px-3 py-2">
-                      <span className="text-xs text-muted-foreground">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span
+                        className="min-w-0 truncate text-xs text-muted-foreground"
+                        title={`${entry.promptTokens.toLocaleString()} input / ${entry.completionTokens.toLocaleString()} output`}
+                      >
                         Tokens ({entry.promptTokens.toLocaleString()}/
                         {entry.completionTokens.toLocaleString()})
                       </span>
-                      <span className="font-mono text-lg text-foreground">
+                      <span className="shrink-0 font-mono text-base font-medium text-foreground">
                         {entry.totalTokens.toLocaleString()}
                       </span>
                     </div>
