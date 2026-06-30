@@ -1,5 +1,20 @@
 import { useEffect, useSyncExternalStore } from "react";
+import { getDecodedToken } from "@cashu/cashu-ts";
 import { store, hydrate } from "@/sdk/sharedStore";
+
+/**
+ * Decode a Cashu token string to its satoshi value.
+ * Returns 0 for malformed tokens or non-sat units.
+ */
+function tokenToSats(token: string): number {
+  try {
+    const decoded = getDecodedToken(token);
+    if (decoded.unit && decoded.unit !== "sat") return 0;
+    return decoded.proofs.reduce((sum, p) => sum + p.amount, 0);
+  } catch {
+    return 0;
+  }
+}
 
 function getSnapshot(): number {
   const state = store.getState();
@@ -11,8 +26,14 @@ function getSnapshot(): number {
     (sum, k) => sum + (k.balance || 0),
     0,
   );
+  // xcashuTokens is keyed by baseUrl; each entry is an array of token objects.
+  const xcashuTotal = Object.values(state.xcashuTokens).reduce(
+    (sum, tokens) =>
+      sum + tokens.reduce((s, t) => s + tokenToSats(t.token), 0),
+    0,
+  );
   // Satoshis are integers — round away floating-point drift from accumulation
-  return Math.round(apiKeyTotal + childKeyTotal);
+  return Math.round(apiKeyTotal + childKeyTotal + xcashuTotal);
 }
 
 function getServerSnapshot(): number {
@@ -20,7 +41,8 @@ function getServerSnapshot(): number {
 }
 
 /**
- * Subscribe to the SDK store's cached balance (apiKeys + childKeys).
+ * Subscribe to the SDK store's cached balance
+ * (apiKeys + childKeys + xcashu tokens).
  * Uses useSyncExternalStore to avoid race conditions with async hydration.
  */
 export function useSdkCachedBalance(): number {
@@ -35,21 +57,6 @@ export function useSdkCachedBalance(): number {
     void hydrate.catch((error) => {
       console.warn("Failed to hydrate store", error);
     });
-
-    // Debug: log cached balance periodically
-    const interval = setInterval(() => {
-      const state = store.getState();
-      const apiKeyTotal = state.apiKeys.reduce(
-        (sum, k) => sum + (k.balance || 0),
-        0,
-      );
-      const childKeyTotal = state.childKeys.reduce(
-        (sum, k) => sum + (k.balance || 0),
-        0,
-      );
-    }, 5000);
-
-    return () => clearInterval(interval);
   }, []);
 
   return cachedBalance;

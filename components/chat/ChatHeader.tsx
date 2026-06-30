@@ -99,16 +99,16 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
       const result = await refundAllApiKeys();
       if (result.totalRefunded > 0) {
         toast.success(
-          `Refunded ${result.totalRefunded} API key${result.totalRefunded > 1 ? "s" : ""} successfully!`,
+          `Refunded ${result.totalRefunded} item${result.totalRefunded > 1 ? "s" : ""} successfully!`,
         );
       }
       if (result.totalFailed > 0) {
         toast.warning(
-          `${result.totalFailed} API key${result.totalFailed > 1 ? "s" : ""} failed to refund.`,
+          `${result.totalFailed} item${result.totalFailed > 1 ? "s" : ""} failed to refund.`,
         );
       }
       if (result.totalRefunded === 0 && result.totalFailed === 0) {
-        toast.info("No API keys to refund.");
+        toast.info("Nothing to refund.");
       }
     } catch (error) {
       toast.error(
@@ -225,13 +225,13 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
             <button
               onClick={() => setShowRefundDialog(true)}
               className="flex flex-col items-end hover:opacity-80 transition-opacity cursor-pointer"
-              title="Click to refund all API keys"
+              title="Click to refund all cached balance"
             >
               <span className="text-xs text-muted-foreground font-medium">
                 {cachedBalance}
               </span>
               <span className="text-[10px] text-muted-foreground/60 leading-none">
-                (api keys)
+                (cached)
               </span>
             </button>
           )}
@@ -254,7 +254,7 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
       >
         <div className="flex items-start justify-between mb-4">
           <h4 className="text-lg font-semibold text-foreground">
-            Refund All API Keys
+            Refund All Cached Balance
           </h4>
           <CloseButton
             onClick={() => !isRefunding && setShowRefundDialog(false)}
@@ -264,7 +264,7 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
           <div className="flex flex-col items-center py-4">
             <RotateCcw className="h-8 w-8 animate-spin text-foreground mb-3" />
             <p className="text-sm text-muted-foreground">
-              Refunding all API keys…
+              Refunding all API keys and xcashu tokens…
             </p>
           </div>
         ) : (
@@ -274,7 +274,7 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
               <span className="font-semibold text-foreground">
                 {cachedBalance}
               </span>{" "}
-              across all your API keys back to your wallet as Cashu tokens.
+              across all your API keys and cached xcashu tokens back to your wallet as Cashu tokens.
             </p>
             <div className="flex justify-end space-x-2">
               <button

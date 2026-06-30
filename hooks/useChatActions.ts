@@ -582,13 +582,20 @@ export const useChatActions = ({
   );
 
   /**
-   * Refund all API keys back to the user's wallet.
-   * Refreshes balances first, then calls refundProviders on the CashuSpender.
+   * Refund all API keys AND xcashu tokens back to the user's wallet.
+   * Refreshes balances first, then calls refundProviders and refundXcashuTokens
+   * on the CashuSpender.
    */
   const refundAllApiKeys = useCallback(async () => {
     const mintUrl = cashuStore.activeMintUrl || DEFAULT_MINT_URL;
     const spender = client.getCashuSpender();
-    const results = await spender.refundProviders(mintUrl, true);
+    const [providerResults, xcashuResults] = await Promise.all([
+      spender.refundProviders(mintUrl, true),
+      spender.refundXcashuTokens(mintUrl).catch((error) => {
+        console.warn("Failed to refund xcashu tokens", error);
+        return [];
+      }),
+    ]);
 
     // Trigger store hydration so balance hooks pick up the changes
     try {
@@ -597,10 +604,18 @@ export const useChatActions = ({
       // Best-effort refresh
     }
 
-    const totalRefunded = results.filter((r) => r.success).length;
-    const totalFailed = results.filter((r) => !r.success).length;
+    const totalRefunded =
+      providerResults.filter((r) => r.success).length +
+      xcashuResults.filter((r) => r.success).length;
+    const totalFailed =
+      providerResults.filter((r) => !r.success).length +
+      xcashuResults.filter((r) => !r.success).length;
 
-    return { totalRefunded, totalFailed, results };
+    return {
+      totalRefunded,
+      totalFailed,
+      results: [...providerResults, ...xcashuResults],
+    };
   }, [client, cashuStore.activeMintUrl]);
 
   return {
