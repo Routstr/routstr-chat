@@ -66,6 +66,13 @@ export interface EventStoreState extends IEventDatabase {
   // Utility methods
   clearStore: () => void;
   getStats: () => { totalEvents: number; replaceableCount: number };
+
+  /**
+   * Internal-only, not part of the IEventDatabase contract: used by
+   * eventStore.ts during startup hydration. Same merge logic as `add()` but
+   * never schedules a persist write (the event is already on disk).
+   */
+  hydrateInsert: (event: NostrEvent) => void;
 }
 
 /**

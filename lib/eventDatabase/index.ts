@@ -22,6 +22,7 @@
 export {
   useEventDatabase,
   getEventDatabaseInstance,
+  eventDatabaseReady,
   default,
 } from "./eventStore";
 

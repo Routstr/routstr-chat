@@ -2,10 +2,18 @@ import {
   BehaviorSubject,
   distinctUntilChanged,
   filter,
+  from,
   shareReplay,
 } from "rxjs";
 import { getStorageItem } from "@/utils/storageUtils";
+import { eventDatabaseReady } from "@/lib/eventDatabase";
 import type { NostrEvent } from "nostr-tools";
+
+// Emits once the IndexedDB persistence sidecar has finished opening,
+// migrating legacy data, and hydrating cached events into memory. Sync
+// pipelines gate on this so they never race ahead of cached history (see
+// hooks/sync/sync1081Keyring.ts).
+export const eventDatabaseReady$ = from(eventDatabaseReady).pipe(shareReplay(1));
 
 // Storage key for chat sync enabled (shared with [`hooks/useChatSync.ts`](hooks/useChatSync.ts:1))
 const CHAT_SYNC_ENABLED_KEY = "chatSyncEnabled";

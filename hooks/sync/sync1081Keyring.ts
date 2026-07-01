@@ -25,6 +25,7 @@ import {
   relayUrlsDefined$,
   userPubkeyDefined$,
   userSignerDefined$,
+  eventDatabaseReady$,
   type UserSignerInfo,
 } from "./chatSyncInputs";
 
@@ -195,6 +196,11 @@ export const sync1081Event$ = combineLatest([
   userPubkeyDefined$,
   relayUrlsDefined$,
   userSignerDefined$,
+  // Wait for storage hydration before the EOSE handler below can decide
+  // whether a local kind-1081 event already exists - otherwise an empty,
+  // not-yet-hydrated cache would race an EOSE and create a replacement PNS
+  // key even though one is already cached on disk.
+  eventDatabaseReady$,
 ]).pipe(
   switchMap(([userPubkey, relayUrls, signerInfo]) => {
     syncStats1081.eventsReceived = 0;
