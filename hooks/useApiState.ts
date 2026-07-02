@@ -3,8 +3,6 @@ import { useSearchParams } from "next/navigation";
 import { ModelManager, MintDiscovery } from "@routstr/sdk";
 import { Model } from "@/types/models";
 import {
-  loadBaseUrl,
-  saveBaseUrl,
   loadLastUsedModel,
   saveLastUsedModel,
   loadBaseUrlsList,
@@ -22,9 +20,7 @@ import {
 import { getPendingCashuTokenAmount } from "@/utils/cashuUtils";
 import {
   filterBaseUrlsForTor,
-  isOnionUrl,
   isTorContext,
-  normalizeProviderUrl,
 } from "@/utils/torUtils";
 import { useDiscoveryAdapter } from "./useDiscoveryAdapter";
 
@@ -32,10 +28,7 @@ export interface UseApiStateReturn {
   models: Model[];
   selectedModel: Model | null;
   isLoadingModels: boolean;
-  isRefreshingModels: boolean;
-  baseUrl: string;
   setSelectedModel: (model: Model | null) => void;
-  setBaseUrl: (url: string) => void;
   fetchModels: (balance: number) => Promise<void>;
   handleModelChange: (modelId: string, configuredKeyOverride?: string) => void;
   lowBalanceWarningForModel: boolean;
@@ -62,8 +55,6 @@ export const useApiState = (
   const [models, setModels] = useState<Model[]>([]);
   const [selectedModel, setSelectedModel] = useState<Model | null>(null);
   const [isLoadingModels, setIsLoadingModels] = useState(true);
-  const [isRefreshingModels, setIsRefreshingModels] = useState(false);
-  const [baseUrl, setBaseUrlState] = useState("");
   const [baseUrlsList, setBaseUrlsList] = useState<string[]>([]);
   const [lowBalanceWarningForModel, setLowBalanceWarningForModel] =
     useState(false);
@@ -78,15 +69,6 @@ export const useApiState = (
       saveBaseUrlsList(filteredBaseUrls);
     }
     setBaseUrlsList(filteredBaseUrls);
-
-    const currentBaseUrl = loadBaseUrl("");
-    if (!torMode && currentBaseUrl && isOnionUrl(currentBaseUrl)) {
-      const fallbackBaseUrl = filteredBaseUrls[0] || "";
-      setBaseUrlState(fallbackBaseUrl);
-      saveBaseUrl(fallbackBaseUrl);
-    } else {
-      setBaseUrlState(currentBaseUrl);
-    }
   }, [isAuthenticated]);
 
   const fetchModels = useCallback(
@@ -95,7 +77,6 @@ export const useApiState = (
 
       try {
         setIsLoadingModels(true);
-        setIsRefreshingModels(true);
         const torMode = isTorContext();
         let bases = baseUrlsList;
 
@@ -117,7 +98,6 @@ export const useApiState = (
             setModels([]);
             setSelectedModel(null);
             setIsLoadingModels(false);
-            setIsRefreshingModels(false);
             return;
           }
         }
@@ -193,13 +173,6 @@ export const useApiState = (
           !lastUsedModelId.includes("@@")
         ) {
           saveLastUsedModel(modelToSelect.id);
-          const mappedBase = loadModelProviderMap()[modelToSelect.id];
-          if (mappedBase) {
-            const normalized = mappedBase.endsWith("/")
-              ? mappedBase
-              : `${mappedBase}/`;
-            setBaseUrl(normalized);
-          }
         }
       } catch (error) {
         console.error("Error while fetching models", error);
@@ -290,7 +263,6 @@ export const useApiState = (
         if (providerSpecific) {
           setSelectedModel(providerSpecific);
           saveLastUsedModel(configuredKeyOverride);
-          setBaseUrl(normalized);
           return;
         }
       }
@@ -299,40 +271,15 @@ export const useApiState = (
       if (!model) return;
       setSelectedModel(model);
       saveLastUsedModel(modelId);
-      const mappedBase = loadModelProviderMap()[modelId];
-      if (mappedBase) {
-        const normalized = mappedBase.endsWith("/")
-          ? mappedBase
-          : `${mappedBase}/`;
-        setBaseUrl(normalized);
-      }
     },
     [models]
   );
-
-  const setBaseUrl = useCallback((url: string) => {
-    const torMode = isTorContext();
-    const normalizedUrl = normalizeProviderUrl(url, torMode) || "";
-    if (!torMode && normalizedUrl && isOnionUrl(normalizedUrl)) {
-      return;
-    }
-    setBaseUrlState(normalizedUrl);
-    saveBaseUrl(normalizedUrl);
-    const updatedBaseUrlsList = filterBaseUrlsForTor(
-      loadBaseUrlsList(),
-      torMode
-    );
-    setBaseUrlsList(updatedBaseUrlsList);
-  }, []);
 
   return {
     models,
     selectedModel,
     isLoadingModels,
-    isRefreshingModels,
-    baseUrl,
     setSelectedModel,
-    setBaseUrl,
     fetchModels,
     handleModelChange,
     lowBalanceWarningForModel,
