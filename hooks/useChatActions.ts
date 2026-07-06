@@ -19,6 +19,8 @@ import {
   hydrate as hydrateStore,
   discoveryAdapter,
   storageAdapter,
+  modelManager,
+  providerManager,
 } from "@/sdk/sharedStore";
 import { fetchAIResponse, consoleLogger, isTorContext } from "@routstr/sdk";
 
@@ -463,6 +465,16 @@ export const useChatActions = ({
           throw new Error("Wallet adapter is not ready");
         }
 
+        // If the shared ModelManager already has providers + models cached,
+        // pass it so resolveRequestContext skips bootstrap+fetchModels entirely
+        // (instant path from cache).  On cold start (cache empty) we omit it and
+        // let the SDK fall back to the full blocking bootstrap — there is no
+        // cached data to serve from, so waiting is the only option.
+        const cachedModels = discoveryAdapter.getCachedModels();
+        const hasCache =
+          modelManager.getBaseUrls().length > 0 &&
+          Object.keys(cachedModels).length > 0;
+
         await fetchAIResponse(
           {
             messageHistory: messageHistory as any,
@@ -473,6 +485,9 @@ export const useChatActions = ({
             discoveryAdapter,
             walletAdapter,
             storageAdapter,
+            ...(hasCache
+              ? { modelManager, providerManager }
+              : {}),
           },
           {
             onPaymentProcessing: setIsPaymentProcessing,

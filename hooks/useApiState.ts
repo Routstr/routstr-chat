@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useSearchParams } from "next/navigation";
-import { ModelManager, MintDiscovery } from "@routstr/sdk";
+import { MintDiscovery } from "@routstr/sdk";
 import { Model } from "@/types/models";
 import {
   loadLastUsedModel,
@@ -23,6 +23,7 @@ import {
   isTorContext,
 } from "@/utils/torUtils";
 import { useDiscoveryAdapter } from "./useDiscoveryAdapter";
+import { modelManager } from "@/sdk/sharedStore";
 
 export interface UseApiStateReturn {
   models: Model[];
@@ -43,10 +44,9 @@ export const useApiState = (
 ): UseApiStateReturn => {
   const searchParams = useSearchParams();
   const discoveryAdapter = useDiscoveryAdapter();
-  const modelManager = useMemo(
-    () => (discoveryAdapter ? new ModelManager(discoveryAdapter) : null),
-    [discoveryAdapter]
-  );
+  // modelManager is a shared singleton from @/sdk/sharedStore — no need to
+  // create one per-hook.  This ensures useChatActions and useApiState share
+  // the same bootstrap state, cache reads, and provider metadata.
   const mintDiscovery = useMemo(
     () => (discoveryAdapter ? new MintDiscovery(discoveryAdapter) : null),
     [discoveryAdapter]
@@ -194,9 +194,50 @@ export const useApiState = (
   );
 
   useEffect(() => {
-    if (!isAuthenticated || !modelManager || !mintDiscovery) return;
+    if (!isAuthenticated || !mintDiscovery) return;
     void fetchModels(balance);
-  }, [isAuthenticated, modelManager, mintDiscovery, baseUrlsList.length]);
+  }, [isAuthenticated, mintDiscovery, baseUrlsList.length]);
+
+  // -----------------------------------------------------------------------
+  // Background cache refresh
+  // -----------------------------------------------------------------------
+  // Periodically refresh the provider/model cache so that fetchAIResponse
+  // (called from useChatActions) never blocks on a stale cache.  The refresh
+  // uses forceRefresh = false, so it only hits the network when the 210-min
+  // TTL has expired — the interval just needs to be frequent enough to catch
+  // staleness.  This runs as a fire-and-forget side-effect: it never blocks
+  // the UI or message sending.
+  const refreshInProgress = useRef(false);
+  useEffect(() => {
+    if (!isAuthenticated || !mintDiscovery) return;
+
+    const backgroundRefresh = async () => {
+      if (refreshInProgress.current) return;
+      refreshInProgress.current = true;
+      try {
+        const torMode = isTorContext();
+        let bases = modelManager.getBaseUrls();
+        if (bases.length === 0) return; // nothing to refresh yet
+        bases = await modelManager.bootstrapProviders(torMode, false);
+        if (bases.length === 0) return;
+        await modelManager.fetchModels(bases, false);
+        await mintDiscovery.discoverMints(bases);
+      } catch (e) {
+        console.warn("Background model refresh failed:", e);
+      } finally {
+        refreshInProgress.current = false;
+      }
+    };
+
+    // Run shortly after mount (gives the initial fetchModels a head start)
+    const initialTimer = setTimeout(backgroundRefresh, 10_000);
+    // Then every 30 minutes — will only do network work when cache is stale
+    const interval = setInterval(backgroundRefresh, 30 * 60 * 1000);
+    return () => {
+      clearTimeout(initialTimer);
+      clearInterval(interval);
+    };
+  }, [isAuthenticated, mintDiscovery]);
 
   useEffect(() => {
     if (!isAuthenticated || models.length === 0) return;
