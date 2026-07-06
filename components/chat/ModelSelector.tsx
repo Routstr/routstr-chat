@@ -25,10 +25,7 @@ import {
   getProviderFromModelName,
 } from "@/utils/modelUtils";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
-import {
-  loadModelProviderMap,
-  getStorageItem,
-} from "@/utils/storageUtils";
+import { loadModelProviderMap } from "@/utils/storageUtils";
 import { useDisabledProviders } from "@/hooks/useDisabledProviders";
 import {
   parseModelKey,
@@ -38,8 +35,17 @@ import {
   isModelAvailable,
 } from "@/utils/modelUtils";
 import { webSearchModels } from "@/lib/preconfiguredModels";
-import { discoveryAdapter } from "@/sdk/sharedStore";
+import { discoveryAdapter, store } from "@/sdk/sharedStore";
+import { ProviderManager } from "@routstr/sdk/client";
 import { getPendingCashuTokenAmount } from "@/utils/cashuUtils";
+
+// Module-level ProviderManager singleton. Shares the same SDK store as the
+// app's RoutstrClient instances, so cooldown / failure state stays consistent
+// across the UI and live requests. Constructed once (cheap) and hydrated from
+// the store. Used by the provider cost-comparison panel so we read from the
+// SDK's canonical cache (IndexedDB) instead of the legacy localStorage
+// `modelsFromAllProviders` mirror.
+const providerManager = new ProviderManager(discoveryAdapter, store);
 
 interface ModelSelectorProps {
   selectedModel: Model | null;
@@ -329,11 +335,11 @@ export default function ModelSelector({
   };
 
   const getProviderPricingEntries = (modelId: string) => {
-    const allProviderModels = getStorageItem<Record<string, Model[]>>(
-      "modelsFromAllProviders",
-      {}
-    );
-    const disabledProvidersSet = new Set(disabledProviders);
+    // Delegate to the SDK's ProviderManager, which reads from the canonical
+    // IndexedDB-backed discovery cache (not the legacy localStorage mirror),
+    // filters disabled + on-cooldown providers, and sorts by total
+    // prompt+completion cost per 1M tokens (cheapest first).
+    const ranking = providerManager.getProviderPriceRankingForModel(modelId);
     const entriesMap = new Map<
       string,
       {
@@ -345,40 +351,28 @@ export default function ModelSelector({
       }
     >();
 
-    for (const [baseUrl, models] of Object.entries(allProviderModels)) {
-      const normalized = normalizeBaseUrl(baseUrl);
-      if (!normalized || disabledProvidersSet.has(normalized)) continue;
-      const model = models.find((m) => m.id === modelId);
-      if (!model) continue;
-      const promptCost =
-        typeof model.sats_pricing?.prompt === "number" &&
-        isFinite(model.sats_pricing.prompt)
-          ? model.sats_pricing.prompt
-          : null;
-      const completionCost =
-        typeof model.sats_pricing?.completion === "number" &&
-        isFinite(model.sats_pricing.completion)
-          ? model.sats_pricing.completion
-          : null;
+    for (const item of ranking) {
+      const normalized = normalizeBaseUrl(item.baseUrl);
+      if (!normalized) continue;
+      // SDK returns sats-per-1M; convert back to sats-per-token so the
+      // existing formatSatsPer1M() formatter (which multiplies by 1M) and
+      // percentDelta comparisons keep working unchanged.
+      const promptCost = item.promptPerMillion / 1_000_000;
+      const completionCost = item.completionPerMillion / 1_000_000;
       entriesMap.set(normalized, {
         baseUrl: normalized,
-        providerLabel: formatProviderLabel(normalized, model),
+        providerLabel: formatProviderLabel(normalized, item.model as unknown as Model),
         promptCost,
         completionCost,
-        model,
+        // SDK Model has optional fields where the local Model type requires
+        // them; provider-discovery payloads are fully populated at runtime.
+        model: item.model as unknown as Model,
       });
     }
 
-    const entries = Array.from(entriesMap.values());
-    entries.sort((a, b) => {
-      const aCost = a.completionCost ?? Number.POSITIVE_INFINITY;
-      const bCost = b.completionCost ?? Number.POSITIVE_INFINITY;
-      if (aCost !== bCost) return aCost - bCost;
-      const aPrompt = a.promptCost ?? Number.POSITIVE_INFINITY;
-      const bPrompt = b.promptCost ?? Number.POSITIVE_INFINITY;
-      return aPrompt - bPrompt;
-    });
-    return entries;
+    // SDK ranking is already sorted cheapest-first (by totalPerMillion);
+    // Map preserves insertion order so we keep that ordering.
+    return Array.from(entriesMap.values());
   };
 
   const selectProviderForModel = (model: Model, baseUrl: string) => {
