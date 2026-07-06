@@ -14,6 +14,7 @@ import {
   createMemoryDriver,
   createMemoryUsageTrackingDriver,
 } from "@routstr/sdk/storage";
+import { ModelManager, ProviderManager, consoleLogger } from "@routstr/sdk";
 
 import type { SdkStore, UsageTrackingDriver } from "@routstr/sdk/storage";
 import type { DiscoveryAdapter } from "@routstr/sdk/discovery";
@@ -51,6 +52,23 @@ const discoveryAdapter: DiscoveryAdapter =
 const storageAdapter: StorageAdapter = createStorageAdapterFromStore(store);
 
 // ---------------------------------------------------------------------------
+// Shared managers (derived from the one store + adapter)
+// ---------------------------------------------------------------------------
+// A single ModelManager instance shared across all hooks.  This avoids
+// re-creating (and re-bootstrapping) a ModelManager on every render / every
+// fetchAIResponse call.  The underlying cache lives in discoveryAdapter, so
+// all consumers read from the same source of truth.
+const modelManager = new ModelManager(discoveryAdapter, {
+  logger: consoleLogger,
+});
+
+// A single ProviderManager for consistent failure-tracking / cooldown state
+// across all requests.  Without a shared instance, each fetchAIResponse call
+// would create a new ProviderManager that knows nothing about providers that
+// already failed.
+const providerManager = new ProviderManager(discoveryAdapter, store, consoleLogger);
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 export {
@@ -59,5 +77,7 @@ export {
   discoveryAdapter,
   storageAdapter,
   usageTrackingDriver,
+  modelManager,
+  providerManager,
 };
 export type { SdkStore, DiscoveryAdapter, StorageAdapter };
