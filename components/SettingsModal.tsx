@@ -51,7 +51,6 @@ interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   initialActiveTab?: SettingsTab;
-  baseUrl: string;
   models: readonly Model[];
   balance: number;
   setBalance: (balance: number | ((prevBalance: number) => number)) => void;
@@ -77,7 +76,6 @@ const SettingsModal = ({
   isOpen,
   onClose,
   initialActiveTab,
-  baseUrl,
   models,
   balance,
   setBalance,
@@ -99,7 +97,6 @@ const SettingsModal = ({
   );
   const mediaQueryIsMobile = useMediaQuery("(max-width: 640px)");
   const isMobile = propIsMobile ?? mediaQueryIsMobile;
-  const baseUrls = baseUrl ? [baseUrl] : [];
 
   useEffect(() => {
     if (isOpen) {
@@ -139,8 +136,6 @@ const SettingsModal = ({
       case "api-keys":
         return (
           <ApiKeysTab
-            baseUrl={baseUrl}
-            baseUrls={baseUrls}
             setActiveTab={setActiveTab}
             isMobile={isMobile}
           />

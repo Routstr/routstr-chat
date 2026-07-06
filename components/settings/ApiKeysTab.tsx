@@ -116,15 +116,11 @@ const ProviderSelector: React.FC<ProviderSelectorProps> = ({
 };
 
 interface ApiKeysTabProps {
-  baseUrl: string;
-  baseUrls: string[]; // kept for backwards compatibility but will be ignored
   setActiveTab: (tab: "settings" | "wallet" | "history" | "api-keys") => void;
   isMobile?: boolean;
 }
 
 const ApiKeysTab = ({
-  baseUrl,
-  baseUrls: _ignoredBaseUrlsProp,
   setActiveTab,
   isMobile,
 }: ApiKeysTabProps) => {
@@ -158,8 +154,8 @@ const ApiKeysTab = ({
         setIsLoadingBaseUrls(true);
         const resp = await fetch("https://api.routstr.com/v1/providers/");
         const urls = new Set<string>();
-        // Always include currently selected baseUrl if present
-        const normalizedCurrentBase = normalizeBaseUrl(baseUrl);
+        // No longer track a global baseUrl — providers come from the API
+        const normalizedCurrentBase = "";
         if (normalizedCurrentBase) urls.add(normalizedCurrentBase);
         if (resp.ok) {
           const data = await resp.json();
@@ -212,8 +208,8 @@ const ApiKeysTab = ({
           (prev) => prev || list[0] || normalizedCurrentBase
         );
       } catch {
-        // On error, fall back to current baseUrl if any
-        const fallbackBaseUrl = normalizeBaseUrl(baseUrl);
+        // On error, produce an empty fallback list
+        const fallbackBaseUrl = "";
         const only = fallbackBaseUrl ? [fallbackBaseUrl] : [];
         setAvailableBaseUrls(only);
         setSelectedNewApiKeyBaseUrl((prev) => prev || only[0] || "");
@@ -223,7 +219,7 @@ const ApiKeysTab = ({
       }
     };
     void fetchProviders();
-  }, [baseUrl]);
+  }, []);
 
   const {
     syncedApiKeys,
@@ -316,14 +312,14 @@ const ApiKeysTab = ({
   const [topUpAmount, setTopUpAmount] = useState(""); // New state for topup amount
   const [keyToTopUp, setKeyToTopUp] = useState<StoredApiKey | null>(null); // Key to topup
   const [selectedNewApiKeyBaseUrl, setSelectedNewApiKeyBaseUrl] =
-    useState<string>(baseUrl); // New state for base URL during API key creation
+    useState<string>(""); // New state for base URL during API key creation
   const [refundFailed, setRefundFailed] = useState(false); // New state to track refund failures
   const [copiedKey, setCopiedKey] = useState<string | null>(null); // Track which key was recently copied
   const [showAddApiKeyModal, setShowAddApiKeyModal] = useState(false); // New state for add API key modal
   const [manualApiKey, setManualApiKey] = useState(""); // New state for manual API key input
   const [manualApiKeyLabel, setManualApiKeyLabel] = useState(""); // New state for manual API key label
   const [selectedManualApiKeyBaseUrl, setSelectedManualApiKeyBaseUrl] =
-    useState<string>(baseUrl); // New state for manual API key base URL
+    useState<string>(""); // New state for manual API key base URL
   const [isAddingApiKey, setIsAddingApiKey] = useState(false); // New state for adding API key loading
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set()); // New state for tracking expanded API keys
   const [isRefreshingKey, setIsRefreshingKey] = useState<string | null>(null); // Loading state for per-key refresh
@@ -366,12 +362,7 @@ const ApiKeysTab = ({
     });
   };
 
-  // Keep selections in sync when baseUrl prop changes (fallback)
-  useEffect(() => {
-    const normalized = normalizeBaseUrl(baseUrl);
-    setSelectedNewApiKeyBaseUrl((prev) => prev || normalized);
-    setSelectedManualApiKeyBaseUrl((prev) => prev || normalized);
-  }, [baseUrl]);
+
 
   // Effect to manage API keys based on cloud sync setting
   useEffect(() => {
@@ -423,7 +414,7 @@ const ApiKeysTab = ({
         const newLocalKeys = parsedKeys.map((key) => ({
           ...key,
           label: key.label || "Unnamed",
-          baseUrl: key.baseUrl || baseUrl,
+          baseUrl: key.baseUrl || "",
         }));
         setStoredApiKeys((prevKeys) => {
           // Perform a deep equality check for array content to prevent unnecessary re-renders
@@ -458,7 +449,7 @@ const ApiKeysTab = ({
         setStoredApiKeys((prevKeys) => (prevKeys.length > 0 ? [] : prevKeys)); // Only clear if not already empty
       }
     }
-  }, [cloudSyncEnabled, syncedApiKeys, baseUrl, hasActiveAccount]); // Added hasActiveAccount dependency
+  }, [cloudSyncEnabled, syncedApiKeys, hasActiveAccount]);
 
   // Separate effect to auto-open inline create form when no keys exist
   useEffect(() => {
@@ -580,7 +571,7 @@ const ApiKeysTab = ({
     updatedKey: StoredApiKey | null;
     error: "invalid_api_key" | "network" | "other" | null;
   }> => {
-    const urlToUse = keyData.baseUrl || baseUrl;
+    const urlToUse = keyData.baseUrl || "";
     try {
       const response = await fetch(`${urlToUse}v1/wallet/info`, {
         headers: {
@@ -643,7 +634,7 @@ const ApiKeysTab = ({
     keyData: StoredApiKey,
     context: "bulk" | "single"
   ): StoredApiKey | null => {
-    const urlToUse = keyData.baseUrl || baseUrl;
+    const urlToUse = keyData.baseUrl || "";
     if (error === "network") {
       const msg =
         context === "bulk"
@@ -772,7 +763,7 @@ const ApiKeysTab = ({
 
       if (keyDataToDelete) {
         // Attempt to refund the balance
-        const urlToUse = keyDataToDelete.baseUrl || baseUrl; // Use key-specific baseUrl or fallback to global
+        const urlToUse = keyDataToDelete.baseUrl || ""; // Use key-specific baseUrl or fallback
         const mintUrl = usingNip60
           ? cashuStore.activeMintUrl || DEFAULT_MINT_URL
           : DEFAULT_MINT_URL;
@@ -847,7 +838,7 @@ const ApiKeysTab = ({
     setIsTopUpLoading(keyToTopUp.key);
     setShowTopUpModal(false);
 
-    const urlToUse = keyToTopUp.baseUrl || baseUrl; // Moved here
+    const urlToUse = keyToTopUp.baseUrl || ""; // Moved here
     try {
       let cashuToken: string | null | { hasTokens: false } | undefined;
 
@@ -898,7 +889,7 @@ const ApiKeysTab = ({
 
       // Refresh only the topped-up key's balance
       await refreshSingleApiKeyBalance(keyToTopUp);
-      if (data.msats) removeLocalCashuToken(baseUrl);
+      if (data.msats) removeLocalCashuToken("");
     } catch (error) {
       console.error("Error during top up:", error);
       if (error instanceof TypeError) {
@@ -919,7 +910,7 @@ const ApiKeysTab = ({
 
   const handleAddApiKey = () => {
     setShowAddApiKeyModal(true);
-    setSelectedManualApiKeyBaseUrl(baseUrl); // Reset to default base URL
+    setSelectedManualApiKeyBaseUrl(""); // Reset to default base URL
   };
 
   const confirmAddApiKey = async () => {
@@ -1362,7 +1353,7 @@ const ApiKeysTab = ({
                         onClick={async () => {
                           setIsRefundingKey(keyData.key); // Set loading for this specific key
                           try {
-                            const urlToUse = keyData.baseUrl || baseUrl; // Use key-specific baseUrl or fallback to global
+                            const urlToUse = keyData.baseUrl || ""; // Use key-specific baseUrl or fallback
                             const mintUrl = usingNip60
                               ? cashuStore.activeMintUrl || DEFAULT_MINT_URL
                               : DEFAULT_MINT_URL;

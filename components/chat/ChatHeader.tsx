@@ -51,7 +51,6 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
   const {
     // Model State
     selectedModel,
-    baseUrl,
     isModelDrawerOpen,
     setIsModelDrawerOpen,
     isWalletLoading,
@@ -208,7 +207,6 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
             configuredModels={configuredModels}
             toggleConfiguredModel={toggleConfiguredModel}
             setModelProviderFor={setModelProviderFor}
-            baseUrl={baseUrl}
             openModelsConfig={() => {
               setIsSettingsOpen(true);
               setInitialSettingsTab("models");

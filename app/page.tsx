@@ -40,7 +40,6 @@ function ChatPageContent() {
     setInitialSettingsTab,
 
     // API State
-    baseUrl,
     models,
     fetchModels,
 
@@ -297,7 +296,6 @@ function ChatPageContent() {
           isOpen={isSettingsOpen}
           onClose={() => setIsSettingsOpen(false)}
           initialActiveTab={initialSettingsTab}
-          baseUrl={baseUrl}
           models={models}
           balance={balance}
           setBalance={setBalance}

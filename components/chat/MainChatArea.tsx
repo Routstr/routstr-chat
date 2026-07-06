@@ -58,7 +58,6 @@ const MainChatArea: React.FC = () => {
 
     // API State
     selectedModel,
-    baseUrl,
     isLoadingModels,
     isWalletLoading,
 
@@ -80,7 +79,7 @@ const MainChatArea: React.FC = () => {
       setMessages,
       activeConversationId,
       selectedModel,
-      baseUrl,
+      "",
       isAuthenticated,
       setIsLoginModalOpen,
       getActiveConversationId
@@ -96,7 +95,7 @@ const MainChatArea: React.FC = () => {
       (index) => editingMessageIndex !== null && setEditingMessageIndex(index),
       setEditingContent,
       selectedModel,
-      baseUrl,
+      "",
       activeConversationId,
       getActiveConversationId
     );
@@ -108,7 +107,7 @@ const MainChatArea: React.FC = () => {
       messages,
       setMessages,
       selectedModel,
-      baseUrl,
+      "",
       activeConversationId,
       getActiveConversationId
     );
