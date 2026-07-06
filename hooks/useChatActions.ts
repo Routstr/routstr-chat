@@ -19,7 +19,6 @@ import {
   hydrate as hydrateStore,
   discoveryAdapter,
   storageAdapter,
-  providerRegistry,
 } from "@/sdk/sharedStore";
 import { fetchAIResponse, consoleLogger, isTorContext } from "@routstr/sdk";
 
@@ -474,7 +473,6 @@ export const useChatActions = ({
             discoveryAdapter,
             walletAdapter,
             storageAdapter,
-            providerRegistry,
           },
           {
             onPaymentProcessing: setIsPaymentProcessing,

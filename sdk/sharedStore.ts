@@ -9,7 +9,6 @@ import {
   createSdkStore,
   createDiscoveryAdapterFromStore,
   createStorageAdapterFromStore,
-  createProviderRegistryFromStore,
   createIndexedDBDriver,
   createIndexedDBUsageTrackingDriver,
   createMemoryDriver,
@@ -18,7 +17,7 @@ import {
 
 import type { SdkStore, UsageTrackingDriver } from "@routstr/sdk/storage";
 import type { DiscoveryAdapter } from "@routstr/sdk/discovery";
-import type { StorageAdapter, ProviderRegistry } from "@routstr/sdk/wallet";
+import type { StorageAdapter } from "@routstr/sdk/wallet";
 
 // ---------------------------------------------------------------------------
 // Driver selection
@@ -51,9 +50,6 @@ const discoveryAdapter: DiscoveryAdapter =
 
 const storageAdapter: StorageAdapter = createStorageAdapterFromStore(store);
 
-const providerRegistry: ProviderRegistry =
-  createProviderRegistryFromStore(store);
-
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -62,7 +58,6 @@ export {
   hydrate,
   discoveryAdapter,
   storageAdapter,
-  providerRegistry,
   usageTrackingDriver,
 };
-export type { SdkStore, DiscoveryAdapter, StorageAdapter, ProviderRegistry };
+export type { SdkStore, DiscoveryAdapter, StorageAdapter };

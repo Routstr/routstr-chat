@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   storageAdapter,
-  providerRegistry,
+  discoveryAdapter,
   usageTrackingDriver,
   hydrate,
 } from "@/sdk/sharedStore";
-import type { StorageAdapter, ProviderRegistry } from "@routstr/sdk/wallet";
+import type { StorageAdapter } from "@routstr/sdk/wallet";
+import type { DiscoveryAdapter } from "@routstr/sdk/discovery";
 import {
   RoutstrClient,
   type RoutstrClientMode,
@@ -20,17 +21,31 @@ interface UseSdkClientResult {
 
 const createPendingDeps = (): {
   storageAdapter: StorageAdapter;
-  providerRegistry: ProviderRegistry;
+  discoveryAdapter: DiscoveryAdapter;
 } => {
   const pendingHandler = () => {
     throw new Error("SDK not ready");
   };
-  const pendingRegistry: ProviderRegistry = {
-    getModelsForProvider: () => [],
+  const pendingDiscovery: DiscoveryAdapter = {
+    getCachedModels: () => ({}),
+    setCachedModels: () => {},
+    getCachedMints: () => ({}),
+    setCachedMints: () => {},
+    getCachedProviderInfo: () => ({}),
+    setCachedProviderInfo: () => {},
+    getProviderLastUpdate: () => null,
+    setProviderLastUpdate: () => {},
+    getLastUsedModel: () => null,
+    setLastUsedModel: () => {},
     getDisabledProviders: () => [],
-    getProviderMints: () => [],
-    getProviderInfo: async () => null,
-    getAllProvidersModels: () => ({}),
+    getBaseUrlsList: () => [],
+    getBaseUrlsLastUpdate: () => null,
+    setBaseUrlsList: () => {},
+    setBaseUrlsLastUpdate: () => {},
+    getRoutstr21Models: () => [],
+    setRoutstr21Models: () => {},
+    getRoutstr21ModelsLastUpdate: () => null,
+    setRoutstr21ModelsLastUpdate: () => {},
   };
   const pendingStorage: StorageAdapter = {
     saveProviderInfo: pendingHandler,
@@ -55,7 +70,7 @@ const createPendingDeps = (): {
     clearXcashuTokensForBaseUrl: pendingHandler,
     updateXcashuTokenTryCount: pendingHandler,
   };
-  return { storageAdapter: pendingStorage, providerRegistry: pendingRegistry };
+  return { storageAdapter: pendingStorage, discoveryAdapter: pendingDiscovery };
 };
 
 export function useSdkClient(
@@ -71,7 +86,7 @@ export function useSdkClient(
       return new RoutstrClient(
         {} as WalletAdapter,
         pendingDeps.storageAdapter,
-        pendingDeps.providerRegistry,
+        pendingDeps.discoveryAdapter,
         "min",
         mode,
       );
@@ -79,7 +94,7 @@ export function useSdkClient(
     return new RoutstrClient(
       walletAdapter,
       storageAdapter,
-      providerRegistry,
+      discoveryAdapter,
       "min",
       mode,
       { usageTrackingDriver },
