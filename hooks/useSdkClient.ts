@@ -13,6 +13,31 @@ import {
 } from "@routstr/sdk/client";
 import type { WalletAdapter } from "@routstr/sdk/wallet";
 
+/**
+ * Creates a filtered logger that only passes through warn and error messages.
+ * Use "warn" to see warn+error, "error" for error only.
+ */
+function createFilteredLogger(level: "warn" | "error") {
+  const filter = (...args: unknown[]): void => {
+    // warn level includes both warn and error
+    // error level includes only error
+    // both levels suppress log and debug
+  };
+
+  const logger = {
+    log: filter,
+    debug: filter,
+    warn:
+      level === "warn"
+        ? (...args: unknown[]) => console.warn(...args)
+        : filter,
+    error: (...args: unknown[]) => console.error(...args),
+    child: () => logger,
+  };
+
+  return logger;
+}
+
 interface UseSdkClientResult {
   client: RoutstrClient;
   isReady: boolean;
@@ -97,7 +122,10 @@ export function useSdkClient(
       discoveryAdapter,
       "min",
       mode,
-      { usageTrackingDriver },
+      {
+        usageTrackingDriver,
+        logger: createFilteredLogger("warn"), // only show warn + error; change to "error" for error-only
+      },
     );
   }, [walletAdapter, mode]);
 

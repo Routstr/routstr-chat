@@ -23,7 +23,7 @@ import {
   isTorContext,
 } from "@/utils/torUtils";
 import { useDiscoveryAdapter } from "./useDiscoveryAdapter";
-import { modelManager } from "@/sdk/sharedStore";
+import { modelManager, providerManager } from "@/sdk/sharedStore";
 
 export interface UseApiStateReturn {
   models: Model[];
@@ -116,25 +116,16 @@ export const useApiState = (
           }
         )) as unknown as Model[];
 
-        const allProviderModels = modelManager.getAllCachedModels();
+        // Delegate cheapest-provider selection to the SDK's
+        // ProviderManager.getBestProviderForModel so the persisted
+        // model_provider_map matches the ranking used by the ModelSelector
+        // details panel (prompt + completion total) and respects disabled /
+        // on-cooldown providers — keeping the list view consistent with actual
+        // routing decisions.
         const bestMap = loadModelProviderMap();
         let mapChanged = false;
         for (const model of combinedModels) {
-          let bestBase: string | null = null;
-          let bestCost = Number.POSITIVE_INFINITY;
-
-          for (const [providerBase, providerModels] of Object.entries(
-            allProviderModels
-          )) {
-            const match = providerModels.find((m) => m.id === model.id);
-            if (!match?.sats_pricing) continue;
-            const cost = match.sats_pricing.completion ?? 0;
-            if (cost < bestCost) {
-              bestCost = cost;
-              bestBase = providerBase;
-            }
-          }
-
+          const bestBase = providerManager.getBestProviderForModel(model.id);
           if (bestBase && bestMap[model.id] !== bestBase) {
             bestMap[model.id] = bestBase;
             mapChanged = true;
