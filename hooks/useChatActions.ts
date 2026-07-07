@@ -23,6 +23,7 @@ import {
   providerManager,
 } from "@/sdk/sharedStore";
 import { fetchAIResponse, consoleLogger, isTorContext } from "@routstr/sdk";
+import { usageTrackingDriver } from "@/sdk/sharedStore";
 
 export interface UseChatActionsReturn {
   inputMessage: string;
@@ -137,6 +138,7 @@ export const useChatActions = ({
     string | null
   >(null);
   const streamingConversationIdRef = useRef<string | null>(null);
+  const requestIdRef = useRef<string | null>(null);
   const [streamingContentByConversation, setStreamingContentByConversation] =
     useState<Record<string, string>>({});
   const [thinkingContentByConversation, setThinkingContentByConversation] =
@@ -557,9 +559,30 @@ export const useChatActions = ({
             onLastMessageSatsUpdate: (satsSpent) => {
               updateLastMessageSatsSpent(originConversationId, satsSpent);
             },
+            onRequestId: (requestId) => {
+              requestIdRef.current = requestId;
+            },
           },
           { alertLevel: "min", logger: consoleLogger, getPendingCashuTokenAmount },
         );
+        
+        // After the SDK finalizes, look up the exact usage entry by requestId
+        // for accurate provider-computed cost (includes msat precision, Tinfoil
+        // header fallback, etc.) rather than using balance-delta satsSpent.
+        if (requestIdRef.current) {
+          const recentEntries = await usageTrackingDriver.list({
+            after: Date.now() - 60_000, // last 60s
+            modelId: selectedModel.id,
+          });
+          const entry = recentEntries.find(
+            (e) => e.id === requestIdRef.current
+          );
+          if (entry) {
+            updateLastMessageSatsSpent(originConversationId, entry.satsCost);
+          }
+        }
+        requestIdRef.current = null;
+
         setPendingCashuAmountState(getPendingCashuTokenAmount());
       } finally {
         setIsLoading(false);
