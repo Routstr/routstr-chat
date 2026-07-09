@@ -85,6 +85,8 @@ export interface UseChatActionsReturn {
     activeConversationId: string | null,
     getActiveConversationId: () => string | null
   ) => void;
+  /** Abort the in-flight AI request / stream. */
+  stopGeneration: () => void;
   /** Refund all API keys back to the active mint */
   refundAllApiKeys: () => Promise<{
     totalRefunded: number;
@@ -139,6 +141,7 @@ export const useChatActions = ({
   >(null);
   const streamingConversationIdRef = useRef<string | null>(null);
   const requestIdRef = useRef<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const [streamingContentByConversation, setStreamingContentByConversation] =
     useState<Record<string, string>>({});
   const [thinkingContentByConversation, setThinkingContentByConversation] =
@@ -449,6 +452,14 @@ export const useChatActions = ({
       setStreamingConversationId(originConversationId ?? null);
       streamingConversationIdRef.current = originConversationId ?? null;
 
+      // Create a fresh AbortController for this request so the UI can stop
+      // generation mid-stream. Aborting causes fetchAIResponse to reject
+      // with an AbortError, which it surfaces as a clean "Generation stopped."
+      // system message.
+      abortControllerRef.current?.abort();
+      const abortController = new AbortController();
+      abortControllerRef.current = abortController;
+
       // Start keep-alive for background processing
       onInferenceStart?.();
       if (originConversationId) {
@@ -487,6 +498,7 @@ export const useChatActions = ({
             discoveryAdapter,
             walletAdapter,
             storageAdapter,
+            abortSignal: abortController.signal,
             ...(hasCache
               ? { modelManager, providerManager }
               : {}),
@@ -591,6 +603,7 @@ export const useChatActions = ({
         setThinkingContent("");
         setStreamingConversationId(null);
         streamingConversationIdRef.current = null;
+        abortControllerRef.current = null;
 
         // Stop keep-alive when inference ends
         onInferenceEnd?.();
@@ -616,6 +629,13 @@ export const useChatActions = ({
       enrichAssistantImages,
     ]
   );
+
+  /**
+   * Abort the in-flight AI request / stream, if any.
+   */
+  const stopGeneration = useCallback(() => {
+    abortControllerRef.current?.abort();
+  }, []);
 
   /**
    * Refund all API keys AND xcashu tokens back to the user's wallet.
@@ -683,5 +703,6 @@ export const useChatActions = ({
     saveInlineEdit,
     retryMessage,
     refundAllApiKeys,
+    stopGeneration,
   };
 };

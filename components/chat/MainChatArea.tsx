@@ -65,6 +65,7 @@ const MainChatArea: React.FC = () => {
     sendMessage,
     saveInlineEdit,
     retryMessage,
+    stopGeneration,
   } = useChat();
 
   const isLoadingChatFromUrl = useMemo(() => {
@@ -152,6 +153,7 @@ const MainChatArea: React.FC = () => {
         isLoadingModels={isLoadingModels}
         isWalletLoading={isWalletLoading}
         isLoadingChatFromUrl={isLoadingChatFromUrl}
+        stopGeneration={stopGeneration}
       />
     </>
   );

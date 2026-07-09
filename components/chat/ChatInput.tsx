@@ -5,7 +5,7 @@ import {
   useCallback,
   useLayoutEffect,
 } from "react";
-import { ArrowRight, FileText, Loader2, Paperclip, X } from "lucide-react";
+import { ArrowRight, FileText, Paperclip, Square, X } from "lucide-react";
 import { motion } from "motion/react";
 import { MessageAttachment } from "@/types/chat";
 import { extractTextFromPdf } from "@/utils/pdfUtils";
@@ -128,6 +128,7 @@ interface ChatInputProps {
   isLoadingModels: boolean;
   isWalletLoading: boolean;
   isLoadingChatFromUrl?: boolean;
+  stopGeneration: () => void;
 }
 
 export default function ChatInput({
@@ -145,6 +146,7 @@ export default function ChatInput({
   isLoadingModels,
   isWalletLoading,
   isLoadingChatFromUrl,
+  stopGeneration,
 }: ChatInputProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -841,26 +843,28 @@ export default function ChatInput({
                   <Paperclip className="h-5 w-5 text-foreground" />
                 </button>
 
-                {/* Send button */}
+                {/* Send / Stop button */}
                 <button
-                  onClick={handleSendMessage}
+                  onClick={isLoading ? stopGeneration : handleSendMessage}
                   disabled={
-                    isLoading ||
-                    isLoadingModels ||
-                    isWalletLoading ||
-                    (!isAuthenticated &&
-                      !inputMessage.trim() &&
-                      uploadedAttachments.length === 0)
+                    !isLoading &&
+                    (isLoadingModels ||
+                      isWalletLoading ||
+                      (!isAuthenticated &&
+                        !inputMessage.trim() &&
+                        uploadedAttachments.length === 0))
                   }
                   className={`p-2 rounded-full transition-colors text-foreground ${
-                    showRedButton
+                    isLoading
                       ? "bg-red-500 hover:bg-red-600 text-white"
-                      : "bg-transparent hover:bg-secondary disabled:hover:bg-transparent"
+                      : showRedButton
+                        ? "bg-red-500 hover:bg-red-600 text-white"
+                        : "bg-transparent hover:bg-secondary disabled:hover:bg-transparent"
                   } disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer pointer-events-auto`}
-                  aria-label="Send message"
+                  aria-label={isLoading ? "Stop generation" : "Send message"}
                 >
                   {isLoading ? (
-                    <Loader2 className="h-5 w-5 animate-spin" />
+                    <Square className="h-4 w-4 fill-current" />
                   ) : (
                     <ArrowRight className="h-5 w-5" />
                   )}
