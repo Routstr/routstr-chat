@@ -1612,7 +1612,9 @@ export default function ModelSelector({
             ? { animationDelay: `${Math.min(rowIndex % MODEL_RENDER_INCREMENT, 12) * 18}ms` }
             : undefined
         }
-        className={`model-item-in group/model min-w-0 p-3 text-xs rounded-xl border transition-all duration-150 ${
+        className={`${
+          isAvailable ? "model-item-in " : ""
+        }group/model min-w-0 p-3 text-xs rounded-xl border transition-all duration-150 ${
           !isAvailable
             ? "opacity-45 cursor-not-allowed border-border/20 bg-muted/10"
             : isSelectedItem
@@ -1658,7 +1660,10 @@ export default function ModelSelector({
           </button>
           {/* Model Info - Clickable area for selection */}
           <div
-            className="flex-1 min-w-0 cursor-pointer"
+            className={`flex-1 min-w-0 ${
+              isAvailable ? "cursor-pointer" : "cursor-not-allowed"
+            }`}
+            aria-disabled={!isAvailable}
             onClick={() => {
               if (isAvailable) {
                 // If this is a favorite with a fixed provider, persist mapping so selection is fixed
