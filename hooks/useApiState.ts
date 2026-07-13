@@ -131,17 +131,36 @@ export const useApiState = (
 
         let firstProgress = true;
 
-        const combinedModels = (await modelManager.fetchModels(
+        const onFetchProgress = (progressModels: unknown[]) => {
+          if (firstProgress) {
+            setIsLoadingModels(false);
+            firstProgress = false;
+          }
+          // Never replace a populated list with an empty progress tick:
+          // partially-failed or stale-cache passes emit [] and would blank
+          // the selector the user is looking at.
+          if (progressModels.length === 0) return;
+          setModels(progressModels as unknown as Model[]);
+        };
+
+        let combinedModels = (await modelManager.fetchModels(
           bases,
           false,
-          (progressModels) => {
-            if (firstProgress) {
-              setIsLoadingModels(false);
-              firstProgress = false;
-            }
-            setModels(progressModels as unknown as Model[]);
-          }
+          onFetchProgress
         )) as unknown as Model[];
+
+        // Zero models across every provider means the cache is poisoned:
+        // per-provider freshness timestamps survived a session where the
+        // model payload write was lost, so each pass serves empty "valid"
+        // cache entries and re-stamps them, never refetching. Force one
+        // network refresh to repopulate and break the loop.
+        if (combinedModels.length === 0 && bases.length > 0) {
+          combinedModels = (await modelManager.fetchModels(
+            bases,
+            true,
+            onFetchProgress
+          )) as unknown as Model[];
+        }
 
         // Delegate cheapest-provider selection to the SDK's
         // ProviderManager.getBestProviderForModel so the persisted
