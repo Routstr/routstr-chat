@@ -157,31 +157,56 @@ html {
   background: transparent;
 }
 
-/* Restore scrollbars specifically for the Model Selector drawer */
-#model-selector-drawer,
-#model-selector-drawer * {
+/* Slim themed scrollbar, opt-in per scroll container (.slim-scroll) */
+.slim-scroll {
   -ms-overflow-style: auto; /* IE and Edge */
   scrollbar-width: thin; /* Firefox */
+  scrollbar-color: color-mix(in oklch, var(--muted-foreground) 30%, transparent)
+    transparent;
 }
 
-/* WebKit scrollbar styles for Model Selector */
-#model-selector-drawer::-webkit-scrollbar,
-#model-selector-drawer *::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+.slim-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
 }
 
-#model-selector-drawer::-webkit-scrollbar-track,
-#model-selector-drawer *::-webkit-scrollbar-track {
+.slim-scroll::-webkit-scrollbar-track {
   background: transparent;
 }
 
-#model-selector-drawer::-webkit-scrollbar-thumb,
-#model-selector-drawer *::-webkit-scrollbar-thumb {
-  background-color: oklch(0.705 0.015 286.067 / 0.6);
+.slim-scroll::-webkit-scrollbar-thumb {
+  background-color: color-mix(in oklch, var(--muted-foreground) 22%, transparent);
   border-radius: 8px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
+}
+
+.slim-scroll:hover::-webkit-scrollbar-thumb {
+  background-color: color-mix(in oklch, var(--muted-foreground) 40%, transparent);
+}
+
+.slim-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in oklch, var(--muted-foreground) 60%, transparent);
+}
+
+/* Model list rows ease in with a slight stagger (set via animation-delay) */
+.model-item-in {
+  animation: model-item-in 160ms ease-out both;
+}
+
+@keyframes model-item-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .model-item-in {
+    animation: none;
+  }
 }
 
 /* Ensure pointer cursor for all button-like elements */
@@ -229,5 +254,38 @@ html {
     animation: none;
     background: none;
     color: var(--muted-foreground);
+  }
+}
+
+/* Global tooltip layer (portal-rendered, see components/ui/GlobalTooltip.tsx) */
+.global-tooltip-layer {
+  position: fixed;
+  z-index: 2147483647;
+  width: max-content;
+  max-width: min(320px, calc(100vw - 16px));
+  pointer-events: none;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  border: 1px solid color-mix(in oklch, var(--border) 84%, var(--foreground));
+  border-radius: calc(var(--radius) - 4px);
+  background: color-mix(in oklch, var(--popover) 96%, black);
+  color: var(--popover-foreground);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.25);
+  padding: 0.42rem 0.62rem;
+  font-size: 0.72rem;
+  font-weight: 500;
+  line-height: 1.18;
+  text-wrap: pretty;
+  animation: global-tooltip-enter 140ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes global-tooltip-enter {
+  from {
+    opacity: 0;
+    transform: translateY(3px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
   }
 }

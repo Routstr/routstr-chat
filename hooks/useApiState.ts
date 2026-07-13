@@ -9,13 +9,13 @@ import {
   saveBaseUrlsList,
   loadModelProviderMap,
   saveModelProviderMap,
-  getStorageItem,
 } from "@/utils/storageUtils";
 import {
   parseModelKey,
   normalizeBaseUrl,
   modelSelectionStrategy,
   isModelAvailable,
+  getAllProviderModels,
 } from "@/utils/modelUtils";
 import { getPendingCashuTokenAmount } from "@/utils/cashuUtils";
 import {
@@ -23,7 +23,7 @@ import {
   isTorContext,
 } from "@/utils/torUtils";
 import { useDiscoveryAdapter } from "./useDiscoveryAdapter";
-import { modelManager, providerManager } from "@/sdk/sharedStore";
+import { hydrate, modelManager, providerManager } from "@/sdk/sharedStore";
 
 export interface UseApiStateReturn {
   models: Model[];
@@ -58,6 +58,33 @@ export const useApiState = (
   const [baseUrlsList, setBaseUrlsList] = useState<string[]>([]);
   const [lowBalanceWarningForModel, setLowBalanceWarningForModel] =
     useState(false);
+
+  // Seed models from the last fetch so the selector opens instantly while the
+  // real fetch refreshes them in the background (stale-while-revalidate).
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    let cancelled = false;
+    // The SDK cache lives in IndexedDB; wait for hydrate or the seed reads an
+    // empty store and only the legacy localStorage copy would be visible.
+    hydrate.then(() => {
+      if (cancelled) return;
+      const cached = getAllProviderModels();
+      const byId = new Map<string, Model>();
+      for (const providerModels of Object.values(cached)) {
+        for (const model of providerModels) {
+          if (!byId.has(model.id)) byId.set(model.id, model);
+        }
+      }
+      if (byId.size === 0) return;
+      setModels((current) =>
+        current.length > 0 ? current : Array.from(byId.values())
+      );
+      setIsLoadingModels(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -281,10 +308,7 @@ export const useApiState = (
         const normalized = fixedBase.endsWith("/")
           ? fixedBase
           : `${fixedBase}/`;
-        const allByProvider = getStorageItem<Record<string, Model[]>>(
-          "modelsFromAllProviders",
-          {}
-        );
+        const allByProvider = getAllProviderModels();
         const list =
           allByProvider?.[normalized] ||
           allByProvider?.[configuredKeyOverride] ||

@@ -28,6 +28,19 @@ import {
   setStorageItem,
 } from "@/utils/storageUtils";
 
+// Single source of truth for ranking providers by price. A provider with
+// missing, zero, or negative completion pricing is unrankable and must lose
+// to any provider with a real price - it must never win as "cheapest".
+// Both the routing map (useApiState) and the selector's provider comparison
+// use this so their "cheapest" verdicts always agree.
+export function getComparableCompletionCost(
+  completion: number | null | undefined
+): number {
+  return typeof completion === "number" && isFinite(completion) && completion > 0
+    ? completion
+    : Number.POSITIVE_INFINITY;
+}
+
 // Extract the provider name from the model name (e.g., "Qwen" from "Qwen: Qwen3 30B A3B")
 export function getProviderFromModelName(modelName: string): string {
   const colonIndex = modelName.indexOf(":");
@@ -44,6 +57,28 @@ export function getModelNameWithoutProvider(modelName: string): string {
     return modelName.substring(colonIndex + 1).trim();
   }
   return modelName;
+}
+
+// Per-provider model lists live in the SDK store (persisted to IndexedDB by
+// the shared adapter); the legacy localStorage "modelsFromAllProviders" copy
+// only receives one-off provider fetches. Readers must merge both or they
+// only ever see the current base URL's models.
+export function getAllProviderModels(): Record<string, Model[]> {
+  let legacy: Record<string, Model[]> = {};
+  try {
+    legacy = getStorageItem<Record<string, Model[]>>(
+      "modelsFromAllProviders",
+      {} as any
+    );
+  } catch {}
+  let sdkCache: Record<string, Model[]> = {};
+  try {
+    sdkCache = (discoveryAdapter.getCachedModels() ?? {}) as unknown as Record<
+      string,
+      Model[]
+    >;
+  } catch {}
+  return { ...legacy, ...sdkCache };
 }
 
 export function upsertCachedProviderModels(
@@ -68,10 +103,7 @@ export function getCachedProviderModels(baseUrl: string): Model[] | undefined {
   try {
     const normalized = normalizeBaseUrl(baseUrl);
     if (!normalized) return undefined;
-    const all = getStorageItem<Record<string, Model[]>>(
-      "modelsFromAllProviders",
-      {} as any
-    );
+    const all = getAllProviderModels();
     return all[normalized];
   } catch {
     return undefined;
@@ -388,10 +420,7 @@ export const modelSelectionStrategy = async (
     const fixedBase = normalizeBaseUrl(base);
     if (!fixedBase) return null;
     const normalized = fixedBase.endsWith("/") ? fixedBase : `${fixedBase}/`;
-    const allByProvider = getStorageItem<Record<string, Model[]>>(
-      "modelsFromAllProviders",
-      {} as any
-    );
+    const allByProvider = getAllProviderModels();
     const list =
       allByProvider?.[normalized] || allByProvider?.[lastUsedModelId] || [];
     modelToSelect = Array.isArray(list)

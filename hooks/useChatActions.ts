@@ -495,6 +495,9 @@ export const useChatActions = ({
         if (!walletAdapter) {
           throw new Error("Wallet adapter is not ready");
         }
+        if (!client || !selectedModel) {
+          throw new Error("SDK client is not ready");
+        }
 
         // If the shared ModelManager already has providers + models cached,
         // pass it so resolveRequestContext skips bootstrap+fetchModels entirely
@@ -678,7 +681,12 @@ export const useChatActions = ({
               requestIdRef.current = requestId;
             },
           },
-          { alertLevel: "min", logger: consoleLogger, getPendingCashuTokenAmount },
+          {
+            client,
+            alertLevel: "min",
+            logger: consoleLogger,
+            getPendingCashuTokenAmount,
+          },
         );
         
         // After the SDK finalizes, look up the exact usage entry by requestId
@@ -733,11 +741,14 @@ export const useChatActions = ({
       }
     },
     [
+      balance,
       transactionHistory,
       setPendingCashuAmountState,
       updateLastMessageSatsSpent,
       getLastNonSystemMessageEventId,
       createAndStoreChatEvent,
+      cashuStore.activeMintUrl,
+      client,
       walletAdapter,
       enrichAssistantImages,
     ]
