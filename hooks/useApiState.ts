@@ -177,7 +177,14 @@ export const useApiState = (
             mapChanged = true;
           }
         }
-        if (mapChanged) saveModelProviderMap(bestMap);
+        if (mapChanged) {
+          saveModelProviderMap(bestMap);
+          // The selector re-reads the provider map when the models array
+          // identity changes; the last progress tick fired before the map
+          // was saved, so nudge it once more or cold loads show every
+          // provider as Unknown until a manual refresh.
+          setModels((current) => [...current]);
+        }
 
         await mintDiscovery.discoverMints(bases);
 
