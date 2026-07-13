@@ -1,9 +1,22 @@
+// Local dev-only HTTP proxy that forwards requests to an upstream LLM endpoint.
+// Run manually with: `node scripts/dev-http-proxy.js`
+// The API key is loaded from the environment; never hard-code credentials here.
+
 const http = require('http');
 const https = require('https');
 
-const PORT = 8010;
-const TARGET_HOST = 'llm.satsandsports.cash';
-const API_KEY = 'sk-1d1690cab477d1c8ee9e8e56653744383a3c6bd7b38d092f3285228f3e4a5ae9';
+const PORT = process.env.PROXY_PORT ? Number(process.env.PROXY_PORT) : 8010;
+const TARGET_HOST =
+  process.env.PROXY_TARGET_HOST ?? 'llm.satsandsports.cash';
+const API_KEY = process.env.PROXY_API_KEY;
+
+if (!API_KEY) {
+  console.error(
+    'PROXY_API_KEY is not set. Export it before starting the proxy, e.g.\n' +
+      '  PROXY_API_KEY=sk-... node scripts/dev-http-proxy.js'
+  );
+  process.exit(1);
+}
 
 const server = http.createServer((req, res) => {
   const url = `https://${TARGET_HOST}${req.url}`;
