@@ -557,7 +557,11 @@ export const useChatActions = ({
           {
             messageHistory: apiMessageHistory as any,
             modelId: selectedModel.id,
-            forcedProvider: baseUrl || undefined,
+            // Only force the user's provider when the SDK will read OUR cache.
+            // Without the shared managers it re-fetches models first and then
+            // throws if the forced provider has since dropped the model, where
+            // ranking would simply have picked another one.
+            forcedProvider: (hasCache && baseUrl) || undefined,
             torMode: isTorContext(),
             mode: "xcashu",
             discoveryAdapter,
@@ -741,13 +745,11 @@ export const useChatActions = ({
       }
     },
     [
-      balance,
       transactionHistory,
       setPendingCashuAmountState,
       updateLastMessageSatsSpent,
       getLastNonSystemMessageEventId,
       createAndStoreChatEvent,
-      cashuStore.activeMintUrl,
       client,
       walletAdapter,
       enrichAssistantImages,
