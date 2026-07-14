@@ -68,13 +68,21 @@ export const useApiState = (
     // empty store and only the legacy localStorage copy would be visible.
     hydrate.then(() => {
       if (cancelled) return;
+      const torMode = isTorContext();
       const cached = getAllProviderModels();
       const byId = new Map<string, Model>();
       for (const providerModels of Object.values(cached)) {
         for (const model of providerModels) {
-          if (!byId.has(model.id)) byId.set(model.id, model);
+          if (byId.has(model.id)) continue;
+          // Skip models with no routable provider (onion outside Tor, disabled,
+          // on cooldown) or they show as "loaded" but every ranking is empty.
+          if (!providerManager.getBestProviderForModel(model.id, { torMode })) {
+            continue;
+          }
+          byId.set(model.id, model);
         }
       }
+      // Nothing eligible: stay loading and let the real fetch decide
       if (byId.size === 0) return;
       setModels((current) =>
         current.length > 0 ? current : Array.from(byId.values())
@@ -132,14 +140,13 @@ export const useApiState = (
         let firstProgress = true;
 
         const onFetchProgress = (progressModels: unknown[]) => {
+          // Ignore empty ticks entirely: they would blank a populated list, and
+          // an empty first tick would flip off loading with nothing to show.
+          if (progressModels.length === 0) return;
           if (firstProgress) {
             setIsLoadingModels(false);
             firstProgress = false;
           }
-          // Never replace a populated list with an empty progress tick:
-          // partially-failed or stale-cache passes emit [] and would blank
-          // the selector the user is looking at.
-          if (progressModels.length === 0) return;
           setModels(progressModels as unknown as Model[]);
         };
 
@@ -171,7 +178,9 @@ export const useApiState = (
         const bestMap = loadModelProviderMap();
         let mapChanged = false;
         for (const model of combinedModels) {
-          const bestBase = providerManager.getBestProviderForModel(model.id);
+          const bestBase = providerManager.getBestProviderForModel(model.id, {
+            torMode,
+          });
           if (bestBase && bestMap[model.id] !== bestBase) {
             bestMap[model.id] = bestBase;
             mapChanged = true;
