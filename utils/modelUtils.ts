@@ -22,24 +22,7 @@ export function normalizeBaseUrl(base?: string | null): string | null {
 // Kept here to avoid duplicating localStorage logic in components
 import type { Model } from "@/types/models";
 import { discoveryAdapter } from "@/sdk/sharedStore";
-import {
-  getStorageItem,
-  loadLastUsedModel,
-  setStorageItem,
-} from "@/utils/storageUtils";
-
-// Single source of truth for ranking providers by price. A provider with
-// missing, zero, or negative completion pricing is unrankable and must lose
-// to any provider with a real price - it must never win as "cheapest".
-// Both the routing map (useApiState) and the selector's provider comparison
-// use this so their "cheapest" verdicts always agree.
-export function getComparableCompletionCost(
-  completion: number | null | undefined
-): number {
-  return typeof completion === "number" && isFinite(completion) && completion > 0
-    ? completion
-    : Number.POSITIVE_INFINITY;
-}
+import { loadLastUsedModel } from "@/utils/storageUtils";
 
 // Extract the provider name from the model name (e.g., "Qwen" from "Qwen: Qwen3 30B A3B")
 export function getProviderFromModelName(modelName: string): string {
@@ -59,26 +42,16 @@ export function getModelNameWithoutProvider(modelName: string): string {
   return modelName;
 }
 
-// Per-provider model lists live in the SDK store (persisted to IndexedDB by
-// the shared adapter); the legacy localStorage "modelsFromAllProviders" copy
-// only receives one-off provider fetches. Readers must merge both or they
-// only ever see the current base URL's models.
+// The SDK store (IndexedDB) is the single source for per-provider model lists.
 export function getAllProviderModels(): Record<string, Model[]> {
-  let legacy: Record<string, Model[]> = {};
   try {
-    legacy = getStorageItem<Record<string, Model[]>>(
-      "modelsFromAllProviders",
-      {} as any
-    );
-  } catch {}
-  let sdkCache: Record<string, Model[]> = {};
-  try {
-    sdkCache = (discoveryAdapter.getCachedModels() ?? {}) as unknown as Record<
+    return (discoveryAdapter.getCachedModels() ?? {}) as unknown as Record<
       string,
       Model[]
     >;
-  } catch {}
-  return { ...legacy, ...sdkCache };
+  } catch {
+    return {};
+  }
 }
 
 export function upsertCachedProviderModels(
@@ -88,14 +61,12 @@ export function upsertCachedProviderModels(
   try {
     const normalized = normalizeBaseUrl(baseUrl);
     if (!normalized) return;
-    const existing = getStorageItem<Record<string, Model[]>>(
-      "modelsFromAllProviders",
-      {} as any
-    );
-    setStorageItem("modelsFromAllProviders", {
+    const existing = (discoveryAdapter.getCachedModels() ??
+      {}) as unknown as Record<string, Model[]>;
+    discoveryAdapter.setCachedModels({
       ...existing,
       [normalized]: models,
-    });
+    } as any);
   } catch {}
 }
 

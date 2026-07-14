@@ -15,6 +15,7 @@ import {
 import {
   getLocalCashuToken,
   removeLocalCashuToken,
+  getStorageItem,
   getOrFetchProviderInfo,
 } from "./storageUtils";
 import { getDisabledProvidersSync } from "@/utils/disabledProviders";
@@ -22,11 +23,7 @@ import { getDecodedToken } from "@cashu/cashu-ts";
 import { isThinkingCapableModel } from "./thinkingParser";
 import { SpendCashuResult } from "@/hooks/useCashuWithXYZ";
 import { Model } from "@/types/models";
-import {
-  getModelForBase,
-  getRequiredSatsForModel,
-  getAllProviderModels,
-} from "./modelUtils";
+import { getModelForBase, getRequiredSatsForModel } from "./modelUtils";
 import { saveFile } from "@/utils/indexedDb";
 import { isOnionUrl, isTorContext } from "@/utils/torUtils";
 
@@ -81,7 +78,10 @@ function findNextBestProvider(
   try {
     const torMode = isTorContext();
     // Load all cached provider models from storage
-    const modelsFromAllProviders = getAllProviderModels();
+    const modelsFromAllProviders = getStorageItem<Record<string, Model[]>>(
+      "modelsFromAllProviders",
+      {}
+    );
 
     // Find all providers that offer this model
     const candidateProviders: Array<{
