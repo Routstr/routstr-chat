@@ -403,10 +403,11 @@ export default function ModelSelector({
     webSearchFilter,
   ]);
 
+  // Model id only: a provider pick in the pane must not reset its scroll.
   useEffect(() => {
     const pane = modelDrawerRef.current?.querySelector(".model-details-scroll");
     if (pane) (pane as HTMLElement).scrollTop = 0;
-  }, [previewRow?.model.id, previewRow?.configuredKey, selectedProvider]);
+  }, [previewRow?.model.id, selectedProvider]);
 
   // Focus search input when drawer opens
   useEffect(() => {

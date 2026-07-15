@@ -30,7 +30,8 @@ function formatPercentDelta(
     return null;
   const diff = ((entryCost - baselineCost) / baselineCost) * 100;
   const rounded = Math.round(diff * 10) / 10;
-  const sign = rounded > 0 ? "+" : rounded < 0 ? "-" : "";
+  if (rounded === 0) return "0%";
+  const sign = rounded > 0 ? "+" : "-";
   return `${sign}${Math.abs(rounded).toFixed(1)}%`;
 }
 
@@ -103,6 +104,16 @@ export default function ModelDetailsPane({
   // row ranked #2 show a cheaper-than-baseline negative delta.
   const cheapestEntry = providerPricingEntries[0];
   const cheapestTotalCost = cheapestEntry ? entryTotalCost(cheapestEntry) : null;
+  // Deltas baseline on the provider in use; cheapest only while browsing.
+  const currentEntry =
+    isCurrentModel && currentSelectedBaseUrl
+      ? providerPricingEntries.find(
+          (e) => e.baseUrl === normalizeBaseUrl(currentSelectedBaseUrl)
+        ) ?? null
+      : null;
+  const baselineTotalCost = currentEntry
+    ? entryTotalCost(currentEntry)
+    : cheapestTotalCost;
 
   const ioPairs = buildIoPairs(effectiveModel);
 
@@ -284,9 +295,9 @@ export default function ModelDetailsPane({
                 mappedCheapestBase === entry.baseUrl;
               const isSelected = isActive || isDefaultCheapest;
               const percentDelta =
-                index === 0
+                !currentEntry && index === 0
                   ? null
-                  : formatPercentDelta(entryTotalCost(entry), cheapestTotalCost);
+                  : formatPercentDelta(entryTotalCost(entry), baselineTotalCost);
               return (
                 <button
                   key={entry.baseUrl}
@@ -294,7 +305,7 @@ export default function ModelDetailsPane({
                   type="button"
                   className={`w-full text-left rounded-xl border px-2.5 py-1.5 text-[11px] transition-colors cursor-pointer ${
                     isSelected
-                      ? "border-primary/25 bg-primary/[0.07] shadow-sm font-medium"
+                      ? "border-primary/25 bg-primary/[0.07] shadow-sm"
                       : "border-border/40 bg-muted/15 hover:bg-muted/35 hover:border-border/80"
                   }`}
                 >
@@ -306,17 +317,17 @@ export default function ModelDetailsPane({
                       {formatProviderLabel(entry.baseUrl, entry.model)}
                     </span>
                     {isCheapest && (
-                      <span className="text-[9px] px-1 py-0.5 rounded-full bg-yellow-500/10 text-yellow-700 dark:text-yellow-400">
+                      <span className="inline-flex items-center h-4 px-1 text-[9px] leading-none rounded-full bg-yellow-500/10 text-yellow-700 dark:text-yellow-400">
                         cheapest
                       </span>
                     )}
                     {isActive && (
-                      <span className="text-[9px] px-1 py-0.5 rounded-full bg-primary/15 text-primary">
+                      <span className="inline-flex items-center h-4 px-1 text-[9px] leading-none rounded-full bg-primary/15 text-primary">
                         current
                       </span>
                     )}
                     {!isActive && isDefaultCheapest && (
-                      <span className="text-[9px] px-1 py-0.5 rounded-full bg-muted text-muted-foreground">
+                      <span className="inline-flex items-center h-4 px-1 text-[9px] leading-none rounded-full bg-muted text-muted-foreground">
                         default
                       </span>
                     )}
@@ -329,7 +340,15 @@ export default function ModelDetailsPane({
                       C: {formatSatsPer1M(entryCompletionCost(entry))}
                     </span>
                     {percentDelta && (
-                      <span className="text-amber-600 dark:text-amber-400">
+                      <span
+                        className={
+                          percentDelta.startsWith("-")
+                            ? "text-emerald-600 dark:text-emerald-400"
+                            : percentDelta === "0%"
+                              ? "text-muted-foreground/70"
+                              : "text-amber-600 dark:text-amber-400"
+                        }
+                      >
                         {percentDelta}
                       </span>
                     )}
