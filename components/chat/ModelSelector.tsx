@@ -11,7 +11,7 @@ import {
 import { Model } from "@/types/models";
 import { getModelNameWithoutProvider } from "@/utils/modelUtils";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
-import { loadModelProviderMap } from "@/utils/storageUtils";
+import { loadModelProviderMap, loadLastUsedModel } from "@/utils/storageUtils";
 import { useDisabledProviders } from "@/hooks/useDisabledProviders";
 import {
   useModelPricing,
@@ -176,10 +176,15 @@ export default function ModelSelector({
     }
   }, [dedupedModels]);
 
-  // Resolved against the ACTIVE provider, not "first key wins": a model
-  // favorited on both A and B reported A as current while the chat was on B.
+  // Read the persisted key billing uses, so the Current row cannot drift from
+  // what send bills.
   const currentConfiguredKeyMemo: string | undefined = useMemo(() => {
     if (!selectedModel) return undefined;
+    const persisted = loadLastUsedModel();
+    if (persisted && parseModelKey(persisted).id === selectedModel.id) {
+      return persisted;
+    }
+    // Fallback: resolve against the active provider, not the first key.
     const keys = configuredModels.filter(
       (key) => parseModelKey(key).id === selectedModel.id
     );
@@ -289,9 +294,8 @@ export default function ModelSelector({
     const { model } = row;
     const pinnedBase = rowPinnedBase(row);
     const pricingEntries = getProviderPricingEntries(model.id);
-    // The Current row describes the provider the chat is ACTUALLY on; the
-    // provider filter only re-interprets the selectable list, so it must not
-    // relabel a selection that was already routed.
+    // The Current row keeps the provider it was routed to; the filter only
+    // re-interprets the selectable list.
     const isCurrentRow =
       selectedModel?.id === model.id &&
       row.configuredKey === currentConfiguredKeyMemo;
@@ -301,10 +305,8 @@ export default function ModelSelector({
         : dynamicBaseFor(selectedProvider);
     const entry = findRowPricingEntry(row, pricingEntries, dynamicBase);
 
-    // A pinned row is unroutable when the ranking drops its provider (disabled
-    // or cooling down). Price it from that provider's OWN cache entry and
-    // disable it, never borrow another provider's number. A dynamic row claims
-    // no provider, so it falls back to the model and stays selectable.
+    // A pinned row prices from its own provider or shows unavailable, never
+    // borrowing another provider's number; dynamic rows fall back to the model.
     const priceSource = pinnedBase
       ? entry?.model ?? getCachedModelFor(pinnedBase, model.id) ?? null
       : entry?.model ?? model;
@@ -381,10 +383,8 @@ export default function ModelSelector({
     setHighlightedIndex(-1);
   }, [allModelEntries]);
 
-  // Switching company/provider/sort/search swaps the list; scroll back to the
-  // top so it does not keep the previous view's offset. Keyed on the explicit
-  // filter inputs, not on the list itself, so a background cache refresh does
-  // not yank the user's scroll mid-browse.
+  // Reset list scroll on an explicit filter change (not on the list itself, so
+  // a background cache refresh does not yank scroll mid-browse).
   useEffect(() => {
     modelDrawerRef.current
       ?.querySelectorAll(".model-selector-list")
@@ -397,12 +397,16 @@ export default function ModelSelector({
     filters.sortMode,
     filters.sortDirection,
     deferredSearchQuery,
+    availableOnly,
+    imageFilter,
+    privateFilter,
+    webSearchFilter,
   ]);
 
   useEffect(() => {
     const pane = modelDrawerRef.current?.querySelector(".model-details-scroll");
     if (pane) (pane as HTMLElement).scrollTop = 0;
-  }, [previewRow?.model.id, previewRow?.configuredKey]);
+  }, [previewRow?.model.id, previewRow?.configuredKey, selectedProvider]);
 
   // Focus search input when drawer opens
   useEffect(() => {
@@ -665,9 +669,8 @@ export default function ModelSelector({
     const favoriteKeysForModel = configuredModels.filter(
       (key) => parseModelKey(key).id === model.id
     );
-    // A row that claims a provider (a favorite key, or any row under a provider
-    // filter) stars the exact `${id}@@${base}`, so stars on different providers
-    // stay independent. An unfiltered row keeps the by-id "favorited somewhere".
+    // A provider-claiming row stars the exact `${id}@@${base}` so stars on
+    // different providers stay independent; an unfiltered row stars by id.
     const claimsProvider = !!configuredKeyOverride || selectedProvider !== "all";
     const claimedKey =
       configuredKeyOverride ??

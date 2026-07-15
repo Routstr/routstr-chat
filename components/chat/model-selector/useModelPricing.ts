@@ -58,6 +58,8 @@ export function useModelPricing({
   // Keyed off the cache itself: a write that adds a provider without adding a
   // new model id would not change `models`, and the filter would miss it.
   const cachedModels = useStore(store, (s) => s.modelsFromAllProviders);
+  // The ranking drops cooldown providers, so re-rank when that set changes.
+  const providersOnCooldown = useStore(store, (s) => s.providersOnCooldown);
 
   // Ranking a model rescans the whole discovery cache, so it is done ONCE per
   // model here rather than per call. The sort comparator calls this O(n log n)
@@ -92,7 +94,7 @@ export function useModelPricing({
     }
 
     return index;
-  }, [models, selectedModel, disabledProviders, cachedModels]);
+  }, [models, selectedModel, disabledProviders, cachedModels, providersOnCooldown]);
 
   const getProviderPricingEntries = useCallback(
     (modelId: string): ProviderPricingEntry[] =>
