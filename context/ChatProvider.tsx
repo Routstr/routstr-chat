@@ -22,6 +22,7 @@ import { useAccountManager } from "@/components/ClientProviders";
 import { useObservableState } from "applesauce-react/hooks";
 import type { NostrEvent } from "nostr-tools";
 import { userPubkey$, userSigner$ } from "@/hooks/useChatSync1081";
+import { blobToDataUrl } from "@/utils/messageUtils";
 
 interface ChatContextType
   extends
@@ -99,7 +100,8 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
   const cashuWithXYZ = useCashuWithXYZ();
 
   // Blossom sync for AI-generated images
-  const { uploadToBlossomAsync, blossomSyncEnabled } = useBlossomSync();
+  const { uploadToBlossomAsync, fetchFromBlossom, blossomSyncEnabled } =
+    useBlossomSync();
   const { pnsKeys } = usePnsKeys();
 
   // Create a stable callback for uploading generated images to Blossom
@@ -117,12 +119,31 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     [blossomSyncEnabled, pnsKeys, uploadToBlossomAsync]
   );
 
+  // Resolves a Blossom hash to a data URL for API resends (cross-device images)
+  const handleBlossomFetch = useCallback(
+    async (hash: string, servers?: string[]): Promise<string | null> => {
+      if (!blossomSyncEnabled || !pnsKeys) return null;
+      try {
+        const result = await fetchFromBlossom(hash, pnsKeys, servers);
+        if (!result) return null;
+        const blob = new Blob([result.data as BlobPart], {
+          type: result.mimeType,
+        });
+        return await blobToDataUrl(blob);
+      } catch {
+        return null;
+      }
+    },
+    [blossomSyncEnabled, pnsKeys, fetchFromBlossom]
+  );
+
   const chatActions = useChatActions({
     createAndStoreChatEvent: conversationState.createAndStoreChatEvent,
     getLastNonSystemMessageEventId:
       conversationState.getLastNonSystemMessageEventId,
     updateLastMessageSatsSpent: conversationState.updateLastMessageSatsSpent,
     onBlossomUpload: handleBlossomUpload,
+    onBlossomFetch: handleBlossomFetch,
   });
   const apiState = useApiState(
     isAuthenticated,
