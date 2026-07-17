@@ -443,7 +443,10 @@ export const useChatActions = ({
         selectedModel,
         baseUrl,
         originConversationId,
-        true
+        true,
+        // The new response must be a SIBLING of the retried message (same
+        // _prevId) or the version navigator renders it stacked below.
+        messages[index]?._prevId
       );
     },
     []
@@ -456,13 +459,16 @@ export const useChatActions = ({
       selectedModel: any,
       baseUrl: string,
       originConversationId: string,
-      retryMessage?: boolean
+      retryMessage?: boolean,
+      retryPrevId?: string
     ) => {
       setIsLoading(true);
       setStreamingContent("");
       setThinkingContent("");
       setStreamingConversationId(originConversationId ?? null);
       streamingConversationIdRef.current = originConversationId ?? null;
+      let lastAppend: Promise<unknown> = Promise.resolve();
+      let retryPrevApplied = false;
 
       // Create a fresh AbortController for this request so the UI can stop
       // generation mid-stream. Aborting causes fetchAIResponse to reject
@@ -589,34 +595,46 @@ export const useChatActions = ({
                 }));
               }
             },
-            onMessageAppend: async (message) => {
-              const messageWithImages = await enrichAssistantImages(
-                message as Message
-              );
-              let prevId;
-              if (retryMessage && message.role !== "system")
-                prevId = getLastNonSystemMessageEventId(originConversationId, [
-                  "user",
-                  "assistant",
-                ]);
-              else
-                prevId = getLastNonSystemMessageEventId(originConversationId);
+            onMessageAppend: (message) => {
+              // Chain appends in arrival order; cost callbacks wait on the
+              // chain since both stamp the conversation's LAST stored message.
+              lastAppend = lastAppend
+                .then(async () => {
+                  const messageWithImages = await enrichAssistantImages(
+                    message as Message
+                  );
+                  let prevId;
+                  if (retryMessage && !retryPrevApplied) {
+                    // Only the retry's first result is the sibling; later
+                    // appends chain behind it via the normal lookup.
+                    retryPrevApplied = true;
+                    prevId =
+                      retryPrevId ??
+                      getLastNonSystemMessageEventId(originConversationId, [
+                        "user",
+                        "assistant",
+                      ]);
+                  } else {
+                    prevId = getLastNonSystemMessageEventId(
+                      originConversationId
+                    );
+                  }
 
-              // Update message object with prevId
-              const updatedMessage = {
-                ...messageWithImages,
-                _prevId: prevId,
-                _createdAt: Date.now(),
-                _modelId: selectedModel.id,
-              };
+                  const updatedMessage = {
+                    ...messageWithImages,
+                    _prevId: prevId,
+                    _createdAt: Date.now(),
+                    _modelId: selectedModel.id,
+                  };
 
-              // Publish AI response to Nostr
-              if (originConversationId) {
-                createAndStoreChatEvent(
-                  originConversationId,
-                  updatedMessage
-                ).catch(console.error);
-              }
+                  if (originConversationId) {
+                    await createAndStoreChatEvent(
+                      originConversationId,
+                      updatedMessage
+                    );
+                  }
+                })
+                .catch(console.error);
             },
             onBalanceUpdate: setBalance,
             onTransactionUpdate: (transaction) => {
@@ -625,7 +643,11 @@ export const useChatActions = ({
             },
             onTokenCreated: setPendingCashuAmountState,
             onLastMessageSatsUpdate: (satsSpent) => {
-              updateLastMessageSatsSpent(originConversationId, satsSpent);
+              void lastAppend
+                .then(() =>
+                  updateLastMessageSatsSpent(originConversationId, satsSpent)
+                )
+                .catch(console.error);
             },
             onRequestId: (requestId) => {
               requestIdRef.current = requestId;
@@ -637,19 +659,25 @@ export const useChatActions = ({
         // After the SDK finalizes, look up the exact usage entry by requestId
         // for accurate provider-computed cost (includes msat precision, Tinfoil
         // header fallback, etc.) rather than using balance-delta satsSpent.
-        if (requestIdRef.current) {
-          const recentEntries = await usageTrackingDriver.list({
-            after: Date.now() - 60_000, // last 60s
-            modelId: selectedModel.id,
-          });
-          const entry = recentEntries.find(
-            (e) => e.id === requestIdRef.current
-          );
-          if (entry) {
-            updateLastMessageSatsSpent(originConversationId, entry.satsCost);
-          }
-        }
+        const requestId = requestIdRef.current;
         requestIdRef.current = null;
+        if (requestId) {
+          void lastAppend
+            .then(async () => {
+              const recentEntries = await usageTrackingDriver.list({
+                after: Date.now() - 60_000, // last 60s
+                modelId: selectedModel.id,
+              });
+              const entry = recentEntries.find((e) => e.id === requestId);
+              if (entry) {
+                updateLastMessageSatsSpent(
+                  originConversationId,
+                  entry.satsCost
+                );
+              }
+            })
+            .catch(console.error);
+        }
 
         setPendingCashuAmountState(getPendingCashuTokenAmount());
       } finally {
