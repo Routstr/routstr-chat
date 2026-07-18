@@ -135,6 +135,9 @@ const MainChatArea: React.FC = () => {
         isLoading={isLoading}
         isPaymentProcessing={isPaymentProcessing}
         isLoadingChatFromUrl={isLoadingChatFromUrl}
+        modelOutputsImages={(
+          selectedModel?.architecture?.output_modalities ?? []
+        ).includes("image")}
       />
 
       {/* Chat Input */}
