@@ -447,7 +447,7 @@ export const fetchAIResponse = async (
   const apiMessages = await Promise.all(
     messageHistory
       .filter((message) => message.role !== "system")
-      .map(convertMessageForAPI)
+      .map((message) => convertMessageForAPI(message))
   );
 
   const tokenAmount = getRequiredSatsForModel(selectedModel, apiMessages);

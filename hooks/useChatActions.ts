@@ -6,6 +6,7 @@ import {
   TransactionHistory,
 } from "@/types/chat";
 import {
+  convertMessageForAPI,
   createTextMessage,
   createMultimodalMessage,
 } from "@/utils/messageUtils";
@@ -23,6 +24,7 @@ import {
   providerManager,
 } from "@/sdk/sharedStore";
 import { fetchAIResponse, consoleLogger, isTorContext } from "@routstr/sdk";
+import { toast } from "sonner";
 import { usageTrackingDriver } from "@/sdk/sharedStore";
 
 export interface UseChatActionsReturn {
@@ -116,6 +118,11 @@ export interface UseChatActionsParams {
   onBlossomUpload?: (
     file: File
   ) => Promise<{ hash: string; servers: string[] } | null>;
+  /** Resolves a Blossom hash to a data URL (cross-device images have no local copy) */
+  onBlossomFetch?: (
+    hash: string,
+    servers?: string[]
+  ) => Promise<string | null>;
 }
 
 /**
@@ -130,6 +137,7 @@ export const useChatActions = ({
   onInferenceStart,
   onInferenceEnd,
   onBlossomUpload,
+  onBlossomFetch,
 }: UseChatActionsParams): UseChatActionsReturn => {
   const [inputMessage, setInputMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -142,6 +150,10 @@ export const useChatActions = ({
   const streamingConversationIdRef = useRef<string | null>(null);
   const requestIdRef = useRef<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  // retry/edit capture a stale performAIRequest (empty deps), so the Blossom
+  // resolver is read through a ref to always use the current PNS keys.
+  const onBlossomFetchRef = useRef(onBlossomFetch);
+  onBlossomFetchRef.current = onBlossomFetch;
   const [streamingContentByConversation, setStreamingContentByConversation] =
     useState<Record<string, string>>({});
   const [thinkingContentByConversation, setThinkingContentByConversation] =
@@ -488,9 +500,53 @@ export const useChatActions = ({
           modelManager.getBaseUrls().length > 0 &&
           Object.keys(cachedModels).length > 0;
 
+        // Race hydration against Stop so a stalled media server can't hold the
+        // UI; bail before any payment is made.
+        const apiMessageHistory = await Promise.race([
+          Promise.all(
+            messageHistory.map((m) =>
+              convertMessageForAPI(m, onBlossomFetchRef.current)
+            )
+          ),
+          new Promise<null>((resolve) => {
+            if (abortController.signal.aborted) return resolve(null);
+            abortController.signal.addEventListener(
+              "abort",
+              () => resolve(null),
+              { once: true }
+            );
+          }),
+        ]);
+        if (abortController.signal.aborted || !apiMessageHistory) return;
+        const lastConverted = apiMessageHistory[apiMessageHistory.length - 1];
+        if (
+          typeof lastConverted?.content === "string" &&
+          lastConverted.content.trim() === "" &&
+          Array.isArray(messageHistory[messageHistory.length - 1]?.content)
+        ) {
+          toast.error(
+            "This message's attachments could not be loaded, request not sent"
+          );
+          return;
+        }
+        const mediaCount = (msgs: { content: string | MessageContent[] }[]) =>
+          msgs.reduce(
+            (n, m) =>
+              n +
+              (Array.isArray(m.content)
+                ? m.content.filter((i) => i.type !== "text").length
+                : 0),
+            0
+          );
+        if (mediaCount(apiMessageHistory) < mediaCount(messageHistory)) {
+          toast.warning(
+            "Some attachments could not be loaded and were left out of this request"
+          );
+        }
+
         await fetchAIResponse(
           {
-            messageHistory: messageHistory as any,
+            messageHistory: apiMessageHistory as any,
             modelId: selectedModel.id,
             forcedProvider: baseUrl || undefined,
             torMode: isTorContext(),

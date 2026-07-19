@@ -47,87 +47,83 @@ export const getTextFromContent = (
   }
 };
 
-/**
- * Converts a File object to a base64 data URL
- * @param file The file to convert
- * @returns Promise resolving to base64 data URL string
- */
-const fileToBase64 = (file: File): Promise<string> => {
+export const blobToDataUrl = (blob: Blob): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onloadend = () => {
       if (typeof reader.result === "string") {
         resolve(reader.result);
       } else {
-        reject(new Error("Failed to convert file to base64"));
+        reject(new Error("Failed to convert blob to base64"));
       }
     };
     reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(blob);
   });
 };
 
+const loadStoredUrl = async (storageId?: string): Promise<string | null> => {
+  if (!storageId) return null;
+  try {
+    const file = await getFile(getMappedStorageId(storageId) ?? storageId);
+    return file ? await blobToDataUrl(file) : null;
+  } catch (error) {
+    console.error("Failed to fetch attachment from IndexedDB:", error);
+    return null;
+  }
+};
+
+/** Resolves a Blossom hash to a data URL (needs pnsKeys, so injected). */
+export type BlossomUrlResolver = (
+  hash: string,
+  servers?: string[]
+) => Promise<string | null>;
+
 /**
- * Converts a Message object to the format expected by the API
- * Strips out thinking and citations from MessageContent as they're metadata, not API content
- * Fetches images from IndexedDB if URL is empty but storageId exists
- * @param message The message to convert
- * @returns Promise resolving to object with role and content for API consumption
+ * Converts a stored Message to the canonical shape providers accept: only API
+ * fields survive, blank media URLs are rehydrated (IndexedDB, then Blossom via
+ * the injected resolver), and items that cannot be resolved are dropped.
  */
 export const convertMessageForAPI = async (
-  message: Message
+  message: Message,
+  resolveBlossomUrl?: BlossomUrlResolver
 ): Promise<{ role: string; content: string | MessageContent[] }> => {
-  // If content is a string, return as-is
   if (typeof message.content === "string") {
-    return {
-      role: message.role,
-      content: message.content,
-    };
+    return { role: message.role, content: message.content };
   }
 
-  // If content is an array, strip thinking and citations from text items
-  // and fetch images from IndexedDB if needed
-  const cleanedContent = await Promise.all(
-    message.content.map(async (item) => {
-      if (item.type === "text") {
-        // Create a copy without thinking and citations
-        const { thinking, citations, ...cleanItem } = item;
-        return cleanItem;
-      }
+  const resolveMediaUrl = async (media: {
+    url?: string;
+    storageId?: string;
+    blossomHash?: string;
+    blossomServers?: string[];
+  }): Promise<string | null> =>
+    media.url ||
+    (await loadStoredUrl(media.storageId)) ||
+    (media.blossomHash && resolveBlossomUrl
+      ? await resolveBlossomUrl(media.blossomHash, media.blossomServers)
+      : null);
 
-      // Handle image_url with empty URL but storageId exists
-      if (item.type === "image_url" && item.image_url) {
-        const { url, storageId } = item.image_url;
+  const items: MessageContent[] = [];
+  for (const item of message.content) {
+    if (item.type === "text" && typeof item.text === "string") {
+      items.push({ type: "text", text: item.text });
+    } else if (item.type === "image_url" && item.image_url) {
+      const url = await resolveMediaUrl(item.image_url);
+      if (url) items.push({ type: "image_url", image_url: { url } });
+      else console.warn("Dropping unresolvable image from API request");
+    } else if (item.type === "file" && item.file) {
+      const { name, mimeType, size } = item.file;
+      const url = await resolveMediaUrl(item.file);
+      if (url) items.push({ type: "file", file: { url, name, mimeType, size } });
+      else console.warn("Dropping unresolvable file from API request");
+    }
+  }
 
-        // If URL is empty and storageId exists, fetch from IndexedDB
-        if (url === "" && storageId) {
-          try {
-            const mappedStorageId = getMappedStorageId(storageId) ?? storageId;
-            const file = await getFile(mappedStorageId);
-            if (file) {
-              const base64Url = await fileToBase64(file);
-              return {
-                ...item,
-                image_url: {
-                  ...item.image_url,
-                  url: base64Url,
-                },
-              };
-            }
-          } catch (error) {
-            console.error("Failed to fetch image from IndexedDB:", error);
-            // Return the item as-is if fetch fails
-          }
-        }
-      }
-
-      return item;
-    })
-  );
-
+  // Never send an empty content array; fall back to the message's plain text.
   return {
     role: message.role,
-    content: cleanedContent,
+    content: items.length > 0 ? items : getTextFromContent(message.content),
   };
 };
 
