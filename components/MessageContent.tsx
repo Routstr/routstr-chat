@@ -10,6 +10,7 @@ import SourcesDropdown from "./SourcesDropdown";
 import { useBlossomSync } from "@/hooks/useBlossomSync";
 import { usePnsKeys } from "@/hooks/usePnsKeys";
 import { storeStorageIdMapping } from "@/utils/storageUtils";
+import { RippleField } from "@/components/chat/ImageGenerationLoader";
 
 interface MessageContentProps {
   content: string | ChatMessageContent[];
@@ -137,6 +138,11 @@ export default function MessageContentRenderer({
     Record<string, ImageStatus>
   >({});
   const [blobUrls, setBlobUrls] = useState<Record<string, string>>({});
+  // Pixel heights so the reveal can ease between waiting box and image;
+  // released back to aspect-ratio once settled (px heights go stale on resize).
+  const [imageHeights, setImageHeights] = useState<
+    Record<string, { from: number; to: number; ratio: number; settled?: boolean }>
+  >({});
   const loadedImagesRef = useRef<Set<string>>(new Set());
   const cleanupUrlsRef = useRef<string[]>([]);
 
@@ -352,6 +358,12 @@ export default function MessageContentRenderer({
           itemAnnotations
         );
         processedText = processCitations(processedText, itemCitations);
+        // Image models emit literal "<image>" placeholders in their prose;
+        // the images render separately below, so drop the tokens.
+        if (imageContent.length > 0) {
+          processedText = processedText.replace(/<image>/gi, "").trim();
+          if (!processedText) return null;
+        }
         return (
           <MarkdownRenderer key={`text-${index}`} content={processedText} />
         );
@@ -404,34 +416,96 @@ export default function MessageContentRenderer({
             const statusKey = `${index}-${imageUrl ?? "no-url"}`;
             const loaded = isImageLoaded(statusKey);
             const errored = isImageError(statusKey);
+            const heights = imageHeights[statusKey];
 
             return (
               <div
                 key={`image-${index}`}
-                className={`relative group shrink-0 overflow-hidden rounded-xl border border-border bg-muted/50`}
+                className={`relative group shrink-0 overflow-hidden rounded-xl border border-border bg-muted/50 transition-[height] duration-700 ease-out`}
                 style={{
                   width: "min(320px, 100%)",
-                  aspectRatio: loaded ? undefined : "1 / 1",
+                  // Pixel heights on both ends so the aspect change eases
+                  // (auto/aspect-ratio heights don't animate).
+                  height:
+                    heights && !heights.settled
+                      ? loaded
+                        ? heights.to
+                        : heights.from
+                      : undefined,
+                  aspectRatio: heights?.settled
+                    ? heights.ratio
+                    : heights || loaded
+                      ? undefined
+                      : "1 / 1",
+                  maxHeight: heights?.settled ? 360 : undefined,
                 }}
               >
+                {/* Same ripple field as the generation loader, so the wait
+                    reads as one continuous surface until the pixels are in. */}
                 <div
-                  className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 ${
+                  className={`absolute inset-0 transition-opacity duration-700 ease-out ${
                     loaded || errored
                       ? "opacity-0 pointer-events-none"
                       : "opacity-100"
                   }`}
                 >
-                  <div className="absolute inset-0 animate-pulse bg-linear-to-br from-muted via-muted/50 to-transparent" />
-                  <div className="relative h-10 w-10 rounded-full border-2 border-foreground/40 border-t-transparent animate-spin" />
+                  <RippleField
+                    paused={loaded || errored}
+                    className="w-full h-full text-foreground"
+                  />
                 </div>
                 {imageUrl && (
                   <img
                     src={imageUrl}
                     alt="Image"
-                    onLoad={() => setImageStatus(statusKey, "loaded")}
+                    // Measure the real display height up front, then hold
+                    // briefly so the bubble eases to the image's aspect and
+                    // the dot field crossfades instead of hard-swapping.
+                    onLoad={(e) => {
+                      const img = e.currentTarget;
+                      const box = img.parentElement;
+                      if (box && img.naturalWidth > 0) {
+                        const w = box.clientWidth;
+                        setImageHeights((prev) =>
+                          prev[statusKey]
+                            ? prev
+                            : {
+                                ...prev,
+                                [statusKey]: {
+                                  from: box.clientHeight,
+                                  to: Math.min(
+                                    360,
+                                    Math.round(
+                                      (w * img.naturalHeight) / img.naturalWidth
+                                    )
+                                  ),
+                                  ratio: img.naturalWidth / img.naturalHeight,
+                                },
+                              }
+                        );
+                      }
+                      setTimeout(() => setImageStatus(statusKey, "loaded"), 600);
+                      // 600ms hold + 700ms ease, then release the px height
+                      // (timer, not transitionend: equal heights never fire it).
+                      setTimeout(() => {
+                        setImageHeights((prev) =>
+                          prev[statusKey]
+                            ? {
+                                ...prev,
+                                [statusKey]: {
+                                  ...prev[statusKey],
+                                  settled: true,
+                                },
+                              }
+                            : prev
+                        );
+                      }, 1400);
+                    }}
                     onError={() => setImageStatus(statusKey, "error")}
-                    className={`block max-w-[320px] w-full h-full max-h-[360px] object-contain bg-black/40 transition-opacity duration-300 ${
-                      loaded ? "opacity-100" : "opacity-0"
+                    className={`block max-w-[320px] w-full h-full max-h-[360px] object-contain transition-all duration-700 ease-out ${
+                      loaded
+                        ? "opacity-100 blur-0 scale-100"
+                        : "opacity-0 blur-md scale-[1.04]"
                     }`}
                   />
                 )}

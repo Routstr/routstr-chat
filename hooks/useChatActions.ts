@@ -575,6 +575,18 @@ export const useChatActions = ({
               )
                 return;
               if (originConversationId) {
+                // The SDK clears right after handing the message to
+                // onMessageAppend; wait for enrich+store to commit it,
+                // or the UI blanks for the whole image save.
+                if (content === "") {
+                  void lastAppend.then(() =>
+                    setStreamingContentByConversation((prev) => ({
+                      ...prev,
+                      [originConversationId]: "",
+                    }))
+                  );
+                  return;
+                }
                 setStreamingContentByConversation((prev) => ({
                   ...prev,
                   [originConversationId]: content,
@@ -589,6 +601,15 @@ export const useChatActions = ({
               )
                 return;
               if (originConversationId) {
+                if (content === "") {
+                  void lastAppend.then(() =>
+                    setThinkingContentByConversation((prev) => ({
+                      ...prev,
+                      [originConversationId]: "",
+                    }))
+                  );
+                  return;
+                }
                 setThinkingContentByConversation((prev) => ({
                   ...prev,
                   [originConversationId]: content,
@@ -633,6 +654,10 @@ export const useChatActions = ({
                       updatedMessage
                     );
                   }
+                  // Message is committed; drop the loading UI now instead of
+                  // holding the loader through the SDK's payment finalize.
+                  setIsLoading(false);
+                  setIsPaymentProcessing(false);
                 })
                 .catch(console.error);
             },
@@ -681,6 +706,10 @@ export const useChatActions = ({
 
         setPendingCashuAmountState(getPendingCashuTokenAmount());
       } finally {
+        // The SDK resolves before the append pipeline (image enrich + event
+        // store) commits the message to state; tearing down earlier leaves
+        // a blank gap while big images save.
+        await lastAppend;
         setIsLoading(false);
         setIsPaymentProcessing(false);
         setStreamingContent("");

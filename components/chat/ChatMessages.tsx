@@ -12,6 +12,7 @@ import MessageContentRenderer from "@/components/MessageContent";
 import MarkdownRenderer from "@/components/MarkdownRenderer";
 import ThinkingSection from "@/components/ui/ThinkingSection";
 import VersionNavigator from "@/components/chat/VersionNavigator";
+import ImageGenerationLoader from "@/components/chat/ImageGenerationLoader";
 import { buildThreadSlots } from "@/utils/messageThread";
 import {
   RefObject,
@@ -21,6 +22,39 @@ import {
   useMemo,
   useCallback,
 } from "react";
+
+/**
+ * Pre-stream status. Payment itself is quick but the SDK only signals
+ * completion after the whole stream, so the label hands off to an honest
+ * "waiting" state with a timer instead of claiming payment for the full wait.
+ */
+const RequestStatusLine = () => {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setElapsed((s) => s + 1), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  const label =
+    elapsed < 3 ? "Processing payment..." : "Waiting for the model...";
+  return (
+    <div className="flex flex-col items-start mb-6 animate-in fade-in duration-300">
+      <div className="flex items-baseline gap-2 text-sm">
+        {/* Keyed by label so each phase eases in instead of hard-swapping. */}
+        <span
+          key={label}
+          className="text-shimmer animate-in fade-in slide-in-from-bottom-1 duration-500"
+        >
+          {label}
+        </span>
+        {elapsed >= 3 && (
+          <span className="text-xs tabular-nums text-muted-foreground/70 animate-in fade-in duration-500">
+            {elapsed}s
+          </span>
+        )}
+      </div>
+    </div>
+  );
+};
 
 // Helper function to extract thinking from message content
 const getThinkingFromContent = (
@@ -70,6 +104,7 @@ interface ChatMessagesProps {
   isLoading: boolean;
   isPaymentProcessing: boolean;
   isLoadingChatFromUrl?: boolean;
+  modelOutputsImages?: boolean;
 }
 
 export default function ChatMessages({
@@ -90,6 +125,7 @@ export default function ChatMessages({
   isLoading,
   isPaymentProcessing,
   isLoadingChatFromUrl,
+  modelOutputsImages,
 }: ChatMessagesProps) {
   const [copiedMessageIndex, setCopiedMessageIndex] = useState<number | null>(
     null
@@ -950,16 +986,10 @@ export default function ChatMessages({
           )}
 
           {isPaymentProcessing &&
+            !modelOutputsImages &&
             !streamingContent &&
             !thinkingContent &&
-            messages.length > 0 && (
-              <div className="flex flex-col items-start mb-6">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground animate-pulse">
-                  <div className="h-4 w-4 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-                  Processing payment...
-                </div>
-              </div>
-            )}
+            messages.length > 0 && <RequestStatusLine />}
 
           {thinkingContent && (
             <ThinkingSection
@@ -974,6 +1004,12 @@ export default function ChatMessages({
                 <MarkdownRenderer content={streamingContent} />
               </div>
             </div>
+          )}
+
+          {/* Below streamed text: holds the image's spot while the model
+              narrates. The messages gate keeps it off the welcome screen. */}
+          {modelOutputsImages && isLoading && messages.length > 0 && (
+            <ImageGenerationLoader />
           )}
 
           <div ref={messagesEndRef} />
