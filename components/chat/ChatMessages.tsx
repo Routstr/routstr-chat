@@ -12,9 +12,9 @@ import MessageContentRenderer from "@/components/MessageContent";
 import MarkdownRenderer from "@/components/MarkdownRenderer";
 import ThinkingSection from "@/components/ui/ThinkingSection";
 import VersionNavigator from "@/components/chat/VersionNavigator";
+import { buildThreadSlots } from "@/utils/messageThread";
 import {
   RefObject,
-  ReactNode,
   useState,
   useRef,
   useEffect,
@@ -51,21 +51,6 @@ const getAnnotationsFromContent = (
   const textContent = content.find((item) => item.type === "text");
   return textContent?.annotations;
 };
-
-const messageActionButtonClassName =
-  "flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground bg-muted/50 hover:bg-muted border border-border rounded-md px-3 py-1.5 transition-colors cursor-pointer";
-
-const MessageActionButton = ({
-  onClick,
-  children,
-}: {
-  onClick: () => void;
-  children: ReactNode;
-}) => (
-  <button onClick={onClick} className={messageActionButtonClassName}>
-    {children}
-  </button>
-);
 
 interface ChatMessagesProps {
   messages: Message[];
@@ -130,29 +115,6 @@ export default function ChatMessages({
     );
   };
 
-  // Reset selectedVersions if any selected eventId is not in the messages list
-  useEffect(() => {
-    // Only proceed if there are selected versions
-    if (selectedVersions.size === 0) return;
-
-    // Create a Set of all message eventIds for fast lookup
-    const messageEventIds = new Set(
-      messages
-        .map((msg) => msg._eventId)
-        .filter((id): id is string => id !== undefined)
-    );
-
-    // Check if any selected version's eventId is not in the messages list
-    const hasInvalidSelection = Array.from(selectedVersions.values()).some(
-      (eventId) => !messageEventIds.has(eventId)
-    );
-
-    // If any invalid selection found, reset the map
-    if (hasInvalidSelection) {
-      setSelectedVersions(new Map());
-    }
-  }, [messages]);
-
   // Helper: Check if a message should always be shown individually
   const isStandaloneSystemMessage = (msg: Message): boolean => {
     if (msg.role !== "system") return false;
@@ -207,170 +169,51 @@ export default function ChatMessages({
     [messages, getTextFromContent]
   );
 
-  // Group messages by their depth in the conversation tree
-  // System message groups are treated as a single version (represented by their first message)
-  const messageVersions = useMemo(() => {
-    const groups = new Map<number, Message[]>();
+  const threadSlots = useMemo(
+    () => buildThreadSlots(messages, systemGroupsMap, selectedVersions),
+    [messages, systemGroupsMap, selectedVersions]
+  );
 
-    const systemGroupMap = systemGroupsMap;
-
-    // Filter messages: exclude system messages that are part of a group (keep only first of each group)
-    const messagesToVersion: Message[] = [];
-    let skipUntilIndex = -1;
-    messages.forEach((msg, index) => {
-      // If we're skipping (inside a system group), continue until we're past it
-      if (index <= skipUntilIndex) return;
-
-      // Check if this is the start of a system group
-      const systemGroup = systemGroupMap.get(index);
-      if (systemGroup) {
-        // Add only the first message of the group
-        messagesToVersion.push(systemGroup.firstMessage);
-        // Skip the rest of the group
-        skipUntilIndex = index + systemGroup.count - 1;
-      } else {
-        // Regular message (user, assistant, or standalone system)
-        messagesToVersion.push(msg);
-      }
-    });
-
-    // Build adjacency list for tree structure
-    const childrenMap = new Map<string, Message[]>();
-    const roots: Message[] = [];
-
-    messagesToVersion.forEach((msg) => {
-      if (!msg._prevId || msg._prevId === "0".repeat(64)) {
-        roots.push(msg);
-      } else {
-        if (!childrenMap.has(msg._prevId)) {
-          childrenMap.set(msg._prevId, []);
-        }
-        childrenMap.get(msg._prevId)!.push(msg);
-      }
-    });
-
-    // Helper function to get the event ID of the last message in a system group
-    const getEventIdForLastMessage = (
-      eventId: string,
-      systemGroupMap: Map<number, { firstMessage: Message; count: number }>
-    ): string | undefined => {
-      if (!eventId) return eventId;
-
-      // Find the group that starts with this eventId
-      for (const [startIndex, group] of systemGroupMap) {
-        if (group.firstMessage._eventId === eventId) {
-          // Found the group, calculate the index of the last message
-          const lastMessageIndex = startIndex + group.count - 1;
-
-          // Return the eventId of the last message in this group
-          if (lastMessageIndex < messages.length) {
-            return messages[lastMessageIndex]._eventId;
-          }
-        }
-      }
-
-      // If not found in any group, return the original eventId
-      return eventId;
-    };
-
-    // BFS traversal to assign depth-based groups
-    let currentDepth = 0;
-    let currentLevel = roots;
-
-    while (currentLevel.length > 0) {
-      // Sort by creation time for consistent ordering
-      currentLevel.sort((a, b) => (a._createdAt || 0) - (b._createdAt || 0));
-      groups.set(currentDepth, currentLevel);
-
-      const nextLevel: Message[] = [];
-      currentLevel.forEach((msg) => {
-        let lastEventId = msg._eventId;
-        if (msg.role === "system" && lastEventId)
-          lastEventId = getEventIdForLastMessage(lastEventId, systemGroupMap);
-        if (lastEventId && childrenMap.has(lastEventId)) {
-          nextLevel.push(...childrenMap.get(lastEventId)!);
-        }
-      });
-
-      currentDepth++;
-      currentLevel = nextLevel;
-    }
-
-    return groups;
-  }, [messages, systemGroupsMap]);
-
-  const getMessageToDisplay = (message: Message, index: number) => {
-    const versions = messageVersions.get(index);
-
-    if (!versions || versions.length <= 1) {
-      return { msg: message, currentVersion: 1, totalVersions: 1 };
-    }
-
-    // Check if a specific version is selected for this "slot" (identified by index)
-    const selectedId = selectedVersions.get(index);
-
-    if (selectedId) {
-      const selectedMsg = versions.find((v) => v._eventId === selectedId);
-      if (selectedMsg) {
-        const versionIndex = versions.findIndex(
-          (v) => v._eventId === selectedId
-        );
-        return {
-          msg: selectedMsg,
-          currentVersion: versionIndex + 1,
-          totalVersions: versions.length,
-        };
-      }
-    }
-
-    // Default to the message passed in (which comes from the main thread)
-    // We need to find its index in the sorted versions array
-    const currentIndex = versions.findIndex(
-      (v) => v._eventId === message._eventId
+  // Prune selections whose key no longer maps to a message (conversation
+  // switch, or a local-<n> key replaced by the real event id on publish);
+  // clearing the whole map would snap every toggled depth back to newest.
+  useEffect(() => {
+    if (selectedVersions.size === 0) return;
+    const stale = Array.from(selectedVersions).filter(
+      ([, key]) => !threadSlots.allKeys.has(key)
     );
+    if (stale.length === 0) return;
+    setSelectedVersions((prev) => {
+      const next = new Map(prev);
+      stale.forEach(([depth]) => next.delete(depth));
+      return next;
+    });
+  }, [threadSlots, selectedVersions]);
 
-    // If for some reason the message isn't in the group (shouldn't happen), default to last
-    if (currentIndex === -1) {
-      return {
-        msg: versions[versions.length - 1],
-        currentVersion: versions.length,
-        totalVersions: versions.length,
-      };
+  // New requests (send or retry) always continue the newest branch, so snap
+  // the view there; a pinned older version would hide the incoming message.
+  useEffect(() => {
+    if (isLoading) {
+      setSelectedVersions((prev) => (prev.size === 0 ? prev : new Map()));
     }
-
-    return {
-      msg: message,
-      currentVersion: currentIndex + 1,
-      totalVersions: versions.length,
-    };
-  };
+  }, [isLoading]);
 
   const handleVersionChange = useCallback(
-    (index: number, direction: "prev" | "next", currentMessageId: string) => {
-      const versions = messageVersions.get(index);
-      console.log("ed", versions, index, messageVersions);
-      if (!versions) return;
+    (depth: number, direction: "prev" | "next") => {
+      const slot = threadSlots.slots[depth];
+      if (!slot) return;
 
-      const currentSelectedId = selectedVersions.get(index) || currentMessageId;
-      const currentIndex = versions.findIndex(
-        (v) => v._eventId === currentSelectedId
-      );
-      console.log(currentIndex, currentSelectedId, selectedVersions);
+      let newIndex =
+        slot.displayedIndex + (direction === "prev" ? -1 : 1);
 
-      if (currentIndex === -1) return;
-
-      let newIndex = direction === "prev" ? currentIndex - 1 : currentIndex + 1;
-
-      // Clamp index
       if (newIndex < 0) newIndex = 0;
-      if (newIndex >= versions.length) newIndex = versions.length - 1;
+      if (newIndex >= slot.keys.length) newIndex = slot.keys.length - 1;
 
-      const newVersionId = versions[newIndex]._eventId;
-      if (newVersionId) {
-        setSelectedVersions((prev) => new Map(prev).set(index, newVersionId));
-      }
+      setSelectedVersions((prev) =>
+        new Map(prev).set(depth, slot.keys[newIndex])
+      );
     },
-    [messageVersions, selectedVersions]
+    [threadSlots]
   );
 
   // Toggle a specific system message group
@@ -601,7 +444,7 @@ export default function ChatMessages({
       <div className="mx-auto w-full max-w-176 px-4 sm:px-6 lg:px-0 py-4 md:py-2 flex flex-col min-h-full">
         {/* Messages container - doesn't grow, just takes natural height */}
         <div className="shrink-0">
-          {messageVersions.size === 0 ? (
+          {threadSlots.slots.length === 0 ? (
             isLoadingChatFromUrl ? (
               <div className="flex-1 flex flex-col items-center justify-center text-center min-h-[calc(100vh-200px)]">
                 <div className="flex flex-col items-center gap-3">
@@ -615,25 +458,14 @@ export default function ChatMessages({
               </div>
             )
           ) : (
-            Array.from({ length: messageVersions.size }, (_, index) => {
-              const versions = messageVersions.get(index);
-              if (!versions || versions.length === 0) return null;
+            threadSlots.slots.map((slot, index) => {
+              const message = slot.displayed;
+              const currentVersion = slot.displayedIndex + 1;
+              const totalVersions = slot.keys.length;
 
-              // Use the first message in the versions array as the original message
-              const originalMessage = versions[versions.length - 1];
-
-              // Determine which version of the message to display
-              const {
-                msg: message,
-                currentVersion,
-                totalVersions,
-              } = getMessageToDisplay(originalMessage, index);
-
-              // Check if this message represents a system message group
-              // We need to match by the message itself, not by index
-              const messageIndex = messages.findIndex(
-                (m) => m._eventId === message._eventId
-              );
+              // Match by object identity: local-only messages share an
+              // undefined _eventId, so id equality would hit the wrong one
+              const messageIndex = messages.indexOf(message);
               const systemGroup = systemGroupsMap.get(messageIndex);
 
               const isSystemGroupStart =
@@ -643,7 +475,7 @@ export default function ChatMessages({
 
               return (
                 <div
-                  key={`msg-${index}-${originalMessage._eventId}`}
+                  key={`msg-${index}`}
                   ref={(el) => {
                     if (el && message._eventId) {
                       messageRefs.current.set(message._eventId, el);
@@ -659,29 +491,15 @@ export default function ChatMessages({
                   <div className="mb-8 last:mb-0">
                     {message.role === "user" ? (
                       <>
-                        <div className="flex justify-end mb-2">
-                          <VersionNavigator
-                            currentVersion={currentVersion}
-                            totalVersions={totalVersions}
-                            onNavigate={(direction) =>
-                              handleVersionChange(
-                                index,
-                                direction,
-                                originalMessage._eventId!
-                              )
-                            }
-                            className="mr-2"
-                          />
-                        </div>
                         <div className="flex justify-end mb-6">
                           <div
                             className={`${
-                              editingMessageIndex === index
+                              editingMessageIndex === messageIndex
                                 ? "w-full sm:max-w-[90%] md:max-w-[85%] lg:max-w-[75%] xl:max-w-[70%]"
                                 : "max-w-[85%]"
                             } wrap-break-word break-all`}
                           >
-                            {editingMessageIndex === index ? (
+                            {editingMessageIndex === messageIndex ? (
                               <div className="flex flex-col w-full">
                                 {/* Show existing attachments that will be preserved */}
                                 {typeof message.content !== "string" && (
@@ -796,36 +614,51 @@ export default function ChatMessages({
                                       />
                                     </div>
                                   </div>
-                                  <div
-                                    className={`flex justify-end items-center gap-2 mt-1 ${
-                                      isMobile
-                                        ? "opacity-100"
-                                        : "opacity-100 md:opacity-0 md:group-hover:opacity-100"
-                                    } transition-opacity duration-200`}
-                                  >
-                                    <button
-                                      onClick={() =>
-                                        copyMessageContent(
-                                          index,
-                                          message.content
-                                        )
+                                  <div className="flex justify-end items-center gap-2 mt-1">
+                                    <VersionNavigator
+                                      currentVersion={currentVersion}
+                                      totalVersions={totalVersions}
+                                      onNavigate={(direction) =>
+                                        handleVersionChange(index, direction)
                                       }
-                                      className="p-1 rounded-full text-muted-foreground hover:text-foreground transition-colors"
-                                      aria-label="Copy message"
+                                    />
+                                    <div
+                                      className={`flex items-center gap-2 ${
+                                        isMobile
+                                          ? "opacity-100"
+                                          : "opacity-100 md:opacity-0 md:group-hover:opacity-100"
+                                      } transition-opacity duration-200`}
                                     >
-                                      {copiedMessageIndex === index ? (
-                                        <Check className="w-4 h-4" />
-                                      ) : (
-                                        <Copy className="w-4 h-4" />
-                                      )}
-                                    </button>
-                                    <button
-                                      onClick={() => startEditingMessage(index)}
-                                      className="p-1 rounded-full text-muted-foreground hover:text-foreground transition-colors"
-                                      aria-label="Edit message"
-                                    >
-                                      <Edit className="w-4 h-4" />
-                                    </button>
+                                      <button
+                                        onClick={() =>
+                                          copyMessageContent(
+                                            messageIndex,
+                                            message.content
+                                          )
+                                        }
+                                        className="p-1 rounded-full text-muted-foreground hover:text-foreground transition-colors"
+                                        aria-label="Copy message"
+                                        title={
+                                          copiedMessageIndex === messageIndex
+                                            ? "Copied!"
+                                            : "Copy"
+                                        }
+                                      >
+                                        {copiedMessageIndex === messageIndex ? (
+                                          <Check className="w-4 h-4" />
+                                        ) : (
+                                          <Copy className="w-4 h-4" />
+                                        )}
+                                      </button>
+                                      <button
+                                        onClick={() => startEditingMessage(messageIndex)}
+                                        className="p-1 rounded-full text-muted-foreground hover:text-foreground transition-colors"
+                                        aria-label="Edit message"
+                                        title="Edit"
+                                      >
+                                        <Edit className="w-4 h-4" />
+                                      </button>
+                                    </div>
                                   </div>
                                 </div>
                               </div>
@@ -840,11 +673,7 @@ export default function ChatMessages({
                             currentVersion={currentVersion}
                             totalVersions={totalVersions}
                             onNavigate={(direction) =>
-                              handleVersionChange(
-                                index,
-                                direction,
-                                originalMessage._eventId!
-                              )
+                              handleVersionChange(index, direction)
                             }
                             className=""
                           />
@@ -959,7 +788,8 @@ export default function ChatMessages({
                                   >
                                     <button
                                       onClick={() => retryMessage(idx)}
-                                      className="flex items-center gap-1.5 text-xs text-red-700 dark:text-red-300 hover:text-red-900 dark:hover:text-red-200 bg-red-100 dark:bg-red-500/20 hover:bg-red-200 dark:hover:bg-red-500/30 border border-red-200 dark:border-red-500/30 rounded-md px-3 py-1.5 transition-colors cursor-pointer"
+                                      disabled={isLoading}
+                                      className="flex items-center gap-1.5 text-xs text-red-700 dark:text-red-300 hover:text-red-900 dark:hover:text-red-200 bg-red-100 dark:bg-red-500/20 hover:bg-red-200 dark:hover:bg-red-500/30 border border-red-200 dark:border-red-500/30 rounded-md px-3 py-1.5 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                                     >
                                       <svg
                                         width="12"
@@ -994,24 +824,7 @@ export default function ChatMessages({
                       </>
                     ) : (
                       <>
-                        <div className="flex justify-start mb-2">
-                          <VersionNavigator
-                            currentVersion={currentVersion}
-                            totalVersions={totalVersions}
-                            onNavigate={(direction) =>
-                              handleVersionChange(
-                                index,
-                                direction,
-                                originalMessage._eventId!
-                              )
-                            }
-                            className="ml-2"
-                          />
-                        </div>
                         <div className="flex flex-col items-start mb-6 group">
-                          {(() => {
-                            return null;
-                          })()}
                           {getThinkingFromContent(message.content) && (
                             <ThinkingSection
                               thinking={
@@ -1031,84 +844,101 @@ export default function ChatMessages({
                               )}
                             />
                           </div>
-                          <div
-                            className={`mt-1.5 ${
-                              isMobile
-                                ? "opacity-100"
-                                : "opacity-100 md:opacity-0 md:group-hover:opacity-100"
-                            } transition-opacity duration-200 flex items-center gap-2`}
-                          >
-                            <MessageActionButton
-                              onClick={() =>
-                                copyMessageContent(index, message.content)
+                          <div className="mt-1.5 flex items-center gap-2">
+                            <VersionNavigator
+                              currentVersion={currentVersion}
+                              totalVersions={totalVersions}
+                              onNavigate={(direction) =>
+                                handleVersionChange(index, direction)
                               }
+                            />
+                            <div
+                              className={`${
+                                isMobile
+                                  ? "opacity-100"
+                                  : "opacity-100 md:opacity-0 md:group-hover:opacity-100"
+                              } transition-opacity duration-200 flex items-center gap-2`}
                             >
-                              {copiedMessageIndex === index ? (
-                                <Check className="w-3 h-3" />
-                              ) : (
-                                <Copy className="w-3 h-3" />
-                              )}
-                              {copiedMessageIndex === index
-                                ? "Copied!"
-                                : "Copy"}
-                            </MessageActionButton>
-                            <MessageActionButton
-                              onClick={() => retryMessage(index)}
-                            >
-                              <svg
-                                width="12"
-                                height="12"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                xmlns="http://www.w3.org/2000/svg"
-                                className="rotate-45"
+                              <button
+                                onClick={() =>
+                                  copyMessageContent(messageIndex, message.content)
+                                }
+                                className="p-1 rounded-full text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                                aria-label="Copy response"
+                                title={
+                                  copiedMessageIndex === messageIndex
+                                    ? "Copied!"
+                                    : "Copy"
+                                }
                               >
-                                <path
-                                  d="M21.168 8A10.003 10.003 0 0 0 12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10"
-                                  stroke="currentColor"
-                                  strokeWidth="2"
-                                  strokeLinecap="round"
-                                />
-                                <path
-                                  d="M17 8h4.4a.6.6 0 0 0 .6-.6V3"
-                                  stroke="currentColor"
-                                  strokeWidth="2"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                />
-                              </svg>
-                              Try Again
-                            </MessageActionButton>
-                            {message.satsSpent !== undefined &&
-                              message.satsSpent > 0 && (
-                                <span className="flex items-center gap-1 text-xs text-[#f7931a] px-2 py-1">
-                                  {message.satsSpent.toFixed(
-                                    message.satsSpent < 1 ? 3 : 0
-                                  )}{" "}
-                                  <svg
-                                    width="16"
-                                    height="16"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    style={{ marginLeft: "-5px" }}
-                                  >
-                                    <path
-                                      fillRule="evenodd"
-                                      clipRule="evenodd"
-                                      d="M8.7516 6.75V17.25H13.2464C14.602 17.1894 15.6545 16.0156 15.6 14.625C15.6545 13.234 14.6014 12.0601 13.2454 12H11.5333C12.8893 11.9399 13.9424 10.766 13.8879 9.375C13.9424 7.98403 12.8893 6.81005 11.5333 6.75L8.7516 6.75Z"
-                                      stroke="currentColor"
-                                      strokeWidth="1.5"
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                    />
-                                    <path
-                                      d="M8.0016 19C8.0016 19.4142 8.33739 19.75 8.7516 19.75C9.16581 19.75 9.5016 19.4142 9.5016 19H8.0016ZM8.7516 17.25H9.5016C9.5016 16.8358 9.16581 16.5 8.7516 16.5V17.25ZM6.825 16.5C6.41079 16.5 6.075 16.8358 6.075 17.25C6.075 17.6642 6.41079 18 6.825 18V16.5ZM9.5016 5C9.5016 4.58579 9.16581 4.25 8.7516 4.25C8.33739 4.25 8.0016 4.58579 8.0016 5H9.5016ZM8.7516 6.75V7.5C9.16581 7.5 9.5016 7.16421 9.5016 6.75H8.7516ZM6.825 6C6.41079 6 6.075 6.33579 6.075 6.75C6.075 7.16421 6.41079 7.5 6.825 7.5V6ZM11.5333 12.75C11.9475 12.75 12.2833 12.4142 12.2833 12C12.2833 11.5858 11.9475 11.25 11.5333 11.25V12.75ZM8.7516 11.25C8.33739 11.25 8.0016 11.5858 8.0016 12C8.0016 12.4142 8.33739 12.75 8.7516 12.75V11.25ZM10.5697 6.75C10.5697 7.16421 10.9055 7.5 11.3197 7.5C11.734 7.5 12.0697 7.16421 12.0697 6.75H10.5697ZM12.0697 5C12.0697 4.58579 11.734 4.25 11.3197 4.25C10.9055 4.25 10.5697 4.58579 10.5697 5H12.0697ZM10.5697 19C10.5697 19.4142 10.9055 19.75 11.3197 19.75C11.734 19.75 12.0697 19.4142 12.0697 19H10.5697ZM12.0697 17.25C12.0697 16.8358 11.734 16.5 11.3197 16.5C10.9055 16.5 10.5697 16.8358 10.5697 17.25H12.0697ZM9.5016 19V17.25H8.0016V19H9.5016ZM8.7516 16.5H6.825V18H8.7516V16.5ZM8.0016 5V6.75H9.5016V5H8.0016ZM8.7516 6H6.825V7.5H8.7516V6ZM11.5333 11.25H8.7516V12.75H11.5333V11.25ZM12.0697 6.75V5H10.5697V6.75H12.0697ZM12.0697 19V17.25H10.5697V19H12.0697Z"
-                                      fill="currentColor"
-                                    />
-                                  </svg>
-                                </span>
-                              )}
+                                {copiedMessageIndex === messageIndex ? (
+                                  <Check className="w-4 h-4" />
+                                ) : (
+                                  <Copy className="w-4 h-4" />
+                                )}
+                              </button>
+                              {/* Retrying mid-generation would abort a request that may already be paid for */}
+                              <button
+                                onClick={() => retryMessage(messageIndex)}
+                                disabled={isLoading}
+                                className="p-1 rounded-full text-muted-foreground hover:text-foreground transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                                aria-label="Retry response"
+                                title={isLoading ? "Generating..." : "Try again"}
+                              >
+                                <svg
+                                  width="16"
+                                  height="16"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  className="rotate-45"
+                                >
+                                  <path
+                                    d="M21.168 8A10.003 10.003 0 0 0 12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                    strokeLinecap="round"
+                                  />
+                                  <path
+                                    d="M17 8h4.4a.6.6 0 0 0 .6-.6V3"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                  />
+                                </svg>
+                              </button>
+                              {message.satsSpent !== undefined &&
+                                message.satsSpent > 0 && (
+                                  <span className="flex items-center gap-1 text-xs text-[#f7931a] px-2 py-1">
+                                    {message.satsSpent.toFixed(
+                                      message.satsSpent < 1 ? 3 : 0
+                                    )}{" "}
+                                    <svg
+                                      width="16"
+                                      height="16"
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      xmlns="http://www.w3.org/2000/svg"
+                                      style={{ marginLeft: "-5px" }}
+                                    >
+                                      <path
+                                        fillRule="evenodd"
+                                        clipRule="evenodd"
+                                        d="M8.7516 6.75V17.25H13.2464C14.602 17.1894 15.6545 16.0156 15.6 14.625C15.6545 13.234 14.6014 12.0601 13.2454 12H11.5333C12.8893 11.9399 13.9424 10.766 13.8879 9.375C13.9424 7.98403 12.8893 6.81005 11.5333 6.75L8.7516 6.75Z"
+                                        stroke="currentColor"
+                                        strokeWidth="1.5"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                      />
+                                      <path
+                                        d="M8.0016 19C8.0016 19.4142 8.33739 19.75 8.7516 19.75C9.16581 19.75 9.5016 19.4142 9.5016 19H8.0016ZM8.7516 17.25H9.5016C9.5016 16.8358 9.16581 16.5 8.7516 16.5V17.25ZM6.825 16.5C6.41079 16.5 6.075 16.8358 6.075 17.25C6.075 17.6642 6.41079 18 6.825 18V16.5ZM9.5016 5C9.5016 4.58579 9.16581 4.25 8.7516 4.25C8.33739 4.25 8.0016 4.58579 8.0016 5H9.5016ZM8.7516 6.75V7.5C9.16581 7.5 9.5016 7.16421 9.5016 6.75H8.7516ZM6.825 6C6.41079 6 6.075 6.33579 6.075 6.75C6.075 7.16421 6.41079 7.5 6.825 7.5V6ZM11.5333 12.75C11.9475 12.75 12.2833 12.4142 12.2833 12C12.2833 11.5858 11.9475 11.25 11.5333 11.25V12.75ZM8.7516 11.25C8.33739 11.25 8.0016 11.5858 8.0016 12C8.0016 12.4142 8.33739 12.75 8.7516 12.75V11.25ZM10.5697 6.75C10.5697 7.16421 10.9055 7.5 11.3197 7.5C11.734 7.5 12.0697 7.16421 12.0697 6.75H10.5697ZM12.0697 5C12.0697 4.58579 11.734 4.25 11.3197 4.25C10.9055 4.25 10.5697 4.58579 10.5697 5H12.0697ZM10.5697 19C10.5697 19.4142 10.9055 19.75 11.3197 19.75C11.734 19.75 12.0697 19.4142 12.0697 19H10.5697ZM12.0697 17.25C12.0697 16.8358 11.734 16.5 11.3197 16.5C10.9055 16.5 10.5697 16.8358 10.5697 17.25H12.0697ZM9.5016 19V17.25H8.0016V19H9.5016ZM8.7516 16.5H6.825V18H8.7516V16.5ZM8.0016 5V6.75H9.5016V5H8.0016ZM8.7516 6H6.825V7.5H8.7516V6ZM11.5333 11.25H8.7516V12.75H11.5333V11.25ZM12.0697 6.75V5H10.5697V6.75H12.0697ZM12.0697 19V17.25H10.5697V19H12.0697Z"
+                                        fill="currentColor"
+                                      />
+                                    </svg>
+                                  </span>
+                                )}
+                            </div>
                           </div>
                         </div>
                       </>
