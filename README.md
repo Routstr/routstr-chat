@@ -12,7 +12,7 @@ This repository contains the Next.js frontend for the Routstr Chat application.
 
 ## Tech Stack
 
-- Next.js 15, React 19, TypeScript 5
+- Next.js 16, React 19, TypeScript 5
 - Tailwind CSS 4
 - Zustand for state management
 - TanStack Query for data fetching/caching
@@ -48,49 +48,7 @@ npm run start
 
 # Lint
 npm run lint
-
-# Invoice-related tests (see Testing below)
-npm run test:invoices
-npm run test:invoices:integration
-
-# Helper: set up local regtest Cashu mint
-npm run test:setup
 ```
-
-## Testing
-
-This project includes invoice persistence and Lightning integration tests.
-
-- Overview and quick usage: `test/README.md`
-- Full local regtest setup: `test/LIGHTNING_TESTING_SETUP.md`
-
-Quick start:
-
-```bash
-# Start Cashu regtest environment (see the guide for details)
-cd ~ && git clone https://github.com/callebtc/cashu-regtest.git
-cd ~/cashu-regtest && ./start.sh
-
-# From the project root, start mint and run tests
-npm run test:setup
-npm run test:invoices
-```
-
-When running the app against local regtest:
-
-```bash
-npm run dev
-```
-
-Then in your browser console set the mint URL (first run):
-
-```javascript
-localStorage.clear();
-localStorage.setItem("mint_url", "http://localhost:3338");
-location.reload();
-```
-
-See `test/LIGHTNING_TESTING_SETUP.md` for a full end-to-end walkthrough and troubleshooting.
 
 ## Production
 
@@ -122,7 +80,7 @@ npm run build
 npm run start
 ```
 
-Deploy to any platform supporting Next.js 15 (Node.js 18+).
+Deploy to any platform supporting Next.js 16 (Node.js 18+).
 
 ## Troubleshooting
 
