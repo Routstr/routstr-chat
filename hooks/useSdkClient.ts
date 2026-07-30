@@ -78,7 +78,6 @@ const createPendingDeps = (): {
     getApiKey: () => null,
     setApiKey: pendingHandler,
     updateApiKeyBalance: pendingHandler,
-    touchApiKeyLastUsed: pendingHandler,
     removeApiKey: pendingHandler,
     getAllApiKeys: () => [],
     getApiKeyDistribution: () => [],
