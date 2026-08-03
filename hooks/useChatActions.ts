@@ -142,6 +142,10 @@ export const useChatActions = ({
   onBlossomFetch,
 }: UseChatActionsParams): UseChatActionsReturn => {
   const nodePays = useNodePays();
+  // Retry and edit hold closures from earlier renders, so read the mode at
+  // call time or a pre-connect closure pays from the wallet.
+  const nodePaysRef = useRef(nodePays);
+  nodePaysRef.current = nodePays;
   const [inputMessage, setInputMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isPaymentProcessing, setIsPaymentProcessing] = useState(false);
@@ -465,6 +469,7 @@ export const useChatActions = ({
       retryMessage?: boolean,
       retryPrevId?: string
     ) => {
+      const nodePays = nodePaysRef.current;
       setIsLoading(true);
       setStreamingContent("");
       setThinkingContent("");
@@ -497,6 +502,17 @@ export const useChatActions = ({
       try {
         if (!walletAdapter) {
           throw new Error("Wallet adapter is not ready");
+        }
+
+        // The node's cache entry can be missing here: right after connect the
+        // node pass is still queued behind the public sweep, and a refresh
+        // pass that lost the write race can prune it. Routing only ever reads
+        // the cache, so guarantee the entry now — one request, node only.
+        if (nodePays && !discoveryAdapter.getCachedModels()[nodePays.url]?.length) {
+          await modelManager.fetchModels([nodePays.url], true);
+          if (!discoveryAdapter.getCachedModels()[nodePays.url]?.length) {
+            throw new Error("Failed to fetch the node's model list");
+          }
         }
 
         // If the shared ModelManager already has providers + models cached,
@@ -767,7 +783,6 @@ export const useChatActions = ({
       createAndStoreChatEvent,
       walletAdapter,
       enrichAssistantImages,
-      nodePays,
     ]
   );
 
