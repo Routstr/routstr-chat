@@ -14,6 +14,7 @@ import { useChat } from "@/context/ChatProvider";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCashuWallet } from "@/features/wallet";
 import { useAutoRefill } from "@/hooks/useAutoRefill";
+import { useNodePays } from "@/hooks/useRemoteNode";
 import {
   KeepAliveProvider,
   useKeepAliveContext,
@@ -94,6 +95,7 @@ function ChatPageContent() {
     setDidRelaysTimeout,
     isLoading: isWalletLoading,
   } = useCashuWallet();
+  const nodePays = useNodePays();
 
   // Enable auto-refill functionality - monitors balance and triggers refills when enabled
   // Only triggers when wallet is fully loaded to avoid false positives from initial zero balance
@@ -148,6 +150,7 @@ function ChatPageContent() {
 
     const shouldPrompt =
       balance === 0 &&
+      !nodePays &&
       !isSettingsOpen &&
       !topUpPromptDismissed &&
       (!isBalanceLoading || !isAuthenticated);
@@ -169,6 +172,7 @@ function ChatPageContent() {
     isAuthenticated,
     isTopUpPromptOpen,
     isLoginModalOpen,
+    nodePays,
   ]);
 
   useEffect(() => {

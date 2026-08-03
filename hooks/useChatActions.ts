@@ -22,10 +22,12 @@ import {
   storageAdapter,
   modelManager,
   providerManager,
+  usageTrackingDriver,
 } from "@/sdk/sharedStore";
 import { fetchAIResponse, consoleLogger, isTorContext } from "@routstr/sdk";
 import { toast } from "sonner";
-import { usageTrackingDriver } from "@/sdk/sharedStore";
+import { useNodePays } from "@/hooks/useRemoteNode";
+import { withNodeModeError } from "@/lib/remoteNode";
 
 export interface UseChatActionsReturn {
   inputMessage: string;
@@ -139,6 +141,7 @@ export const useChatActions = ({
   onBlossomUpload,
   onBlossomFetch,
 }: UseChatActionsParams): UseChatActionsReturn => {
+  const nodePays = useNodePays();
   const [inputMessage, setInputMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isPaymentProcessing, setIsPaymentProcessing] = useState(false);
@@ -506,6 +509,15 @@ export const useChatActions = ({
           modelManager.getBaseUrls().length > 0 &&
           Object.keys(cachedModels).length > 0;
 
+        // setApiKey refuses to overwrite, so replace rather than write.
+        if (
+          nodePays &&
+          storageAdapter.getApiKey(nodePays.url)?.key !== nodePays.apiKey
+        ) {
+          storageAdapter.removeApiKey(nodePays.url);
+          storageAdapter.setApiKey(nodePays.url, nodePays.apiKey);
+        }
+
         // Race hydration against Stop so a stalled media server can't hold the
         // UI; bail before any payment is made.
         const apiMessageHistory = await Promise.race([
@@ -554,11 +566,23 @@ export const useChatActions = ({
           {
             messageHistory: apiMessageHistory as any,
             modelId: selectedModel.id,
-            forcedProvider: baseUrl || undefined,
+            forcedProvider: nodePays ? nodePays.url : baseUrl || undefined,
             torMode: isTorContext(),
-            mode: "xcashu",
+            mode: nodePays ? "apikeys" : "xcashu",
             discoveryAdapter,
-            walletAdapter,
+            walletAdapter: nodePays
+              ? {
+                  ...walletAdapter,
+                  // The SDK tops up from the wallet on a 402 before failover is
+                  // consulted, so while the node pays, anything reaching for the
+                  // user's proofs is a bug.
+                  sendToken: async () => {
+                    throw new Error(
+                      "Node mode: refusing to pay from your wallet."
+                    );
+                  },
+                }
+              : walletAdapter,
             storageAdapter,
             abortSignal: abortController.signal,
             ...(hasCache
@@ -616,7 +640,10 @@ export const useChatActions = ({
                 }));
               }
             },
-            onMessageAppend: (message) => {
+            onMessageAppend: (incoming) => {
+              const message = nodePays
+                ? withNodeModeError(incoming)
+                : incoming;
               // Chain appends in arrival order; cost callbacks wait on the
               // chain since both stamp the conversation's LAST stored message.
               lastAppend = lastAppend
@@ -740,6 +767,7 @@ export const useChatActions = ({
       createAndStoreChatEvent,
       walletAdapter,
       enrichAssistantImages,
+      nodePays,
     ]
   );
 

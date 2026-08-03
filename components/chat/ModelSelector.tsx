@@ -27,6 +27,7 @@ import {
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { loadModelProviderMap } from "@/utils/storageUtils";
 import { useDisabledProviders } from "@/hooks/useDisabledProviders";
+import { useNodePays } from "@/hooks/useRemoteNode";
 import {
   parseModelKey,
   normalizeBaseUrl,
@@ -89,6 +90,7 @@ export default function ModelSelector({
   // Disabled providers come from the SDK store (single source of truth used
   // for routing), not a separate localStorage list.
   const { disabledProviders } = useDisabledProviders();
+  const nodePays = useNodePays();
   const [hoveredModelId, setHoveredModelId] = useState<string | null>(null);
   const isMobile = useMediaQuery("(max-width: 768px)");
   const [activeView, setActiveView] = useState<"list" | "details">("list");
@@ -616,20 +618,22 @@ export default function ModelSelector({
         </button>
 
         {/* Private (E2EE) Filter */}
-        <button
-          onClick={() => setPrivateFilter(!privateFilter)}
-          className={`shrink-0 h-6 inline-flex items-center gap-1 px-2 rounded-full text-[11px] border transition-colors cursor-pointer ${
-            privateFilter
-              ? "bg-primary/20 border-primary/30 text-foreground"
-              : "bg-muted/50 border-border text-muted-foreground hover:bg-muted"
-          }`}
-          title="Filter private (end-to-end encrypted) models"
-          type="button"
-          aria-pressed={privateFilter}
-        >
-          <Lock className="h-3.5 w-3.5" />
-          <span>Private (E2EE)</span>
-        </button>
+        {!nodePays && (
+          <button
+            onClick={() => setPrivateFilter(!privateFilter)}
+            className={`shrink-0 h-6 inline-flex items-center gap-1 px-2 rounded-full text-[11px] border transition-colors cursor-pointer ${
+              privateFilter
+                ? "bg-primary/20 border-primary/30 text-foreground"
+                : "bg-muted/50 border-border text-muted-foreground hover:bg-muted"
+            }`}
+            title="Filter private (end-to-end encrypted) models"
+            type="button"
+            aria-pressed={privateFilter}
+          >
+            <Lock className="h-3.5 w-3.5" />
+            <span>Private (E2EE)</span>
+          </button>
+        )}
 
         {quickPairOptions.map((opt) => {
           const isActive = pairFilters.has(opt.key);
@@ -835,10 +839,13 @@ export default function ModelSelector({
       ? providerModels[model.id]
       : undefined;
     const effectiveModelForPricing = providerSpecificModel || model;
-    const isAvailable = isModelAvailable(
-      effectiveModelForPricing,
-      balance + getPendingCashuTokenAmount()
-    );
+    // The node pays, so the local balance does not gate what this user can run.
+    const isAvailable =
+      Boolean(nodePays) ||
+      isModelAvailable(
+        effectiveModelForPricing,
+        balance + getPendingCashuTokenAmount()
+      );
     const requiredMin = getRequiredSatsForModel(effectiveModelForPricing);
     const isFav = isFavorite || isConfiguredModel(model.id);
     const effectiveProviderLabel =

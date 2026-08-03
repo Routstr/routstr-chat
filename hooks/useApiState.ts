@@ -18,6 +18,7 @@ import {
   isModelAvailable,
 } from "@/utils/modelUtils";
 import { getPendingCashuTokenAmount } from "@/utils/cashuUtils";
+import { useNodePays } from "@/hooks/useRemoteNode";
 import {
   filterBaseUrlsForTor,
   isTorContext,
@@ -58,6 +59,7 @@ export const useApiState = (
   const [baseUrlsList, setBaseUrlsList] = useState<string[]>([]);
   const [lowBalanceWarningForModel, setLowBalanceWarningForModel] =
     useState(false);
+  const nodePays = useNodePays();
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -80,7 +82,12 @@ export const useApiState = (
         const torMode = isTorContext();
         let bases = baseUrlsList;
 
-        if (!bases || bases.length === 0) {
+        if (nodePays) {
+          // Node mode swaps the provider set rather than adding to it: the SDK
+          // prunes every provider outside this list, so the node ends up the
+          // only one it can route to or fall back to.
+          bases = [nodePays.url];
+        } else if (!bases || bases.length === 0) {
           bases = await modelManager.bootstrapProviders(torMode, false);
           if (process.env.NODE_ENV === "development") {
             const localDevProvider = "http://localhost:8000/";
@@ -104,17 +111,29 @@ export const useApiState = (
 
         let firstProgress = true;
 
-        const combinedModels = (await modelManager.fetchModels(
-          bases,
-          false,
-          (progressModels) => {
-            if (firstProgress) {
-              setIsLoadingModels(false);
-              firstProgress = false;
+        // The prune drops the other mode's lists but leaves their timestamps
+        // fresh, so without this the picker comes back empty after a toggle.
+        const cached = discoveryAdapter.getCachedModels();
+        const staleSet = !bases.some((base) => cached[base]?.length);
+
+        // routstrd needs a JSON body with a model field, so it cannot proxy
+        // Tinfoil's encrypted transport.
+        const visible = (list: Model[]) =>
+          nodePays ? list.filter((m) => !m.id.startsWith("tinfoil-")) : list;
+
+        const combinedModels = visible(
+          (await modelManager.fetchModels(
+            bases,
+            staleSet,
+            (progressModels) => {
+              if (firstProgress) {
+                setIsLoadingModels(false);
+                firstProgress = false;
+              }
+              setModels(visible(progressModels as unknown as Model[]));
             }
-            setModels(progressModels as unknown as Model[]);
-          }
-        )) as unknown as Model[];
+          )) as unknown as Model[]
+        );
 
         // Delegate cheapest-provider selection to the SDK's
         // ProviderManager.getBestProviderForModel so the persisted
@@ -181,13 +200,24 @@ export const useApiState = (
       searchParams,
       maxBalance,
       pendingCashuAmountState,
+      nodePays,
     ]
   );
 
+  // Each pass overwrites the shared cache wholesale, so serialise them and let
+  // the newest win. `hydrated` holds the first pass until useNodePays knows
+  // which mode we are in.
+  const passRef = useRef(0);
+  const passChainRef = useRef<Promise<unknown>>(Promise.resolve());
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => setHydrated(true), []);
   useEffect(() => {
-    if (!isAuthenticated || !mintDiscovery) return;
-    void fetchModels(balance);
-  }, [isAuthenticated, mintDiscovery, baseUrlsList.length]);
+    if (!isAuthenticated || !mintDiscovery || !hydrated) return;
+    const pass = ++passRef.current;
+    passChainRef.current = passChainRef.current.then(() =>
+      pass === passRef.current ? fetchModels(balance) : undefined
+    );
+  }, [isAuthenticated, mintDiscovery, baseUrlsList.length, nodePays, hydrated]);
 
   // -----------------------------------------------------------------------
   // Background cache refresh
@@ -200,7 +230,8 @@ export const useApiState = (
   // the UI or message sending.
   const refreshInProgress = useRef(false);
   useEffect(() => {
-    if (!isAuthenticated || !mintDiscovery) return;
+    // One provider, and this pass would prune it.
+    if (!isAuthenticated || !mintDiscovery || nodePays) return;
 
     const backgroundRefresh = async () => {
       if (refreshInProgress.current) return;
@@ -228,7 +259,7 @@ export const useApiState = (
       clearTimeout(initialTimer);
       clearInterval(interval);
     };
-  }, [isAuthenticated, mintDiscovery]);
+  }, [isAuthenticated, mintDiscovery, nodePays]);
 
   useEffect(() => {
     if (!isAuthenticated || models.length === 0) return;
@@ -250,10 +281,11 @@ export const useApiState = (
 
       if (selectedModel && !isWalletLoading) {
         setLowBalanceWarningForModel(
-          !isModelAvailable(
-            selectedModel,
-            balance + getPendingCashuTokenAmount()
-          )
+          !nodePays &&
+            !isModelAvailable(
+              selectedModel,
+              balance + getPendingCashuTokenAmount()
+            )
         );
       }
     };
@@ -268,6 +300,7 @@ export const useApiState = (
     pendingCashuAmountState,
     isWalletLoading,
     maxBalance,
+    nodePays,
   ]);
 
   const handleModelChange = useCallback(
