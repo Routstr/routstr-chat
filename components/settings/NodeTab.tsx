@@ -2,10 +2,12 @@
 
 import React, { useState } from "react";
 import { useObservableState } from "applesauce-react/hooks";
-import { Loader2, Server } from "lucide-react";
+import { Copy, Loader2, Server } from "lucide-react";
+import { toast } from "sonner";
 import { useAccountManager } from "@/components/ClientProviders";
 import { Switch } from "@/components/ui/switch";
 import { connectRemoteNode, RemoteNodeError } from "@/lib/remoteNode";
+import { formatPublicKey } from "@/lib/nostr";
 import { normalizeProviderUrl } from "@/utils/torUtils";
 import {
   loadRemoteNode,
@@ -20,7 +22,17 @@ const NodeTab: React.FC = () => {
   const [node, setNode] = useState<RemoteNode | null>(() => loadRemoteNode());
   const [url, setUrl] = useState(node?.url ?? "");
   const [isConnecting, setIsConnecting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{
+    message: string;
+    unauthorized?: boolean;
+  } | null>(null);
+
+  // The operator adds users by npub, so when the node rejects this account,
+  // put the npub right under the error for copying.
+  const unauthorizedNpub =
+    error?.unauthorized && activeAccount
+      ? formatPublicKey(activeAccount.pubkey)
+      : null;
 
   const persist = (next: RemoteNode | null) => {
     saveRemoteNode(next);
@@ -31,11 +43,11 @@ const NodeTab: React.FC = () => {
     setError(null);
     const normalized = normalizeProviderUrl(url);
     if (!normalized) {
-      setError("Enter the address of a routstrd instance.");
+      setError({ message: "Enter the address of a routstrd instance." });
       return;
     }
     if (!activeAccount) {
-      setError("Sign in first, the node identifies you by your npub.");
+      setError({ message: "Sign in first, the node identifies you by your npub." });
       return;
     }
 
@@ -51,7 +63,9 @@ const NodeTab: React.FC = () => {
       setUrl(normalized);
     } catch (e) {
       setError(
-        e instanceof RemoteNodeError ? e.message : "Could not connect to that node."
+        e instanceof RemoteNodeError
+          ? { message: e.message, unauthorized: e.unauthorized }
+          : { message: "Could not connect to that node." }
       );
     } finally {
       setIsConnecting(false);
@@ -93,7 +107,30 @@ const NodeTab: React.FC = () => {
           </button>
         </div>
 
-        {error && <p className="text-sm text-red-400 mb-3">{error}</p>}
+        {error && <p className="text-sm text-red-400 mb-3">{error.message}</p>}
+
+        {unauthorizedNpub && (
+          <div className="flex items-center gap-2 mb-3 bg-muted/50 rounded-md px-3 py-2">
+            <span className="grow truncate font-mono text-xs text-foreground/80">
+              {unauthorizedNpub}
+            </span>
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(unauthorizedNpub);
+                  toast.success("Copied!");
+                } catch {
+                  toast.error("Failed to copy!");
+                }
+              }}
+              className="shrink-0 text-foreground/60 hover:text-foreground cursor-pointer"
+              aria-label="Copy npub"
+            >
+              <Copy className="h-4 w-4" />
+            </button>
+          </div>
+        )}
 
         {node && (
           <div className="bg-muted/50 rounded-md p-3">

@@ -8,7 +8,14 @@ const CLIENT_ID = "routstr-chat";
 
 type Signer = { signEvent: (template: EventTemplate) => Promise<NostrEvent> };
 
-export class RemoteNodeError extends Error {}
+export class RemoteNodeError extends Error {
+  constructor(
+    message: string,
+    readonly unauthorized = false
+  ) {
+    super(message);
+  }
+}
 
 async function signedFetch(
   signer: Signer,
@@ -56,6 +63,11 @@ export function withNodeModeError<T extends { role: string; content: unknown }>(
       "Could not reach the node. Check it is running, or turn off node mode in Settings to pay from your wallet."
     );
   }
+  if (/does not offer model/i.test(message.content)) {
+    return say(
+      "The node does not offer this model. Pick one of the node's models from the selector."
+    );
+  }
   return message;
 }
 
@@ -71,7 +83,8 @@ export async function connectRemoteNode(
   });
   if (listed.status === 403) {
     throw new RemoteNodeError(
-      "This node has not authorized your npub yet. Ask its operator to add it, then try again."
+      "This node has not authorized your npub yet. Ask its operator to add it, then try again.",
+      true
     );
   }
   if (!listed.ok) {
