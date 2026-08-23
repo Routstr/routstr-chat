@@ -1,51 +1,42 @@
-import { useRef, useEffect, useState, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   ChevronDown,
   ChevronRight,
-  Loader2,
   Search,
-  Settings,
   Star,
   Info,
-  Image as ImageIcon,
-  Type,
-  Mic,
-  Video,
-  Copy,
   Check,
-  Globe,
-  Bitcoin,
-  Lock,
 } from "lucide-react";
-import type { ReactNode } from "react";
 import { Model } from "@/types/models";
-import {
-  getModelNameWithoutProvider,
-  getProviderFromModelName,
-} from "@/utils/modelUtils";
+import { getModelNameWithoutProvider } from "@/utils/modelUtils";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
-import { loadModelProviderMap } from "@/utils/storageUtils";
+import { loadModelProviderMap, loadLastUsedModel } from "@/utils/storageUtils";
 import { useDisabledProviders } from "@/hooks/useDisabledProviders";
+import {
+  useModelPricing,
+  formatProviderLabel,
+} from "./model-selector/useModelPricing";
+import {
+  useModelFilters,
+  rowKeyOf,
+  rowPinnedBase,
+  findRowPricingEntry,
+  dynamicBaseFor,
+  MODEL_RENDER_INCREMENT,
+  type ModelRowEntry,
+} from "./model-selector/useModelFilters";
+import { normalizeModality } from "./model-selector/modality";
+import { PriceMeter } from "./model-selector/display";
+import ModelDetailsPane from "./model-selector/ModelDetailsPane";
+import FilterToolbar, { CompanyRail } from "./model-selector/FilterToolbar";
 import {
   parseModelKey,
   normalizeBaseUrl,
-  getCachedProviderModels,
   getRequiredSatsForModel,
   isModelAvailable,
 } from "@/utils/modelUtils";
-import { webSearchModels } from "@/lib/preconfiguredModels";
-import { discoveryAdapter, store } from "@/sdk/sharedStore";
-import { ProviderManager } from "@routstr/sdk/client";
 import { getPendingCashuTokenAmount } from "@/utils/cashuUtils";
-
-// Module-level ProviderManager singleton. Shares the same SDK store as the
-// app's RoutstrClient instances, so cooldown / failure state stays consistent
-// across the UI and live requests. Constructed once (cheap) and hydrated from
-// the store. Used by the provider cost-comparison panel so we read from the
-// SDK's canonical cache (IndexedDB) instead of the legacy localStorage
-// `modelsFromAllProviders` mirror.
-const providerManager = new ProviderManager(discoveryAdapter, store);
 
 interface ModelSelectorProps {
   selectedModel: Model | null;
@@ -54,6 +45,7 @@ interface ModelSelectorProps {
   isAuthenticated: boolean;
   setIsLoginModalOpen: (isOpen: boolean) => void;
   isWalletLoading: boolean;
+  isLoadingModels: boolean;
   filteredModels: Model[];
   handleModelChange: (modelId: string, configuredKeyOverride?: string) => void;
   balance: number;
@@ -61,8 +53,46 @@ interface ModelSelectorProps {
   openModelsConfig?: () => void;
   toggleConfiguredModel: (modelId: string) => void;
   setModelProviderFor?: (modelId: string, baseUrl: string) => void;
-  baseUrl?: string;
   lowBalanceWarningForModel: boolean;
+}
+
+
+// Self-observing infinite-scroll sentinel. The list is rendered twice (mobile
+// and desktop views), so each copy must watch its own element; a shared ref
+// would only track the last-rendered one. Re-arms on hiddenCount so it keeps
+// loading when it is still in view after a batch renders.
+function LoadMoreSentinel({
+  hiddenCount,
+  onLoadMore,
+}: {
+  hiddenCount: number;
+  onLoadMore: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const sentinel = ref.current;
+    if (!sentinel || hiddenCount <= 0) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          onLoadMore();
+        }
+      },
+      { rootMargin: "240px" }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hiddenCount, onLoadMore]);
+
+  return (
+    <div
+      ref={ref}
+      className="flex h-10 items-center justify-center text-[11px] font-medium text-muted-foreground/50"
+      aria-hidden="true"
+    >
+      Loading more...
+    </div>
+  );
 }
 
 export default function ModelSelector({
@@ -72,42 +102,61 @@ export default function ModelSelector({
   isAuthenticated,
   setIsLoginModalOpen,
   isWalletLoading,
-  filteredModels: dedupedModels,
+  isLoadingModels,
+  filteredModels: dedupedModelsRaw,
   handleModelChange,
   balance,
   configuredModels,
   openModelsConfig,
   toggleConfiguredModel,
   setModelProviderFor,
-  baseUrl,
   lowBalanceWarningForModel,
 }: ModelSelectorProps) {
+  // Providers list models this app cannot drive: embeddings return vectors and
+  // fail in /chat/completions, and the composer only ever sends text.
+  const dedupedModels = useMemo(
+    () =>
+      dedupedModelsRaw.filter((model) => {
+        // Raw compare, NOT normalizeModality: that maps unknowns to "text",
+        // which would let "embeddings" back in.
+        const outputs = model.architecture?.output_modalities;
+        const canAnswer =
+          !outputs?.length ||
+          outputs
+            .map((o) => String(o ?? "").toLowerCase())
+            .some((o) => o === "text" || o === "image");
+        if (!canAnswer) return false;
+
+        const inputs = model.architecture?.input_modalities;
+        return (
+          !inputs?.length || inputs.map(normalizeModality).some((i) => i === "text")
+        );
+      }),
+    [dedupedModelsRaw]
+  );
+
   const modelDrawerRef = useRef<HTMLDivElement>(null);
   const toggleButtonRef = useRef<HTMLButtonElement>(null);
-  const [searchQuery, setSearchQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
   // Disabled providers come from the SDK store (single source of truth used
   // for routing), not a separate localStorage list.
   const { disabledProviders } = useDisabledProviders();
-  const [hoveredModelId, setHoveredModelId] = useState<string | null>(null);
+  // By ROW, not model: sibling favorite rows must highlight independently.
+  const [hoveredRowKey, setHoveredRowKey] = useState<string | null>(null);
   const isMobile = useMediaQuery("(max-width: 768px)");
   const [activeView, setActiveView] = useState<"list" | "details">("list");
   const [isTransitioning, setIsTransitioning] = useState(false);
-  const [detailsModel, setDetailsModel] = useState<Model | null>(null);
+  // A ROW, not a model plus a loose base url: those two could drift, and the
+  // pane would describe a provider the row never used.
+  const [detailsRow, setDetailsRow] = useState<ModelRowEntry | null>(null);
   const [modelProviderMap, setModelProviderMap] = useState<
     Record<string, string>
   >({});
-  const [providerModelCache] = useState<Record<string, Record<string, Model>>>(
-    {}
-  );
-  const [detailsBaseUrl, setDetailsBaseUrl] = useState<string | null>(null);
-  const [pairFilters, setPairFilters] = useState<Set<string>>(new Set());
-  const [webSearchFilter, setWebSearchFilter] = useState<boolean>(false);
-  const [privateFilter, setPrivateFilter] = useState<boolean>(false);
   const [copiedModelId, setCopiedModelId] = useState<string | null>(null);
   // Drawer open/close animation state
   const [isDrawerVisible, setIsDrawerVisible] = useState(false);
   const [isDrawerAnimating, setIsDrawerAnimating] = useState(false);
+  const effectiveBalance = balance + getPendingCashuTokenAmount();
 
   useEffect(() => {
     try {
@@ -127,252 +176,171 @@ export default function ModelSelector({
     }
   }, [dedupedModels]);
 
-  // Current model helpers for top-of-list section
+  // Read the persisted key billing uses, so the Current row cannot drift from
+  // what send bills.
   const currentConfiguredKeyMemo: string | undefined = useMemo(() => {
     if (!selectedModel) return undefined;
-    const preferred = configuredModels.find((k) =>
-      k.startsWith(`${selectedModel.id}@@`)
+    const persisted = loadLastUsedModel();
+    if (persisted && parseModelKey(persisted).id === selectedModel.id) {
+      return persisted;
+    }
+    // Fallback: resolve against the active provider, not the first key.
+    const keys = configuredModels.filter(
+      (key) => parseModelKey(key).id === selectedModel.id
     );
-    if (preferred) return preferred;
-    const anyKey = configuredModels.find((k) => k === selectedModel.id);
-    return anyKey;
-  }, [configuredModels, selectedModel]);
+    if (keys.length === 0) return undefined;
+    const activeBase = normalizeBaseUrl(modelProviderMap[selectedModel.id]);
+    const exact = activeBase
+      ? keys.find(
+          (key) => normalizeBaseUrl(parseModelKey(key).base) === activeBase
+        )
+      : undefined;
+    // No keys[0] last resort: if the chat is on a provider the model is not
+    // favorited on, no favorite row is current. Claiming one would hide it.
+    return exact ?? keys.find((key) => key === selectedModel.id);
+  }, [configuredModels, selectedModel, modelProviderMap]);
 
-  // Determine the currently selected provider base from active API baseUrl when available
   const currentSelectedBaseUrl: string | null = useMemo(() => {
-    const normFromApi = normalizeBaseUrl(baseUrl);
-    if (normFromApi) return normFromApi;
-    // Fallback to base encoded in the configured key
+    // The base encoded in the configured key, else the cheapest mapping.
     if (currentConfiguredKeyMemo && currentConfiguredKeyMemo.includes("@@")) {
       const parsed = parseModelKey(currentConfiguredKeyMemo);
       return normalizeBaseUrl(parsed.base);
     }
-    // Final fallback to best-priced mapping
     if (selectedModel) {
       return normalizeBaseUrl(modelProviderMap[selectedModel.id]);
     }
     return null;
-  }, [baseUrl, currentConfiguredKeyMemo, selectedModel, modelProviderMap]);
+  }, [currentConfiguredKeyMemo, selectedModel, modelProviderMap]);
 
-  // Normalize provider modality strings to canonical categories used for icons/filters
-  const normalizeModality = (
-    value: unknown
-  ): "text" | "image" | "audio" | "video" => {
-    const k = String(value ?? "").toLowerCase();
-    if (
-      k === "image" ||
-      k === "images" ||
-      k === "img" ||
-      k === "vision" ||
-      k === "picture" ||
-      k === "photo"
-    )
-      return "image";
-    if (k === "audio" || k === "sound" || k === "speech" || k === "voice")
-      return "audio";
-    if (k === "video" || k === "videos") return "video";
-    // Treat unknowns (e.g., "file", "document", "json") as text for display purposes
-    return "text";
-  };
-
-  // Collect available input->output pairs dynamically from real model data
-  const availablePairs: readonly {
-    key: string;
-    input: string;
-    output: string;
-  }[] = useMemo(() => {
-    const found = new Map<
-      string,
-      { key: string; input: string; output: string }
-    >();
-    for (const m of dedupedModels) {
-      try {
-        const inputs = new Set(
-          (m.architecture?.input_modalities ?? ["text"]).map(normalizeModality)
-        );
-        const outputs = new Set(
-          (m.architecture?.output_modalities ?? ["text"]).map(normalizeModality)
-        );
-        for (const i of inputs) {
-          for (const o of outputs) {
-            const key = `${i}->${o}`;
-            if (!found.has(key)) found.set(key, { key, input: i, output: o });
-          }
-        }
-      } catch {}
-    }
-    return Array.from(found.values()).sort((a, b) =>
-      a.key.localeCompare(b.key)
-    );
-  }, [dedupedModels]);
-
-  // Normalize a string for fuzzy matching by stripping non-alphanumeric chars
-  const normalizeForSearch = (s: string) =>
-    s.toLowerCase().replace(/[^a-z0-9]/g, "");
-
-  // Filter models based on search query, selected input->output pair filters, and web search filter
-  const filteredModels = dedupedModels.filter((model) => {
-    const normalizedQuery = normalizeForSearch(searchQuery);
-    const modelName = getModelNameWithoutProvider(model.name);
-    // Match if the normalized (stripped) name contains the normalized query,
-    // or if the raw name contains the raw query (for exact substring matches)
-    const matchesSearch =
-      normalizeForSearch(modelName).includes(normalizedQuery) ||
-      modelName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      normalizeForSearch(model.id).includes(normalizedQuery);
-    if (!matchesSearch) return false;
-
-    // Apply web search filter
-    if (webSearchFilter && !webSearchModels.includes(model.id)) {
-      return false;
-    }
-
-    // Apply private (E2EE) filter
-    if (privateFilter && !model.id.startsWith("tinfoil")) {
-      return false;
-    }
-
-    if (pairFilters.size === 0) return true;
-    const inputs = new Set(
-      (model.architecture?.input_modalities ?? ["text"]).map(normalizeModality)
-    );
-    const outputs = new Set(
-      (model.architecture?.output_modalities ?? ["text"]).map(normalizeModality)
-    );
-    for (const i of inputs) {
-      for (const o of outputs) {
-        const key = `${i}->${o}`;
-        if (pairFilters.has(key)) return true;
-      }
-    }
-    return false;
+  const {
+    getProviderPricingEntries,
+    getCachedModelFor,
+    providerOptions,
+    getPricingIndex,
+  } = useModelPricing({
+    models: dedupedModels,
+    disabledProviders,
+    modelProviderMap,
+    configuredModels,
+    selectedModel,
   });
 
-  // Determine which model's details to show in the right pane
-  const previewModel: Model | null = useMemo(() => {
-    const fromHover = filteredModels.find((m) => m.id === hoveredModelId);
-    if (fromHover) return fromHover;
-    if (selectedModel && filteredModels.some((m) => m.id === selectedModel.id))
-      return selectedModel as Model;
-    return filteredModels[0] ?? null;
-  }, [filteredModels, hoveredModelId, selectedModel]);
+  // Kept as one object so the whole filter surface reaches FilterToolbar as a
+  // single prop instead of twenty forwarded ones.
+  const filters = useModelFilters({
+    models: dedupedModels,
+    selectedModel,
+    currentConfiguredKey: currentConfiguredKeyMemo,
+    configuredModels,
+    effectiveBalance,
+    providerOptions,
+    getProviderPricingEntries,
+  });
 
-  // Display helpers: convert sats/token -> sats/1M tokens
-  const computeSatsPer1M = (satsPerToken?: number): number | null => {
-    if (
-      typeof satsPerToken !== "number" ||
-      !isFinite(satsPerToken) ||
-      satsPerToken <= 0
-    )
-      return null;
-    return satsPerToken * 1_000_000;
+  const {
+    setSearchQuery,
+    deferredSearchQuery,
+    selectedCompany,
+    setSelectedCompany,
+    selectedProvider,
+    setSelectedProvider,
+    webSearchFilter,
+    setWebSearchFilter,
+    privateFilter,
+    setPrivateFilter,
+    imageFilter,
+    setImageFilter,
+    availableOnly,
+    setAvailableOnly,
+    allModelEntries,
+    visibleAllModelEntries,
+    hiddenModelCount,
+    handleLoadMore,
+    companyFilters,
+    activeCompanyFilterLabel,
+    hasActiveModelFilters,
+    isConfiguredModel,
+  } = filters;
+
+  const selectCompany = (companyId: string) => {
+    setSelectedCompany(companyId);
+    setHoveredRowKey(null);
   };
 
-  const formatSatsPer1M = (satsPerToken?: number): string => {
-    const value = computeSatsPer1M(satsPerToken);
-    if (value === null) return "—";
-    if (value >= 100)
-      return `${Math.round(value).toLocaleString()} sat/1M tokens`;
-    return `${value.toFixed(2)} sat/1M tokens`;
-  };
-
-  // Percentile-based log prices for normalization (excludes extreme outliers)
-  const pricingBounds = useMemo(() => {
-    const prices = dedupedModels
-      .map((m) => m.sats_pricing?.completion)
-      .filter(
-        (p): p is number => typeof p === "number" && p > 0 && isFinite(p)
-      );
-
-    if (prices.length === 0) return { minLog: 0, maxLog: 4 };
-
-    // Sort prices and use 5th/95th percentiles to exclude extreme outliers
-    const sorted = [...prices].sort((a, b) => a - b);
-    const p5Index = Math.floor(sorted.length * 0.05);
-    const p95Index = Math.min(
-      sorted.length - 1,
-      Math.floor(sorted.length * 0.95)
+  // Which ROW the right pane describes. Keyed off the hovered row so a favorite
+  // pinned to provider A previews A, not the model's default provider.
+  const previewRow: ModelRowEntry | null = useMemo(() => {
+    const fromHover = allModelEntries.find(
+      (entry) => rowKeyOf(entry) === hoveredRowKey
     );
-    const p5 = sorted[p5Index];
-    const p95 = sorted[p95Index];
+    if (fromHover) return fromHover;
+    if (selectedModel) {
+      return {
+        model: selectedModel as Model,
+        configuredKey: currentConfiguredKeyMemo,
+      };
+    }
+    return allModelEntries[0] ?? null;
+  }, [
+    allModelEntries,
+    hoveredRowKey,
+    selectedModel,
+    currentConfiguredKeyMemo,
+  ]);
+
+  // A row is a (model, provider) pair. The ONLY provider resolver: rows, the
+  // details pane and keyboard selection all use it, so they cannot disagree.
+  const resolveRow = (row: ModelRowEntry) => {
+    const { model } = row;
+    const pinnedBase = rowPinnedBase(row);
+    const pricingEntries = getProviderPricingEntries(model.id);
+    // The Current row keeps the provider it was routed to; the filter only
+    // re-interprets the selectable list.
+    const isCurrentRow =
+      selectedModel?.id === model.id &&
+      row.configuredKey === currentConfiguredKeyMemo;
+    const dynamicBase =
+      isCurrentRow && !pinnedBase && currentSelectedBaseUrl
+        ? currentSelectedBaseUrl
+        : dynamicBaseFor(selectedProvider);
+    const entry = findRowPricingEntry(row, pricingEntries, dynamicBase);
+
+    // A pinned row prices from its own provider or shows unavailable, never
+    // borrowing another provider's number; dynamic rows fall back to the model.
+    const priceSource = pinnedBase
+      ? entry?.model ?? getCachedModelFor(pinnedBase, model.id) ?? null
+      : entry?.model ?? model;
+    const isRoutable = pinnedBase ? !!entry : true;
 
     return {
-      minLog: Math.log10(p5),
-      maxLog: Math.log10(p95),
+      fixedBase: pinnedBase,
+      baseForPricing: pinnedBase ?? entry?.baseUrl ?? null,
+      pricingEntries,
+      priceSource,
+      isRoutable,
+      isAvailable:
+        isRoutable && !!priceSource && isModelAvailable(priceSource, effectiveBalance),
     };
-  }, [dedupedModels]);
-
-  // Normalized pricing index: 1 = cheapest, 5 = most expensive
-  const getPricingIndex = (satsPrice?: number): number | null => {
-    if (
-      typeof satsPrice !== "number" ||
-      satsPrice <= 0 ||
-      !isFinite(satsPrice)
-    ) {
-      return null;
-    }
-
-    const { minLog, maxLog } = pricingBounds;
-    const range = maxLog - minLog;
-    if (range <= 0) return 3; // All models same price
-
-    // Normalize to 1-5 scale (min price -> 1, max price -> 5)
-    const normalized = 1 + ((Math.log10(satsPrice) - minLog) / range) * 4;
-    return Math.round(Math.min(5, Math.max(1, normalized)) * 10) / 10;
   };
 
-  const formatProviderLabel = (
-    baseUrl: string | null | undefined,
-    model: Model
-  ): string => {
-    try {
-      if (baseUrl) {
-        const url = new URL(normalizeBaseUrl(baseUrl) || "");
-        return url.host;
-      }
-    } catch {}
-    return getProviderFromModelName(model.name);
-  };
-
-  const getProviderPricingEntries = (modelId: string) => {
-    // Delegate to the SDK's ProviderManager, which reads from the canonical
-    // IndexedDB-backed discovery cache (not the legacy localStorage mirror),
-    // filters disabled + on-cooldown providers, and sorts by total
-    // prompt+completion cost per 1M tokens (cheapest first).
-    const ranking = providerManager.getProviderPriceRankingForModel(modelId);
-    const entriesMap = new Map<
-      string,
-      {
-        baseUrl: string;
-        providerLabel: string;
-        promptCost: number | null;
-        completionCost: number | null;
-        model: Model;
-      }
-    >();
-
-    for (const item of ranking) {
-      const normalized = normalizeBaseUrl(item.baseUrl);
-      if (!normalized) continue;
-      // SDK returns sats-per-1M; convert back to sats-per-token so the
-      // existing formatSatsPer1M() formatter (which multiplies by 1M) and
-      // percentDelta comparisons keep working unchanged.
-      const promptCost = item.promptPerMillion / 1_000_000;
-      const completionCost = item.completionPerMillion / 1_000_000;
-      entriesMap.set(normalized, {
-        baseUrl: normalized,
-        providerLabel: formatProviderLabel(normalized, item.model as unknown as Model),
-        promptCost,
-        completionCost,
-        // SDK Model has optional fields where the local Model type requires
-        // them; provider-discovery payloads are fully populated at runtime.
-        model: item.model as unknown as Model,
-      });
+  const selectRow = (row: ModelRowEntry) => {
+    const { fixedBase, baseForPricing, isAvailable } = resolveRow(row);
+    if (!isAvailable) return;
+    if (fixedBase && setModelProviderFor) {
+      setModelProviderFor(row.model.id, fixedBase);
     }
-
-    // SDK ranking is already sorted cheapest-first (by totalPerMillion);
-    // Map preserves insertion order so we keep that ordering.
-    return Array.from(entriesMap.values());
+    // If the row CLAIMS a provider (pinned, or filtered to one) select that
+    // exact provider, so the request bills the one the user saw. Keying off
+    // configuredKey instead would miss a plain-key favorite under a filter: it
+    // has a key but no provider, and would silently route to the cheapest.
+    // An unfiltered row claims nothing and stays dynamic, keeping SDK failover.
+    const claimsProvider = !!fixedBase || selectedProvider !== "all";
+    const selectedKey =
+      claimsProvider && baseForPricing
+        ? `${row.model.id}@@${baseForPricing}`
+        : row.configuredKey;
+    handleModelChange(row.model.id, selectedKey);
+    setIsModelDrawerOpen(false);
   };
 
   const selectProviderForModel = (model: Model, baseUrl: string) => {
@@ -380,32 +348,13 @@ export default function ModelSelector({
     if (!normalized) return;
     setModelProviderMap((prev) => ({ ...prev, [model.id]: normalized }));
     setModelProviderFor?.(model.id, normalized);
-    setDetailsBaseUrl(normalized);
+    // Repoint the pane at the provider just picked.
+    setDetailsRow({ model, configuredKey: `${model.id}@@${normalized}` });
     handleModelChange(model.id, `${model.id}@@${normalized}`);
   };
 
-  // Treat a model as configured if any configured key matches its id or `${id}@@...`
-  const isConfiguredModel = (modelId: string) => {
-    return configuredModels.some(
-      (key) => key === modelId || key.startsWith(`${modelId}@@`)
-    );
-  };
-
-  // Split into configured and all (remaining) models
-  const configuredModelsList = filteredModels.filter((model) =>
-    isConfiguredModel(model.id)
-  );
-  const remainingModelsList = filteredModels.filter(
-    (model) => !isConfiguredModel(model.id)
-  );
-  const recommendedModels = discoveryAdapter.getRoutstr21Models();
-  const recommendedModelsList = recommendedModels
-    .map((modelId) => filteredModels.find((model) => model.id === modelId))
-    .filter((model): model is Model => model !== undefined);
-
   // Calculate unique models and providers for display (excluding disabled providers)
   const { uniqueModelCount, uniqueProviderCount } = useMemo(() => {
-    const disabledProvidersSet = new Set(disabledProviders);
     const uniqueProviders = new Set<string>();
     const enabledModels = new Set<string>();
 
@@ -414,7 +363,7 @@ export default function ModelSelector({
       if (baseUrl) {
         const normalized = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
         // Only count if not disabled
-        if (!disabledProvidersSet.has(normalized)) {
+        if (!disabledProviders.includes(normalized)) {
           uniqueProviders.add(normalized);
           enabledModels.add(model.id);
         }
@@ -427,51 +376,38 @@ export default function ModelSelector({
     };
   }, [dedupedModels, modelProviderMap, disabledProviders]);
 
-  // Build favorites entries with provider labels from configured keys
-  const favoriteEntries = useMemo(() => {
-    return configuredModels
-      .map((key) => {
-        const { id, base } = parseModelKey(key);
-        let model = filteredModels.find((m) => m.id === id);
-        if (!model && base) {
-          try {
-            const cached = getCachedProviderModels(base);
-            if (cached) {
-              model = cached.find((m) => m.id === id);
-            }
-          } catch {}
-        }
-        if (!model) return null;
-        const mappedBase =
-          base || modelProviderMap[key] || modelProviderMap[id];
-        const providerLabel = formatProviderLabel(mappedBase, model);
-        return { key, model, providerLabel } as {
-          key: string;
-          model: Model;
-          providerLabel: string;
-        };
-      })
-      .filter(
-        (e): e is { key: string; model: Model; providerLabel: string } => !!e
-      );
-  }, [configuredModels, filteredModels, modelProviderMap]);
+  // Keyboard navigation over the visible list (from the search input)
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  // allModelEntries folds in every filter/sort input, so this covers them all
+  useEffect(() => {
+    setHighlightedIndex(-1);
+  }, [allModelEntries]);
 
-  // Current model helpers for top-of-list section (alias to memoized key)
-  const currentConfiguredKey: string | undefined = currentConfiguredKeyMemo;
+  // Reset list scroll on an explicit filter change (not on the list itself, so
+  // a background cache refresh does not yank scroll mid-browse).
+  useEffect(() => {
+    modelDrawerRef.current
+      ?.querySelectorAll(".model-selector-list")
+      .forEach((el) => {
+        (el as HTMLElement).scrollTop = 0;
+      });
+  }, [
+    selectedCompany,
+    selectedProvider,
+    filters.sortMode,
+    filters.sortDirection,
+    deferredSearchQuery,
+    availableOnly,
+    imageFilter,
+    privateFilter,
+    webSearchFilter,
+  ]);
 
-  const currentProviderLabel: string | undefined = useMemo(() => {
-    if (!selectedModel) return undefined;
-    let base: string | null = null;
-    if (currentConfiguredKey) {
-      const parsed = parseModelKey(currentConfiguredKey);
-      base = parsed.base;
-    }
-    const mappedBase =
-      base ||
-      modelProviderMap[currentConfiguredKey || ""] ||
-      modelProviderMap[selectedModel.id];
-    return formatProviderLabel(mappedBase, selectedModel);
-  }, [selectedModel, currentConfiguredKey, modelProviderMap]);
+  // Model id only: a provider pick in the pane must not reset its scroll.
+  useEffect(() => {
+    const pane = modelDrawerRef.current?.querySelector(".model-details-scroll");
+    if (pane) (pane as HTMLElement).scrollTop = 0;
+  }, [previewRow?.model.id, selectedProvider]);
 
   // Focus search input when drawer opens
   useEffect(() => {
@@ -488,7 +424,7 @@ export default function ModelSelector({
   useEffect(() => {
     if (isModelDrawerOpen) {
       setActiveView("list");
-      setDetailsModel(null);
+      setDetailsRow(null);
       setIsTransitioning(false);
     }
   }, [isModelDrawerOpen]);
@@ -509,7 +445,15 @@ export default function ModelSelector({
       const target = event.target as Node;
       const clickedInsideDrawer = modelDrawerRef.current?.contains(target);
       const clickedToggle = toggleButtonRef.current?.contains(target);
-      if (!clickedInsideDrawer && !clickedToggle) setIsModelDrawerOpen(false);
+      // Radix portals popover content to body, so it is outside modelDrawerRef
+      const targetElement =
+        target instanceof Element ? target : target.parentElement;
+      const clickedInsidePopover = !!targetElement?.closest(
+        '[data-slot="popover-content"]'
+      );
+      if (!clickedInsideDrawer && !clickedToggle && !clickedInsidePopover) {
+        setIsModelDrawerOpen(false);
+      }
     };
 
     if (isModelDrawerOpen) {
@@ -544,6 +488,27 @@ export default function ModelSelector({
     // Prevent propagation to avoid closing the drawer
     e.stopPropagation();
 
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      const lastIndex = visibleAllModelEntries.length - 1;
+      if (lastIndex < 0) return;
+      setHighlightedIndex((index) =>
+        e.key === "ArrowDown"
+          ? Math.min(index + 1, lastIndex)
+          : Math.max(index - 1, 0)
+      );
+      return;
+    }
+
+    if (e.key === "Enter") {
+      const entry = visibleAllModelEntries[highlightedIndex];
+      // Same path as a click: resolveRow decides affordability from the row's
+      // own provider, and a pinned favorite gets its provider persisted.
+      if (entry) selectRow(entry);
+      e.preventDefault();
+      return;
+    }
+
     // Handle escape key to clear search
     if (e.key === "Escape") {
       setSearchQuery("");
@@ -551,261 +516,134 @@ export default function ModelSelector({
     }
   };
 
-  // Quick filter badges for input->output pairs (from real data)
-  const modalityIconFor = (key: string): ReactNode => {
-    switch (key) {
-      case "text":
-        return <Type className="h-3.5 w-3.5" />;
-      case "image":
-        return <ImageIcon className="h-3.5 w-3.5" />;
-      case "audio":
-        return <Mic className="h-3.5 w-3.5" />;
-      case "video":
-        return <Video className="h-3.5 w-3.5" />;
-      default:
-        return <Type className="h-3.5 w-3.5" />;
-    }
-  };
+  // Keep the keyboard-highlighted row in view
+  useEffect(() => {
+    if (highlightedIndex < 0) return;
+    // The list is rendered twice (mobile + desktop); the hidden copy has no
+    // offsetParent, so scroll the one that is actually visible.
+    const rows = modelDrawerRef.current?.querySelectorAll(
+      `[data-model-row="${highlightedIndex}"]`
+    );
+    rows &&
+      Array.from(rows)
+        .find((el) => (el as HTMLElement).offsetParent !== null)
+        ?.scrollIntoView({ block: "nearest" });
+  }, [highlightedIndex]);
 
-  const quickPairOptions: {
-    key: string;
-    input: string;
-    output: string;
-    label: string;
-    left: ReactNode;
-    right: ReactNode;
-  }[] = useMemo(() => {
-    return availablePairs.map((p) => ({
-      key: p.key,
-      input: p.input,
-      output: p.output,
-      label: `${p.input.charAt(0).toUpperCase() + p.input.slice(1)} → ${
-        p.output.charAt(0).toUpperCase() + p.output.slice(1)
-      }`,
-      left: modalityIconFor(p.input),
-      right: modalityIconFor(p.output),
-    }));
-  }, [availablePairs]);
-
-  const togglePairFilter = (key: string) => {
-    setPairFilters((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  };
-
-  const renderQuickFilters = () => (
-    <div className="mt-2 -mx-2 px-2">
-      <div className="flex gap-1.5 flex-wrap overflow-x-hidden pb-1 pr-2">
-        {/* Web Search Filter */}
-        <button
-          onClick={() => setWebSearchFilter(!webSearchFilter)}
-          className={`shrink-0 h-6 inline-flex items-center gap-1 px-2 rounded-full text-[11px] border transition-colors cursor-pointer ${
-            webSearchFilter
-              ? "bg-primary/20 border-primary/30 text-foreground"
-              : "bg-muted/50 border-border text-muted-foreground hover:bg-muted"
-          }`}
-          title="Filter web search models"
-          type="button"
-          aria-pressed={webSearchFilter}
-        >
-          <Globe className="h-3.5 w-3.5" />
-          <span>Web Search</span>
-        </button>
-
-        {/* Private (E2EE) Filter */}
-        <button
-          onClick={() => setPrivateFilter(!privateFilter)}
-          className={`shrink-0 h-6 inline-flex items-center gap-1 px-2 rounded-full text-[11px] border transition-colors cursor-pointer ${
-            privateFilter
-              ? "bg-primary/20 border-primary/30 text-foreground"
-              : "bg-muted/50 border-border text-muted-foreground hover:bg-muted"
-          }`}
-          title="Filter private (end-to-end encrypted) models"
-          type="button"
-          aria-pressed={privateFilter}
-        >
-          <Lock className="h-3.5 w-3.5" />
-          <span>Private (E2EE)</span>
-        </button>
-
-        {quickPairOptions.map((opt) => {
-          const isActive = pairFilters.has(opt.key);
-          return (
-            <button
-              key={opt.key}
-              onClick={() => togglePairFilter(opt.key)}
-              className={`shrink-0 h-6 inline-flex items-center gap-1 px-2 rounded-full text-[11px] border transition-colors cursor-pointer ${
-                isActive
-                  ? "bg-primary/20 border-primary/30 text-foreground"
-                  : "bg-muted/50 border-border text-muted-foreground hover:bg-muted"
-              }`}
-              title={`Filter by ${opt.label.toLowerCase()}`}
-              type="button"
-              aria-pressed={isActive}
-            >
-              <span className="inline-flex items-center gap-1">
-                {opt.left}
-                <span>→</span>
-                {opt.right}
-              </span>
-              {/* icons only */}
-            </button>
-          );
-        })}
-        {(pairFilters.size > 0 || webSearchFilter || privateFilter) && (
-          <button
-            onClick={() => {
-              setPairFilters(new Set());
-              setWebSearchFilter(false);
-              setPrivateFilter(false);
-            }}
-            className="shrink-0 h-6 text-[11px] px-2 rounded-full bg-transparent text-muted-foreground hover:text-foreground hover:bg-muted border border-border cursor-pointer"
-            title="Clear filters"
-            type="button"
-          >
-            Clear
-          </button>
-        )}
-      </div>
-    </div>
-  );
-
-  // Shared search bar component
-  const renderSearchBar = () => (
-    <div className="sticky top-0 p-2 bg-card backdrop-blur-sm border-b border-border">
-      <div className="relative">
-        <div className="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
-          <Search className="h-3.5 w-3.5 text-muted-foreground" />
-        </div>
-        <input
-          ref={searchInputRef}
-          type="text"
-          placeholder="Search models..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          onKeyDown={handleSearchKeyDown}
-          className="w-full bg-muted/50 border border-border rounded-md py-1 pl-8 pr-10 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-        />
-        <div className="absolute inset-y-0 right-0 pr-2 flex items-center gap-2">
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery("")}
-              className="flex items-center text-muted-foreground hover:text-foreground"
-              title="Clear"
-              type="button"
-            >
-              <span className="text-xs">×</span>
-            </button>
-          )}
-          {openModelsConfig && (
-            <button
-              onClick={() => openModelsConfig()}
-              className="text-muted-foreground hover:text-foreground"
-              title="Configure models"
-              type="button"
-            >
-              <Settings className="h-3.5 w-3.5" />
-            </button>
-          )}
-        </div>
-      </div>
-      {renderQuickFilters()}
-    </div>
-  );
-
-  // Shared loading state component
   const renderLoadingState = () => (
-    <div className="flex justify-center items-center py-4">
-      <Loader2 className="h-5 w-5 text-muted-foreground animate-spin" />
+    <div className="space-y-1 p-2" aria-busy="true" aria-label="Loading models">
+      {[72, 58, 66, 48, 62, 54].map((width, index) => (
+        <div
+          key={index}
+          className="flex animate-pulse items-center gap-3 rounded-xl border border-border/25 bg-card/20 p-3"
+          style={{ animationDelay: `${index * 90}ms` }}
+        >
+          <div className="h-3.5 w-3.5 shrink-0 rounded bg-muted/60" />
+          <div className="min-w-0 flex-1 space-y-2">
+            <div className="h-3 rounded bg-muted/60" style={{ width: `${width}%` }} />
+            <div className="h-2.5 rounded bg-muted/40" style={{ width: `${width / 2}%` }} />
+          </div>
+          <div className="h-5 w-14 shrink-0 rounded-full bg-muted/40" />
+        </div>
+      ))}
     </div>
   );
 
-  // Shared model list sections
   const renderModelListSections = () => (
-    <div className="overflow-y-auto max-h-[60vh] pb-10">
-      {/* Current Model Section */}
+    <div className="model-selector-list slim-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-2 pb-10 [scrollbar-gutter:stable]">
       {selectedModel && (
         <div className="p-1">
-          <div className="px-2 py-1 text-xs font-medium text-muted-foreground">
+          <div className="px-2 py-2 text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground/70">
             Current
           </div>
           <div className="space-y-1">
-            {renderModelItem(
-              selectedModel,
-              isConfiguredModel(selectedModel.id),
-              currentProviderLabel,
-              currentConfiguredKey
-            )}
+            {renderModelItem({
+              model: selectedModel,
+              configuredKey: currentConfiguredKeyMemo,
+            })}
           </div>
         </div>
       )}
 
-      {/* Favorite Models Section */}
-      {favoriteEntries.length > 0 && (
-        <div className="p-1">
-          <div className="px-2 py-1 text-xs font-medium text-muted-foreground">
-            Favorites
-          </div>
-          <div className="space-y-1">
-            {favoriteEntries.map((entry) =>
-              renderModelItem(entry.model, true, entry.providerLabel, entry.key)
-            )}
-          </div>
-        </div>
+      {selectedModel && allModelEntries.length > 0 && (
+        <div className="my-2 border-t border-border/60" />
       )}
 
-      {/* Separator */}
-      {(!!selectedModel || favoriteEntries.length > 0) &&
-        remainingModelsList.length > 0 && (
-          <div className="border-t border-border my-1" />
-        )}
-
-      {/* Recommended Models Section */}
       <div className="p-1">
-        <div className="px-2 py-1 text-xs font-medium text-muted-foreground">
-          Recommended Models
-        </div>
-        {recommendedModelsList.length > 0 ? (
-          <div className="space-y-1">
-            {recommendedModelsList.map((model) =>
-              renderModelItem(model, false)
-            )}
+        <div className="flex items-center justify-between gap-3 px-2 py-2">
+          <div className="min-w-0 text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground/70">
+            {activeCompanyFilterLabel}
+            {selectedCompany === "all" &&
+              uniqueModelCount > 0 &&
+              uniqueProviderCount > 0 && (
+                <span className="ml-1 normal-case tracking-normal text-muted-foreground/60">
+                  {selectedProvider !== "all"
+                    ? `(${allModelEntries.length} on ${
+                        providerOptions.find(
+                          (provider) => provider.value === selectedProvider
+                        )?.label ?? "this provider"
+                      })`
+                    : hasActiveModelFilters || deferredSearchQuery
+                      ? `(${allModelEntries.length} of ${uniqueModelCount})`
+                      : `(${uniqueModelCount} models from ${uniqueProviderCount} providers)`}
+                </span>
+              )}
           </div>
-        ) : (
-          <div className="p-2 text-sm text-muted-foreground text-center">
-            No models found
-          </div>
-        )}
-      </div>
-
-      {/* Separator */}
-      {(!!selectedModel || favoriteEntries.length > 0) &&
-        remainingModelsList.length > 0 && (
-          <div className="border-t border-border my-1" />
-        )}
-
-      {/* All Models Section */}
-      <div className="p-1">
-        <div className="px-2 py-1 text-xs font-medium text-muted-foreground">
-          All Models{" "}
-          {uniqueModelCount > 0 && uniqueProviderCount > 0 && (
-            <span className="text-muted-foreground/70">
-              ({uniqueModelCount} models from {uniqueProviderCount} providers)
-            </span>
+          {deferredSearchQuery && (
+            <div className="shrink-0 text-[10px] font-semibold text-muted-foreground/60">
+              {allModelEntries.length} matches
+            </div>
           )}
         </div>
-        {remainingModelsList.length > 0 ? (
+
+        {allModelEntries.length > 0 ? (
           <div className="space-y-1">
-            {remainingModelsList
-              .filter((m) => m.id !== selectedModel?.id)
-              .map((model) => renderModelItem(model, false))}
+            {visibleAllModelEntries.map((entry, index) =>
+              renderModelItem(entry, index)
+            )}
+            {hiddenModelCount > 0 && (
+              <LoadMoreSentinel
+                hiddenCount={hiddenModelCount}
+                onLoadMore={handleLoadMore}
+              />
+            )}
           </div>
         ) : (
-          <div className="p-2 text-sm text-muted-foreground text-center">
-            No models found
+          <div className="rounded-xl border border-dashed border-border/50 bg-muted/10 px-4 py-5 text-center">
+            {selectedCompany === "favorites" && (
+              <Star className="mx-auto mb-2 h-5 w-5 text-muted-foreground/40" />
+            )}
+            <div className="text-xs font-medium text-muted-foreground/60">
+              {selectedCompany === "favorites"
+                ? "Star models to add them here"
+                : deferredSearchQuery
+                  ? `No models match "${deferredSearchQuery}"`
+                  : "No models match the current filters"}
+            </div>
+            {selectedCompany !== "favorites" &&
+              (deferredSearchQuery ||
+                imageFilter ||
+                webSearchFilter ||
+                privateFilter ||
+                availableOnly ||
+                selectedProvider !== "all" ||
+                selectedCompany !== "all") && (
+                <button
+                  onClick={() => {
+                    setSearchQuery("");
+                    setWebSearchFilter(false);
+                    setPrivateFilter(false);
+                    setImageFilter(false);
+                    setAvailableOnly(false);
+                    setSelectedProvider("all");
+                    setSelectedCompany("all");
+                  }}
+                  className="mt-3 inline-flex h-7 items-center rounded-full border border-border/60 bg-muted/30 px-3 text-[11px] font-semibold text-muted-foreground transition-colors cursor-pointer hover:bg-muted hover:text-foreground"
+                  type="button"
+                >
+                  Clear search & filters
+                </button>
+              )}
           </div>
         )}
       </div>
@@ -813,170 +651,176 @@ export default function ModelSelector({
   );
 
   // Render a model item
-  const renderModelItem = (
-    model: Model,
-    isFavorite: boolean = false,
-    providerLabel?: string,
-    configuredKeyOverride?: string
-  ) => {
-    // Resolve provider base for this item (fixed provider wins; otherwise use best-priced mapping)
-    const isFixedProvider =
-      !!configuredKeyOverride && configuredKeyOverride.includes("@@");
-    const fixedBaseRaw = isFixedProvider
-      ? parseModelKey(configuredKeyOverride!).base
-      : null;
-    const fixedBase = normalizeBaseUrl(fixedBaseRaw);
-    const mappedBase = normalizeBaseUrl(modelProviderMap[model.id]);
-    const baseForPricing = fixedBase || mappedBase;
-    const providerModels = baseForPricing
-      ? providerModelCache[baseForPricing]
-      : undefined;
-    const providerSpecificModel = providerModels
-      ? providerModels[model.id]
-      : undefined;
-    const effectiveModelForPricing = providerSpecificModel || model;
-    const isAvailable = isModelAvailable(
-      effectiveModelForPricing,
-      balance + getPendingCashuTokenAmount()
+  const renderModelItem = (row: ModelRowEntry, rowIndex?: number) => {
+    const { model, configuredKey: configuredKeyOverride } = row;
+    // The deduped `model` carries whichever provider's pricing survived dedupe,
+    // so pricing off it greys out models the user can actually afford.
+    const {
+      fixedBase,
+      baseForPricing,
+      pricingEntries,
+      priceSource,
+      isRoutable,
+      isAvailable,
+    } = resolveRow(row);
+    const rowKey = rowKeyOf(row);
+    const isFixedProvider = fixedBase !== null;
+    const providerCount = isFixedProvider ? 0 : pricingEntries.length;
+    const requiredMin = priceSource ? getRequiredSatsForModel(priceSource) : 0;
+    const favoriteKeysForModel = configuredModels.filter(
+      (key) => parseModelKey(key).id === model.id
     );
-    const requiredMin = getRequiredSatsForModel(effectiveModelForPricing);
-    const isFav = isFavorite || isConfiguredModel(model.id);
-    const effectiveProviderLabel =
-      providerLabel || formatProviderLabel(baseForPricing, model);
-    const isDynamicProvider = !isFixedProvider;
-    // Selection should be provider+model specific when provider is fixed
+    // A provider-claiming row stars the exact `${id}@@${base}` so stars on
+    // different providers stay independent; an unfiltered row stars by id.
+    const claimsProvider = !!configuredKeyOverride || selectedProvider !== "all";
+    const claimedKey =
+      configuredKeyOverride ??
+      (selectedProvider !== "all" && baseForPricing
+        ? `${model.id}@@${baseForPricing}`
+        : model.id);
+    const isFav = claimsProvider
+      ? configuredModels.includes(claimedKey)
+      : isConfiguredModel(model.id);
+    const effectiveProviderLabel = formatProviderLabel(
+      baseForPricing,
+      priceSource ?? model
+    );
+    // A filtered row shows one provider's price, so it is not "auto-cheapest".
+    const isDynamicProvider = !isFixedProvider && selectedProvider === "all";
+    // Selection is provider-specific only when the row pins a provider.
     const idMatches = selectedModel?.id === model.id;
-    const itemBaseForSelection = baseForPricing || null;
     const providerMatches = isFixedProvider
-      ? Boolean(
-          currentSelectedBaseUrl &&
-          itemBaseForSelection &&
-          currentSelectedBaseUrl === itemBaseForSelection
-        )
+      ? Boolean(currentSelectedBaseUrl && currentSelectedBaseUrl === baseForPricing)
       : true;
     const isSelectedItem = Boolean(idMatches && providerMatches);
     return (
       <div
-        key={`${configuredKeyOverride || model.id}`}
-        className={`p-2 text-sm rounded-md transition-colors ${
+        key={rowKey}
+        data-model-row={rowIndex}
+        style={
+          rowIndex !== undefined
+            ? { animationDelay: `${Math.min(rowIndex % MODEL_RENDER_INCREMENT, 12) * 18}ms` }
+            : undefined
+        }
+        className={`${
+          isAvailable ? "model-item-in " : ""
+        }group/model min-w-0 p-3 text-xs rounded-xl border transition-all duration-150 ${
           !isAvailable
-            ? "opacity-40 cursor-not-allowed"
+            ? "opacity-45 cursor-not-allowed border-border/20 bg-muted/10"
             : isSelectedItem
-              ? "bg-primary/10 ring-1 ring-primary/30 cursor-pointer"
-              : "hover:bg-muted/50 cursor-pointer"
+              ? "bg-primary/[0.08] border-primary/30 shadow-e1 cursor-pointer font-semibold"
+              : rowKey === hoveredRowKey
+                ? // Persistent cue for the row the details pane is describing;
+                  // plain :hover vanishes once the cursor moves to the pane.
+                  "bg-muted/60 border-border shadow-e1 cursor-pointer"
+                : "bg-card/25 hover:bg-muted/35 hover:border-border/70 hover:shadow-e1 border-border/35 cursor-pointer"
+        } ${
+          rowIndex !== undefined && rowIndex === highlightedIndex
+            ? "ring-2 ring-ring/40"
+            : ""
         }`}
-        onMouseEnter={() => setHoveredModelId(model.id)}
+        onMouseEnter={() => setHoveredRowKey(rowKey)}
       >
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 items-center gap-3">
           {/* Favorite toggle */}
           <button
             onClick={(e) => {
               e.stopPropagation();
-              toggleConfiguredModel(configuredKeyOverride || model.id);
+              if (isFav) {
+                // A provider-claiming row un-stars only its own key; an
+                // unfiltered all-models row drops every key the model has.
+                const keysToRemove = claimsProvider
+                  ? [claimedKey]
+                  : favoriteKeysForModel.length > 0
+                    ? favoriteKeysForModel
+                    : [model.id];
+                keysToRemove.forEach((key) => toggleConfiguredModel(key));
+                return;
+              }
+
+              toggleConfiguredModel(claimedKey);
             }}
-            className={`shrink-0 p-0.5 rounded transition-colors cursor-pointer ${
+            className={`shrink-0 rounded-lg border border-transparent p-1 transition-colors cursor-pointer group-hover/model:border-border/40 group-hover/model:bg-muted/30 ${
               isFav
                 ? "text-yellow-500 hover:text-yellow-400"
                 : "text-muted-foreground hover:text-yellow-500"
             }`}
-            title={isFav ? "Remove from favorites" : "Add to favorites"}
+            data-tooltip={isFav ? "Remove from favorites" : "Add to favorites"}
+            data-tooltip-side="right"
             type="button"
+            aria-label={isFav ? "Remove from favorites" : "Add to favorites"}
+            aria-pressed={isFav}
           >
-            <Star className={`h-3 w-3 ${isFav ? "fill-current" : ""}`} />
+            <Star className={`h-3.5 w-3.5 ${isFav ? "fill-current" : ""}`} />
           </button>
           {/* Model Info - Clickable area for selection */}
           <div
-            className="flex-1 min-w-0 cursor-pointer"
-            onClick={() => {
-              if (isAvailable) {
-                // If this is a favorite with a fixed provider, persist mapping so selection is fixed
-                if (isFixedProvider && fixedBase && setModelProviderFor) {
-                  setModelProviderFor(model.id, fixedBase);
-                }
-                handleModelChange(model.id, configuredKeyOverride || undefined);
-                setIsModelDrawerOpen(false);
-              }
-            }}
+            className={`flex-1 min-w-0 ${
+              isAvailable ? "cursor-pointer" : "cursor-not-allowed"
+            }`}
+            aria-disabled={!isAvailable}
+            onClick={() => selectRow(row)}
           >
-            <div className="font-medium truncate flex items-center gap-1.5">
-              {getModelNameWithoutProvider(model.name)}
+            <div className="flex items-center gap-1.5 truncate font-semibold text-foreground">
+              <span className="truncate">
+                {getModelNameWithoutProvider(model.name)}
+              </span>
               {isSelectedItem && (
                 <Check className="h-3.5 w-3.5 text-primary shrink-0" />
               )}
-              {!isAvailable && requiredMin > 0 && (
-                <span className="text-[10px] text-yellow-600 dark:text-yellow-400 font-medium shrink-0">
-                  Min: {requiredMin.toFixed(0)} sats
+              {!isRoutable ? (
+                <span
+                  className="text-[10px] text-muted-foreground/70 font-medium shrink-0"
+                  data-tooltip="This provider is disabled or temporarily unreachable"
+                  data-tooltip-side="right"
+                >
+                  Provider unavailable
                 </span>
+              ) : (
+                !isAvailable &&
+                requiredMin > 0 && (
+                  <span className="text-[10px] text-yellow-600 dark:text-yellow-400 font-medium shrink-0">
+                    {requiredMin < 1
+                      ? "Min: <1 sat"
+                      : `Min: ${Math.round(requiredMin)} sats`}
+                  </span>
+                )
               )}
             </div>
-            <div className="text-xs text-muted-foreground flex items-center justify-between">
-              <span className="text-muted-foreground truncate pr-2 flex items-center gap-1">
+            <div className="mt-1.5 flex items-center justify-between text-xs text-muted-foreground">
+              <span className="flex min-w-0 items-center gap-1 pr-2 text-muted-foreground">
                 {isDynamicProvider && (
-                  <span title="Dynamic provider: always picks the cheapest based on pricing">
+                  <span
+                    data-tooltip="Auto-picks cheapest provider"
+                    data-tooltip-side="inside-right"
+                  >
                     ~
                   </span>
                 )}
-                <span className="truncate">{effectiveProviderLabel}</span>
+                <span className="min-w-0 truncate">{effectiveProviderLabel}</span>
                 {isDynamicProvider && (
                   <span
-                    className="inline-flex"
-                    title="Dynamic provider: always picks the cheapest based on pricing"
+                    className="inline-flex h-4 w-4 shrink-0 items-center justify-center"
+                    data-tooltip="Auto-picks cheapest provider"
+                    data-tooltip-side="inside-right"
                   >
                     <Info className="h-3 w-3 text-muted-foreground" />
                   </span>
                 )}
+                {providerCount > 1 && (
+                  <span
+                    className="shrink-0 rounded-full border border-border/40 bg-muted/30 px-1.5 py-px text-[10px] text-muted-foreground/80"
+                    data-tooltip="Available from multiple providers"
+                    data-tooltip-side="inside-right"
+                  >
+                    +{providerCount - 1}
+                  </span>
+                )}
               </span>
-              <span
-                className="mx-2 shrink-0 inline-flex items-center gap-0.5"
-                title="Pricing (1-5 ₿): fewer = cheaper"
-              >
-                {(() => {
-                  const value = getPricingIndex(
-                    effectiveModelForPricing?.sats_pricing?.completion
-                  );
-                  if (value === null) return "—";
-                  const fullCount = Math.floor(value);
-                  const hasHalf =
-                    value - fullCount >= 0.3 && value - fullCount < 0.8;
-                  const emptyCount =
-                    5 -
-                    fullCount -
-                    (hasHalf ? 1 : 0) -
-                    (value - fullCount >= 0.8 ? 1 : 0);
-                  const extraFull = value - fullCount >= 0.8 ? 1 : 0;
-
-                  return (
-                    <>
-                      {/* Full yellow icons */}
-                      {Array.from({ length: fullCount + extraFull }, (_, i) => (
-                        <Bitcoin
-                          key={`full-${i}`}
-                          className="h-3 w-3 text-yellow-500 -ml-0.5 first:ml-0"
-                        />
-                      ))}
-                      {/* Half icon */}
-                      {hasHalf && (
-                        <span className="relative w-3 h-3 overflow-hidden -ml-0.5">
-                          <Bitcoin className="h-3 w-3 text-muted-foreground/15 absolute" />
-                          <span
-                            className="absolute inset-0 overflow-hidden"
-                            style={{ width: "50%" }}
-                          >
-                            <Bitcoin className="h-3 w-3 text-yellow-500" />
-                          </span>
-                        </span>
-                      )}
-                      {/* Empty gray icons */}
-                      {Array.from({ length: emptyCount }, (_, i) => (
-                        <Bitcoin
-                          key={`empty-${i}`}
-                          className="h-3 w-3 text-muted-foreground/15 -ml-0.5"
-                        />
-                      ))}
-                    </>
-                  );
-                })()}
-              </span>
+              <PriceMeter
+                value={getPricingIndex(priceSource?.sats_pricing?.completion)}
+                satsPerToken={priceSource?.sats_pricing?.completion}
+              />
             </div>
           </div>
 
@@ -985,14 +829,14 @@ export default function ModelSelector({
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                // Resolve base for details as well so the details panel fetches correct pricing
-                setDetailsModel(model);
-                setDetailsBaseUrl(baseForPricing);
+                setDetailsRow(row);
                 navigateToView("details");
               }}
               className="shrink-0 p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 cursor-pointer"
-              title="View details"
+              data-tooltip="View details"
+              data-tooltip-side="left"
               type="button"
+              aria-label="View model details"
             >
               <ChevronRight className="h-4 w-4" />
             </button>
@@ -1002,304 +846,21 @@ export default function ModelSelector({
     );
   };
 
-  // Render model details (shared by desktop pane and mobile popover)
-  const renderModelDetails = (model: Model) => {
-    // Determine provider base for details: prefer explicit detailsBaseUrl, otherwise mapping
-    const baseForDetails =
-      normalizeBaseUrl(detailsBaseUrl) ||
-      (selectedModel?.id === model.id && currentSelectedBaseUrl
-        ? normalizeBaseUrl(currentSelectedBaseUrl)
-        : null) ||
-      normalizeBaseUrl(modelProviderMap[model.id]);
-    const providerModels = baseForDetails
-      ? providerModelCache[baseForDetails]
-      : undefined;
-    const providerSpecificModel = providerModels
-      ? providerModels[model.id]
-      : undefined;
-    const effectiveModel = providerSpecificModel || model;
-    const providerLabel = formatProviderLabel(baseForDetails, effectiveModel);
-    const providerPricingEntries = getProviderPricingEntries(model.id);
-    const cheapestBaseUrl = providerPricingEntries[0]?.baseUrl ?? null;
-    const mappedCheapestBase = normalizeBaseUrl(modelProviderMap[model.id]);
-    const normalizedDetailsBase = normalizeBaseUrl(baseForDetails);
-    const currentPricingEntry = normalizedDetailsBase
-      ? providerPricingEntries.find(
-          (entry) => entry.baseUrl === normalizedDetailsBase
-        )
-      : undefined;
-    const currentCompletionCost = currentPricingEntry?.completionCost ?? null;
-
-    const formatPercentDelta = (
-      entryCost: number | null,
-      baselineCost: number | null
-    ): string | null => {
-      if (
-        entryCost === null ||
-        baselineCost === null ||
-        !isFinite(entryCost) ||
-        !isFinite(baselineCost) ||
-        baselineCost <= 0
-      )
-        return null;
-      const diff = ((entryCost - baselineCost) / baselineCost) * 100;
-      const rounded = Math.round(diff * 10) / 10;
-      const sign = rounded > 0 ? "+" : rounded < 0 ? "-" : "";
-      return `${sign}${Math.abs(rounded).toFixed(1)}%`;
-    };
-
-    // Date formatter for created timestamp (epoch seconds)
-    const formatDate = (epochSeconds?: number): string => {
-      try {
-        if (
-          typeof epochSeconds !== "number" ||
-          !isFinite(epochSeconds) ||
-          epochSeconds <= 0
-        )
-          return "—";
-        const d = new Date(epochSeconds * 1000);
-        if (isNaN(d.getTime())) return "—";
-        return d.toLocaleDateString();
-      } catch {
-        return "—";
-      }
-    };
-
-    // Build input->output modality pairs for icon display
-    const inputs = new Set(
-      (effectiveModel?.architecture?.input_modalities ?? ["text"]).map(
-        normalizeModality
-      )
-    );
-    const outputs = new Set(
-      (effectiveModel?.architecture?.output_modalities ?? ["text"]).map(
-        normalizeModality
-      )
-    );
-    const ioPairs: { key: string; input: string; output: string }[] = (() => {
-      const pairs: { key: string; input: string; output: string }[] = [];
-      const seen = new Set<string>();
-      for (const i of inputs) {
-        for (const o of outputs) {
-          const key = `${i}->${o}`;
-          if (!seen.has(key)) {
-            seen.add(key);
-            pairs.push({ key, input: i, output: o });
-          }
-        }
-      }
-      return pairs;
-    })();
-
+  const renderModelDetails = (row: ModelRowEntry) => {
+    const { priceSource, baseForPricing } = resolveRow(row);
     return (
-      <div className="space-y-2">
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <div className="text-xs text-muted-foreground flex items-center gap-1">
-              <span>{getProviderFromModelName(effectiveModel.name)}</span>
-              {providerLabel &&
-                providerLabel !==
-                  getProviderFromModelName(effectiveModel.name) && (
-                  <>
-                    <span className="text-muted-foreground/50">•</span>
-                    <span>{providerLabel}</span>
-                  </>
-                )}
-            </div>
-            <div className="text-base font-semibold truncate text-foreground">
-              {getModelNameWithoutProvider(effectiveModel.name)}
-            </div>
-            <div className="text-[11px] text-muted-foreground/80 mt-0.5 flex items-center gap-2">
-              <span className="break-all" title="Model ID">
-                {effectiveModel.id}
-              </span>
-              <button
-                onClick={() => {
-                  try {
-                    void navigator.clipboard.writeText(effectiveModel.id);
-                    setCopiedModelId(effectiveModel.id);
-                    setTimeout(() => setCopiedModelId(null), 1200);
-                  } catch {}
-                }}
-                className="cursor-pointer text-muted-foreground hover:text-foreground"
-                title="Copy model ID"
-                type="button"
-                aria-label="Copy model ID"
-              >
-                {copiedModelId === effectiveModel.id ? (
-                  <Check className="h-3 w-3" />
-                ) : (
-                  <Copy className="h-3 w-3" />
-                )}
-              </button>
-              {effectiveModel.created ? (
-                <span className="whitespace-nowrap">
-                  · {formatDate(effectiveModel.created)}
-                </span>
-              ) : null}
-            </div>
-          </div>
-        </div>
-
-        {effectiveModel.description && (
-          <div className="text-xs text-muted-foreground line-clamp-4">
-            {effectiveModel.description}
-          </div>
-        )}
-
-        <div className="grid grid-cols-2 gap-2 text-xs">
-          <div className="bg-muted/50 rounded-md p-2 border border-border">
-            <div className="text-muted-foreground">Context length</div>
-            <div className="font-medium mt-1 text-foreground">
-              {effectiveModel.context_length?.toLocaleString?.() ?? "—"} tokens
-            </div>
-          </div>
-          <div className="bg-muted/50 rounded-md p-2 border border-border">
-            <div className="text-muted-foreground">Modality</div>
-            <div className="font-medium mt-1 text-foreground">
-              <div className="flex flex-wrap gap-2">
-                {ioPairs.length > 0 ? (
-                  ioPairs.map((p) => (
-                    <span
-                      key={p.key}
-                      className="inline-flex items-center gap-1"
-                      title={`${p.input} → ${p.output}`}
-                    >
-                      {modalityIconFor(p.input)}
-                      <span>→</span>
-                      {modalityIconFor(p.output)}
-                    </span>
-                  ))
-                ) : (
-                  <span>—</span>
-                )}
-              </div>
-            </div>
-          </div>
-          <div className="bg-muted/50 rounded-md p-2 border border-border">
-            <div className="text-muted-foreground">Tokenizer</div>
-            <div className="font-medium mt-1 text-foreground">
-              {effectiveModel.architecture?.tokenizer ?? "—"}
-            </div>
-          </div>
-          <div className="bg-muted/50 rounded-md p-2 border border-border">
-            <div className="text-muted-foreground">Instruct type</div>
-            <div className="font-medium mt-1 text-foreground">
-              {effectiveModel.architecture?.instruct_type ?? "—"}
-            </div>
-          </div>
-        </div>
-
-        <div className="space-y-1">
-          <div className="text-xs text-muted-foreground">Pricing</div>
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            <div className="bg-muted/50 rounded-md p-2 border border-border">
-              <div className="text-muted-foreground">Prompt</div>
-              <div className="font-medium mt-1 text-foreground">
-                {formatSatsPer1M(effectiveModel?.sats_pricing?.prompt)}
-              </div>
-            </div>
-            <div className="bg-muted/50 rounded-md p-2 border border-border">
-              <div className="text-muted-foreground">Completion</div>
-              <div className="font-medium mt-1 text-foreground">
-                {formatSatsPer1M(effectiveModel?.sats_pricing?.completion)}
-              </div>
-            </div>
-          </div>
-          {effectiveModel?.sats_pricing && (
-            <div className="text-[11px] text-muted-foreground/80">
-              Est. min: {getRequiredSatsForModel(effectiveModel).toFixed(0)}{" "}
-              sats
-            </div>
-          )}
-        </div>
-
-        {providerPricingEntries.length > 0 && (
-          <div className="space-y-1">
-            <div className="text-xs text-muted-foreground">
-              Provider cost comparison
-            </div>
-            <div className="space-y-1">
-              {providerPricingEntries.map((entry, index) => {
-                const isActive =
-                  currentSelectedBaseUrl &&
-                  normalizeBaseUrl(currentSelectedBaseUrl) === entry.baseUrl;
-                const isCheapest =
-                  cheapestBaseUrl && entry.baseUrl === cheapestBaseUrl;
-                const isDefaultCheapest =
-                  isCheapest &&
-                  mappedCheapestBase &&
-                  mappedCheapestBase === entry.baseUrl;
-                const isSelected = isActive || isDefaultCheapest;
-                const percentDelta = formatPercentDelta(
-                  entry.completionCost,
-                  currentCompletionCost
-                );
-                return (
-                  <button
-                    key={entry.baseUrl}
-                    onClick={() => selectProviderForModel(model, entry.baseUrl)}
-                    type="button"
-                    className={`w-full text-left rounded-md border px-2 py-1 text-[11px] transition-colors ${
-                      isSelected
-                        ? "border-primary/40 bg-primary/10"
-                        : "border-border bg-muted/40 hover:bg-muted"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="inline-flex items-center justify-center h-4 min-w-[18px] px-1 rounded-full bg-muted text-[9px] text-muted-foreground">
-                        #{index + 1}
-                      </span>
-                      <span className="font-medium truncate">
-                        {entry.providerLabel}
-                      </span>
-                      {isCheapest && (
-                        <span className="text-[9px] px-1 py-0.5 rounded-full bg-yellow-500/10 text-yellow-700 dark:text-yellow-400">
-                          cheapest
-                        </span>
-                      )}
-                      {isActive && (
-                        <span className="text-[9px] px-1 py-0.5 rounded-full bg-primary/15 text-primary">
-                          current
-                        </span>
-                      )}
-                      {!isActive && isDefaultCheapest && (
-                        <span className="text-[9px] px-1 py-0.5 rounded-full bg-muted text-muted-foreground">
-                          default
-                        </span>
-                      )}
-                    </div>
-                    <div className="mt-0.5 text-[10px] text-muted-foreground/80 flex flex-wrap gap-2">
-                      <span>
-                        P: {formatSatsPer1M(entry.promptCost ?? undefined)}
-                      </span>
-                      <span>
-                        C: {formatSatsPer1M(entry.completionCost ?? undefined)}
-                      </span>
-                      {!isActive && percentDelta && (
-                        <span
-                          className={
-                            percentDelta.startsWith("-")
-                              ? "text-emerald-600 dark:text-emerald-400"
-                              : "text-amber-600 dark:text-amber-400"
-                          }
-                        >
-                          {percentDelta}
-                        </span>
-                      )}
-                      {isActive && (
-                        <span className="text-muted-foreground">0%</span>
-                      )}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Capabilities section removed per request */}
-      </div>
+      <ModelDetailsPane
+        model={row.model}
+        effectiveModel={priceSource ?? row.model}
+        baseForDetails={baseForPricing}
+        selectedModel={selectedModel}
+        currentSelectedBaseUrl={currentSelectedBaseUrl}
+        modelProviderMap={modelProviderMap}
+        copiedModelId={copiedModelId}
+        setCopiedModelId={setCopiedModelId}
+        getProviderPricingEntries={getProviderPricingEntries}
+        selectProviderForModel={selectProviderForModel}
+      />
     );
   };
 
@@ -1327,14 +888,16 @@ export default function ModelSelector({
         }}
         aria-expanded={isModelDrawerOpen}
         aria-controls="model-selector-drawer"
-        className={`flex items-center gap-2 text-foreground bg-muted/50 hover:bg-muted rounded-md py-2 px-3 sm:px-4 h-[36px] text-xs sm:text-sm transition-colors cursor-pointer border overflow-hidden max-w-[calc(100vw-260px)] sm:max-w-none ${
-          lowBalanceWarningForModel ? "border-red-500" : "border-border"
+        className={`flex h-[40px] items-center gap-2 overflow-hidden rounded-2xl border bg-card/55 px-4 py-2 text-sm font-semibold text-foreground shadow-e1 backdrop-blur-md transition-all duration-200 cursor-pointer max-w-[calc(100vw-260px)] hover:bg-muted/55 hover:shadow-e2 sm:max-w-none ${
+          lowBalanceWarningForModel
+            ? "border-destructive/80 ring-1 ring-destructive/30"
+            : "border-border/60"
         }`}
         data-tutorial="model-selector"
         type="button"
       >
         <div className="flex items-center gap-1.5 min-w-0">
-          <span className="font-medium truncate whitespace-nowrap">
+          <span className="truncate whitespace-nowrap font-semibold">
             {selectedModel
               ? getModelNameWithoutProvider(selectedModel.name)
               : isWalletLoading
@@ -1360,14 +923,14 @@ export default function ModelSelector({
           id="model-selector-drawer"
           className={`${
             isMobile
-              ? "fixed left-1/2 -translate-x-1/2 top-[60px] w-[92vw]"
-              : "absolute top-full left-0 w-[720px] max-w-[95vw] mt-1"
-          } bg-card border border-border rounded-md shadow-lg max-h-[70vh] overflow-hidden z-50 transform transition-all duration-200 ${
+              ? "fixed left-1/2 -translate-x-1/2 top-[64px] w-[94vw]"
+              : "absolute top-full left-0 w-[820px] max-w-[95vw] mt-2"
+          } bg-popover border border-border/80 rounded-2xl shadow-e3 max-h-[76vh] overflow-hidden z-50 transform transition-all duration-200 ${
             isDrawerAnimating
               ? "opacity-100 translate-y-0 scale-100"
               : "opacity-0 -translate-y-1 scale-95"
           }`}
-          onMouseLeave={() => setHoveredModelId(null)}
+          onMouseLeave={() => setHoveredRowKey(null)}
         >
           {/* Mobile view: page-like transition between list and details */}
           <div
@@ -1375,12 +938,21 @@ export default function ModelSelector({
               isTransitioning
                 ? "opacity-0 translate-x-2"
                 : "opacity-100 translate-x-0"
-            } overflow-y-auto max-h-[70vh]`}
+            } slim-scroll overflow-y-auto max-h-[70vh]`}
           >
             {activeView === "list" ? (
               <div>
-                {renderSearchBar()}
-                {dedupedModels.length < 5
+                {<FilterToolbar
+                  filters={filters}
+                  providerOptions={providerOptions}
+                  uniqueModelCount={uniqueModelCount}
+                  uniqueProviderCount={uniqueProviderCount}
+                  openModelsConfig={openModelsConfig}
+                  searchInputRef={searchInputRef}
+                  onSearchKeyDown={handleSearchKeyDown}
+                  onSelectCompany={selectCompany}
+                />}
+                {isLoadingModels && dedupedModels.length === 0
                   ? renderLoadingState()
                   : renderModelListSections()}
               </div>
@@ -1393,9 +965,9 @@ export default function ModelSelector({
                 >
                   <ArrowLeft className="h-5 w-5" />
                 </button>
-                {detailsModel ? (
+                {detailsRow ? (
                   <div className="space-y-3">
-                    {renderModelDetails(detailsModel)}
+                    {renderModelDetails(detailsRow)}
                   </div>
                 ) : (
                   <div className="text-sm text-muted-foreground">
@@ -1407,22 +979,49 @@ export default function ModelSelector({
           </div>
 
           {/* Desktop view: side-by-side list and details */}
-          <div className="hidden sm:grid grid-cols-2">
+          <div className="hidden sm:grid h-[76vh] max-h-[76vh] overflow-hidden grid-cols-[minmax(0,0.95fr)_minmax(320px,1.05fr)]">
             {/* Left: Search + List */}
-            <div className="border-r border-border">
-              {renderSearchBar()}
-              {dedupedModels.length < 5
-                ? renderLoadingState()
-                : renderModelListSections()}
+            <div className="grid min-h-0 h-full max-h-full grid-cols-[48px_minmax(0,1fr)] border-r border-border/70">
+              <div className="border-r border-border/60 bg-background/20 h-full max-h-full overflow-hidden">
+                {
+                  <CompanyRail
+                    companyFilters={companyFilters}
+                    selectedCompany={selectedCompany}
+                    onSelectCompany={selectCompany}
+                    orientation="vertical"
+                  />
+                }
+              </div>
+              <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
+                {<FilterToolbar
+                  filters={filters}
+                  providerOptions={providerOptions}
+                  uniqueModelCount={uniqueModelCount}
+                  uniqueProviderCount={uniqueProviderCount}
+                  openModelsConfig={openModelsConfig}
+                  searchInputRef={searchInputRef}
+                  onSearchKeyDown={handleSearchKeyDown}
+                  onSelectCompany={selectCompany}
+                />}
+                {isLoadingModels && dedupedModels.length === 0
+                  ? renderLoadingState()
+                  : renderModelListSections()}
+              </div>
             </div>
 
             {/* Right: Details */}
-            <div className="p-3 overflow-y-auto max-h-[70vh]">
-              {previewModel ? (
-                renderModelDetails(previewModel)
+            <div className="model-details-scroll slim-scroll h-full min-h-0 overflow-y-auto overflow-x-hidden bg-background/20 p-4 [scrollbar-gutter:stable]">
+              {previewRow ? (
+                renderModelDetails(previewRow)
               ) : (
-                <div className="text-sm text-muted-foreground">
-                  No model selected
+                <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
+                  <Search className="h-5 w-5 text-muted-foreground/40" />
+                  <div className="text-sm font-medium text-muted-foreground">
+                    Hover a model to preview it
+                  </div>
+                  <div className="text-xs text-muted-foreground/60">
+                    Pricing, context window and providers show up here
+                  </div>
                 </div>
               )}
             </div>

@@ -9,13 +9,13 @@ import {
   saveBaseUrlsList,
   loadModelProviderMap,
   saveModelProviderMap,
-  getStorageItem,
 } from "@/utils/storageUtils";
 import {
   parseModelKey,
   normalizeBaseUrl,
   modelSelectionStrategy,
   isModelAvailable,
+  getAllProviderModels,
 } from "@/utils/modelUtils";
 import { getPendingCashuTokenAmount } from "@/utils/cashuUtils";
 import {
@@ -23,7 +23,7 @@ import {
   isTorContext,
 } from "@/utils/torUtils";
 import { useDiscoveryAdapter } from "./useDiscoveryAdapter";
-import { modelManager, providerManager } from "@/sdk/sharedStore";
+import { hydrate, modelManager, providerManager } from "@/sdk/sharedStore";
 
 export interface UseApiStateReturn {
   models: Model[];
@@ -58,6 +58,41 @@ export const useApiState = (
   const [baseUrlsList, setBaseUrlsList] = useState<string[]>([]);
   const [lowBalanceWarningForModel, setLowBalanceWarningForModel] =
     useState(false);
+
+  // Seed models from the last fetch so the selector opens instantly while the
+  // real fetch refreshes them in the background (stale-while-revalidate).
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    let cancelled = false;
+    // The SDK cache lives in IndexedDB; wait for hydrate or the seed reads an
+    // empty store and only the legacy localStorage copy would be visible.
+    hydrate.then(() => {
+      if (cancelled) return;
+      const torMode = isTorContext();
+      const cached = getAllProviderModels();
+      const byId = new Map<string, Model>();
+      for (const providerModels of Object.values(cached)) {
+        for (const model of providerModels) {
+          if (byId.has(model.id)) continue;
+          // Skip models with no routable provider (onion outside Tor, disabled,
+          // on cooldown) or they show as "loaded" but every ranking is empty.
+          if (!providerManager.getBestProviderForModel(model.id, { torMode })) {
+            continue;
+          }
+          byId.set(model.id, model);
+        }
+      }
+      // Nothing eligible: stay loading and let the real fetch decide
+      if (byId.size === 0) return;
+      setModels((current) =>
+        current.length > 0 ? current : Array.from(byId.values())
+      );
+      setIsLoadingModels(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -104,17 +139,35 @@ export const useApiState = (
 
         let firstProgress = true;
 
-        const combinedModels = (await modelManager.fetchModels(
+        const onFetchProgress = (progressModels: unknown[]) => {
+          // Ignore empty ticks entirely: they would blank a populated list, and
+          // an empty first tick would flip off loading with nothing to show.
+          if (progressModels.length === 0) return;
+          if (firstProgress) {
+            setIsLoadingModels(false);
+            firstProgress = false;
+          }
+          setModels(progressModels as unknown as Model[]);
+        };
+
+        let combinedModels = (await modelManager.fetchModels(
           bases,
           false,
-          (progressModels) => {
-            if (firstProgress) {
-              setIsLoadingModels(false);
-              firstProgress = false;
-            }
-            setModels(progressModels as unknown as Model[]);
-          }
+          onFetchProgress
         )) as unknown as Model[];
+
+        // Zero models across every provider means the cache is poisoned:
+        // per-provider freshness timestamps survived a session where the
+        // model payload write was lost, so each pass serves empty "valid"
+        // cache entries and re-stamps them, never refetching. Force one
+        // network refresh to repopulate and break the loop.
+        if (combinedModels.length === 0 && bases.length > 0) {
+          combinedModels = (await modelManager.fetchModels(
+            bases,
+            true,
+            onFetchProgress
+          )) as unknown as Model[];
+        }
 
         // Delegate cheapest-provider selection to the SDK's
         // ProviderManager.getBestProviderForModel so the persisted
@@ -125,13 +178,22 @@ export const useApiState = (
         const bestMap = loadModelProviderMap();
         let mapChanged = false;
         for (const model of combinedModels) {
-          const bestBase = providerManager.getBestProviderForModel(model.id);
+          const bestBase = providerManager.getBestProviderForModel(model.id, {
+            torMode,
+          });
           if (bestBase && bestMap[model.id] !== bestBase) {
             bestMap[model.id] = bestBase;
             mapChanged = true;
           }
         }
-        if (mapChanged) saveModelProviderMap(bestMap);
+        if (mapChanged) {
+          saveModelProviderMap(bestMap);
+          // The selector re-reads the provider map when the models array
+          // identity changes; the last progress tick fired before the map
+          // was saved, so nudge it once more or cold loads show every
+          // provider as Unknown until a manual refresh.
+          setModels((current) => [...current]);
+        }
 
         await mintDiscovery.discoverMints(bases);
 
@@ -281,10 +343,7 @@ export const useApiState = (
         const normalized = fixedBase.endsWith("/")
           ? fixedBase
           : `${fixedBase}/`;
-        const allByProvider = getStorageItem<Record<string, Model[]>>(
-          "modelsFromAllProviders",
-          {}
-        );
+        const allByProvider = getAllProviderModels();
         const list =
           allByProvider?.[normalized] ||
           allByProvider?.[configuredKeyOverride] ||

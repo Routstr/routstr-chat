@@ -54,6 +54,7 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
     isModelDrawerOpen,
     setIsModelDrawerOpen,
     isWalletLoading,
+    isLoadingModels,
     models: filteredModels,
     handleModelChange,
     configuredModels,
@@ -201,6 +202,7 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
             isAuthenticated={isAuthenticated}
             setIsLoginModalOpen={setIsLoginModalOpen}
             isWalletLoading={isWalletLoading}
+            isLoadingModels={isLoadingModels}
             filteredModels={filteredModels}
             handleModelChange={handleModelChange}
             balance={balance}

@@ -22,11 +22,7 @@ export function normalizeBaseUrl(base?: string | null): string | null {
 // Kept here to avoid duplicating localStorage logic in components
 import type { Model } from "@/types/models";
 import { discoveryAdapter } from "@/sdk/sharedStore";
-import {
-  getStorageItem,
-  loadLastUsedModel,
-  setStorageItem,
-} from "@/utils/storageUtils";
+import { loadLastUsedModel } from "@/utils/storageUtils";
 
 // Extract the provider name from the model name (e.g., "Qwen" from "Qwen: Qwen3 30B A3B")
 export function getProviderFromModelName(modelName: string): string {
@@ -46,6 +42,18 @@ export function getModelNameWithoutProvider(modelName: string): string {
   return modelName;
 }
 
+// The SDK store (IndexedDB) is the single source for per-provider model lists.
+export function getAllProviderModels(): Record<string, Model[]> {
+  try {
+    return (discoveryAdapter.getCachedModels() ?? {}) as unknown as Record<
+      string,
+      Model[]
+    >;
+  } catch {
+    return {};
+  }
+}
+
 export function upsertCachedProviderModels(
   baseUrl: string,
   models: Model[]
@@ -53,14 +61,12 @@ export function upsertCachedProviderModels(
   try {
     const normalized = normalizeBaseUrl(baseUrl);
     if (!normalized) return;
-    const existing = getStorageItem<Record<string, Model[]>>(
-      "modelsFromAllProviders",
-      {} as any
-    );
-    setStorageItem("modelsFromAllProviders", {
+    const existing = (discoveryAdapter.getCachedModels() ??
+      {}) as unknown as Record<string, Model[]>;
+    discoveryAdapter.setCachedModels({
       ...existing,
       [normalized]: models,
-    });
+    } as any);
   } catch {}
 }
 
@@ -68,10 +74,7 @@ export function getCachedProviderModels(baseUrl: string): Model[] | undefined {
   try {
     const normalized = normalizeBaseUrl(baseUrl);
     if (!normalized) return undefined;
-    const all = getStorageItem<Record<string, Model[]>>(
-      "modelsFromAllProviders",
-      {} as any
-    );
+    const all = getAllProviderModels();
     return all[normalized];
   } catch {
     return undefined;
@@ -388,10 +391,7 @@ export const modelSelectionStrategy = async (
     const fixedBase = normalizeBaseUrl(base);
     if (!fixedBase) return null;
     const normalized = fixedBase.endsWith("/") ? fixedBase : `${fixedBase}/`;
-    const allByProvider = getStorageItem<Record<string, Model[]>>(
-      "modelsFromAllProviders",
-      {} as any
-    );
+    const allByProvider = getAllProviderModels();
     const list =
       allByProvider?.[normalized] || allByProvider?.[lastUsedModelId] || [];
     modelToSelect = Array.isArray(list)

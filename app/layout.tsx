@@ -5,6 +5,7 @@ import ClientProviders from "@/components/ClientProviders";
 import { Toaster } from "@/components/ui/sonner";
 import BitcoinConnectClient from "@/components/bitcoin-connect/BitcoinConnectClient";
 import SWUpdater from "@/components/SWUpdater";
+import { GlobalTooltip } from "@/components/ui/GlobalTooltip";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -58,6 +59,7 @@ export default function RootLayout({
           <SWUpdater />
           {children}
           <Toaster />
+          <GlobalTooltip />
           <BitcoinConnectClient />
         </ClientProviders>
       </body>

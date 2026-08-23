@@ -495,6 +495,9 @@ export const useChatActions = ({
         if (!walletAdapter) {
           throw new Error("Wallet adapter is not ready");
         }
+        if (!client || !selectedModel) {
+          throw new Error("SDK client is not ready");
+        }
 
         // If the shared ModelManager already has providers + models cached,
         // pass it so resolveRequestContext skips bootstrap+fetchModels entirely
@@ -554,7 +557,11 @@ export const useChatActions = ({
           {
             messageHistory: apiMessageHistory as any,
             modelId: selectedModel.id,
-            forcedProvider: baseUrl || undefined,
+            // Only force the user's provider when the SDK will read OUR cache.
+            // Without the shared managers it re-fetches models first and then
+            // throws if the forced provider has since dropped the model, where
+            // ranking would simply have picked another one.
+            forcedProvider: (hasCache && baseUrl) || undefined,
             torMode: isTorContext(),
             mode: "xcashu",
             discoveryAdapter,
@@ -678,7 +685,12 @@ export const useChatActions = ({
               requestIdRef.current = requestId;
             },
           },
-          { alertLevel: "min", logger: consoleLogger, getPendingCashuTokenAmount },
+          {
+            client,
+            alertLevel: "min",
+            logger: consoleLogger,
+            getPendingCashuTokenAmount,
+          },
         );
         
         // After the SDK finalizes, look up the exact usage entry by requestId
@@ -738,6 +750,7 @@ export const useChatActions = ({
       updateLastMessageSatsSpent,
       getLastNonSystemMessageEventId,
       createAndStoreChatEvent,
+      client,
       walletAdapter,
       enrichAssistantImages,
     ]

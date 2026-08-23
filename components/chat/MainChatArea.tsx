@@ -7,6 +7,10 @@ import { useAuth } from "@/context/AuthProvider";
 import ChatMessages from "./ChatMessages";
 import ChatInput from "./ChatInput";
 import { getTextFromContent } from "@/utils/messageUtils";
+import { normalizeBaseUrl, parseModelKey } from "@/utils/modelUtils";
+import { loadLastUsedModel } from "@/utils/storageUtils";
+import { providerManager } from "@/sdk/sharedStore";
+import { isTorContext } from "@/utils/torUtils";
 
 /**
  * Central chat interface component
@@ -74,13 +78,31 @@ const MainChatArea: React.FC = () => {
     return !conversationsLoaded || isSyncing;
   }, [chatIdFromUrl, activeConversationId, messages.length, conversationsLoaded, isSyncing]);
 
+  // The explicitly chosen provider from the persisted selection key (NOT
+  // modelProviderMap, which is auto-filled with the cheapest), else "" to keep
+  // SDK ranking. Resolved at send time: forcedProvider skips the SDK's own
+  // disabled/cooldown checks and throws if the provider dropped the model.
+  const resolveForcedBaseUrl = () => {
+    if (!selectedModel) return "";
+    const key = loadLastUsedModel();
+    const base = key ? normalizeBaseUrl(parseModelKey(key).base) : null;
+    if (!base || parseModelKey(key!).id !== selectedModel.id) return "";
+
+    const routable = providerManager
+      .getProviderPriceRankingForModel(selectedModel.id, {
+        torMode: isTorContext(),
+      })
+      .some((entry) => normalizeBaseUrl(entry.baseUrl) === base);
+    return routable ? base : "";
+  };
+
   const handleSendMessage = async () => {
     await sendMessage(
       messages,
       setMessages,
       activeConversationId,
       selectedModel,
-      "",
+      resolveForcedBaseUrl(),
       isAuthenticated,
       setIsLoginModalOpen,
       getActiveConversationId
@@ -96,7 +118,7 @@ const MainChatArea: React.FC = () => {
       (index) => editingMessageIndex !== null && setEditingMessageIndex(index),
       setEditingContent,
       selectedModel,
-      "",
+      resolveForcedBaseUrl(),
       activeConversationId,
       getActiveConversationId
     );
@@ -108,7 +130,7 @@ const MainChatArea: React.FC = () => {
       messages,
       setMessages,
       selectedModel,
-      "",
+      resolveForcedBaseUrl(),
       activeConversationId,
       getActiveConversationId
     );
