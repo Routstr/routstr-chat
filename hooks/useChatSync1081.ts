@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { NostrEvent } from "nostr-tools";
 import { PnsKeys, SALT_PNS } from "@/lib/pns";
+import { eventDatabaseReady } from "@/lib/eventDatabase";
 import { useAppContext } from "@/hooks/useAppContext";
 import {
   chatSyncEnabled$,
@@ -80,6 +81,20 @@ export function useChatSync1081() {
   useEffect(() => {
     const sub = processStored1081Events$.subscribe();
     return () => sub.unsubscribe();
+  }, []);
+
+  // Process cached kind-1081 events once storage hydration completes, even
+  // if we're offline and no fresh network event ever arrives. This is what
+  // lets currentPnsKeys (and, transitively, cached kind-1080 conversation
+  // history in useConversationState) become available without relay access.
+  useEffect(() => {
+    let cancelled = false;
+    eventDatabaseReady.then(() => {
+      if (!cancelled) triggerProcessStored1081Events();
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Subscribe to auto-sync on initial load
