@@ -190,7 +190,7 @@ export function useCashuToken() {
       try {
         // Pass keysetId to force swap and skip offline send functionality
         const result = await wallet.send(amount, proofs, {
-          keysetId: activeKeysets[0]?.id,
+          keysetId: wallet.keysetId,
           includeFees: true,
         });
         proofsToKeep = result.keep;
@@ -225,7 +225,7 @@ export function useCashuToken() {
           try {
             // Pass keysetId to force swap and skip offline send functionality
             const result = await wallet.send(amount, proofs, {
-              keysetId: activeKeysets[0]?.id,
+              keysetId: wallet.keysetId,
             });
             proofsToKeep = result.keep;
             proofsToSend = result.send;
