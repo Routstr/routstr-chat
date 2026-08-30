@@ -1,262 +1,136 @@
 import { http, HttpResponse, delay } from "msw";
+import type { JsonBodyType } from "msw";
 
-function getScenario(request: Request): string | null {
-  const header = request.headers.get("X-Mock-Scenario");
-  return header ? header.toLowerCase() : null;
+// Dev-only error injection for chat completions, keyed off localStorage. See README.
+// Never mock the mint here: top-ups pay real invoices, canned keysets strand the ecash.
+
+type ErrorScenario = {
+  aliases: string[];
+  status: number;
+  requestId?: string;
+  body: { text: string } | { json: JsonBodyType };
+};
+
+const routstrError = (message: string, code: string, status: number) => ({
+  json: { error: { message, code, status } },
+});
+
+const SCENARIOS: ErrorScenario[] = [
+  {
+    aliases: ["401", "unauthorized"],
+    status: 401,
+    requestId: "7ee5gg8b-9d41-5cbe-c2aa-50d0555eg07d",
+    body: routstrError(
+      "Unauthorized - Invalid or expired token",
+      "UNAUTHORIZED",
+      401
+    ),
+  },
+  {
+    aliases: ["403", "forbidden"],
+    status: 403,
+    requestId: "8ff6hh9c-0e52-6dcf-d3bb-61e1666fh18e",
+    body: routstrError(
+      "Forbidden - Insufficient permissions",
+      "FORBIDDEN",
+      403
+    ),
+  },
+  {
+    aliases: ["402", "payment-required"],
+    status: 402,
+    requestId: "9gg7ii0d-1f63-7edg-e4cc-72f2777gi29f",
+    body: routstrError(
+      "Payment Required - Insufficient balance",
+      "PAYMENT_REQUIRED",
+      402
+    ),
+  },
+  {
+    aliases: ["413", "payload-too-large"],
+    status: 413,
+    requestId: "6dd4ff7a-8c30-4bad-b199-49c9444df96c",
+    body: routstrError("Payload Too Large", "PAYLOAD_TOO_LARGE", 413),
+  },
+  {
+    aliases: ["500", "internal-server-error"],
+    status: 500,
+    requestId: "0hh8jj1e-2g74-8feh-f5dd-83g3888hj30g",
+    body: routstrError(
+      "Internal Server Error - Something went wrong on the server",
+      "INTERNAL_SERVER_ERROR",
+      500
+    ),
+  },
+  {
+    aliases: ["502", "bad-gateway"],
+    status: 502,
+    requestId: "1ii9kk2f-3h85-9gfi-g6ee-94h4999ik41h",
+    body: routstrError(
+      "Bad Gateway - Server received an invalid response",
+      "BAD_GATEWAY",
+      502
+    ),
+  },
+  {
+    // Plain text, because that is what the provider actually returns here.
+    aliases: ["400", "bad-request", "invalid-model"],
+    status: 400,
+    requestId: "a00b11c-4i96-0hjj-h7ff-05i5000jl52i",
+    body: { text: "model-xyz is not a valid model ID" },
+  },
+  {
+    aliases: ["400-model-not-found"],
+    status: 400,
+    body: {
+      json: {
+        error: {
+          message: "Model 'gpt-oss-20b' not found",
+          type: "invalid_model",
+          code: 400,
+        },
+        request_id: "17f6608b-f8af-454e-9e97-8d71cdc849e3",
+      },
+    },
+  },
+];
+
+const NAMED_LATENCY: Record<string, number> = { slow: 1500, timeout: 10000 };
+
+async function applyLatency(request: Request): Promise<void> {
+  const raw = request.headers.get("X-Mock-Latency");
+  if (!raw) return;
+  const ms = Number.isNaN(Number(raw))
+    ? (NAMED_LATENCY[raw] ?? 0)
+    : Number(raw);
+  if (ms > 0) await delay(ms);
 }
 
 export const handlers = [
   http.post("*/v1/chat/completions", async ({ request }) => {
-    const scenario = getScenario(request);
+    const requested = request.headers.get("X-Mock-Scenario")?.toLowerCase();
+    if (!requested) return;
 
-    if (scenario && (scenario === "401" || scenario === "unauthorized")) {
-      const latency = request.headers.get("X-Mock-Latency");
-      if (latency) {
-        const ms = Number.isNaN(Number(latency))
-          ? latency === "slow"
-            ? 1500
-            : latency === "timeout"
-              ? 10000
-              : 0
-          : Number(latency);
-        if (ms > 0) await delay(ms);
-      }
+    const scenario = SCENARIOS.find((s) => s.aliases.includes(requested));
+    if (!scenario) return;
 
-      return HttpResponse.json(
-        {
-          error: {
-            message: "Unauthorized - Invalid or expired token",
-            code: "UNAUTHORIZED",
-            status: 401,
-          },
-        },
-        {
-          status: 401,
-          headers: {
-            "Content-Type": "application/json",
-            "x-routstr-request-id": "7ee5gg8b-9d41-5cbe-c2aa-50d0555eg07d",
-          },
-        }
-      );
-    }
+    await applyLatency(request);
 
-    if (scenario && (scenario === "403" || scenario === "forbidden")) {
-      const latency = request.headers.get("X-Mock-Latency");
-      if (latency) {
-        const ms = Number.isNaN(Number(latency))
-          ? latency === "slow"
-            ? 1500
-            : latency === "timeout"
-              ? 10000
-              : 0
-          : Number(latency);
-        if (ms > 0) await delay(ms);
-      }
+    const headers: Record<string, string> = {
+      "Content-Type":
+        "text" in scenario.body ? "text/plain" : "application/json",
+    };
+    if (scenario.requestId)
+      headers["x-routstr-request-id"] = scenario.requestId;
 
-      return HttpResponse.json(
-        {
-          error: {
-            message: "Forbidden - Insufficient permissions",
-            code: "FORBIDDEN",
-            status: 403,
-          },
-        },
-        {
-          status: 403,
-          headers: {
-            "Content-Type": "application/json",
-            "x-routstr-request-id": "8ff6hh9c-0e52-6dcf-d3bb-61e1666fh18e",
-          },
-        }
-      );
-    }
-
-    if (scenario && (scenario === "402" || scenario === "payment-required")) {
-      const latency = request.headers.get("X-Mock-Latency");
-      if (latency) {
-        const ms = Number.isNaN(Number(latency))
-          ? latency === "slow"
-            ? 1500
-            : latency === "timeout"
-              ? 10000
-              : 0
-          : Number(latency);
-        if (ms > 0) await delay(ms);
-      }
-
-      return HttpResponse.json(
-        {
-          error: {
-            message: "Payment Required - Insufficient balance",
-            code: "PAYMENT_REQUIRED",
-            status: 402,
-          },
-        },
-        {
-          status: 402,
-          headers: {
-            "Content-Type": "application/json",
-            "x-routstr-request-id": "9gg7ii0d-1f63-7edg-e4cc-72f2777gi29f",
-          },
-        }
-      );
-    }
-
-    if (
-      scenario &&
-      (scenario === "400" ||
-        scenario === "bad-request" ||
-        scenario === "invalid-model")
-    ) {
-      const latency = request.headers.get("X-Mock-Latency");
-      if (latency) {
-        const ms = Number.isNaN(Number(latency))
-          ? latency === "slow"
-            ? 1500
-            : latency === "timeout"
-              ? 10000
-              : 0
-          : Number(latency);
-        if (ms > 0) await delay(ms);
-      }
-
-      return HttpResponse.text("model-xyz is not a valid model ID", {
-        status: 400,
-        headers: {
-          "Content-Type": "text/plain",
-          "x-routstr-request-id": "a00b11c-4i96-0hjj-h7ff-05i5000jl52i",
-        },
-      });
-    }
-
-    if (scenario && scenario === "400-model-not-found") {
-      const latency = request.headers.get("X-Mock-Latency");
-      if (latency) {
-        const ms = Number.isNaN(Number(latency))
-          ? latency === "slow"
-            ? 1500
-            : latency === "timeout"
-              ? 10000
-              : 0
-          : Number(latency);
-        if (ms > 0) await delay(ms);
-      }
-
-      return HttpResponse.json(
-        {
-          error: {
-            message: "Model 'gpt-oss-20b' not found",
-            type: "invalid_model",
-            code: 400,
-          },
-          request_id: "17f6608b-f8af-454e-9e97-8d71cdc849e3",
-        },
-        {
-          status: 400,
-          headers: {
-            "Content-Type": "application/json",
-          },
-        }
-      );
-    }
-
-    if (scenario && (scenario === "413" || scenario === "payload-too-large")) {
-      const latency = request.headers.get("X-Mock-Latency");
-      if (latency) {
-        const ms = Number.isNaN(Number(latency))
-          ? latency === "slow"
-            ? 1500
-            : latency === "timeout"
-              ? 10000
-              : 0
-          : Number(latency);
-        if (ms > 0) await delay(ms);
-      }
-
-      return HttpResponse.json(
-        {
-          error: {
-            message: "Payload Too Large",
-            code: "PAYLOAD_TOO_LARGE",
-            status: 413,
-          },
-        },
-        {
-          status: 413,
-          headers: {
-            "Content-Type": "application/json",
-            "x-routstr-request-id": "6dd4ff7a-8c30-4bad-b199-49c9444df96c",
-          },
-        }
-      );
-    }
-
-    if (
-      scenario &&
-      (scenario === "500" || scenario === "internal-server-error")
-    ) {
-      const latency = request.headers.get("X-Mock-Latency");
-      if (latency) {
-        const ms = Number.isNaN(Number(latency))
-          ? latency === "slow"
-            ? 1500
-            : latency === "timeout"
-              ? 10000
-              : 0
-          : Number(latency);
-        if (ms > 0) await delay(ms);
-      }
-
-      return HttpResponse.json(
-        {
-          error: {
-            message:
-              "Internal Server Error - Something went wrong on the server",
-            code: "INTERNAL_SERVER_ERROR",
-            status: 500,
-          },
-        },
-        {
-          status: 500,
-          headers: {
-            "Content-Type": "application/json",
-            "x-routstr-request-id": "0hh8jj1e-2g74-8feh-f5dd-83g3888hj30g",
-          },
-        }
-      );
-    }
-
-    if (scenario && (scenario === "502" || scenario === "bad-gateway")) {
-      const latency = request.headers.get("X-Mock-Latency");
-      if (latency) {
-        const ms = Number.isNaN(Number(latency))
-          ? latency === "slow"
-            ? 1500
-            : latency === "timeout"
-              ? 10000
-              : 0
-          : Number(latency);
-        if (ms > 0) await delay(ms);
-      }
-
-      return HttpResponse.json(
-        {
-          error: {
-            message: "Bad Gateway - Server received an invalid response",
-            code: "BAD_GATEWAY",
-            status: 502,
-          },
-        },
-        {
-          status: 502,
-          headers: {
-            "Content-Type": "application/json",
-            "x-routstr-request-id": "1ii9kk2f-3h85-9gfi-g6ee-94h4999ik41h",
-          },
-        }
-      );
-    }
-
-    return;
+    return "text" in scenario.body
+      ? HttpResponse.text(scenario.body.text, {
+          status: scenario.status,
+          headers,
+        })
+      : HttpResponse.json(scenario.body.json, {
+          status: scenario.status,
+          headers,
+        });
   }),
 ];
