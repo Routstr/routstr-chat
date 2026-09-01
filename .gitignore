@@ -13,6 +13,9 @@ coverage
 out/
 build
 
+# android apk artifacts
+*.apk
+
 # misc
 .DS_Store
 *.pem
