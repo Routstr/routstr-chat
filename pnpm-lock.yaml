@@ -57,8 +57,8 @@ importers:
         specifier: ^1.1.11
         version: 1.1.15(@types/react-dom@19.2.2(@types/react@19.2.2))(@types/react@19.2.2)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       '@routstr/sdk':
-        specifier: ^0.3.18
-        version: 0.3.18(@libsql/client@0.15.15)(@noble/curves@2.2.0)(@tursodatabase/database-wasm@0.2.2(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0))(@tursodatabase/database@0.2.2)(@types/react@19.2.2)(react@19.2.0)(typescript@5.9.3)(zod@4.4.3)
+        specifier: ^0.4.1
+        version: 0.4.1(@libsql/client@0.15.15)(@noble/curves@2.2.0)(@tursodatabase/database-wasm@0.2.2(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0))(@tursodatabase/database@0.2.2)(@types/react@19.2.2)(react@19.2.0)(typescript@5.9.3)(zod@4.4.3)
       '@tailwindcss/typography':
         specifier: ^0.5.16
         version: 0.5.20(tailwindcss@4.3.1)
@@ -2277,8 +2277,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@routstr/sdk@0.3.18':
-    resolution: {integrity: sha512-OtBZp1iURl4lQOcmKOFw0sGlgEIVJTR+nTg2MCms/fx74j3YxOJrAyQXxsy+vqoiD1KwJ6a3g7TEowluW9Yv4A==}
+  '@routstr/sdk@0.4.1':
+    resolution: {integrity: sha512-lUZ40djUsVcS43qIlS19vP0mSOVH8VsLjmOgNkCQ7BVk4qIIgqcuTiGig7HdgSDxvKwYs6CxnpXoHvb1PaFdng==}
     peerDependencies:
       typescript: '>=5.0.0'
 
@@ -3225,6 +3225,7 @@ packages:
 
   crypto-js@4.2.0:
     resolution: {integrity: sha512-KALDyEYgpY+Rlob/iriUtjV6d5Eq+Y191A5g4UqLAi8CyGP9N1+FdVbkc1SxKc2r4YAYqG8JzO2KGL+AizD70Q==}
+    deprecated: Active development of CryptoJS has been discontinued. This library is no longer maintained.
 
   crypto-random-string@2.0.0:
     resolution: {integrity: sha512-v1plID3y9r/lPhviJ1wrXpLeyUIGAZ2SHNYTEapm7/8A9nLPoyvVp3RK/EPFqn5kEznyWgYZNsRtYYIWbuG8KA==}
@@ -3548,6 +3549,7 @@ packages:
   eslint@9.39.4:
     resolution: {integrity: sha512-XoMjdBOwe/esVgEvLmNsD3IRHkm7fbKIUGvrleloJXUZgDHig2IPWNniv+GwjyJXzuNqVjlr5+4yVUZjycJwfQ==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+    deprecated: This version is no longer supported. Please see https://eslint.org/version-support for other options.
     hasBin: true
     peerDependencies:
       jiti: '*'
@@ -7978,7 +7980,7 @@ snapshots:
   '@rollup/rollup-win32-x64-msvc@4.62.2':
     optional: true
 
-  '@routstr/sdk@0.3.18(@libsql/client@0.15.15)(@noble/curves@2.2.0)(@tursodatabase/database-wasm@0.2.2(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0))(@tursodatabase/database@0.2.2)(@types/react@19.2.2)(react@19.2.0)(typescript@5.9.3)(zod@4.4.3)':
+  '@routstr/sdk@0.4.1(@libsql/client@0.15.15)(@noble/curves@2.2.0)(@tursodatabase/database-wasm@0.2.2(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0))(@tursodatabase/database@0.2.2)(@types/react@19.2.2)(react@19.2.0)(typescript@5.9.3)(zod@4.4.3)':
     dependencies:
       '@cashu/cashu-ts': 3.7.0
       applesauce-core: 5.2.0(typescript@5.9.3)
