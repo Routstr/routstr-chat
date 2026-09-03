@@ -8,6 +8,7 @@ import GeneralTab from "./settings/GeneralTab";
 import ModelsTab from "@/components/settings/ModelsTab";
 import HistoryTab from "./settings/HistoryTab";
 import ApiKeysTab from "./settings/ApiKeysTab";
+import NodeTab from "./settings/NodeTab";
 import DevConsoleTab from "./settings/DevConsoleTab";
 import UnifiedWallet from "@/features/wallet/components/UnifiedWallet";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
@@ -19,6 +20,7 @@ import CloseButton from "@/components/ui/CloseButton";
 type SettingsTab =
   | "settings"
   | "wallet"
+  | "node"
   | "history"
   | "api-keys"
   | "models"
@@ -35,6 +37,7 @@ const getSettingsTabs = (): { key: SettingsTab; label: string }[] => {
     { key: "settings", label: "General" },
     { key: "models", label: "Models" },
     { key: "wallet", label: "Wallet" },
+    { key: "node", label: "Node" },
     { key: "history", label: "History" },
     { key: "api-keys", label: "API Keys" },
   ];
@@ -140,6 +143,8 @@ const SettingsModal = ({
             isMobile={isMobile}
           />
         );
+      case "node":
+        return <NodeTab />;
       case "wallet":
         return <UnifiedWallet mintUrl={DEFAULT_MINT_URL} />;
       case "dev-console":

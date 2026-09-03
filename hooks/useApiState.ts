@@ -18,6 +18,7 @@ import {
   getAllProviderModels,
 } from "@/utils/modelUtils";
 import { getPendingCashuTokenAmount } from "@/utils/cashuUtils";
+import { useNodePays } from "@/hooks/useRemoteNode";
 import {
   filterBaseUrlsForTor,
   isTorContext,
@@ -58,6 +59,12 @@ export const useApiState = (
   const [baseUrlsList, setBaseUrlsList] = useState<string[]>([]);
   const [lowBalanceWarningForModel, setLowBalanceWarningForModel] =
     useState(false);
+  const nodePays = useNodePays();
+  // Passes are queued and can run long after they were scheduled, so read the
+  // mode when a pass actually runs. Otherwise a slow first-run public pass
+  // finishes after the node is connected and overwrites it.
+  const nodePaysRef = useRef(nodePays);
+  nodePaysRef.current = nodePays;
 
   // Seed models from the last fetch so the selector opens instantly while the
   // real fetch refreshes them in the background (stale-while-revalidate).
@@ -113,9 +120,15 @@ export const useApiState = (
       try {
         setIsLoadingModels(true);
         const torMode = isTorContext();
+        const node = nodePaysRef.current;
         let bases = baseUrlsList;
 
-        if (!bases || bases.length === 0) {
+        if (node) {
+          // Node mode swaps the provider set rather than adding to it: the SDK
+          // prunes every provider outside this list, so the node ends up the
+          // only one it can route to or fall back to.
+          bases = [node.url];
+        } else if (!bases || bases.length === 0) {
           bases = await modelManager.bootstrapProviders(torMode, false);
           if (process.env.NODE_ENV === "development") {
             const localDevProvider = "http://localhost:8000/";
@@ -139,6 +152,11 @@ export const useApiState = (
 
         let firstProgress = true;
 
+        // The prune drops the other mode's lists but leaves their timestamps
+        // fresh, so without this the picker comes back empty after a toggle.
+        const cached = discoveryAdapter.getCachedModels();
+        const staleSet = !bases.some((base) => cached[base]?.length);
+
         const onFetchProgress = (progressModels: unknown[]) => {
           // Ignore empty ticks entirely: they would blank a populated list, and
           // an empty first tick would flip off loading with nothing to show.
@@ -152,7 +170,7 @@ export const useApiState = (
 
         let combinedModels = (await modelManager.fetchModels(
           bases,
-          false,
+          staleSet,
           onFetchProgress
         )) as unknown as Model[];
 
@@ -246,10 +264,20 @@ export const useApiState = (
     ]
   );
 
+  // Each pass overwrites the shared cache wholesale, so serialise them and let
+  // the newest win. `hydrated` holds the first pass until useNodePays knows
+  // which mode we are in.
+  const passRef = useRef(0);
+  const passChainRef = useRef<Promise<unknown>>(Promise.resolve());
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => setHydrated(true), []);
   useEffect(() => {
-    if (!isAuthenticated || !mintDiscovery) return;
-    void fetchModels(balance);
-  }, [isAuthenticated, mintDiscovery, baseUrlsList.length]);
+    if (!isAuthenticated || !mintDiscovery || !hydrated) return;
+    const pass = ++passRef.current;
+    passChainRef.current = passChainRef.current.then(() =>
+      pass === passRef.current ? fetchModels(balance) : undefined
+    );
+  }, [isAuthenticated, mintDiscovery, baseUrlsList.length, nodePays, hydrated]);
 
   // -----------------------------------------------------------------------
   // Background cache refresh
@@ -262,10 +290,14 @@ export const useApiState = (
   // the UI or message sending.
   const refreshInProgress = useRef(false);
   useEffect(() => {
-    if (!isAuthenticated || !mintDiscovery) return;
+    // One provider, and this pass would prune it.
+    if (!isAuthenticated || !mintDiscovery || nodePays) return;
 
     const backgroundRefresh = async () => {
       if (refreshInProgress.current) return;
+      // Re-check at run time: a node connected while this waited in the chain,
+      // and this pass would prune it from the cache.
+      if (nodePaysRef.current) return;
       refreshInProgress.current = true;
       try {
         const torMode = isTorContext();
@@ -282,15 +314,23 @@ export const useApiState = (
       }
     };
 
+    // The SDK stamps a provider fresh the moment its fetch settles but writes
+    // model payloads only at end-of-pass, so a refresh overlapping another
+    // pass reads "valid" empty entries and later clobbers the cache with
+    // them. Queue refreshes on the pass chain so they never overlap.
+    const queueRefresh = () => {
+      passChainRef.current = passChainRef.current.then(backgroundRefresh);
+    };
+
     // Run shortly after mount (gives the initial fetchModels a head start)
-    const initialTimer = setTimeout(backgroundRefresh, 10_000);
+    const initialTimer = setTimeout(queueRefresh, 10_000);
     // Then every 30 minutes — will only do network work when cache is stale
-    const interval = setInterval(backgroundRefresh, 30 * 60 * 1000);
+    const interval = setInterval(queueRefresh, 30 * 60 * 1000);
     return () => {
       clearTimeout(initialTimer);
       clearInterval(interval);
     };
-  }, [isAuthenticated, mintDiscovery]);
+  }, [isAuthenticated, mintDiscovery, nodePays]);
 
   useEffect(() => {
     if (!isAuthenticated || models.length === 0) return;
@@ -312,10 +352,11 @@ export const useApiState = (
 
       if (selectedModel && !isWalletLoading) {
         setLowBalanceWarningForModel(
-          !isModelAvailable(
-            selectedModel,
-            balance + getPendingCashuTokenAmount()
-          )
+          !nodePays &&
+            !isModelAvailable(
+              selectedModel,
+              balance + getPendingCashuTokenAmount()
+            )
         );
       }
     };
@@ -330,6 +371,7 @@ export const useApiState = (
     pendingCashuAmountState,
     isWalletLoading,
     maxBalance,
+    nodePays,
   ]);
 
   const handleModelChange = useCallback(

@@ -22,10 +22,12 @@ import {
   storageAdapter,
   modelManager,
   providerManager,
+  usageTrackingDriver,
 } from "@/sdk/sharedStore";
 import { fetchAIResponse, consoleLogger, isTorContext } from "@routstr/sdk";
 import { toast } from "sonner";
-import { usageTrackingDriver } from "@/sdk/sharedStore";
+import { useNodePays } from "@/hooks/useRemoteNode";
+import { withNodeModeError } from "@/lib/remoteNode";
 
 export interface UseChatActionsReturn {
   inputMessage: string;
@@ -139,6 +141,11 @@ export const useChatActions = ({
   onBlossomUpload,
   onBlossomFetch,
 }: UseChatActionsParams): UseChatActionsReturn => {
+  const nodePays = useNodePays();
+  // Retry and edit hold closures from earlier renders, so read the mode at
+  // call time or a pre-connect closure pays from the wallet.
+  const nodePaysRef = useRef(nodePays);
+  nodePaysRef.current = nodePays;
   const [inputMessage, setInputMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isPaymentProcessing, setIsPaymentProcessing] = useState(false);
@@ -462,6 +469,7 @@ export const useChatActions = ({
       retryMessage?: boolean,
       retryPrevId?: string
     ) => {
+      const nodePays = nodePaysRef.current;
       setIsLoading(true);
       setStreamingContent("");
       setThinkingContent("");
@@ -499,6 +507,17 @@ export const useChatActions = ({
           throw new Error("SDK client is not ready");
         }
 
+        // The node's cache entry can be missing here: right after connect the
+        // node pass is still queued behind the public sweep, and a refresh
+        // pass that lost the write race can prune it. Routing only ever reads
+        // the cache, so guarantee the entry now — one request, node only.
+        if (nodePays && !discoveryAdapter.getCachedModels()[nodePays.url]?.length) {
+          await modelManager.fetchModels([nodePays.url], true);
+          if (!discoveryAdapter.getCachedModels()[nodePays.url]?.length) {
+            throw new Error("Failed to fetch the node's model list");
+          }
+        }
+
         // If the shared ModelManager already has providers + models cached,
         // pass it so resolveRequestContext skips bootstrap+fetchModels entirely
         // (instant path from cache).  On cold start (cache empty) we omit it and
@@ -508,6 +527,15 @@ export const useChatActions = ({
         const hasCache =
           modelManager.getBaseUrls().length > 0 &&
           Object.keys(cachedModels).length > 0;
+
+        // setApiKey refuses to overwrite, so replace rather than write.
+        if (
+          nodePays &&
+          storageAdapter.getApiKey(nodePays.url)?.key !== nodePays.apiKey
+        ) {
+          storageAdapter.removeApiKey(nodePays.url);
+          storageAdapter.setApiKey(nodePays.url, nodePays.apiKey);
+        }
 
         // Race hydration against Stop so a stalled media server can't hold the
         // UI; bail before any payment is made.
@@ -557,15 +585,34 @@ export const useChatActions = ({
           {
             messageHistory: apiMessageHistory as any,
             modelId: selectedModel.id,
-            // Only force the user's provider when the SDK will read OUR cache.
-            // Without the shared managers it re-fetches models first and then
-            // throws if the forced provider has since dropped the model, where
-            // ranking would simply have picked another one.
-            forcedProvider: (hasCache && baseUrl) || undefined,
+            // In node mode the node is the only provider the app knows, so
+            // always force its URL — its models were fetched just above and its
+            // API key was just (re)installed, so the SDK never needs to fall
+            // back, and a fallback would spend the user's sats somewhere they
+            // never chose. Outside node mode, only force the user's provider
+            // when the SDK will read OUR cache. Without the shared managers it
+            // re-fetches models first and then throws if the forced provider
+            // has since dropped the model, where ranking would simply have
+            // picked another one.
+            forcedProvider: nodePays
+              ? nodePays.url
+              : (hasCache && baseUrl) || undefined,
             torMode: isTorContext(),
-            mode: "xcashu",
+            mode: nodePays ? "apikeys" : "xcashu",
             discoveryAdapter,
-            walletAdapter,
+            walletAdapter: nodePays
+              ? {
+                  ...walletAdapter,
+                  // The SDK tops up from the wallet on a 402 before failover is
+                  // consulted, so while the node pays, anything reaching for the
+                  // user's proofs is a bug.
+                  sendToken: async () => {
+                    throw new Error(
+                      "Node mode: refusing to pay from your wallet."
+                    );
+                  },
+                }
+              : walletAdapter,
             storageAdapter,
             abortSignal: abortController.signal,
             ...(hasCache
@@ -623,7 +670,10 @@ export const useChatActions = ({
                 }));
               }
             },
-            onMessageAppend: (message) => {
+            onMessageAppend: (incoming) => {
+              const message = nodePays
+                ? withNodeModeError(incoming)
+                : incoming;
               // Chain appends in arrival order; cost callbacks wait on the
               // chain since both stamp the conversation's LAST stored message.
               lastAppend = lastAppend

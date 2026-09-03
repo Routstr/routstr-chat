@@ -28,6 +28,7 @@ import BalanceInvoiceTab from "@/features/wallet/components/balance/BalanceInvoi
 import SendSection from "@/features/wallet/components/balance/SendSection";
 import ReceiveSection from "@/features/wallet/components/balance/ReceiveSection";
 import { useWalletReceive } from "@/features/wallet/hooks/useWalletReceive";
+import { useNodePays } from "@/hooks/useRemoteNode";
 
 interface BalanceDisplayProps {
   setIsSettingsOpen: (isOpen: boolean) => void;
@@ -56,6 +57,7 @@ const BalanceDisplay: React.FC<BalanceDisplayProps> = ({
     transactionHistory,
     setTransactionHistory,
   } = useChat();
+  const nodePays = useNodePays();
 
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<ActiveTab>("overview");
@@ -138,9 +140,12 @@ const BalanceDisplay: React.FC<BalanceDisplayProps> = ({
   const truncatedNpub =
     npub.length <= 16 ? npub : `${npub.slice(0, 8)}...${npub.slice(-6)}`;
 
-  const displayBalance = isBalanceLoading
+  const walletBalance = isBalanceLoading
     ? "loading"
     : `${localBalance.toFixed(2)} sats`;
+  // The pill answers what pays for a chat. Inside the wallet the user still
+  // needs to see their own sats.
+  const displayBalance = nodePays ? "Node" : walletBalance;
 
   const tabTitleMap: Record<ActiveTab, string> = {
     overview: "Wallet",
@@ -289,7 +294,7 @@ const BalanceDisplay: React.FC<BalanceDisplayProps> = ({
                 <BalanceOverviewTab
                   mintSelector={mintSelector}
                   truncatedNpub={truncatedNpub}
-                  displayBalance={displayBalance}
+                  displayBalance={walletBalance}
                   onNavigate={(tab) => navigateToTab(tab)}
                 />
               )}
