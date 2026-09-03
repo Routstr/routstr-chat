@@ -508,7 +508,29 @@ export const STORAGE_KEYS = {
   LAST_MODELS_UPDATE: "lastModelsUpdate",
   AUTO_DELETE_CONVERSATIONS: "auto_delete_conversations",
   KEEP_ALIVE_ENABLED: "keep_alive_enabled",
+  REMOTE_NODE: "remote_node",
 } as const;
+
+/** A routstrd instance that pays for requests instead of the local wallet. */
+export interface RemoteNode {
+  /** Base URL of the routstrd-auth instance, always trailing-slashed. */
+  url: string;
+  apiKey: string;
+  /** npub the key was issued to, so a different account does not inherit it. */
+  pubkey: string;
+  enabled: boolean;
+}
+
+/** Fired on this tab when the node changes, since `storage` only fires on others. */
+export const REMOTE_NODE_CHANGED = "remote-node-changed";
+
+export const loadRemoteNode = (): RemoteNode | null =>
+  getStorageItem<RemoteNode | null>(STORAGE_KEYS.REMOTE_NODE, null);
+
+export const saveRemoteNode = (node: RemoteNode | null): void => {
+  setStorageItem(STORAGE_KEYS.REMOTE_NODE, node);
+  window.dispatchEvent(new Event(REMOTE_NODE_CHANGED));
+};
 
 /**
  * Load auto-delete conversations preference from localStorage

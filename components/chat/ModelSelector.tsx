@@ -13,6 +13,7 @@ import { getModelNameWithoutProvider } from "@/utils/modelUtils";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { loadModelProviderMap, loadLastUsedModel } from "@/utils/storageUtils";
 import { useDisabledProviders } from "@/hooks/useDisabledProviders";
+import { useNodePays } from "@/hooks/useRemoteNode";
 import {
   useModelPricing,
   formatProviderLabel,
@@ -141,6 +142,7 @@ export default function ModelSelector({
   // Disabled providers come from the SDK store (single source of truth used
   // for routing), not a separate localStorage list.
   const { disabledProviders } = useDisabledProviders();
+  const nodePays = useNodePays();
   // By ROW, not model: sibling favorite rows must highlight independently.
   const [hoveredRowKey, setHoveredRowKey] = useState<string | null>(null);
   const isMobile = useMediaQuery("(max-width: 768px)");
@@ -156,7 +158,9 @@ export default function ModelSelector({
   // Drawer open/close animation state
   const [isDrawerVisible, setIsDrawerVisible] = useState(false);
   const [isDrawerAnimating, setIsDrawerAnimating] = useState(false);
-  const effectiveBalance = balance + getPendingCashuTokenAmount();
+  const effectiveBalance = nodePays
+    ? Infinity
+    : balance + getPendingCashuTokenAmount();
 
   useEffect(() => {
     try {
@@ -319,7 +323,9 @@ export default function ModelSelector({
       priceSource,
       isRoutable,
       isAvailable:
-        isRoutable && !!priceSource && isModelAvailable(priceSource, effectiveBalance),
+        isRoutable &&
+        !!priceSource &&
+        (Boolean(nodePays) || isModelAvailable(priceSource, effectiveBalance)),
     };
   };
 
