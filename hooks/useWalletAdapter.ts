@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
-import { getDecodedToken } from "@cashu/cashu-ts";
+import { getTokenMetadata } from "@cashu/cashu-ts";
 import type { WalletAdapter } from "@routstr/sdk/wallet";
 import { DEFAULT_MINT_URL } from "@/lib/utils";
 
@@ -66,8 +66,8 @@ export function useWalletAdapter(
           };
         }
 
-        const decoded = getDecodedToken(token);
-        const fallbackUnit = decoded?.unit === "msat" ? "msat" : "sat";
+        const fallbackUnit =
+          getTokenMetadata(token).unit === "msat" ? "msat" : "sat";
 
         try {
           const proofs = await activeSource.receiveToken(token);

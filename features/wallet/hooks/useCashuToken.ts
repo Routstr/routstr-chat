@@ -7,7 +7,7 @@ import {
   Mint,
   Wallet,
   Proof,
-  getDecodedToken,
+  getTokenMetadata,
   CheckStateEnum,
   getEncodedTokenV4,
 } from "@cashu/cashu-ts";
@@ -403,17 +403,14 @@ export function useCashuToken() {
     setIsLoading(true);
     setError(null);
 
+    let tokenMintUrl: string | undefined;
     try {
-      // Decode token
-      const decodedToken = getDecodedToken(token);
-      if (!decodedToken) {
-        throw new Error("Invalid token format");
-      }
-
-      const { mint: mintUrl, proofs: tokenProofs, unit: unit } = decodedToken;
+      // Metadata only: wallet.receive() below resolves the token's proofs
+      // itself, once loadMint() has supplied the keysets.
+      tokenMintUrl = getTokenMetadata(token).mint;
 
       // if we don't have the mintUrl yet, add it
-      const normalizedMintUrl = await addMintIfNotExists(mintUrl);
+      const normalizedMintUrl = await addMintIfNotExists(tokenMintUrl);
       const mintDetails = cashuStore.getMint(normalizedMintUrl);
 
       // Setup wallet for receiving
@@ -486,10 +483,8 @@ export function useCashuToken() {
 
       // Check if it's a network error and add mintUrl to the error
       if (message.includes("NetworkError when attempting to fetch resource.")) {
-        // Get the mintUrl from the decoded token
-        const decodedToken = getDecodedToken(token);
-        if (decodedToken && error instanceof Error) {
-          (error as any).mintUrl = decodedToken.mint;
+        if (tokenMintUrl && error instanceof Error) {
+          (error as any).mintUrl = tokenMintUrl;
         }
       } else if (message.includes("Wallet not found")) {
         if (error instanceof Error) {

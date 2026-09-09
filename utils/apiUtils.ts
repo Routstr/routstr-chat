@@ -19,7 +19,7 @@ import {
   getOrFetchProviderInfo,
 } from "./storageUtils";
 import { getDisabledProvidersSync } from "@/utils/disabledProviders";
-import { getDecodedToken } from "@cashu/cashu-ts";
+import { getTokenMetadata } from "@cashu/cashu-ts";
 import { isThinkingCapableModel } from "./thinkingParser";
 import { SpendCashuResult } from "@/hooks/useCashuWithXYZ";
 import { Model } from "@/types/models";
@@ -614,7 +614,7 @@ export const fetchAIResponse = async (
         transactionHistory,
         onMessageAppend,
         estimatedCosts,
-        unit: getDecodedToken(token).unit ?? "sat",
+        unit: getTokenMetadata(token).unit ?? "sat",
       });
 
       // Update the last message with sats spent if callback is provided

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
-import { getDecodedToken, MintQuoteState } from "@cashu/cashu-ts";
+import { getTokenMetadata, MintQuoteState } from "@cashu/cashu-ts";
 import { useInvoiceSync } from "@/hooks/useInvoiceSync";
 import { useChat } from "@/context/ChatProvider";
 import {
@@ -181,7 +181,7 @@ export function useWalletReceive(navigateToTab: (tab: "overview" | "invoice") =>
       setError("");
       setSuccessMessage("");
       setIsImporting(true);
-      const unit = getDecodedToken(tokenToImport).unit;
+      const unit = getTokenMetadata(tokenToImport).unit;
       const proofs = await receiveToken(tokenToImport);
       const totalAmount = proofs.reduce((sum, p) => sum + p.amount, 0);
       setSuccessMessage(

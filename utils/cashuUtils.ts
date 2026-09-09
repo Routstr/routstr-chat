@@ -3,7 +3,7 @@ import {
   Mint,
   Wallet,
   getEncodedTokenV4,
-  getDecodedToken,
+  getTokenMetadata,
 } from "@cashu/cashu-ts";
 import {
   getLocalCashuToken,
@@ -395,12 +395,9 @@ export const getPendingCashuTokenDistribution = (): {
 
   tokens.forEach((entry) => {
     try {
-      const decoded = getDecodedToken(entry.token);
-      const unitDivisor = decoded.unit === "msat" ? 1000 : 1;
-      let sum = 0;
-      decoded.proofs.forEach((p: { amount: number }) => {
-        sum += p.amount / unitDivisor;
-      });
+      const metadata = getTokenMetadata(entry.token);
+      const unitDivisor = metadata.unit === "msat" ? 1000 : 1;
+      const sum = metadata.amount / unitDivisor;
       if (sum > 0) {
         distributionMap[entry.baseUrl] =
           (distributionMap[entry.baseUrl] || 0) + sum;
