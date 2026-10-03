@@ -34,6 +34,7 @@ import SettingsDialog from "@/components/ui/SettingsDialog";
 import { ModalShell } from "@/components/ui/ModalShell";
 import { DEFAULT_MINT_URL } from "@/lib/utils";
 import { removeLocalCashuToken } from "@/utils/storageUtils";
+import { isInvalidApiKeyError } from "@/utils/apiKeyErrors";
 import {
   getProviderEndpoints,
   isOnionUrl,
@@ -590,7 +591,7 @@ const ApiKeysTab = ({
         // Try to parse error body to detect invalid key
         try {
           const data = await response.json();
-          if (data?.detail?.error?.code === "invalid_api_key") {
+          if (isInvalidApiKeyError(data)) {
             return {
               updatedKey: { ...keyData, balance: null, isInvalid: true },
               error: "invalid_api_key",
@@ -940,7 +941,7 @@ const ApiKeysTab = ({
 
       if (!response.ok) {
         const data = await response.json();
-        if (data.detail?.error?.code === "invalid_api_key") {
+        if (isInvalidApiKeyError(data)) {
           throw new Error("Invalid API key");
         }
         throw new Error("Failed to verify API key");
