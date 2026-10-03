@@ -1,0 +1,83 @@
+# Keeps GitHub main in step with nostr main, in both directions.
+# Fast-forward only: it never force-pushes and never deletes a branch or tag.
+#
+# Settings:
+#   vars.SYNC_APP_ID      GitHub App allowed to push main (GitHub side)
+#   secrets.SYNC_APP_KEY  that app's private key
+#   secrets.NOSTR_BOT_NSEC key of a co-maintainer bot (nostr side, optional;
+#                          without it GitHub -> nostr is skipped)
+name: Sync nostr and GitHub
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-nostr-github
+
+env:
+  NGIT_VERSION: v3.0.3
+  NOSTR_URL: nostr://npub1m5tu2t8fynfw46hcm779qtnltt74uc6fzmf6t0l2zxwsy5uutens6mxx2f/relay.ngit.dev/routstr-chat
+  GRASP_URL: https://relay.ngit.dev/npub1m5tu2t8fynfw46hcm779qtnltt74uc6fzmf6t0l2zxwsy5uutens6mxx2f/routstr-chat.git
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Fetch nostr main and tags
+        run: git fetch --no-tags "$GRASP_URL" "+refs/heads/main:refs/remotes/nostr/main" "refs/tags/*:refs/tags/*"
+
+      - name: Compare
+        id: cmp
+        run: |
+          gh=$(git rev-parse origin/main) ns=$(git rev-parse nostr/main)
+          if [ "$gh" = "$ns" ]; then d=equal
+          elif git merge-base --is-ancestor "$gh" "$ns"; then d=nostr-ahead
+          elif git merge-base --is-ancestor "$ns" "$gh"; then d=github-ahead
+          else d=diverged; fi
+          echo "GitHub $gh, nostr $ns: $d"
+          echo "d=$d" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/create-github-app-token@v2
+        id: app
+        if: steps.cmp.outputs.d == 'nostr-ahead'
+        with:
+          app-id: ${{ vars.SYNC_APP_ID }}
+          private-key: ${{ secrets.SYNC_APP_KEY }}
+
+      - name: nostr -> GitHub
+        if: steps.cmp.outputs.d == 'nostr-ahead'
+        env:
+          TOKEN: ${{ steps.app.outputs.token }}
+        run: |
+          url=https://x-access-token:$TOKEN@github.com/${{ github.repository }}.git
+          git push "$url" refs/remotes/nostr/main:refs/heads/main
+          git push "$url" --tags
+
+      - name: GitHub -> nostr
+        if: steps.cmp.outputs.d == 'github-ahead'
+        env:
+          NSEC: ${{ secrets.NOSTR_BOT_NSEC }}
+        run: |
+          if [ -z "$NSEC" ]; then echo "GitHub is ahead and no bot key is set, skipping"; exit 0; fi
+          curl -fsSL "https://github.com/DanConwayDev/ngit-cli/releases/download/$NGIT_VERSION/ngit-$NGIT_VERSION-x86_64-unknown-linux-musl.tar.gz" | sudo tar xz -C /usr/local/bin
+          git remote add nostr "$NOSTR_URL"
+          ngit sync --trust-server --ref-name main --nsec "$NSEC" --defaults
+
+      - name: Diverged
+        if: steps.cmp.outputs.d == 'diverged'
+        run: |
+          echo "::error::nostr main and GitHub main both changed. Nothing was pushed, reconcile by hand."
+          exit 1
