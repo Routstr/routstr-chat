@@ -17,7 +17,7 @@ import {
   Proof,
   MeltQuoteResponse,
   MintQuoteResponse,
-  getDecodedToken,
+  getTokenMetadata,
   MintQuoteState,
   MeltQuoteState,
 } from "@cashu/cashu-ts";
@@ -414,7 +414,7 @@ const SixtyWallet: React.FC<{
       setError(null);
       setSuccessMessage(null);
 
-      const unit = getDecodedToken(tokenToImport).unit;
+      const unit = getTokenMetadata(tokenToImport).unit;
       const proofs = await receiveToken(tokenToImport);
       const totalAmount = proofs.reduce((sum, p) => sum + p.amount, 0);
 

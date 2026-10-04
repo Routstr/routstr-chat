@@ -1,5 +1,5 @@
 import { useEffect, useSyncExternalStore } from "react";
-import { getDecodedToken } from "@cashu/cashu-ts";
+import { getTokenMetadata } from "@cashu/cashu-ts";
 import { store, hydrate } from "@/sdk/sharedStore";
 
 /**
@@ -8,9 +8,9 @@ import { store, hydrate } from "@/sdk/sharedStore";
  */
 function tokenToSats(token: string): number {
   try {
-    const decoded = getDecodedToken(token);
-    if (decoded.unit && decoded.unit !== "sat") return 0;
-    return decoded.proofs.reduce((sum, p) => sum + p.amount, 0);
+    const metadata = getTokenMetadata(token);
+    if (metadata.unit && metadata.unit !== "sat") return 0;
+    return metadata.amount;
   } catch {
     return 0;
   }

@@ -33,7 +33,7 @@ import {
   createLightningInvoice,
   mintTokensFromPaidInvoice,
 } from "@/lib/cashuLightning";
-import { MintQuoteState, getDecodedToken } from "@cashu/cashu-ts";
+import { MintQuoteState, getTokenMetadata } from "@cashu/cashu-ts";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useAccountManager, AccountMetadata } from "@/components/ClientProviders";
 import {
@@ -179,18 +179,9 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
       try {
         setIsReceivingToken(true);
 
-        // Decode token to get original amount and unit for display
-        const decodedToken = getDecodedToken(cashuTokenParam.trim());
-        if (!decodedToken) {
-          throw new Error("Invalid token format");
-        }
-
-        const tokenUnit = decodedToken.unit || "sat";
-        // Calculate total from original token proofs
-        const originalTotalAmount = decodedToken.proofs.reduce(
-          (sum: number, p: { amount: number }) => sum + p.amount,
-          0
-        );
+        const metadata = getTokenMetadata(cashuTokenParam.trim());
+        const tokenUnit = metadata.unit || "sat";
+        const originalTotalAmount = metadata.amount;
 
         // Receive the token
         await receiveToken(cashuTokenParam.trim());
@@ -466,18 +457,9 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
     try {
       setIsReceivingToken(true);
 
-      // Decode token to get original amount and unit for display
-      const decodedToken = getDecodedToken(cashuToken.trim());
-      if (!decodedToken) {
-        throw new Error("Invalid token format");
-      }
-
-      const tokenUnit = decodedToken.unit || "sat";
-      // Calculate total from original token proofs
-      const originalTotalAmount = decodedToken.proofs.reduce(
-        (sum: number, p: { amount: number }) => sum + p.amount,
-        0
-      );
+      const metadata = getTokenMetadata(cashuToken.trim());
+      const tokenUnit = metadata.unit || "sat";
+      const originalTotalAmount = metadata.amount;
 
       // Receive the token
       await receiveToken(cashuToken.trim());
