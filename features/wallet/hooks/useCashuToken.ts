@@ -282,7 +282,6 @@ export function useCashuToken() {
         })),
         unit: preferredUnit,
       });
-      console.log("rdlogs: token", token);
       // Wallet-send tokens must be stored before dropping the proof backup.
       if (trackUnclaimed) {
         useUnclaimedTokensStore.getState().addUnclaimedToken({
