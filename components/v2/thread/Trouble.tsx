@@ -21,7 +21,8 @@ export const isStopped = (m: Message) => m.role === "system" && /^Generation sto
 const kindOf = (raw: string): Kind => {
   const t = raw.trim();
   if (/^Generation stopped/i.test(t)) return "stopped";
-  if (/did not respond|timed? ?out|no response/i.test(t)) return "noanswer";
+  // a dropped connection reads as the SDK's refund step failing ("returned -1"): no answer came back
+  if (/did not respond|timed? ?out|no response|returned -1|network error/i.test(t)) return "noanswer";
   if (DECLINED.test(t) || /content filtering/i.test(t)) return "declined";
   if (/insufficient|not enough|balance/i.test(t)) return "funds";
   return "unknown";
@@ -114,7 +115,7 @@ export default function Trouble({
   let second: React.ReactNode = null;
   if (kind === "noanswer" || many) {
     head = "The provider did not answer.";
-    sub = many ? `No reply after ${spell(msgs.length)} tries. Another model may answer sooner.` : "It happens now and then. Trying again usually works.";
+    sub = many ? `No reply after ${spell(msgs.length)} tries. Another model may answer sooner.` : "Any sats it held come back to your wallet on their own.";
     second = canAct && (
       <button type="button" className="la-act" onClick={switchModel}>
         Switch model

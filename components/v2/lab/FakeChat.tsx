@@ -316,6 +316,7 @@ export function FakeChatProvider({ children }: { children: React.ReactNode }) {
       stopGeneration: () => {
         abort.current = true;
       },
+      returnHeld: async () => {},
       refundAllApiKeys: async () => ({ totalRefunded: 0, totalFailed: 0, results: [] }),
       sendMessage: async () => {
         if (!inputMessage.trim()) return;

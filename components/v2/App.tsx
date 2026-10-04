@@ -10,6 +10,7 @@ import { KeepAliveProvider, useKeepAliveContext } from "@/components/pwa/KeepAli
 import { QueryTimeoutModal } from "@/components/QueryTimeoutModal";
 import { useCashuToken, useCashuWallet } from "@/features/wallet";
 import { useAutoRefill } from "@/hooks/useAutoRefill";
+import { useAutoReturn } from "./wallet/useAutoReturn";
 import { RoomProvider } from "./room/RoomProvider";
 import { UiProvider, useUi } from "./ui";
 import { useEnsureAccount } from "./useEnsureAccount";
@@ -54,6 +55,7 @@ function Behaviour() {
 
   // only once the wallet has loaded, so a zero on boot is not mistaken for empty
   useAutoRefill({ balance, isWalletLoaded: !isWalletLoading });
+  useAutoReturn(!isWalletLoading);
 
   const qs = searchParams.toString();
   const chatIdFromUrl = searchParams.get("chatId");

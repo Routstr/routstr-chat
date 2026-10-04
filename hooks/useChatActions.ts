@@ -91,6 +91,9 @@ export interface UseChatActionsReturn {
   ) => void;
   /** Abort the in-flight AI request / stream. */
   stopGeneration: () => void;
+  /** Brings back what providers still hold from replies that failed: their tokens, and refunds the
+   *  wallet could not receive. Leaves API-key credit alone. */
+  returnHeld: () => Promise<void>;
   /** Refund all API keys back to the active mint */
   refundAllApiKeys: () => Promise<{
     totalRefunded: number;
@@ -871,7 +874,17 @@ export const useChatActions = ({
     };
   }, [client, cashuStore.activeMintUrl]);
 
+  const returnHeld = useCallback(async () => {
+    const mintUrl = cashuStore.activeMintUrl || DEFAULT_MINT_URL;
+    const spender = client.getCashuSpender();
+    await Promise.all([
+      spender.refundXcashuTokens(mintUrl).catch(() => []),
+      spender.recoverCachedReceiveTokens().catch(() => []),
+    ]);
+  }, [client, cashuStore.activeMintUrl]);
+
   return {
+    returnHeld,
     inputMessage,
     isLoading,
     isPaymentProcessing,

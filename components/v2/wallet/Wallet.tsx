@@ -593,7 +593,7 @@ function Home({ go, freeze, bloom }: { go: (v: View, o?: { reopen?: Reopen | nul
                     : someBack
                       ? "Some came back. The rest could not yet. Try again later."
                       : "Nothing came back yet. Try again later."
-                  : "Part of your balance above. Kept there so replies start fast."}
+                  : "Part of your balance above. Held by providers that have not answered yet; it comes back on its own when they do."}
             </span>
           </div>
         </div>
