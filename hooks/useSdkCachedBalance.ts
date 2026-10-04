@@ -37,8 +37,13 @@ function getSnapshot(): number {
       sum + tokens.reduce((s, t) => s + tokenToSats(t.token), 0),
     0,
   );
+  // refunds a provider sent back that the wallet could not take in yet
+  const parkedTotal = state.cachedReceiveTokens.reduce(
+    (sum, t) => sum + (t.unit === "msat" ? t.amount / 1000 : t.amount),
+    0,
+  );
   // Satoshis are integers — round away floating-point drift from accumulation
-  return Math.round(apiKeyTotal + childKeyTotal + xcashuTotal);
+  return Math.round(apiKeyTotal + childKeyTotal + xcashuTotal + parkedTotal);
 }
 
 function getServerSnapshot(): number {

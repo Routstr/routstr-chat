@@ -835,10 +835,15 @@ export const useChatActions = ({
   const refundAllApiKeys = useCallback(async () => {
     const mintUrl = cashuStore.activeMintUrl || DEFAULT_MINT_URL;
     const spender = client.getCashuSpender();
-    const [providerResults, xcashuResults] = await Promise.all([
+    const [providerResults, xcashuResults, parkedResults] = await Promise.all([
       spender.refundProviders(mintUrl, true),
       spender.refundXcashuTokens(mintUrl).catch((error) => {
         console.warn("Failed to refund xcashu tokens", error);
+        return [];
+      }),
+      // refunds already sent back by a provider, parked when the wallet could not receive them
+      spender.recoverCachedReceiveTokens().catch((error) => {
+        console.warn("Failed to receive parked refunds", error);
         return [];
       }),
     ]);
@@ -852,10 +857,12 @@ export const useChatActions = ({
 
     const totalRefunded =
       providerResults.filter((r) => r.success).length +
-      xcashuResults.filter((r) => r.success).length;
+      xcashuResults.filter((r) => r.success).length +
+      parkedResults.filter((r) => r.success).length;
     const totalFailed =
       providerResults.filter((r) => !r.success).length +
-      xcashuResults.filter((r) => !r.success).length;
+      xcashuResults.filter((r) => !r.success).length +
+      parkedResults.filter((r) => !r.success).length;
 
     return {
       totalRefunded,
