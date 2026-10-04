@@ -235,6 +235,7 @@
 .island .tipped:has(:focus-visible) > .tip { opacity: 1; transform: none; transition-delay: 0s; }
 .island .model[aria-expanded="true"] + .tip, .island:not([data-face="write"]) .tip, .island[data-drag] .tip,
 .island[data-picking] .tip { display: none; }
+.island .tipped[data-quiet] > .tip { opacity: 0; transition-delay: 0s; }
 @media (hover: none) { .island .tip { display: none; } }
 
 /* ══ attachments: they ride above the words ══════════════════════════════ */

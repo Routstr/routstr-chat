@@ -200,7 +200,7 @@ export function Account({ go }: { go: (id: SettingsSection) => void }) {
       <>
         <Head
           title="Account"
-          lede="Your key is your account. There is no email and no password."
+          lede="Your key is your account. No email, no password."
         />
         <Grp id="g-signin" k="Sign in">
           <div className="st-signin">
@@ -290,7 +290,7 @@ export function Account({ go }: { go: (id: SettingsSection) => void }) {
     <>
       <Head
         title="Account"
-        lede="Your key is your account. There is no email and no password."
+        lede="Your key is your account. No email, no password."
       />
       <Grp id="g-you" k="You">
         <div className="st-id">
@@ -585,7 +585,6 @@ export function Sync() {
     <>
       <Head
         title="Sync and storage"
-        lede="What leaves this device, and where it is kept."
       />
       <Grp id="g-chats" k="Chats">
         <Row
@@ -930,7 +929,7 @@ export function Node() {
   const head = (
     <Head
       title="Remote node"
-      lede="Send chats through a routstrd node you have access to. It pays with its own wallet."
+      lede="Chats go through your routstrd node, which pays from its own wallet."
     />
   );
   if (!active)
@@ -1204,7 +1203,7 @@ export function Console() {
 export function About() {
   return (
     <>
-      <Head title="About" lede="What this app is, and where its code lives." />
+      <Head title="About" />
       <Grp id="g-about" k="Routstr">
         <div className="st-about">
           <span className="st-mark">

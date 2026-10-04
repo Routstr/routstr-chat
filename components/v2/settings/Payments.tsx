@@ -97,7 +97,7 @@ export default function Payments() {
 
   return (
     <>
-      <Head title="Payments" lede="Where your sats are, how each reply is paid, and where top-ups come from." />
+      <Head title="Payments" />
       <Grp id="g-balance" k="Balance">
         <div className="st-row st-balrow">
           <div className="st-txt">

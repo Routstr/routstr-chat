@@ -57,18 +57,15 @@ describe("sortRows", () => {
 
 describe("words", () => {
   it("prices read the way the composer says them", () => {
-    expect(fmt(0.354)).toBe("0.35");
-    expect(fmt(7.46)).toBe("7.5");
+    expect(fmt(7.46)).toBe("7");
     expect(fmt(1240.2)).toBe("1,240");
   });
   it("says what a model takes in and gives back", () => {
     const m = model("x", "X", { architecture: { input_modalities: ["text", "image", "file"], output_modalities: ["text"] } } as unknown as Partial<Model>);
     expect(handles(m)).toEqual(["Text, images and PDFs in", "text out"]);
   });
-  it("places prices on a log line and counts cheaper and pricier", () => {
+  it("places prices on a log line", () => {
     const s = priceScale([1, 10, 100]);
     expect(s.at(10)).toBeCloseTo(0.5);
-    expect(s.cheaperThan(10)).toBe(33);
-    expect(s.pricierThan(10)).toBe(33);
   });
 });

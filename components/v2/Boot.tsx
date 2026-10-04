@@ -201,8 +201,9 @@ export default function Boot({ ready, onDone, first: forceFirst }: { ready: bool
             delay: full ? 530 : 250,
             easing: S,
           });
-        // the rows under the brand fill in once the mark has landed, so it flies over an empty card
-        if (railShown && !reduced && mark && shown)
+        // the rows under the brand fill in once the mark has landed, so it flies over an empty card.
+        // A folded rail keeps them hidden: animating their opacity would show titles on the spine
+        if (railShown && !reduced && mark && shown && !document.querySelector("[data-furniture='rail'][data-fold]"))
           document.querySelectorAll("[data-furniture='rail'] .card :is(.sb-new, .sb-find, .sb-list)").forEach((el) =>
             A(el, [{ opacity: 0 }, { opacity: 1 }], { duration: 320, delay: FLY * 0.9 + 40, easing: E })
           );

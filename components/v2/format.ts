@@ -51,12 +51,30 @@ export const sats = (n: number) => {
 export const satUnit = (n: number) => (sats(n) === "1" ? "sat" : "sats");
 
 /** "Anthropic: Claude Sonnet 5" -> "Claude Sonnet 5" */
+// words a model id spells in lower case that people write differently
+const CASE: Record<string, string> = { gpt: "GPT", glm: "GLM", oss: "OSS", vl: "VL", ai: "AI", deepseek: "DeepSeek", minimax: "MiniMax", openai: "OpenAI" };
+
+/** A raw id as people write it: "ollama_cloud/kimi-k3" -> "Kimi K3",
+ *  "gpt-6-astra" -> "GPT-6 Astra", "deepseek-v4-1-flash" -> "DeepSeek V4.1 Flash". */
+const fromId = (raw: string) => {
+  const out: string[] = [];
+  for (const t of raw.slice(raw.lastIndexOf("/") + 1).split(/[-_]+/).filter(Boolean)) {
+    const prev = out[out.length - 1];
+    if (/^\d+$/.test(t) && prev && /\d$/.test(prev)) out[out.length - 1] = `${prev}.${t}`;
+    else if (/^\d/.test(t) && prev === "GPT") out[out.length - 1] = `GPT-${t}`;
+    else out.push(CASE[t] ?? (/^[a-z]\d|^\d+[bkm]$/.test(t) ? t.toUpperCase() : t[0].toUpperCase() + t.slice(1)));
+  }
+  return out.join(" ");
+};
+
 export const shortModelName = (name?: string, id?: string) => {
   if (name) {
     const i = name.indexOf(": ");
-    return i > -1 ? name.slice(i + 2) : name;
+    const n = i > -1 ? name.slice(i + 2) : name;
+    // a name that is only the id again reads like one
+    return /\s/.test(n) || n !== n.toLowerCase() ? n : fromId(n);
   }
-  return id ?? "";
+  return id ? fromId(id) : "";
 };
 
 export const textOf = (content: Message["content"]): string => {

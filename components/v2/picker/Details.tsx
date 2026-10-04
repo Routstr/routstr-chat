@@ -4,10 +4,9 @@ import React, { memo, useCallback, useEffect, useLayoutEffect, useRef, useState 
 import { renderCompanyIcon } from "@/components/chat/model-selector/display";
 import { getCompanyMeta } from "@/components/chat/modelCompanies";
 import { Icon } from "../icons";
-import { shortModelName } from "../format";
+import { satUnit, shortModelName } from "../format";
 import type { Catalog } from "./useCatalog";
 import {
-  about,
   ctxK,
   fmt,
   handles,
@@ -46,7 +45,7 @@ interface DetailsProps {
    short fades; once the scroll rests, each edge snaps to the gap between two
    lines. The mask stops are registered custom properties, so the snap is a
    quick wipe, not a jump. */
-const LINES = ".dt-say, .dt-desc, .dt-facts dd";
+const LINES = ".dt-desc, .dt-facts dd";
 const BLOCKS = ".dt-head, .dt-id, .pl, .dt-sum, .dt-facts dt, .dt-t, .rte";
 
 // layout coordinates, not screen ones: the card may still be scaling in
@@ -240,9 +239,6 @@ function Details(props: DetailsProps) {
   const short = Math.max(0, Math.ceil(need - cat.balance));
   const base = routes[0] ? cat.cost(routes[0].model) : p;
   const x = p > 0 ? cat.scale.at(p) : null;
-  const cheaper = cat.scale.cheaperThan(p);
-  const pricier = cat.scale.pricierThan(p);
-  const balance = Math.floor(cat.balance).toLocaleString("en-US");
   const kicker = `${getCompanyMeta(co).label}${isPrivate(m) && !nameSaysPrivate(m) ? " · private" : ""}`;
   const [hin, hout] = handles(m);
   // the last input keeps its "in": "Text, images and / PDFs in"
@@ -252,27 +248,6 @@ function Details(props: DetailsProps) {
   const ctx = Number(m.context_length ?? 0);
   const created = Number(m.created ?? 0);
   const hostName = host ? rt.host : null;
-
-  const compare = cheaper >= pricier ? `Cheaper than ${cheaper}%` : `Pricier than ${pricier}%`;
-  const say =
-    p <= 0 ? (
-      <>This provider does not list a price for it.</>
-    ) : cat.node ? (
-      <>
-        About <strong>{fmt(p)}&nbsp;sats</strong> for this message, paid by your node. {compare} of models here.
-      </>
-    ) : ok ? (
-      <>
-        About <strong>{fmt(p)}&nbsp;sats</strong> for this message. {compare} of models here, and your {balance}&nbsp;sats
-        covers about <strong>{about(Math.floor(cat.balance / p))}</strong> <span className="nw">like it.</span>
-      </>
-    ) : (
-      <>
-        About <strong>{fmt(p)}&nbsp;sats</strong> for this message. To start it needs{" "}
-        <strong>{Math.ceil(need).toLocaleString("en-US")}&nbsp;sats</strong> in the wallet, and you have {balance}. Unused
-        sats come back after the answer.
-      </>
-    );
 
   const per = (r: { model: typeof m }) => (
     <span className="rt-s">
@@ -317,7 +292,7 @@ function Details(props: DetailsProps) {
         )}
         <span className="m-g" aria-hidden="true">{renderCompanyIcon(co, "co-ico")}</span>
         <span className="m-n" aria-hidden="true">{name}</span>
-        {p > 0 && <span className="m-p" aria-hidden="true">~{fmt(p)}&nbsp;sats</span>}
+        {p > 0 && <span className="m-p" aria-hidden="true">~{fmt(p)}&nbsp;{satUnit(p)}</span>}
       </div>
 
       <div className="dt-scroll scroll" ref={sc} onScroll={() => measure(true)}>
@@ -364,7 +339,7 @@ function Details(props: DetailsProps) {
             </div>
             {x !== null && (
               <div className="pl-mark" style={{ "--x": x.toFixed(4) } as React.CSSProperties}>
-                <b>{fmt(p)}&nbsp;sats</b>
+                <b>~{fmt(p)}&nbsp;{satUnit(p)} a message</b>
               </div>
             )}
             <div className="pl-ends">
@@ -372,7 +347,6 @@ function Details(props: DetailsProps) {
               <span>pricier</span>
             </div>
           </div>
-          <p className="dt-say">{say}</p>
         </section>
 
         {multi ? (
@@ -385,7 +359,6 @@ function Details(props: DetailsProps) {
             <Icon name="servers" size={17} />
             <span className="s-t">
               <strong>{routes.length} providers</strong>
-              <span className="s-f">, from {fmt(base)}&nbsp;sats</span>
             </span>
             <span className="s-r">
               {hostName ? <span className="h">{hostName}</span> : "Automatic"}
@@ -402,6 +375,26 @@ function Details(props: DetailsProps) {
         )}
 
         <dl className="dt-facts">
+          {p <= 0 ? (
+            <>
+              <dt>Price</dt>
+              <dd>Not listed by this provider</dd>
+            </>
+          ) : cat.node ? (
+            <>
+              <dt>Paid by</dt>
+              <dd>Your node</dd>
+            </>
+          ) : !ok ? (
+            <>
+              <dt>Holds</dt>
+              <dd>
+                <span className="nw">{Math.ceil(need).toLocaleString("en-US")} sats</span>
+                <wbr />
+                <span className="nw dim"><Sep />unused comes back</span>
+              </dd>
+            </>
+          ) : null}
           <dt>Context</dt>
           <dd>
             {ctx > 0 ? (

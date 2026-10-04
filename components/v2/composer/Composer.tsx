@@ -16,7 +16,7 @@ import { Icon } from "../icons";
 import { useUi } from "../ui";
 import { useActions } from "../useActions";
 import { useMoney } from "../useMoney";
-import { sats, shortModelName, textOf } from "../format";
+import { sats, satUnit, shortModelName, textOf } from "../format";
 import { useAttachments } from "./useAttachments";
 import { estimateSats, promptTokens } from "../price";
 import { settle, takeFlight } from "./landing";
@@ -508,7 +508,7 @@ export default function Composer({ centred }: { centred: boolean }) {
     </>
   ) : priceShown ? (
     <>
-      <b>~{sats(estimate.value!)}</b> sats
+      <b>~{sats(estimate.value!)}</b> {satUnit(estimate.value!)}
     </>
   ) : null;
 
@@ -615,7 +615,12 @@ export default function Composer({ centred }: { centred: boolean }) {
                 e.target.value = "";
               }}
             />
-            <span className="chip-wrap tipped">
+            {/* a press opens or closes the picker; its tip waits until the pointer leaves and comes back */}
+            <span
+              className="chip-wrap tipped"
+              onPointerDown={(e) => e.currentTarget.setAttribute("data-quiet", "")}
+              onPointerLeave={(e) => e.currentTarget.removeAttribute("data-quiet")}
+            >
               <button
                 ref={chip}
                 className="model"

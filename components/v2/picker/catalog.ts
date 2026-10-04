@@ -58,8 +58,8 @@ export const parseKey = (key: string) => {
 /* ── numbers in words ─────────────────────────────────────────────────── */
 
 /** A price for this message: "0.65", "7.5", "13", "1,240". */
-export const fmt = (n: number) =>
-  n < 1 ? n.toFixed(2) : n < 10 ? n.toFixed(1) : Math.round(n).toLocaleString("en-US");
+// replies settle in whole sats, so prices show whole sats
+export const fmt = (n: number) => Math.round(n).toLocaleString("en-US");
 
 /** sats per token, shown per 1M tokens: "270", "0.40", "12.5". */
 export const per1M = (perToken: number) => {
@@ -74,7 +74,6 @@ const sig2 = (n: number) => {
   return Math.round(n / p) * p;
 };
 /** Two significant figures, for "covers about 1,600 like it". */
-export const about = (n: number) => (n >= 1000 ? sig2(n) : n).toLocaleString("en-US");
 
 /** 0.75 words a token, 500 words a page. */
 export const pages = (ctx: number) => sig2(ctx * 0.0015).toLocaleString("en-US");
@@ -183,15 +182,13 @@ export const measureFor = (key: SortKey, cost: (r: Row) => number, routes: (id: 
 
 export function priceScale(costs: number[]) {
   const ok = costs.filter((c) => c > 0 && Number.isFinite(c));
-  if (!ok.length) return { at: () => 0.5, ticks: [] as number[], cheaperThan: () => 0, pricierThan: () => 0 };
+  if (!ok.length) return { at: () => 0.5, ticks: [] as number[] };
   const lo = Math.log10(Math.min(...ok));
   const hi = Math.log10(Math.max(...ok));
   const at = (c: number) => (hi === lo ? 0.5 : Math.max(0, Math.min(1, (Math.log10(c) - lo) / (hi - lo))));
   return {
     at,
     ticks: ok.map(at),
-    cheaperThan: (c: number) => Math.round((ok.filter((v) => v > c).length / ok.length) * 100),
-    pricierThan: (c: number) => Math.round((ok.filter((v) => v < c).length / ok.length) * 100),
   };
 }
 

@@ -4,12 +4,9 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { nip19 } from "nostr-tools";
 import { useObservableState } from "applesauce-react/hooks";
 import { useApiKeysSync } from "@/hooks/useApiKeysSync";
-import { useChat } from "@/context/ChatProvider";
 import { useAccountManager } from "@/components/ClientProviders";
 import { useChatSync } from "@/hooks/useChatSync";
-import { useLogs } from "@/hooks/useLogs";
 import { useSdkUsageHistory } from "@/features/wallet/hooks/useSdkUsageHistory";
-import { APP_VERSION } from "@/lib/version";
 import { loadRemoteNode } from "@/utils/storageUtils";
 import { useBitcoinConnectStatus } from "@/hooks/useBitcoinConnect";
 import { Icon, type IconName } from "../icons";
@@ -129,12 +126,10 @@ export default function Settings() {
 function Layer({ leaving }: { leaving: boolean }) {
   const ui = useUi();
   const room = useRoom();
-  const chat = useChat();
   const money = useMoney();
   const { chatSyncEnabled } = useChatSync();
   const { manager } = useAccountManager();
   const active = useObservableState(manager.active$);
-  const logs = useLogs();
   const week = useMemo(() => Date.now() - 7 * 86_400_000, []);
   const usage = useSdkUsageHistory({ after: week });
 
@@ -209,20 +204,20 @@ function Layer({ leaving }: { leaving: boolean }) {
       return 0;
     }
   })();
+  // a value shows only when it tells you something; defaults and "None" stay quiet
   const values: Record<SettingsSection, string> = {
     look: room.room === "auto" ? "System" : ROOMS.find((r) => r.id === room.room)?.name ?? "",
     account: active ? short(nip19.npubEncode(active.pubkey), 9, 4) : "Not signed in",
     wallet: money.node ? "Node pays" : `${n0(money.total)} ${satUnit(money.total)}`,
-    keys: !active ? "None" : keysN ? plural(keysN, "key") : "None",
-    // the figure is this week's, so it says so
+    keys: active && keysN ? plural(keysN, "key") : "",
     // fractions of a sat are real spending: the same figure the Usage page shows
-    history: !usage.hasUsage ? "None yet" : usage.totals.requests ? `${sats(usage.totals.satsCost)} ${satUnit(usage.totals.satsCost)} this week` : "Nothing this week",
-    models: chat.configuredModels.length ? plural(chat.configuredModels.length, "favorite") : "No favorites",
-    // nothing syncs without a key, whatever the switch says
-    sync: chatSyncEnabled && active ? "Syncing" : "Off",
-    node: nodeState,
-    console: logs.logCount ? plural(logs.logCount, "line") : "Empty",
-    about: APP_VERSION ?? "",
+    history: usage.totals.requests ? `${sats(usage.totals.satsCost)} ${satUnit(usage.totals.satsCost)} this week` : "",
+    models: "",
+    // nothing syncs without a key, whatever the switch says; syncing is the normal state
+    sync: chatSyncEnabled && active ? "" : "Off",
+    node: nodeState === "Off" ? "" : nodeState,
+    console: "",
+    about: "",
   };
 
   /* ── the index ──────────────────────────────────────────────────────── */
@@ -588,7 +583,7 @@ function Layer({ leaving }: { leaving: boolean }) {
           <div className="st-results" id="st-results" role="listbox" aria-label="Matching settings" hidden={!q}>
             {q && !hits.length ? (
               <p className="st-res-none">
-                Nothing matches <b>“{q}”</b>. Try words like relays, key, theme or top up.
+                Nothing matches <b>“{q}”</b>.
               </p>
             ) : (
               hits.map(([l, s, , w, note], i) => {
@@ -621,9 +616,6 @@ function Layer({ leaving }: { leaving: boolean }) {
               })
             )}
           </div>
-        </div>
-        <div className="st-nav-foot">
-          <span>Saved as you go</span>
         </div>
       </nav>
       <section className="st-pane" ref={pane} aria-labelledby="st-title" data-scrolled={scrolled ? "" : undefined}>

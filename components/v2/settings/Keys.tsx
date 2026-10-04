@@ -36,7 +36,7 @@ export default function Keys() {
     <>
       <Head
         title="API keys"
-        lede="Keys let other apps spend sats you set aside, each at one provider. They are being replaced by routstrd, a small app that pays from your own wallet. Keys you have keep working."
+        lede="Keys let other apps spend credit at one provider. routstrd is replacing them; your keys keep working."
       />
       <Grp id="g-keys" k="Your keys">
         {/* keys are kept with an account; signed out, the old panel would wait for ever */}

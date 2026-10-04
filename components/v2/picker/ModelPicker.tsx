@@ -10,7 +10,7 @@ import { normalizeBaseUrl } from "@/utils/modelUtils";
 import { getStorageItem, setStorageItem } from "@/utils/storageUtils";
 import { Icon, type IconName } from "../icons";
 import { useUi } from "../ui";
-import { shortModelName } from "../format";
+import { satUnit, shortModelName } from "../format";
 import { chipAnchor } from "../composer/Composer";
 import { panelBox } from "../furniture";
 import { tokenMs } from "../motion";
@@ -621,11 +621,12 @@ function Picker({
     target?.focus({ preventScroll: true });
   }, [shown, phone, signedOut]);
 
-  // the risen composer settles back when the picker closes or leaves
+  // the risen composer settles back once the card has left (the unmount below), never under the
+  // fading card; a phone's sheet stays mounted, so it lets go on close
   useEffect(() => {
-    if (open) return;
+    if (open || !phone) return;
     document.querySelector<HTMLElement>("[data-furniture='panel']")?.removeAttribute("data-picking");
-  }, [open]);
+  }, [open, phone]);
   useEffect(() => () => document.querySelector<HTMLElement>("[data-furniture='panel']")?.removeAttribute("data-picking"), []);
 
   // close: fall back, then leave
@@ -896,7 +897,7 @@ function Picker({
             {
               price: cat.cost(rt.model),
               short: !ok,
-              sub: ok ? subOf(r) : [`needs ${Math.ceil(cat.needFor(rt.model)).toLocaleString("en-US")} sats to start`],
+              sub: subOf(r),
             },
           ] as const;
         })
@@ -1139,7 +1140,6 @@ function Picker({
       <footer className="mp-foot" inert={hidden}>
         <span className="mp-bal">{bal}</span>
         <span className="mp-note">
-          <span className="unit">Prices are for one message</span>
           <span className="keys" aria-hidden="true">↑ ↓ to move, Enter to use, Esc to close</span>
         </span>
       </footer>
@@ -1337,10 +1337,16 @@ const ModelRow = memo(function ModelRow({
         </span>
       </span>
       <span className="r-p">
+        {short && (
+          <span className="r-need" title="Needs more sats to start">
+            <Icon name="wallet" size={13} />
+            <span className="sr">, needs more sats</span>
+          </span>
+        )}
         {price > 0 && (
           <>
             ~{fmt(price)}
-            <span className="r-u"> sats</span>
+            <span className="r-u"> {satUnit(price)}</span>
           </>
         )}
       </span>

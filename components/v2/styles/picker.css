@@ -57,8 +57,9 @@ html[data-room="night"] .mp, html[data-room="meridian"][data-face="dusk"] .mp { 
 /* a new chat: the composer rises while you choose, the greeting steps away */
 .panel[data-state="empty"] .dock { transition: transform var(--d-mid) var(--e-out); }
 .panel[data-state="empty"][data-picking] .dock { transform: translateY(var(--pick-rise, 0px)); transition: transform var(--d-move) var(--e-spring); }
-.panel[data-state="empty"] .stage, .panel[data-state="empty"] .stage-tail { transition: opacity var(--d-mid) var(--e-out); }
-.panel[data-state="empty"][data-picking] .stage, .panel[data-state="empty"][data-picking] .stage-tail { opacity: 0; transition-duration: var(--d-fast); }
+/* back from the picker, the greeting comes in once the composer has nearly settled: a slow fade, a beat late */
+.panel[data-state="empty"] .stage, .panel[data-state="empty"] .stage-tail { transition: opacity var(--d-slow) var(--e-out) var(--d-fast); }
+.panel[data-state="empty"][data-picking] .stage, .panel[data-state="empty"][data-picking] .stage-tail { opacity: 0; transition-duration: var(--d-fast); transition-delay: 0s; }
 
 /* ══ makers rail: named, so nothing is a riddle ════════════════════════ */
 .mp-rail { grid-area: rail; min-height: 0; position: relative; }
@@ -238,6 +239,7 @@ html[data-room="night"] .mp, html[data-room="meridian"][data-face="dusk"] .mp { 
    the "needs N sats" line carries the state */
 .mp .row[data-short] .r-g { opacity: .42; }
 .mp .row[data-short] .r-n { color: var(--ink-2); }
+.mp .r-need { display: inline-flex; margin-right: 6px; vertical-align: -2px; color: var(--ink-3); }
 .mp .row[data-current]::before {
   content: ""; position: absolute; left: 4px; top: 50%; width: 3px; height: 20px; margin-top: -10px; border-radius: 3px;
   background: var(--ink);
@@ -293,7 +295,6 @@ html[data-room="night"] .mp, html[data-room="meridian"][data-face="dusk"] .mp { 
 .mp-note > span { grid-area: 1 / 1; transition: opacity var(--d-mid) var(--e-out); overflow: hidden; text-overflow: ellipsis; }
 .mp-note .keys { opacity: 0; }
 .mp[data-hints] .mp-note .keys { opacity: 1; }
-.mp[data-hints] .mp-note .unit { opacity: 0; }
 
 /* ══ details ═══════════════════════════════════════════════════════════ */
 .mp-detail {
@@ -365,8 +366,6 @@ html[data-room="night"] .mp, html[data-room="meridian"][data-face="dusk"] .mp { 
 }
 .pl-ends { display: flex; justify-content: space-between; margin-top: 4px; font-family: var(--f-mono); font-size: 10px; letter-spacing: .11em; text-transform: uppercase; color: var(--ink-3); }
 /* three lines, always: what comes under it starts at the same height for every model */
-.dt-say { margin-top: 10px; min-height: 63px; font-size: 13.5px; line-height: 21px; color: var(--ink-2); text-wrap: pretty; }
-.dt-say strong { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
 
 /* who runs it, in one line, always in view: it scrolls down to the full list */
 .dt-sum {
@@ -386,11 +385,10 @@ button.dt-sum:hover { background: var(--fill-1); color: var(--ink); }
 button.dt-sum:hover .s-r .v2-ico { transform: translateY(2px); }
 .mp .u-short { display: none; }
 @container (max-width: 340px) {
-  .dt-sum .s-f, .mp .u-long { display: none; }
+  .mp .u-long { display: none; }
   .mp .u-short { display: inline; }
   .dt-scroll, .dt-mini { padding-left: 18px; padding-right: 18px; }
 }
-@container (max-width: 420px) { .dt-sum.has-host .s-f { display: none; } }
 /* narrow details: the quiet half of a fact takes its own line, without the dot */
 @container (max-width: 340px) { .dt-facts dd .dim { display: block; } .dt-facts dd .dim .sep { display: none; } }
 

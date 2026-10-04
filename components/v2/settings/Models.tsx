@@ -18,7 +18,6 @@ import {
 import type { Model } from "@/types/models";
 import { Icon } from "../icons";
 import { shortModelName } from "../format";
-import { useUi } from "../ui";
 import {
   Btn,
   Fold,
@@ -101,12 +100,7 @@ function useProviders() {
 
 export default function Models() {
   const chat = useChat();
-  const ui = useUi();
   const toast = useToast();
-  const browse = () => {
-    ui.closeSettings();
-    ui.setPicker(true);
-  };
   const tor = isTorContext();
   const {
     all: providers,
@@ -174,20 +168,14 @@ export default function Models() {
 
   return (
     <>
-      <Head
-        title="Models"
-        lede="Favorites come first in the model menu. Turn off any provider you never want your messages to reach."
-      />
+      <Head title="Models" />
       <Grp id="g-favs" k="Favorites">
         {!favs.length && !goneFavs.gone.size ? (
           <div className="st-emptyrow">
             <span className="st-it-ic">
               <Icon name="star" />
             </span>
-            <p className="st-rn">
-              No favorites yet. Star models in the model menu.
-            </p>
-            <Btn onClick={browse}>Browse models</Btn>
+            <p className="st-rn">No favorites yet.</p>
           </div>
         ) : (
           <>
@@ -248,9 +236,6 @@ export default function Models() {
             {favs.length > 0 && (
               <>
                 <div className="st-more">
-                  <Btn kind="bare" onClick={browse}>
-                    Browse models
-                  </Btn>
                   <Btn
                     kind="bare"
                     controls="f-clearfavs"
@@ -293,6 +278,7 @@ export default function Models() {
             )}
           </>
         )}
+        <FavAdder />
       </Grp>
 
       <Grp
@@ -362,6 +348,75 @@ export default function Models() {
           </div>
         )}
       </Grp>
+    </>
+  );
+}
+
+/* Star a model without leaving settings: type a few letters, star a match. */
+function FavAdder() {
+  const chat = useChat();
+  const [q, setQ] = useState("");
+  const favIds = useMemo(() => new Set(chat.configuredModels.map((k) => parseModelKey(k).id)), [chat.configuredModels]);
+  const matches = useMemo(() => {
+    const qq = q.trim().toLowerCase();
+    if (!qq) return [];
+    const seen = new Set<string>();
+    return chat.models
+      .filter((m) => {
+        if (seen.has(m.id) || favIds.has(m.id)) return false;
+        seen.add(m.id);
+        return `${shortModelName(m.name, m.id)} ${m.id}`.toLowerCase().includes(qq);
+      })
+      .slice(0, 6);
+  }, [q, chat.models, favIds]);
+
+  return (
+    <>
+      <div className="st-add one">
+        <input
+          className="st-in"
+          type="search"
+          placeholder="Add a favorite, like sonnet"
+          aria-label="Find a model to add to favorites"
+          autoCapitalize="off"
+          spellCheck={false}
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          onKeyDown={(e) => e.key === "Escape" && q && (e.stopPropagation(), setQ(""))}
+        />
+      </div>
+      {q.trim() && (
+        <div className="st-items">
+          {matches.length ? (
+            matches.map((m) => {
+              const name = shortModelName(m.name, m.id);
+              return (
+                <div className="st-it" key={m.id}>
+                  <span className="st-it-ic">{renderCompanyIcon(getModelCompanyId(m), "co-ico")}</span>
+                  <div className="st-it-m">
+                    <span className="st-it-t">{name}</span>
+                    <span className="st-it-s">{m.id}</span>
+                  </div>
+                  <div className="st-it-r">
+                    <button
+                      type="button"
+                      className="st-ib st-star"
+                      aria-pressed="false"
+                      aria-label={`Add ${name} to favorites`}
+                      title="Add to favorites"
+                      onClick={() => chat.toggleConfiguredModel(m.id)}
+                    >
+                      <Icon name="star" size={16} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <p className="st-rn st-pad">No model matches “{q.trim()}”.</p>
+          )}
+        </div>
+      )}
     </>
   );
 }
