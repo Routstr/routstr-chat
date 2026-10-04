@@ -44,7 +44,8 @@ function RollWords({ text, className }: { text: string; className?: string }) {
     const key = ++n.current;
     // a newer phrase removes any leaving one at once and rolls in over the current
     setItems((xs) => [...xs.filter((x) => x.state !== "out").map((x) => ({ ...x, state: "out" as const })), { key, text, state: "in" as const }]);
-    const raf = requestAnimationFrame(() => requestAnimationFrame(() => setItems((xs) => xs.map((x) => (x.key === key ? { ...x, state: "rest" } : x)))));
+    // the inner frame can outlive a newer phrase: it settles this one only while it is still arriving
+    const raf = requestAnimationFrame(() => requestAnimationFrame(() => setItems((xs) => xs.map((x) => (x.key === key && x.state === "in" ? { ...x, state: "rest" } : x)))));
     const t = window.setTimeout(() => setItems((xs) => xs.filter((x) => x.state !== "out")), tokenMs("--d-fast") + 40);
     return () => {
       cancelAnimationFrame(raf);

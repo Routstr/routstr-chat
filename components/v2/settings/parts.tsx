@@ -250,7 +250,9 @@ export function Roll({ text, className = "st-v" }: { text: string; className?: s
     if (reducedMotion()) return setItems([{ k: ++n.current, t: text, s: "" }]);
     const k = ++n.current;
     setItems((xs) => [...xs.filter((x) => x.s !== "out").map((x) => ({ ...x, s: "out" as const })), { k, t: text, s: "in" as const }]);
-    const r = requestAnimationFrame(() => requestAnimationFrame(() => setItems((xs) => xs.map((x) => (x.k === k ? { ...x, s: "lit" } : x)))));
+    // only the inner frame can outlive a newer value (cancel stops the outer one), so it lights the
+    // new one only while it is still arriving, never one already leaving
+    const r = requestAnimationFrame(() => requestAnimationFrame(() => setItems((xs) => xs.map((x) => (x.k === k && x.s === "in" ? { ...x, s: "lit" } : x)))));
     const t1 = window.setTimeout(() => setItems((xs) => xs.filter((x) => x.s !== "out")), tokenMs("--d-mid") + 40);
     const t2 = window.setTimeout(() => setItems((xs) => xs.map((x) => (x.k === k ? { ...x, s: "" } : x))), tokenMs("--d-move") * 2);
     return () => {
