@@ -366,7 +366,7 @@ html[data-room="meridian"] .v2 {
 .st-acts .grow { flex: 1; }
 
 /* list items (relays, mints, keys, providers, favourites) */
-.st-items { display: grid; gap: 1px; margin: 4px -12px 0; }
+.st-items { display: grid; align-content: start; gap: 1px; margin: 4px -12px 0; }
 .st-it { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; column-gap: 12px; min-height: 48px; padding: 6px 12px; border-radius: var(--r-sm);
   transition: background var(--d-fast) var(--e-out), opacity var(--d-mid) var(--e-out), transform var(--d-mid) var(--e-out); }
 /* only a row that does something lights under the pointer */
@@ -500,7 +500,7 @@ html[data-room="meridian"] .v2 {
 .st-stat-v { font-family: var(--f-display); font-weight: var(--w-display); font-size: calc(34px * var(--display-scale)); font-stretch: var(--display-stretch, 100%);
   letter-spacing: var(--display-track); color: var(--ink); font-variant-numeric: tabular-nums lining-nums; line-height: 1.1; }
 .st-stat-k { margin-top: 2px; font-family: var(--f-body); font-size: 13px; color: var(--ink-3); }
-.st-tbl { display: grid; margin: 0 -12px; }
+.st-tbl { display: grid; align-content: start; margin: 0 -12px; }
 .st-tr { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.2fr) 60px 74px 84px; gap: 12px; align-items: center; min-height: 44px; padding: 0 12px; border-radius: var(--r-xs);
   font-family: var(--f-ui); font-size: 13.5px; color: var(--ink); }
 .st-tr:not(.st-th):hover { background: var(--fill-1); }
@@ -510,6 +510,11 @@ html[data-room="meridian"] .v2 {
 .st-th { min-height: 32px; font-family: var(--f-mono); font-size: 10px; letter-spacing: .11em; text-transform: uppercase; color: var(--ink-3); }
 .st-th span, .st-th .num { font-family: var(--f-mono); font-size: 10px; letter-spacing: .11em; }
 .st-tfoot { padding: 10px 0 2px; font-family: var(--f-ui); font-size: 12.5px; color: var(--ink-3); }
+.st-pager { display: flex; align-items: center; justify-content: flex-end; gap: 4px; font-variant-numeric: tabular-nums; }
+.st-pager > span { margin-right: 6px; }
+.st-pg { display: grid; place-items: center; width: 32px; height: 32px; border-radius: var(--r-sm); color: var(--ink-2); }
+.st-pg:hover:not(:disabled) { background: var(--fill-1); color: var(--ink); }
+.st-pg:disabled { opacity: .35; }
 .st-amt { font-family: var(--f-mono); font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--ink); }
 .st-amt[data-dir="out"] { color: var(--ink-2); }
 .st-view { animation: stRise var(--d-mid) var(--e-out) both; }
@@ -640,6 +645,18 @@ html[data-room="meridian"] .v2 {
 .st-sel .v2-ico { position: absolute; right: 10px; }
 .st-sel select { position: absolute; inset: 0; opacity: 0; cursor: pointer; font-size: 16px; width: 100%; }
 .st-sel:has(select:focus-visible) { box-shadow: var(--focus); }
+/* where the browser lets a select's list be styled (Chromium), it wears the app's menu surface;
+   elsewhere the system list stays */
+@supports (appearance: base-select) {
+  .st-sel select, .st-sel select::picker(select) { appearance: base-select; }
+  .st-sel select::picker(select) {
+    margin-top: 6px; padding: 6px; min-width: 200px; border: 0; border-radius: var(--r-md);
+    background: rgb(var(--surface-hero)); color: var(--ink); box-shadow: var(--lift-3), var(--glow);
+  }
+  .st-sel option { padding: 8px 10px; border-radius: var(--r-sm); font-family: var(--f-ui); font-size: 14px; color: var(--ink-2); }
+  .st-sel option:hover, .st-sel option:focus-visible { background: var(--fill-1); color: var(--ink); outline: none; }
+  .st-sel option:checked { color: var(--ink); }
+}
 .st-provs { grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); column-gap: 8px; }
 .st-provs .st-it { cursor: pointer; }
 .st-master .st-rn { margin-top: 2px; }
@@ -658,6 +675,11 @@ html[data-room="meridian"] .v2 {
 
 /* Usage */
 .st-filters { padding-top: 16px; }
+/* one row: a long name ends in "…" instead of pushing its menu onto a new line */
+.st-filters { flex-wrap: nowrap; }
+.st-filters > .st-seg { flex: none; }
+.st-filters .st-sel, .st-filters .st-sel:last-child { flex: 0 1 auto; min-width: 0; max-width: 200px; }
+.st-filters .st-sel > span { min-width: 0; }
 .st-stats { padding: 22px 0 14px; }
 .st-bars { display: flex; align-items: flex-end; height: 88px; margin: 2px 0 22px; padding-bottom: 20px; position: relative; }
 .st-bars::after { content: ""; position: absolute; left: 0; right: 0; bottom: 20px; height: 1px; background: var(--hair); }
@@ -801,7 +823,8 @@ html[data-room="meridian"] .v2 {
   .st-rel { min-height: 48px; }
   .st-filters .grow { display: none; }
   .st-filters .st-seg, .st-headseg .st-seg { display: grid; width: 100%; }
-  .st-filters .st-sel { flex: 1; }
+  .st-filters { flex-wrap: wrap; }
+  .st-filters .st-sel, .st-filters .st-sel:last-child { flex: 1; max-width: none; }
   .st-path { column-gap: 8px; }
   .st-path-node { max-width: 150px; }
   .st-hero-v { font-size: calc(40px * var(--display-scale)); }

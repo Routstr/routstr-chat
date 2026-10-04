@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useChat } from "@/context/ChatProvider";
 import { useChatSync } from "@/hooks/useChatSync";
 import { useObservableState } from "applesauce-react/hooks";
@@ -81,6 +81,39 @@ function tick(period: Period, start: number, i: number, n: number) {
   return i % 3 === 0 ? d.toLocaleString("en-US", { month: "short" }) : "";
 }
 
+const PAGE = 15;
+/** A paged list keeps a full page's height on a shorter last page, so the pager under it stays put. */
+function useFullPageHeight(paged: boolean) {
+  const ref = useRef<HTMLDivElement>(null);
+  const full = useRef(0);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.minHeight = "";
+    full.current = paged ? Math.max(full.current, el.offsetHeight) : 0;
+    if (full.current) el.style.minHeight = `${full.current}px`;
+  });
+  return ref;
+}
+/** A long list a page at a time, newest first: where you are, and a step either way. */
+function Pager({ n, page, onPage }: { n: number; page: number; onPage: (p: number) => void }) {
+  if (n <= PAGE) return null;
+  const last = Math.ceil(n / PAGE) - 1;
+  return (
+    <div className="st-tfoot st-pager">
+      <span>
+        {n0(page * PAGE + 1)}–{n0(Math.min(n, (page + 1) * PAGE))} of {n0(n)}
+      </span>
+      <button type="button" className="st-pg" aria-label="Newer" disabled={page === 0} onClick={() => onPage(page - 1)}>
+        <Icon name="left" size={14} />
+      </button>
+      <button type="button" className="st-pg" aria-label="Older" disabled={page >= last} onClick={() => onPage(page + 1)}>
+        <Icon name="right" size={14} />
+      </button>
+    </div>
+  );
+}
+
 export default function Usage({ view: asked }: { view?: "wallet" } = {}) {
   const chat = useChat();
   const { chatSyncEnabled } = useChatSync();
@@ -97,6 +130,9 @@ export default function Usage({ view: asked }: { view?: "wallet" } = {}) {
   const [period, setPeriod] = useState<Period>("7d");
   const [model, setModel] = useState("");
   const [provider, setProvider] = useState("");
+  const [reqPage, setReqPage] = useState(0);
+  // a new period or filter starts from the newest again
+  useEffect(() => setReqPage(0), [period, model, provider]);
   const after = useMemo(() => (period === "all" ? undefined : Date.now() - (period === "1d" ? D : period === "7d" ? 7 * D : 30 * D)), [period]);
   const u = useSdkUsageHistory({ after, modelId: model || undefined, baseUrl: provider || undefined });
   const modelName = (id: string) => {
@@ -153,6 +189,9 @@ export default function Usage({ view: asked }: { view?: "wallet" } = {}) {
   const entries = useTransactionHistoryStore((s) => s.history);
   const clearHistory = useTransactionHistoryStore((s) => s.clearHistory);
   const [apart, setApart] = useState(false);
+  const [actPage, setActPage] = useState(0);
+  useEffect(() => setActPage(0), [apart]);
+  const reqList = useFullPageHeight(u.entries.length > PAGE);
   const [pending, setPending] = useState(0);
   const [dist, setDist] = useState<{ baseUrl: string; amount: number }[]>([]);
   const { done, copy } = useCopied();
@@ -185,6 +224,7 @@ export default function Usage({ view: asked }: { view?: "wallet" } = {}) {
     return { rows: out.sort((a, b) => b.t - a.t).slice(0, 60), paired: changeOf.size };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entries, apart]);
+  const actList = useFullPageHeight(ledger.length > PAGE);
 
   /* ── clearing ──────────────────────────────────────────────────────────── */
   const [ask, setAsk] = useState<"" | "log" | "pay" | "chats">("");
@@ -223,8 +263,8 @@ export default function Usage({ view: asked }: { view?: "wallet" } = {}) {
                 label="Period"
                 opts={[
                   ["1d", "24h"],
-                  ["7d", "7 days"],
-                  ["30d", "30 days"],
+                  ["7d", "7d"],
+                  ["30d", "30d"],
                   ["all", "All"],
                 ]}
                 value={period}
@@ -370,7 +410,7 @@ export default function Usage({ view: asked }: { view?: "wallet" } = {}) {
                   </div>
                 ) : (
                   <>
-                    <div className="st-tbl" role="table" aria-label="Requests">
+                    <div className="st-tbl" role="table" aria-label="Requests" ref={reqList}>
                       <div className="st-tr st-th" role="row">
                         <span role="columnheader">Model</span>
                         <span role="columnheader">Provider</span>
@@ -384,7 +424,7 @@ export default function Usage({ view: asked }: { view?: "wallet" } = {}) {
                           When
                         </span>
                       </div>
-                      {u.entries.slice(0, 40).map((e) => (
+                      {u.entries.slice(reqPage * PAGE, (reqPage + 1) * PAGE).map((e) => (
                         <div className="st-tr" role="row" key={e.id}>
                           <span className="st-mod" role="cell">
                             {modelIcon(e.modelId) && (
@@ -410,7 +450,7 @@ export default function Usage({ view: asked }: { view?: "wallet" } = {}) {
                         </div>
                       ))}
                     </div>
-                    {!filtered && u.totals.requests > 40 && <p className="st-tfoot">The latest 40 of {n0(u.totals.requests)} requests</p>}
+                    <Pager n={u.entries.length} page={reqPage} onPage={setReqPage} />
                   </>
                 )}
               </>
@@ -460,8 +500,9 @@ export default function Usage({ view: asked }: { view?: "wallet" } = {}) {
                 <p className="st-rn">No payments yet. Money in and out shows here.</p>
               </div>
             ) : (
-              <div className="st-items st-ledger">
-                {ledger.map((e) => (
+              <>
+              <div className="st-items st-ledger" ref={actList}>
+                {ledger.slice(actPage * PAGE, (actPage + 1) * PAGE).map((e) => (
                   <div className="st-it noic" key={e.id}>
                     <div className="st-it-m">
                       <span className="st-it-t">{e.kind}</span>
@@ -477,6 +518,8 @@ export default function Usage({ view: asked }: { view?: "wallet" } = {}) {
                   </div>
                 ))}
               </div>
+              <Pager n={ledger.length} page={actPage} onPage={setActPage} />
+              </>
             )}
           </Grp>
         </div>
