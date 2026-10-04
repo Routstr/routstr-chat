@@ -125,8 +125,12 @@ export default function Trouble({
     head = "Not enough sats for this reply.";
     sub = (
       <>
-        {model} holds {hold ? <span className="n">{Number(hold).toLocaleString("en-US")} sats</span> : "a few sats"} while it answers. What it does not use comes
-        back. Your wallet has <span className="n">{Math.floor(money.total).toLocaleString("en-US")} sats</span>.
+        {hold && (
+          <>
+            {model} needs <span className="n">{Number(hold).toLocaleString("en-US")} sats</span> to start.{" "}
+          </>
+        )}
+        Your wallet has <span className="n">{Math.floor(money.total).toLocaleString("en-US")} sats</span>.
       </>
     );
     prime = (

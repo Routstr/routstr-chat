@@ -86,6 +86,9 @@ html[data-room="night"] .island, html[data-room="meridian"][data-face="dusk"] .i
 /* ── amounts: four numbers, no boxes until you touch one ────────────────── */
 /* the cells sit on the text column: a picked cell's fill starts and ends where the words do */
 .pa-amts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s1); margin: 0; }
+/* a narrow card (small window, sidebar open) takes two rows rather than squeezing four numbers together */
+.pa-pickbody { container-type: inline-size; }
+@container (max-width: 499.98px) { .pa-amts { grid-template-columns: 1fr 1fr; } }
 .pa-amt {
   position: relative; display: grid; justify-items: center; align-content: center; gap: 3px;
   min-height: 76px; padding: var(--s3) var(--s1); border-radius: var(--r-sm);
@@ -104,7 +107,6 @@ html[data-room="night"] .island, html[data-room="meridian"][data-face="dusk"] .i
 .pa-amt[aria-disabled="true"] .pa-r { color: var(--ink-3); }
 .pa-amt[aria-disabled="true"]:hover { background: none; }
 .pa-amt[aria-disabled="true"]:active { transform: none; }
-.pa-keep { display: none; }
 .pa-num {
   display: inline-flex; align-items: baseline; gap: 5px; height: var(--pa-nh);
   font-family: var(--f-display); font-weight: var(--w-display);
@@ -351,7 +353,6 @@ a.prime[aria-disabled="true"] { opacity: .45; pointer-events: none; }
 /* held back while what was typed is wrong: neutral until the value changes */
 .pa-card .prime[data-hold] { background: var(--fill-2); color: var(--ink); box-shadow: none; filter: none; transform: none; }
 .pa-corner .pa-link { font-size: 14px; }
-.pa-note { font-family: var(--f-body); font-size: 13.5px; color: var(--ink-3); white-space: nowrap; }
 /* icon and label are one group, centred; both labels share one cell, so the
    button keeps the widest label's width and the icon never drifts from it */
 .pa-swapc { display: inline-grid; grid-template-columns: auto auto; align-items: center; gap: 8px; }
@@ -504,7 +505,6 @@ a.prime[aria-disabled="true"] { opacity: .45; pointer-events: none; }
   .pa-amt[aria-disabled="true"], .pa-amt[aria-disabled="true"]:hover { background: color-mix(in srgb, var(--fill-1) 30%, transparent); }
   .pa-num { font-size: calc(34px * var(--display-scale)); }
   .pa-r { font-size: 11.5px; }
-  .pa-keep { display: block; text-align: center; font-family: var(--f-body); font-size: 14px; line-height: 1.4; color: var(--ink-3); }
 
   /* the token: a 160px field centred in the space; once read, the same slot holds the amount */
   .pa-mid:has(.pa-tokbody) { gap: var(--s3); }

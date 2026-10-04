@@ -676,7 +676,7 @@ export default function Composer({ centred }: { centred: boolean }) {
           </div>
 
           <div className="backside" inert={face === "write"}>
-            {back && <Back face={back} estimate={estimate.value} island={island} />}
+            {back && <Back face={back} island={island} />}
           </div>
         </div>
       </div>

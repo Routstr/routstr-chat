@@ -24,14 +24,6 @@ const PRESETS = [500, 1000, 5000];
 const fmt = (n: number) => Math.round(n).toLocaleString("en-US");
 const nbsp = (s: string) => s.replace(/ ([^ ]+)$/, " $1"); // no lonely last word
 
-const replies = (sats: number, est: number | null) => {
-  if (!est || est <= 0) return "";
-  const n = sats / est;
-  if (!Number.isFinite(n) || n < 1) return "";
-  const r = n < 20 ? Math.floor(n) : n < 200 ? Math.round(n / 5) * 5 : Math.round(n / 10) * 10;
-  return `about ${fmt(r)} ${r === 1 ? "reply" : "replies"}`;
-};
-
 const phoneNow = () => typeof window !== "undefined" && window.innerWidth <= 760;
 const touch = () => typeof window !== "undefined" && window.matchMedia("(hover: none)").matches;
 const reduced = () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -104,11 +96,9 @@ type Way = null | "ext" | "key" | "bunker";
 
 export default function Back({
   face,
-  estimate,
   island,
 }: {
   face: "pay" | "auth";
-  estimate: number | null;
   island: React.RefObject<HTMLDivElement | null>;
 }) {
   const { selectedModel } = useChat();
@@ -424,7 +414,7 @@ export default function Back({
           t: "Top up to send",
           s: (
             <>
-              You have <b>{fmt(balance)} sats</b>. This model needs <b>{fmt(need)}</b> to start a reply, and hands back what it does not&nbsp;use.
+              You have <b>{fmt(balance)} sats</b>. This model needs <b>{fmt(need)} sats</b>{" "}to start a&nbsp;reply.
             </>
           ),
         }
@@ -475,7 +465,7 @@ export default function Back({
                     <span className="pa-n">{fmt(n)}</span>
                     <span className="pa-u">sats</span>
                   </span>
-                  <span className="pa-r">{low ? "too little" : replies(n, estimate)}</span>
+                  <span className="pa-r">{low && "too little"}</span>
                 </button>
               );
             })}
@@ -503,11 +493,10 @@ export default function Back({
                 {other && <span className="pa-u">{otherN === 1 ? "sat" : "sats"}</span>}
               </span>
               <span className="pa-r" id="paOtherR">
-                {!other ? "any amount" : otherN < minOther ? `at least ${fmt(minOther)}` : replies(otherN, estimate) || "sats"}
+                {!other ? "any amount" : otherN < minOther ? `at least ${fmt(minOther)}` : ""}
               </span>
             </label>
           </div>
-          {isAuthenticated && <p className="pa-keep">Unused sats stay yours.</p>}
         </div>
       </div>
     );
@@ -1007,7 +996,6 @@ export default function Back({
           <span className="pa-long">Have a key? </span>Sign in
         </button>
       );
-    else if (!phone) corner = <span className="pa-note">Unused sats stay yours.</span>;
   } else if (view === "inv") {
     const payBtn = (label: string) => (
       <Swap className="prime" icon="bolt" idle={label} busy="Paying" on={funding.walletPaying} onClick={() => void funding.payFromWallet()} />

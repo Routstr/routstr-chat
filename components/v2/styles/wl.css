@@ -323,7 +323,7 @@ button.wl-line:active { background: var(--fill-2); }
 @keyframes wlFromL { from { opacity: 0; transform: translateX(-14px); } to { opacity: 1; transform: none; } }
 
 /* ── the amount you type ───────────────────────────────────────────────── */
-.wl-amount { display: grid; justify-items: center; gap: 8px; padding: 0; }
+.wl-amount { display: grid; grid-template-columns: minmax(0, 1fr); justify-items: center; gap: 8px; padding: 0; }
 /* the line box is the largest step's, always: as the number steps down only
    the glyphs shrink, and nothing under it moves while you type */
 .wl-amount { --amt-top: 60px; }
@@ -346,7 +346,7 @@ button.wl-line:active { background: var(--fill-2); }
 .wl-amount .wl-unit { font-size: 14px; }
 .wl-amount[data-bump] .wl-amt-field { animation: wlBump var(--d-mid) var(--e-spring); }
 @keyframes wlBump { 40% { transform: translateY(-2px) scale(1.03); } }
-.wl-buys { min-height: calc(2em * 1.45); font-family: var(--f-ui); font-size: 12.5px; line-height: 1.45; color: var(--ink-3); text-align: center; }
+.wl-buys { max-width: 100%; min-height: calc(2em * 1.45); font-family: var(--f-ui); font-size: 12.5px; line-height: 1.45; color: var(--ink-3); text-align: center; }
 .wl-buys > span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wl-buys .l2 { color: var(--ink-3); }
 .wl-buys.warn .l1 { color: var(--wl-warn); }
@@ -654,7 +654,8 @@ button.wl-line:active { background: var(--fill-2); }
 /* first paint: the head labels are already right, nothing cross-fades in */
 .wl[data-first] .wl-swap > * { transition: none; }
 /* the amount and its picks are one set in the middle of the pane */
-.wl-amtset { display: grid; gap: var(--s6); justify-items: center; }
+/* one column the panel's width: a long model or mint name ellipsizes, it never widens the panel */
+.wl-amtset { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s6); justify-items: center; }
 .wl-amtset .wl-picks { width: 100%; }
 /* a token someone else already claimed: the amount it held, dimmed, and why */
 .wl-read.is-spent .wl-read-n { color: var(--ink-3); }

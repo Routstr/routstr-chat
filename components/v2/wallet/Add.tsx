@@ -5,10 +5,10 @@ import { getDecodedToken } from "@cashu/cashu-ts";
 import { Icon } from "../icons";
 import { useMoney } from "../useMoney";
 import { useFunding } from "./useFunding";
-import { usePendingInvoices, usePerReply, useActiveMint } from "./Wallet";
+import { usePendingInvoices, useActiveMint } from "./Wallet";
 import { Amount, Clock, Code, CopyLine, Done, Note, NumT, Pane, Pasted, Picks, Seg, Spin, Two, Warn, fmt, flipFrom, host, useCopy } from "./bits";
 
-/* Adding money. Lightning: type an amount (what it buys shows as you type),
+/* Adding money. Lightning: type an amount,
    then the typed number becomes the invoice's title while its code prints in.
    Cashu token: paste it, see what it holds and from where, then take it.
    Money only moves through useFunding, which calls the wallet's own hooks. */
@@ -35,7 +35,6 @@ export default function Add({
   const funding = useFunding();
   const money = useMoney();
   const mint = useActiveMint();
-  const { per, name } = usePerReply();
   const pending = usePendingInvoices();
   const { copied, copy } = useCopy(say);
   const [tab, setTab] = useState<0 | 1>(0);
@@ -274,20 +273,7 @@ export default function Add({
                 onEnter={() => create(n)}
                 bump={bump}
                 fieldRef={field}
-                buys={
-                  n > 0 && per > 0 ? (
-                    <Two
-                      a={
-                        <>
-                          About <b>{fmt(Math.max(1, Math.floor(n / per)))} {Math.floor(n / per) === 1 ? "reply" : "replies"}</b>
-                        </>
-                      }
-                      b={`with ${name}`}
-                    />
-                  ) : (
-                    <Two a="Type an amount" b="or pick one below" />
-                  )
-                }
+                buys={n > 0 ? null : <Two a="Type an amount" b="or pick one below" />}
               />
               <Picks
                 list={[500, 1000, 5000].map((p) => [p, fmt(p)] as [number, string])}
