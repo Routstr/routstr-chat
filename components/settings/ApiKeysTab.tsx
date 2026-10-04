@@ -865,15 +865,14 @@ const ApiKeysTab = ({
       // Use the key-specific baseUrl or fallback to global baseUrl
       // Make the topup request to the backend
       const response = await fetch(
-        `${urlToUse}v1/wallet/topup?cashu_token=${encodeURIComponent(
-          cashuToken
-        )}`,
+        `${urlToUse}v1/wallet/topup`,
         {
           method: "POST",
           headers: {
             Authorization: `Bearer ${keyToTopUp.key}`,
             "Content-Type": "application/json",
           },
+          body: JSON.stringify({ cashu_token: cashuToken }),
         }
       );
 
