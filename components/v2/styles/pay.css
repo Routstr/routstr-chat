@@ -155,8 +155,12 @@ html[data-room="night"] .island, html[data-room="meridian"][data-face="dusk"] .i
   background: var(--qr-bg); color: var(--qr-ink);
   box-shadow: var(--lift-1), inset 0 0 0 1px var(--hair);
   display: grid; place-items: center; padding: 14px;
-  transition: background var(--d-move) var(--e-out), box-shadow var(--d-move) var(--e-out);
+  transition: background var(--d-move) var(--e-out), box-shadow var(--d-move) var(--e-out), transform var(--d-fast) var(--e-spring);
 }
+/* the code copies on a press: it lifts under the pointer, as the wallet's does, instead of a system tooltip */
+.pa-qr[data-copyable] { cursor: pointer; }
+@media (hover: hover) and (pointer: fine) { .pa-qr[data-copyable]:hover { transform: translateY(-1px); } }
+.pa-qr[data-copyable]:active { transform: scale(.985); }
 .pa-qr > svg { width: 100%; height: 100%; display: block; grid-area: 1 / 1; }
 .pa-qr .qr-dots { clip-path: circle(0% at 50% 50%); transition: clip-path calc(560ms) var(--e-out); }
 .pa-qr .qr-eyes { opacity: .16; transition: opacity calc(var(--d-move)) var(--e-out); }

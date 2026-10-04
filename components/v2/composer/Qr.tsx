@@ -39,9 +39,9 @@ export default function Qr({
         if (x >= h0 - 0.5 && x < h1 + 0.5 && y >= h0 - 0.5 && y < h1 + 0.5) continue;
         d += `M${(x + 0.5 - r).toFixed(2)} ${y + 0.5}a${r} ${r} 0 1 0 ${2 * r} 0a${r} ${r} 0 1 0 ${-2 * r} 0`;
       }
-    return { n, d, c: n / 2, m: hole * 0.78, k: n * 0.039, sw: n * 0.038 };
+    return { n, d, c: n / 2, m: hole * 0.78, k: n * 0.039 };
   }, [value]);
-  const { n, d, c, m, k, sw } = drawn;
+  const { n, d, c, m, k } = drawn;
   const copyable = state === "ready" && !!onCopy;
 
   return (
@@ -52,7 +52,6 @@ export default function Qr({
       role={copyable ? "button" : "img"}
       tabIndex={copyable ? 0 : undefined}
       aria-label={copyable ? `${label}. Copy` : label}
-      title={copyable ? "Copy" : undefined}
       onClick={copyable ? onCopy : undefined}
       onKeyDown={
         copyable
@@ -81,12 +80,13 @@ export default function Qr({
         <svg className="qr-mark" x={c - m / 2} y={c - m / 2} width={m} height={m} viewBox="190 200 640 640">
           <path d={MARK_D} fill="currentColor" />
         </svg>
+        {/* the copy glyph spans 4 to 20 of its 24-unit box: sized to the clear centre, like the mark */}
         <g
           className="qr-copy"
-          transform={`translate(${c - 12 * k * 1.15} ${c - 12 * k * 1.15}) scale(${k * 1.15})`}
+          transform={`translate(${c - 12 * (m / 18)} ${c - 12 * (m / 18)}) scale(${m / 18})`}
           fill="none"
           stroke="currentColor"
-          strokeWidth={((sw * 0.8) / (k * 1.15)).toFixed(3)}
+          strokeWidth={1.9}
           strokeLinecap="round"
           strokeLinejoin="round"
         >
