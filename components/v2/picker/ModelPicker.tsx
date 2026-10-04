@@ -7,7 +7,8 @@ import { useAuth } from "@/context/AuthProvider";
 import { MODEL_COMPANIES, getCompanyMeta } from "@/components/chat/modelCompanies";
 import { renderCompanyIcon } from "@/components/chat/model-selector/display";
 import { normalizeBaseUrl } from "@/utils/modelUtils";
-import { getStorageItem, setStorageItem } from "@/utils/storageUtils";
+import { getStorageItem, setProviderLastUpdate, setStorageItem } from "@/utils/storageUtils";
+import { useDisabledProviders } from "@/hooks/useDisabledProviders";
 import { Icon, type IconName } from "../icons";
 import { useUi } from "../ui";
 import { satUnit, shortModelName } from "../format";
@@ -512,6 +513,14 @@ function Picker({
     setF(NO_FILTERS);
     setOnly(null);
     input.current?.focus();
+  };
+
+  // the same way back as Settings, Models: every provider on, then ask them again
+  const { disabledProviders, setDisabledProviders } = useDisabledProviders();
+  const allOn = () => {
+    disabledProviders.forEach((u) => setProviderLastUpdate(u, 0));
+    setDisabledProviders([]);
+    void chat.fetchModels(0).catch(() => {});
   };
 
   const push = useCallback(
@@ -1105,7 +1114,7 @@ function Picker({
               ))}
             </div>
           ) : !total ? (
-            <Empty scope={scope} q={q} f={f} only={only} balance={cat.balance} onClear={clearAll} onFund={fund} />
+            <Empty scope={scope} q={q} f={f} only={only} balance={cat.balance} onClear={clearAll} onFund={fund} onUseAll={allOn} />
           ) : (
             sections.map((s) => (
               <div key={s.title} className="sec" role="group" aria-label={s.title}>
@@ -1377,6 +1386,7 @@ function Empty({
   balance,
   onClear,
   onFund,
+  onUseAll,
 }: {
   scope: Scope;
   q: string;
@@ -1385,9 +1395,22 @@ function Empty({
   balance: number;
   onClear: () => void;
   onFund: () => void;
+  onUseAll: () => void;
 }) {
   const query = q.trim();
   const anyFilter = f.fits || f.web || f.priv || f.images || !!only;
+  // no search and no filter, yet nothing: every provider is off (by hand, or by a review check that failed)
+  if (!query && !anyFilter && scope === "all")
+    return (
+      <div className="mp-empty">
+        <Icon name="servers" size={22} />
+        <p className="e-t">No providers to ask</p>
+        <p className="e-s">They are switched off, or their reviews could not be checked.</p>
+        <div className="e-row">
+          <button className="soft sm" type="button" onClick={onUseAll}>Use all providers</button>
+        </div>
+      </div>
+    );
   if (scope === "favorites" && !query && !anyFilter)
     return (
       <div className="mp-empty">
