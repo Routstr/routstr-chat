@@ -26,6 +26,22 @@ const HOUR = 60 * MIN;
 const DAY = 24 * HOUR;
 /** Seconds or milliseconds, as the stores keep them. */
 export const toMs = (t?: number) => (!t ? 0 : t < 1e12 ? t * 1000 : t);
+
+/** A reply pays first and gets its change back just after: each payment takes the first money that
+ *  comes in within two minutes of it. Anything else coming in is a top-up. */
+export function pairChange<E extends { id: string; direction: string; timestamp?: number }>(entries: E[]) {
+  const sorted = [...entries].sort((a, b) => toMs(a.timestamp) - toMs(b.timestamp));
+  const changeOf = new Map<string, E>();
+  const taken = new Set<string>();
+  sorted.forEach((e, i) => {
+    if (e.direction !== "out") return;
+    const c = sorted.find((x, k) => k > i && x.direction === "in" && !taken.has(x.id) && toMs(x.timestamp) - toMs(e.timestamp) <= 120_000);
+    if (!c) return;
+    changeOf.set(e.id, c);
+    taken.add(c.id);
+  });
+  return { sorted, changeOf, taken };
+}
 const hm = (t: number) => new Date(t).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
 const md = (t: number) => new Date(t).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 const midnight = () => new Date(new Date().setHours(0, 0, 0, 0)).getTime();

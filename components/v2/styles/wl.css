@@ -590,6 +590,8 @@ button.wl-line:active { background: var(--fill-2); }
 .wl-mi .wl-amt { grid-column: 3; grid-row: 1 / span 2; font-size: 12px; color: var(--ink-3); }
 .wl-mi[aria-checked="true"] .wl-amt { color: var(--ink-2); }
 .wl-mi.manage { grid-template-columns: 18px 1fr; font-family: var(--f-ui); font-size: 13px; color: var(--ink-2); }
+.wl-mi.manage > .v2-ico { grid-column: 1; grid-row: 1; }
+.wl-mi.manage > span { grid-column: 2; grid-row: 1; white-space: nowrap; }
 .wl-mi.manage .v2-ico { color: var(--ink-3); grid-row: auto; }
 .wl-menu-sep { height: 1px; background: var(--hair); margin: 5px 8px; }
 

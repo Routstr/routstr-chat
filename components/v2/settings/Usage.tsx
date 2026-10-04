@@ -15,6 +15,7 @@ import { Icon } from "../icons";
 import { satUnit, sats, shortModelName } from "../format";
 import { tokenMs } from "../motion";
 import { Btn, Fold, Grp, Roll, Say, Seg, Sw, hostOf, n0, plural, useCopied, useToast } from "./parts";
+import { pairChange } from "../wallet/bits";
 
 /* Every request and every payment, kept only in this browser. The period's
    three numbers read at a glance; hover, focus or tap a bar and they roll to
@@ -165,22 +166,8 @@ export default function Usage({ view: asked }: { view?: "wallet" } = {}) {
     return () => window.removeEventListener("storage", check);
   }, []);
   const { rows: ledger, paired } = useMemo(() => {
-    const sorted = [...entries].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-    const at = (e: (typeof sorted)[number]) => ms(e.timestamp || 0);
+    const { sorted, changeOf, taken } = pairChange(entries);
     const amt = (e: (typeof sorted)[number]) => Number(e.amount) || 0;
-    // a reply pays first and gets its change back just after: each payment takes the first money
-    // that comes in within two minutes of it. Anything else coming in is a top-up, received.
-    const changeOf = new Map<string, (typeof sorted)[number]>();
-    const taken = new Set<string>();
-    for (let i = 0; i < sorted.length; i++) {
-      const e = sorted[i];
-      if (e.direction !== "out") continue;
-      const c = sorted.find((x, k) => k > i && x.direction === "in" && !taken.has(x.id) && at(x) - at(e) <= 120_000);
-      if (c) {
-        changeOf.set(e.id, c);
-        taken.add(c.id);
-      }
-    }
     const out: { id: string; kind: string; amt: number; t: number }[] = [];
     for (const e of sorted) {
       if (apart) {

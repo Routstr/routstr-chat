@@ -13,7 +13,7 @@ import { shortModelName } from "../format";
 import { estimateSats, promptTokens } from "../price";
 import { useMoney } from "../useMoney";
 import { tokenMs } from "../motion";
-import { Note, Odometer, dayOf, fmt, host, left, mintLabel, numSize, phoneNow, reduced, span, toMs, whenIn } from "./bits";
+import { Note, Odometer, dayOf, fmt, host, left, mintLabel, numSize, pairChange, phoneNow, reduced, span, toMs, whenIn } from "./bits";
 import Add, { type Reopen } from "./Add";
 import Send, { Tokens } from "./Send";
 
@@ -283,6 +283,9 @@ function Home({ go, freeze, bloom }: { go: (v: View, o?: { reopen?: Reopen | nul
   // held with providers: named, counted, one tap from coming home
   const [heldState, setHeldState] = useState<"idle" | "busy" | "done" | "part">("idle");
   const [heldBack, setHeldBack] = useState(0);
+  // the store can drop returned tokens a moment after the call resolves, so the count of
+  // successful returns also says whether anything came back
+  const [someBack, setSomeBack] = useState(false);
   // the note says what moved, measured: held before the call less held after
   // (the call resolves once the store has re-read what the providers hold)
   const giveBack = async () => {
@@ -292,7 +295,8 @@ function Home({ go, freeze, bloom }: { go: (v: View, o?: { reopen?: Reopen | nul
       const r = await refundAllApiKeys();
       const moved = Math.max(0, before - readSdkCachedBalance());
       setHeldBack(moved);
-      setHeldState(moved > 0 && r.totalFailed === 0 ? "done" : "part");
+      setSomeBack(r.totalRefunded > 0);
+      setHeldState((moved > 0 || r.totalRefunded > 0) && r.totalFailed === 0 ? "done" : "part");
     } catch {
       setHeldState("part");
     }
@@ -306,13 +310,19 @@ function Home({ go, freeze, bloom }: { go: (v: View, o?: { reopen?: Reopen | nul
   // activity: one line per movement, by day; three spends in a row fold
   const [all, setAll] = useState(false);
   const [runs, setRuns] = useState<Set<string>>(new Set());
-  const items = useMemo(
-    () =>
-      history.history
-        .map((h) => ({ id: h.id, dir: h.direction, amount: Number(h.amount) || 0, t: toMs(h.timestamp) }))
-        .sort((a, b) => b.t - a.t),
-    [history.history]
-  );
+  // a reply is one line, what it really cost: its payment less the change that came back
+  const items = useMemo(() => {
+    const { sorted, changeOf, taken } = pairChange(history.history);
+    return sorted
+      .filter((h) => !taken.has(h.id))
+      .map((h) => {
+        const c = changeOf.get(h.id);
+        return { id: c ? `${h.id}-${c.id}` : h.id, dir: h.direction, amount: (Number(h.amount) || 0) - (c ? Number(c.amount) || 0 : 0), t: toMs(h.timestamp) };
+      })
+      // a reply that was refunded in full cost nothing and needs no line
+      .filter((h) => h.amount > 0)
+      .sort((a, b) => b.t - a.t);
+  }, [history.history]);
 
   if (money.loading && !money.node) {
     return (
@@ -580,7 +590,9 @@ function Home({ go, freeze, bloom }: { go: (v: View, o?: { reopen?: Reopen | nul
                 : heldState === "part"
                   ? heldBack > 0
                     ? `${fmt(heldBack)} sats came back. The rest could not yet. Try again later.`
-                    : "Nothing came back yet. Try again later."
+                    : someBack
+                      ? "Some came back. The rest could not yet. Try again later."
+                      : "Nothing came back yet. Try again later."
                   : "Part of your balance above. Kept there so replies start fast."}
             </span>
           </div>
@@ -679,9 +691,7 @@ function MintFoot() {
         <>
           <div className="wl-scrim" data-closing={closing ? "" : undefined} onClick={() => close(true)} />
           <div className="wl-menu" role="menu" aria-label="Mints" ref={menu} data-closing={closing ? "" : undefined} onKeyDown={onKey}>
-            {m.all.length ? (
-              <p className="wl-menu-h">New invoices and tokens use this mint. Each keeps its own sats.</p>
-            ) : (
+            {m.all.length ? null : (
               <p className="wl-menu-h" style={{ paddingTop: 2 }}>
                 No mints yet. One is picked for you when you first add funds.
               </p>
