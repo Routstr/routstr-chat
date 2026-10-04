@@ -50,6 +50,8 @@ export function useWalletReceive(navigateToTab: (tab: "overview" | "invoice") =>
   const [isImporting, setIsImporting] = useState(false);
   const [isNip60Processing, setIsNip60Processing] = useState(false);
   const [isBcPaying, setIsBcPaying] = useState(false);
+  // what the connected wallet said when it would not pay (e.g. too little balance)
+  const [bcError, setBcError] = useState("");
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
@@ -218,12 +220,14 @@ export function useWalletReceive(navigateToTab: (tab: "overview" | "invoice") =>
     async (invoice: string, quoteId: string) => {
       if (!invoice) return;
       setIsBcPaying(true);
+      setBcError("");
       try {
         const provider = await requestBitcoinConnectProvider();
         try {
           await provider.sendPayment(invoice);
-        } catch {
-          // Some wallets may not return preimage — rely on polling
+        } catch (e) {
+          // Some wallets may not return preimage, so polling still decides; their reason is shown meanwhile
+          setBcError(e instanceof Error ? e.message : String(e));
         }
         if (quoteId && cashuStore.activeMintUrl) {
           const amt = parseInt(mintAmount || "0", 10) || 0;
@@ -254,6 +258,7 @@ export function useWalletReceive(navigateToTab: (tab: "overview" | "invoice") =>
     bcBalance,
     connectWallet,
     isBcPaying,
+    bcError,
     receiveTab,
     setReceiveTab,
     mintAmount,

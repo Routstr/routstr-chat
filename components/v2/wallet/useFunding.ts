@@ -163,6 +163,7 @@ export function useFunding(onPaid?: (sats: number) => void) {
     tokenBusy,
     walletConnected: receive.bcStatus === "connected",
     walletPaying: receive.isBcPaying,
+    walletError: receive.bcError,
     createInvoice,
     redeemToken,
     payFromWallet,

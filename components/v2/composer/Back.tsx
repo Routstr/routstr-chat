@@ -539,9 +539,11 @@ export default function Back({
               ? nbsp("Nothing was charged. Make a new one to carry on.")
               : funding.walletPaying
                 ? nbsp("Your wallet is paying. Your message sends once it lands.")
-                : funding.expiresAt
-                  ? nbsp(`Scan with any Lightning wallet. Good until ${new Date(funding.expiresAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}.`)
-                  : "Scan with any Lightning wallet.";
+                : funding.walletError
+                  ? nbsp(`Your wallet could not pay: ${funding.walletError}. The invoice still works.`)
+                  : funding.expiresAt
+                    ? nbsp(`Scan with any Lightning wallet. Good until ${new Date(funding.expiresAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}.`)
+                    : "Scan with any Lightning wallet.";
     let acts: React.ReactNode = null;
     if (s === "making" && phone) acts = <button className="pa-link" type="button" onClick={changeAmount}>Change amount</button>;
     if (s === "waiting")

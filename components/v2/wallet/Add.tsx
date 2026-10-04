@@ -362,7 +362,7 @@ export default function Add({
         code = <Code value={inv} printed={printed} copied={copied === "inv"} label="Copy invoice" onCopy={() => void copy(inv, "inv")} />;
         line = <CopyLine value={inv} copied={copied === "inv"} label="Copy invoice" onCopy={() => void copy(inv, "inv")} />;
         status = walletFail ? (
-          <Note kind="warn" center text="Your wallet did not pay. Nothing was sent, and the invoice still works." />
+          <Note kind="warn" center text={funding.walletError ? `Your wallet could not pay: ${funding.walletError}. The invoice still works.` : "Your wallet did not pay. Nothing was sent, and the invoice still works."} />
         ) : (
           <p className="wl-status" role="status">
             <span className="wl-live" />
