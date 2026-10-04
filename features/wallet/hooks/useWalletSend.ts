@@ -244,8 +244,13 @@ export function useWalletSend() {
           proofsToAdd: [...result.keep, ...result.change],
           proofsToRemove: selectedProofs,
         });
-        await updateInvoice(nip60MeltQuoteId, { state: MeltQuoteState.PAID, paidAt: Date.now() });
-        setSuccessMessage(`Paid ${formatBalance(invoiceAmount, currentMintUnit)}s!`);
+        const settled = result.state !== MeltQuoteState.PENDING;
+        await updateInvoice(nip60MeltQuoteId, settled ? { state: MeltQuoteState.PAID, paidAt: Date.now() } : { state: MeltQuoteState.PENDING });
+        setSuccessMessage(
+          result.state === MeltQuoteState.PENDING
+            ? `Sending ${formatBalance(invoiceAmount, currentMintUnit)}s, waiting for the network to confirm.`
+            : `Paid ${formatBalance(invoiceAmount, currentMintUnit)}s!`
+        );
         handleNip60PaymentCancel();
         setTimeout(() => setSuccessMessage(""), 5000);
       }

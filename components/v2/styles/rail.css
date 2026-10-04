@@ -1,0 +1,693 @@
+/* rail.css: the rail card, chats side. Tokens only (rooms.css).
+
+   One vertical line runs through the whole card at x = 30px (card coordinates): the mark, the new-chat
+   plus, the search glass and, when folded, every tool in the foot sit on it. Text starts on a second
+   line at x = 22px (titles, group labels, balance). Command labels start at x = 50px. */
+
+:root { --spine-w: 60px; --row-h: 34px; --act-h: 36px; }
+/* how much of the panel's left runs on under the open card; registered so it
+   resolves to px (the picker and the room read it) and can transition */
+@property --clip-l { syntax: "<length>"; inherits: false; initial-value: 0px; }
+
+/* ── the room grid never changes. Folding is paint only: the card is clipped to a spine, and the reading
+   panel, which is always laid out at its FOLDED size, is clipped on its left while the card is open.
+   Folding opens that clip and slides the centred content half the gain to the left. Both gaps (card to
+   panel, panel to window) stay equal in both states, and the thread never re-lays out ──────────────── */
+@media (min-width: 761px) {
+  .room { transition: none; }
+  .room > .panel {
+    --gain: calc(var(--rail-w) - var(--spine-w));
+    --pw: min(1040px, calc(100vw - 3 * var(--gutter) - var(--rail-w)));
+    --clip-l: var(--gain);
+    justify-self: start;
+    width: calc(var(--pw) + var(--gain));
+    margin-left: calc((100vw - 3 * var(--gutter) - var(--rail-w) - var(--pw)) / 2 - var(--gain));
+    clip-path: inset(0 0 0 var(--clip-l) round var(--r-lg));
+    transition: --clip-l var(--d-move) var(--e-spring);
+  }
+  .room > .panel.is-shifted { --clip-l: 0px; }
+  .room > .panel :is(.panel-head .title, .thread-box, .dock .slot, .stage-in, .stage-tail > *) {
+    max-width: calc(100% - var(--gain));
+    transform: translateX(calc(var(--gain) / 2));
+    transition: transform var(--d-move) var(--e-spring);
+  }
+  /* at 1440 the content is narrower than the open panel, so the cap never bites and nothing re-wraps;
+     on a narrow window the fold really does give the text more room */
+  .room > .panel .panel-head .title { margin-inline: auto; }
+  .room > .panel.is-shifted :is(.panel-head .title, .thread-box, .dock .slot, .stage-in, .stage-tail > *) { max-width: 100%; transform: none; }
+  /* the phone veil is a grid child too: on desktop it must not add an empty row under the furniture
+     (it did, which hung the card 20px from the top and 40px from the bottom). shell.css fix. */
+  .drawer-veil { display: none; }
+  .room .rail { opacity: 1; transform: none; pointer-events: auto; }
+  /* the rail sits above the panel so its tips and menus are never cut; folded, only the spine takes clicks */
+  .room .rail.sb { z-index: 4; }
+  .room .rail.sb[data-fold] { pointer-events: none; }
+  .sb[data-fold] .sb-clip, .sb[data-fold] .sb-rooms { pointer-events: auto; }
+}
+.sb .card {
+  position: relative; height: 100%; width: var(--rail-w);
+  background: none; box-shadow: none; border-radius: var(--r-lg);
+}
+/* the spine: two opposite slides that cancel for the content and leave only the right edge moving */
+.sb-clip, .sb-clip-in { position: absolute; inset: 0; border-radius: var(--r-lg); transition: transform var(--d-move) var(--e-spring); }
+.sb-clip-in { perspective: 1800px; }
+/* always clipped, so folding never changes how the card is painted; only a turn-over lets it breathe,
+   because in perspective the turning card is briefly taller than itself */
+.sb-clip { overflow: hidden; }
+.sb-clip.is-turning { overflow: visible; }
+.sb[data-fold] .sb-clip { transform: translateX(calc(var(--spine-w) - var(--rail-w))); }
+.sb[data-fold] .sb-clip-in { transform: translateX(calc(var(--rail-w) - var(--spine-w))); }
+.sb-shade {
+  position: absolute; inset: 0; border-radius: var(--r-lg); pointer-events: none;
+  box-shadow: var(--lift-2), var(--cast);
+  transform-origin: 0 50%;
+  transition: transform var(--d-move) var(--e-spring), border-radius var(--d-move) var(--e-spring);
+}
+/* while it travels the shade is the full card scaled down; its corners are drawn wide (272 / 60) so the
+   squeeze lands them round. At rest it is a real 60px box with the card's own radius on all four corners
+   and the spine's exact height, so no square ledge can show under the rounded foot */
+.sb[data-fold] .sb-shade {
+  transform: scaleX(calc(60 / 272));
+  border-radius: calc(var(--r-lg) * 272 / 60) / var(--r-lg);
+}
+.sb[data-fold] .sb-shade.is-rest {
+  inset: 0 auto 0 0; width: var(--spine-w); border-radius: var(--r-lg); transform: none; transition: none;
+}
+.sb .face {
+  inset: 0; padding: 0; overflow: hidden; border-radius: var(--r-lg);
+  background: rgb(var(--surface-2)); box-shadow: var(--glow);
+}
+.sb .face.back { padding: var(--s5) var(--s3) var(--s3); }
+.sb-in {
+  position: relative; width: var(--rail-w); height: 100%;
+  display: flex; flex-direction: column;
+  padding: 14px var(--s3) var(--s3);
+}
+
+/* ── head: mark, wordmark, fold ───────────────────────────────────────────────────────────── */
+.sb-head { display: flex; align-items: center; height: 40px; flex: none; }
+.sb-brand {
+  position: relative; display: flex; align-items: center; gap: 10px;
+  height: 36px; padding: 0 10px 0 8px; margin-left: 0; color: var(--ink); user-select: none;
+}
+/* the wordmark is a signature, not a second New chat button */
+.sb-mark { position: relative; width: 20px; height: 20px; flex: none; }
+.sb-mark > svg { position: absolute; inset: -3px; width: 26px; height: 26px; }
+.sb-word {
+  font-family: var(--f-brand); font-weight: 500; font-size: 18.5px;
+  letter-spacing: -.006em; line-height: 1;
+  transition: opacity var(--d-mid) var(--e-out);
+}
+.sb-fold { margin-left: auto; color: var(--ink-3); }
+.sb-fold:hover { color: var(--ink); }
+.sb-close { display: none; }
+
+/* ── commands: new chat, search ───────────────────────────────────────────────────────────── */
+/* the command rows reserve the same scrollbar gutter as the list below (overflow hidden + a stable gutter),
+   so New chat's highlight is exactly as wide as a chat row's on every platform. The 4px / 12px padding keeps
+   focus rings inside the clip */
+.sb-acts {
+  /* the reserved gutter comes out of the right padding (--gut, measured), so rows end where the head and foot do */
+  display: grid; gap: 2px; margin: 10px calc(var(--s3) * -1) -4px; padding: 4px max(0px, var(--s3) - var(--gut, 0px)) 4px var(--s3); flex: none;
+  overflow: hidden; scrollbar-gutter: stable; scrollbar-width: thin;
+  transition: transform var(--d-move) var(--e-spring);
+}
+.sb-act {
+  position: relative; display: flex; align-items: center; gap: 12px;
+  height: var(--act-h); padding: 0 10px; border-radius: var(--r-sm);
+  font-family: var(--f-ui); font-size: 14px; font-weight: 450; letter-spacing: -.003em;
+  color: var(--ink); text-align: left; isolation: isolate;
+  transition: color var(--d-fast) var(--e-out);
+}
+.sb-act:focus-visible { box-shadow: var(--focus); }
+.sb-act::before {
+  content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit;
+  background: var(--fill-1); opacity: 0;
+  clip-path: inset(0 0 0 0 round var(--r-sm));
+  transition: opacity var(--d-quick) var(--e-out), clip-path var(--d-move) var(--e-spring);
+}
+.sb-act:active::before { background: var(--fill-2); }
+.sb-act > .v2-ico { width: 16px; height: 16px; color: var(--ink-2); transition: transform var(--d-mid) var(--e-spring), color var(--d-fast); }
+/* two bare 16px glyphs on the x = 30 line; New chat leads by weight, not by a shape */
+.sb-new > .v2-ico { stroke-width: 1.7; color: var(--ink); }
+.sb-new .sb-lbl { font-weight: 550; }
+/* with no chat open, the highlight rests here: this is where you are */
+.sb-act > .sb-glide { z-index: -1; }
+.sb-new[aria-current="page"]::before { display: none; }
+/* nothing to search yet: still there, so nothing jumps when the first chat lands, but plainly asleep */
+.sb-find[aria-disabled="true"] { color: var(--ink-3); cursor: default; }
+.sb-find[aria-disabled="true"] > .v2-ico { color: var(--ink-3); }
+.sb-find[aria-disabled="true"]::before, .sb-find[aria-disabled="true"] kbd { display: none; }
+.sb-lbl { flex: 1; min-width: 0; white-space: nowrap; transition: opacity var(--d-fast) var(--e-out); }
+.sb-act kbd, .sb-tip kbd {
+  font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .03em; color: var(--ink-3);
+  white-space: nowrap;
+}
+.sb-act kbd { opacity: 0; transform: translateX(3px); transition: opacity var(--d-fast) var(--e-out), transform var(--d-mid) var(--e-out); }
+@media (hover: hover) {
+  .sb-act:hover::before { opacity: 1; }
+  .sb-act:hover kbd { opacity: 1; transform: none; }
+  .sb-new:hover > .v2-ico { transform: rotate(90deg); }
+}
+.sb-act:focus-visible kbd { opacity: 1; transform: none; }
+
+/* ── the list ─────────────────────────────────────────────────────────────────────────────── */
+.sb-list {
+  position: relative; flex: 1 1 auto; min-height: 0;
+  overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain;
+  margin: 12px calc(var(--s3) * -1) 0; padding: 0 max(0px, var(--s3) - var(--gut, 0px)) var(--s4) var(--s3);
+  scrollbar-gutter: stable; scrollbar-width: thin; scrollbar-color: transparent transparent;
+  transition: opacity var(--d-mid) var(--e-out), scrollbar-color var(--d-mid);
+}
+@media (min-width: 761px) { .sb-list { will-change: opacity; } }
+.sb-list:hover { scrollbar-color: var(--fill-2) transparent; }
+.sb-list::-webkit-scrollbar { width: 8px; }
+.sb-list::-webkit-scrollbar-thumb { background: transparent; border-radius: 99px; border: 2px solid transparent; background-clip: content-box; }
+.sb-list:hover::-webkit-scrollbar-thumb { background-color: var(--fill-2); }
+.sb-list[data-more] { mask-image: linear-gradient(to bottom, #000 calc(100% - 36px), transparent); }
+
+.sb-grp + .sb-grp { margin-top: 10px; }
+.sb-grp[data-first] .sb-grp-t { height: 22px; }
+.sb-grp-t {
+  position: sticky; top: 0; z-index: 3;
+  display: flex; align-items: flex-end; height: 30px; padding: 0 10px 8px;
+  background: rgb(var(--surface-2));
+  font-family: var(--f-mono); font-size: 10px; font-weight: 400; line-height: 1;
+  letter-spacing: .11em; text-transform: uppercase; color: var(--ink-3);
+}
+.sb-grp-t::after {
+  content: ""; position: absolute; left: 0; right: 0; top: 100%; height: 22px; pointer-events: none;
+  background: linear-gradient(rgb(var(--surface-2)) 20%, rgb(var(--surface-2) / 0));
+  opacity: 0; transition: opacity var(--d-fast);
+}
+.sb-list[data-scrolled] .sb-grp-t::after { opacity: 1; }
+.sb-grp { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: 1fr; transition: grid-template-rows var(--d-move) var(--e-out), opacity var(--d-mid) var(--e-out), margin var(--d-move) var(--e-out); }
+.sb-grp > .sb-grp-in { min-height: 0; min-width: 0; }
+.sb-grp.is-gone { grid-template-rows: 0fr; opacity: 0; margin-top: 0; }
+.sb-grp.is-gone > .sb-grp-in, .sb-grp.is-new > .sb-grp-in { overflow: hidden; }
+.sb-grp.is-new { grid-template-rows: 0fr; opacity: 0; }
+
+/* a row. The right 36px are its tool slot: live mark, new-answer mark, delete */
+.sb-row {
+  position: relative; z-index: 1; contain: layout style;
+  display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: 1fr;
+  transition: grid-template-rows var(--d-move) var(--e-out), opacity var(--d-mid) var(--e-out);
+}
+.sb-row-in { position: relative; min-height: 0; min-width: 0; }
+.sb-row.is-gone, .sb-row.is-new { grid-template-rows: 0fr; opacity: 0; }
+.sb-row.is-gone > .sb-row-in, .sb-row.is-new > .sb-row-in { overflow: hidden; }
+.sb-go {
+  position: relative; z-index: 1; display: flex; align-items: center; width: 100%;
+  height: var(--row-h); padding: 0 10px; border-radius: var(--r-sm);
+  font-family: var(--f-body); font-size: 14.5px; line-height: 1.3; color: var(--ink-2); text-align: left;
+  touch-action: pan-y; -webkit-touch-callout: none; user-select: none;
+  transition: color var(--d-fast) var(--e-out), opacity var(--d-fast) var(--e-out);
+}
+.sb-go::before {
+  content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit;
+  background: var(--fill-1); opacity: 0; transition: opacity var(--d-fast) var(--e-out);
+}
+.sb-go:active::before { opacity: 1; background: var(--fill-2); }
+/* titles never end in dots: they fade, and the fade steps back when the tool slot is in use */
+@property --slot { syntax: "<length>"; inherits: true; initial-value: 0px; }
+@property --lf { syntax: "<length>"; inherits: false; initial-value: 0px; }
+.sb-t {
+  flex: 1; min-width: 0; overflow: hidden; white-space: nowrap;
+}
+.sb-t.is-long {
+  mask-image: linear-gradient(to right, transparent 0, #000 var(--lf), #000 calc(100% - var(--slot) - 22px), transparent calc(100% - var(--slot)));
+  transition: --slot var(--d-mid) var(--e-out), --lf var(--d-mid) var(--e-out);
+}
+.sb-tt { display: inline-block; }
+.sb-t.is-rolling { --lf: 16px; }
+.sb-t.is-rolling .sb-tt { will-change: transform; }
+.sb-row.is-live { --slot: 30px; }
+.sb-row.is-unread { --slot: 20px; }
+/* open is its own state, not a stronger hover: the deeper glide fill plus full ink at a heavier weight */
+.sb-go[aria-current="page"] { color: var(--ink); font-weight: 500; }
+.sb-go[aria-current="page"]::before { display: none; }
+.sb-go:focus-visible { box-shadow: var(--focus); border-radius: var(--r-sm); }
+
+.sb-glide {
+  position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  border-radius: var(--r-sm); background: var(--fill-2);
+}
+
+.sb-x {
+  position: absolute; z-index: 2; right: 4px; top: calc((var(--row-h) - 28px) / 2);
+  width: 28px; height: 28px; border-radius: var(--r-xs); color: var(--ink-3);
+  display: grid; place-items: center; opacity: 0; transform: scale(.86);
+  transition: opacity var(--d-quick) var(--e-out), transform var(--d-mid) var(--e-spring), color var(--d-fast), background var(--d-fast);
+}
+.sb-x .v2-ico { width: 15px; height: 15px; }
+.sb-x:hover { color: var(--ink); background: var(--fill-1); }
+.sb-x:focus-visible { opacity: 1; transform: none; box-shadow: var(--focus); }
+.sb-row.is-kbd { --slot: 28px; }
+.sb-row.is-kbd .sb-x { opacity: 1; transform: none; }
+@media (hover: hover) {
+  .sb-row:hover .sb-go:not([aria-current="page"])::before { opacity: 1; }
+  .sb-row:hover .sb-go { color: var(--ink); }
+  .sb-row:hover { --slot: 28px; }
+  .sb-row:hover:not(.is-leaving) .sb-x { opacity: 1; transform: none; transition-delay: calc(var(--d-quick) / 2); }
+  .sb-row:hover .sb-mark-r { opacity: 0; transform: scale(.4); }
+}
+
+/* Two marks share the row's right slot and never look alike.
+   Answering: three small dots that rise in turn (the universal "writing" sign) and a slow sheen on the title.
+   Answered while you were elsewhere: one still tint dot and a full-ink title, until you open it. */
+.sb-mark-r {
+  position: absolute; z-index: 1; right: 12px; top: calc(var(--row-h) / 2 - 3px);
+  display: flex; align-items: center; justify-content: flex-end; gap: 4px; height: 6px;
+  opacity: 0; transform: scale(.6); transform-origin: 100% 50%; pointer-events: none;
+  transition: opacity var(--d-mid) var(--e-out), transform var(--d-mid) var(--e-spring);
+}
+.sb-mark-r::after {
+  content: ""; width: 6px; height: 6px; border-radius: 99px; background: var(--tint);
+}
+.sb-mark-r i { display: none; width: 4px; height: 4px; border-radius: 99px; background: var(--tint); opacity: .3; }
+.sb-row.is-live .sb-mark-r, .sb-row.is-unread .sb-mark-r { opacity: 1; transform: none; }
+.sb-row.is-live .sb-mark-r::after { display: none; }
+.sb-row.is-live .sb-mark-r i { display: block; animation: sbDot var(--d-spin) var(--e-in-out) infinite; }
+.sb-row.is-live .sb-mark-r i:nth-child(2) { animation-delay: .2s; }
+.sb-row.is-live .sb-mark-r i:nth-child(3) { animation-delay: .4s; }
+@keyframes sbDot { 0%, 64%, 100% { opacity: .3; } 26% { opacity: 1; } }
+.sb-row.is-live .sb-tt {
+  background: linear-gradient(90deg, var(--ink-2) 0%, var(--ink-2) 38%, var(--ink) 50%, var(--ink-2) 62%, var(--ink-2) 100%);
+  background-size: 260% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: sbShim calc(var(--d-wave) * 1.18) linear infinite;
+}
+.sb-row.is-unread .sb-go { color: var(--ink); }
+/* a title that has just been written: it settles in from the left, like ink drying */
+.sb-row.is-titled .sb-tt { animation: sbInk var(--d-slow) var(--e-out) calc(var(--d-quick) * 1.33) both; }
+@keyframes sbInk {
+  from { opacity: 0; transform: translateX(-4px); -webkit-mask-image: linear-gradient(90deg, #000 0%, transparent 30%); mask-image: linear-gradient(90deg, #000 0%, transparent 30%); }
+  to { opacity: 1; transform: none; }
+}
+
+/* delete, in place: the row becomes a line you can take back. No box: words and a ring that empties */
+.sb-undo {
+  position: absolute; inset: 0; z-index: 2; display: flex; align-items: center; gap: 8px;
+  padding: 0 3px 0 10px; border-radius: var(--r-sm);
+  opacity: 0; visibility: hidden; transform: translateX(-6px);
+  transition: opacity var(--d-fast) var(--e-out), transform var(--d-mid) var(--e-out), visibility 0s linear var(--d-fast);
+}
+.sb-undo-t {
+  flex: 1; min-width: 0; font-family: var(--f-ui); font-size: 13px; letter-spacing: -.003em;
+  color: var(--ink-3); white-space: nowrap; overflow: hidden;
+}
+.sb-undo-b {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: var(--f-ui); font-size: 13px; font-weight: 550; color: var(--ink);
+  height: 28px; padding: 0 9px 0 11px; border-radius: var(--r-xs);
+  transition: background var(--d-fast) var(--e-out), transform var(--d-fast) var(--e-spring);
+}
+.sb-undo-b:hover { background: var(--fill-1); }
+.sb-undo-b:active { transform: scale(.96); background: var(--fill-2); }
+.sb-undo-b:focus-visible { box-shadow: var(--focus); }
+/* the time left, as a thin ring that unwinds from twelve o'clock (stroke-dashoffset is paint only). A line,
+   never a filled wedge: a wedge on a disc reads as a half moon, the dark-mode sign */
+.sb-ring { width: 14px; height: 14px; flex: none; transform: rotate(-90deg) scaleY(-1); }
+.sb-ring-bg { fill: none; stroke: color-mix(in srgb, var(--ink-3) 30%, transparent); stroke-width: 1.5; }
+.sb-drain { fill: none; stroke: var(--ink-3); stroke-width: 1.5; stroke-linecap: round; stroke-dasharray: 100 100; stroke-dashoffset: 0; }
+.sb-row.is-leaving .sb-go { opacity: 0; transform: translateX(8px); pointer-events: none; transition: opacity var(--d-quick) var(--e-out), transform var(--d-mid) var(--e-out); }
+.sb-row.is-leaving .sb-go::before { opacity: 0; }
+.sb-row.is-leaving .sb-x, .sb-row.is-leaving .sb-mark-r { opacity: 0; pointer-events: none; }
+.sb-row.is-leaving .sb-undo { opacity: 1; visibility: visible; transform: none; transition-delay: calc(var(--d-quick) / 2), calc(var(--d-quick) / 2), 0s; }
+.sb-row.is-leaving .sb-glide { opacity: 0; }
+
+/* phone swipe: what is under a row. Neutral until the row passes the point of no return, then it commits */
+/* the moving title slips into the row's own left edge: a short fade there, so it never ends flush and chopped */
+@property --sw-f { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@property --sw-i { syntax: "<length>"; inherits: false; initial-value: 0px; }
+.sb-row.is-swiping > .sb-row-in {
+  /* 2px off top and bottom, so a row held open never touches the selected row's fill */
+  --sw-f: var(--s6); --sw-i: 2px;
+  overflow: clip; border-radius: var(--r-sm); clip-path: inset(var(--sw-i) 0 round var(--r-sm));
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 var(--sw-f)); mask-image: linear-gradient(90deg, transparent 0, #000 var(--sw-f));
+  transition: --sw-f var(--d-mid) var(--e-out), --sw-i var(--d-mid) var(--e-out);
+}
+/* going home: the fade and the inset leave with the row, not after it */
+.sb-row.is-swiping.is-homing > .sb-row-in { --sw-f: 0px; --sw-i: 0px; }
+.sb-row.is-swiping .sb-go { background: rgb(var(--surface-2)); }
+.sb-row.is-swiping .sb-go[aria-current="page"] { background: color-mix(in srgb, rgb(var(--surface-2)), var(--ink) 9%); }
+.sb-row.is-swiping .sb-glide { display: none; }
+.sb-under {
+  position: absolute; inset: 0; z-index: 0; border-radius: var(--r-sm);
+  display: none; align-items: center; justify-content: flex-end; gap: 8px; padding-right: 18px;
+  background: var(--fill-2); color: var(--ink);
+  font-family: var(--f-ui); font-size: 14px; font-weight: 500;
+  opacity: var(--sw, 0);
+  transition: background var(--d-fast) var(--e-out);
+}
+/* no warning colour: the layer is the same neutral ink as the rest of the row */
+.sb-under .v2-ico { width: 17px; height: 17px; transition: transform var(--d-mid) var(--e-spring); }
+/* resting open after a part swipe: the Delete under the row is a 96px target on the right */
+.sb-row.is-open .sb-under { cursor: pointer; }
+.sb-row.is-open .sb-under:active { background: color-mix(in srgb, var(--ink) 17%, transparent); }
+
+/* ── empty, finding ───────────────────────────────────────────────────────────────────────── */
+/* where the first chat will land, said once and quietly, on the list's own edge */
+.sb-empty {
+  display: grid; gap: 6px; padding: 0;
+  animation: sbFade var(--d-slow) var(--e-out) both;
+}
+/* the label sits exactly where 'Today' will land */
+.sb-empty .sb-grp-t { position: static; height: 22px; }
+@keyframes sbFade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+.sb-finding { padding-top: 0; }
+.sb-finding .sb-grp-t { position: static; }
+.sb-shim {
+  background: linear-gradient(90deg, var(--ink-3) 0%, var(--ink-3) 40%, var(--ink) 50%, var(--ink-3) 60%, var(--ink-3) 100%);
+  background-size: 250% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: sbShim var(--d-wave) linear infinite;
+}
+@keyframes sbShim { from { background-position: 100% 0; } to { background-position: -150% 0; } }
+.sb-ghost {
+  display: flex; align-items: center; height: var(--row-h); padding: 0 10px;
+}
+.sb-ghost i {
+  display: block; height: 9px; border-radius: 99px; background: var(--fill-2);
+  animation: sbGhost calc(var(--d-wave) * .82) var(--e-in-out) infinite; animation-delay: calc(var(--i) * var(--d-quick) * 1.22);
+  opacity: calc(1 - var(--i) * .1);
+}
+@keyframes sbGhost { 0%, 100% { opacity: calc(.55 - var(--i) * .05); } 50% { opacity: calc(1 - var(--i) * .08); } }
+.sb-list.is-arriving .sb-row { animation: sbFade var(--d-slow) var(--e-out) both; animation-delay: calc(var(--n, 0) * var(--d-stagger) * 1.1); }
+
+/* ── foot: balance, room, settings ────────────────────────────────────────────────────────── */
+.sb-foot {
+  position: relative; flex: none; display: flex; align-items: flex-end; justify-content: space-between; gap: 8px;
+  padding-top: 8px; min-height: 52px;
+}
+.sb-bal {
+  position: relative; display: grid; gap: 3px; min-width: 0; text-align: left;
+  padding: 6px 10px 5px; border-radius: var(--r-sm);
+  transition: background var(--d-fast) var(--e-out);
+}
+.sb-bal:hover { background: var(--fill-1); }
+.sb-bal:active { background: var(--fill-2); }
+.sb-bal-k {
+  position: relative; display: block; height: 11px; overflow: hidden;
+  font-family: var(--f-mono); font-size: 9.5px; line-height: 11px; letter-spacing: .11em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+/* an invoice waiting: a breathing dot and how many, in the key's own voice */
+.sb-wait { display: inline-flex; align-items: center; gap: 5px; margin-left: 8px; color: var(--ink-2); }
+.sb-wait i { width: 5px; height: 5px; border-radius: 9px; background: var(--tint); animation: breathe calc(var(--d-slow) * 4) var(--e-in-out) infinite; }
+html[data-room="meridian"] .sb-wait i { background: var(--ink-2); }
+.sb-bal-k > span { display: block; transition: transform var(--d-mid) var(--e-spring), opacity var(--d-fast) var(--e-out); }
+.sb-bal-k > span + span { position: absolute; inset: 0; transform: translateY(100%); opacity: 0; }
+@media (hover: hover) {
+  .sb-bal:hover .sb-bal-k > span:first-child { transform: translateY(-100%); opacity: 0; }
+  .sb-bal:hover .sb-bal-k > span + span { transform: none; opacity: 1; }
+}
+.sb-bal:focus-visible .sb-bal-k > span:first-child { transform: translateY(-100%); opacity: 0; }
+.sb-bal:focus-visible .sb-bal-k > span + span { transform: none; opacity: 1; }
+.sb-bal-v {
+  display: flex; align-items: baseline; gap: 5px; white-space: nowrap;
+  /* a money figure: the room's display face, the same number the wallet shows large */
+  font-family: var(--f-display); font-weight: var(--w-display); font-stretch: var(--display-stretch, 100%);
+  font-size: calc(18.5px * var(--display-scale)); line-height: 1.2; letter-spacing: var(--display-track);
+  color: var(--ink); font-variant-numeric: tabular-nums lining-nums;
+}
+.sb-bal-v .unit { font-family: var(--f-ui); font-weight: 400; font-size: 12px; color: var(--ink-3); letter-spacing: 0; }
+/* at zero the foot says what to do next, in the room's tint, on the value line; the label says "0 sats".
+   Compact enough to sit beside the longest room name (Overprint) and the gear */
+.sb-bal[data-zero] :is(.sb-num, .unit) { display: none; }
+.sb-add { display: none; font-family: var(--f-ui); font-size: 15px; font-weight: 500; letter-spacing: -.005em; color: var(--tint); }
+.sb-bal[data-zero] .sb-add { display: inline; }
+/* meridian's accent is a crimson (a rose at dusk): the rail's first word to a new visitor stays ink */
+html[data-room="meridian"] .sb-add { color: var(--ink); }
+.sb-bal[data-node] .sb-bal-v { font-family: var(--f-ui); font-size: 15px; color: var(--ink); letter-spacing: -.005em; }
+/* money in: the amount that arrived rises beside the balance once, then goes */
+.sb-bal-v { position: relative; }
+.sb-delta {
+  position: absolute; left: calc(100% + 8px); bottom: 1px; pointer-events: none;
+  font-family: var(--f-mono); font-size: 11.5px; letter-spacing: .01em; color: var(--tint); white-space: nowrap;
+  animation: sbDelta calc(var(--d-slow) * 3.6) var(--e-out) both;
+}
+@keyframes sbDelta {
+  0% { opacity: 0; transform: translateY(5px); }
+  18% { opacity: 1; transform: none; }
+  70% { opacity: 1; transform: translateY(-2px); }
+  100% { opacity: 0; transform: translateY(-7px); }
+}
+.sb-bal-wait {
+  display: block; width: 64px; height: 12px; margin: 4px 0 3px; border-radius: 99px; background: var(--fill-2);
+  animation: sbGhost calc(var(--d-wave) * .82) var(--e-in-out) infinite; --i: 0;
+}
+.sb-bal-mini {
+  display: none; font-family: var(--f-mono); font-size: 11px; line-height: 1.15; letter-spacing: -.01em;
+  color: var(--ink); font-variant-numeric: tabular-nums; text-align: center;
+}
+.sb-bal-mini small { display: block; font-size: 8.5px; letter-spacing: .08em; color: var(--ink-3); text-transform: uppercase; margin-top: 2px; }
+.sb-bal[data-zero] .sb-bal-mini { color: var(--ink-3); }
+
+.sb-tools { display: flex; align-items: center; gap: 2px; padding-bottom: 3px; }
+.sb-tools .ghost { color: var(--ink-3); }
+.sb-tools .ghost:hover { color: var(--ink); }
+/* the room, said in words: a small round swatch of the room's own backdrop and its name, quiet like the
+   balance label. Folded, only the swatch stays (the tip names it). Nothing here looks like a layout icon */
+.sb-sw {
+  display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px 0 9px; border-radius: var(--r-sm);
+  font-family: var(--f-ui); font-size: 13px; font-weight: 450; letter-spacing: -.003em; color: var(--ink-2);
+  transition: background var(--d-fast) var(--e-out), color var(--d-fast) var(--e-out);
+}
+.sb-sw:hover, .sb-sw[aria-expanded="true"] { background: var(--fill-1); color: var(--ink); }
+.sb-sw:focus-visible { box-shadow: var(--focus); }
+.sb-sw-n { white-space: nowrap; }
+/* the room you are in, from its own tokens (--room, --light-a); meridian's is its hour (DayStrip.at, inline) */
+.sb-dot {
+  display: block; flex: none; width: 14px; height: 14px; border-radius: 99px;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ink) 20%, transparent), inset 0 0 0 .5px color-mix(in srgb, var(--ink) 10%, transparent);
+  transition: transform var(--d-mid) var(--e-spring);
+}
+.sb-sw:hover .sb-dot, .sb-sw[aria-expanded="true"] .sb-dot { transform: scale(1.12); }
+/* "Follow system" keeps the app's own split swatch (.sw-auto, shell.css) */
+/* a room in small: its ground, its light, and a point of its colour, so it never reads as an empty radio */
+.sb-dot:not(.sw-auto) {
+  background:
+    radial-gradient(circle at 66% 36%, var(--tint) 0 1.7px, transparent 2.2px),
+    radial-gradient(90% 90% at 30% 25%, var(--light-a), transparent 70%), var(--room);
+}
+
+/* ── the room menu: sits on the foot, as wide as the card ─────────────────────────────────── */
+.sb-rooms {
+  position: absolute; z-index: 60; left: var(--s2); width: calc(var(--rail-w) - 2 * var(--s2));
+  bottom: 68px; padding: 6px; border-radius: var(--r-md);
+  background: rgb(var(--surface-hero)); box-shadow: var(--lift-3), var(--glow);
+  transform-origin: 85% 100%;
+  animation: sbPop var(--d-mid) var(--e-spring) both;
+}
+.sb-rooms[data-closing] { animation: sbPopOut var(--d-fast) var(--e-out) forwards; }
+@keyframes sbPop { from { opacity: 0; transform: translateY(6px) scale(.97); } to { opacity: 1; transform: none; } }
+@keyframes sbPopOut { to { opacity: 0; transform: translateY(4px) scale(.98); } }
+.sb-rooms-t {
+  display: flex; justify-content: space-between; gap: 12px; align-items: baseline;
+  padding: 6px 6px 8px; font-family: var(--f-mono); font-size: 9.5px; letter-spacing: .11em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+.sb-rooms-now {
+  font-family: var(--f-ui); font-size: 12px; letter-spacing: -.003em; text-transform: none; color: var(--ink-2);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+}
+.sb-rooms-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.sb-room {
+  position: relative; display: grid; gap: 7px; justify-items: start;
+  width: 100%; padding: 6px 6px 9px; border-radius: var(--r-sm);
+  font-family: var(--f-ui); color: var(--ink-2); text-align: left;
+  animation: sbFade var(--d-mid) var(--e-out) both; animation-delay: calc(var(--i) * var(--d-stagger) * 1.1);
+  transition: background var(--d-quick), color var(--d-quick);
+}
+.sb-room:hover, .sb-room:focus-visible { background: var(--fill-1); color: var(--ink); }
+.sb-room:focus-visible { box-shadow: var(--focus); }
+.sb-room:active { background: var(--fill-2); }
+.sb-room[aria-checked="true"] { color: var(--ink); }
+/* each room previewed as a tiny room: its light, a rail and a panel in it */
+.room-sw { position: relative; display: block; aspect-ratio: 4 / 5; border-radius: var(--r-sm); overflow: hidden;
+  box-shadow: inset 0 0 0 1px var(--hair); background-size: 180% 180%; animation: drift 26s var(--e-in-out) infinite alternate;
+  transition: transform var(--d-mid) var(--e-spring); }
+.room-sw.sw-meridian { background-size: 100% 100%; animation: none; }
+.mini-rail { position: absolute; left: 8%; top: 8%; bottom: 8%; width: 22%; border-radius: 5px; }
+.room-ink { position: absolute; left: 34%; right: 8%; top: 8%; bottom: 8%; border-radius: 5px;
+  display: grid; align-content: end; gap: 5px; padding: 10px 9px; }
+.room-ink i { display: block; height: 3px; border-radius: 3px; background: currentColor; opacity: .45; }
+.room-ink i:nth-child(2) { width: 80%; } .room-ink i:nth-child(3) { width: 55%; }
+.room-ink i:nth-child(4) { height: 12px; margin-top: 6px; border-radius: 4px; opacity: .14; }
+.mini-rail[data-room="paper"] { background: #F2F2EC; }
+.mini-rail[data-room="night"] { background: #182324; }
+.mini-rail[data-room="overprint"] { background: #F6F5F2; }
+.mini-rail[data-room="meridian"] { background: #F2F0E6; }
+.mini-rail[data-room="auto"] { background: linear-gradient(135deg, #F2F2EC 50%, #182324 50%); }
+.room-ink[data-room="paper"] { background: #F7F7F3; color: #171A19; }
+.room-ink[data-room="night"] { background: #16201F; color: #E7EDEB; }
+.room-ink[data-room="overprint"] { background: #FBFAF9; color: #15181C; }
+.room-ink[data-room="meridian"] { background: #F8F7EF; color: #14150F; }
+.room-ink[data-room="auto"] { background: linear-gradient(135deg, #F7F7F3 50%, #16201F 50%); color: #7d8784; }
+.sb-room .room-sw {
+  width: 100%; aspect-ratio: 16 / 10; border-radius: var(--r-xs);
+  box-shadow: inset 0 0 0 1px var(--hair);
+  transition: transform var(--d-mid) var(--e-spring), box-shadow var(--d-fast) var(--e-out);
+}
+.sb-room .room-ink { gap: 3px; padding: 6px 6px; inset: 12% 9% 12% 36%; border-radius: calc(var(--r-xs) * .45); }
+.sb-room .room-ink i { height: 2px; }
+.sb-room .room-ink i:nth-child(4) { height: 7px; margin-top: 3px; }
+.sb-room .mini-rail { border-radius: calc(var(--r-xs) * .45); top: 12%; bottom: 12%; left: 9%; width: 21%; }
+.sb-room:hover .room-sw { transform: translateY(-1px); }
+/* the room you are in: a ring drawn just outside the window, in ink, never a badge */
+.sb-room[aria-checked="true"] .room-sw { box-shadow: inset 0 0 0 1px var(--hair), 0 0 0 2px rgb(var(--surface-hero)), 0 0 0 3.5px var(--ink); }
+.sb-room-n { font-size: 13px; font-weight: 500; letter-spacing: -.003em; line-height: 1.2; padding-left: 2px; }
+.sb-room-auto {
+  grid-template-columns: 22px minmax(0, 1fr) 16px; column-gap: 10px; align-items: center;
+  margin-top: 4px; padding: 9px 10px 9px 7px; min-height: 48px;
+}
+.sb-room-auto::before { content: ""; position: absolute; left: 10px; right: 10px; top: -3px; height: 1px; background: var(--hair); }
+.sb-room-auto .sb-dot { justify-self: center; width: 16px; height: 16px; }
+.sb-room-tx { display: grid; gap: 2px; min-width: 0; }
+.sb-room-l { font-size: 12px; line-height: 1.3; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sb-room .v2-ico { width: 15px; height: 15px; color: var(--ink); }
+
+/* ── tip: a long title's rest, or a folded tool's name ────────────────────────────────────── */
+.sb-tip {
+  position: absolute; z-index: 70; left: 0; top: 0; pointer-events: none;
+  display: flex; align-items: center; gap: 12px; white-space: nowrap;
+  padding: 0 12px; height: 32px; border-radius: var(--r-sm);
+  background: rgb(var(--surface-hero)); box-shadow: var(--lift-3), var(--glow);
+  font-family: var(--f-ui); font-size: 13px; color: var(--ink);
+  opacity: 0; transform: translateX(-4px);
+  transition: opacity var(--d-quick) var(--e-out), transform var(--d-quick) var(--e-out);
+}
+.sb-tip.is-on { opacity: 1; transform: none; transition-duration: var(--d-fast), var(--d-mid); }
+/* a very long title: the row opens downward to show all of it. The first line sits exactly on the row's
+   own line (same face, size and inset), so it reads as the row growing, not as a tooltip */
+.sb-tip.is-title {
+  display: block; height: auto; min-height: var(--row-h); padding: 7.6px 36px 9px 10px; white-space: normal;
+  font-family: var(--f-body); font-size: 14.5px; line-height: 1.3; color: var(--ink); text-wrap: pretty;
+  transform: none; clip-path: inset(-16px -16px calc(100% - var(--row-h)) -16px round var(--r-sm));
+  box-shadow: var(--lift-3), var(--glow), 0 0 0 1px var(--hair);
+  transition: opacity var(--d-quick) var(--e-out), clip-path var(--d-quick) var(--e-out);
+}
+/* the row's delete glyph, drawn by the layer at the exact spot of the real button under it (which takes the click) */
+.sb-tip-x {
+  position: absolute; right: 4px; top: calc((var(--row-h) - 28px) / 2); width: 28px; height: 28px;
+  display: grid; place-items: center; border-radius: var(--r-xs); color: var(--ink-3);
+  transition: color var(--d-fast), background var(--d-fast);
+}
+.sb-tip-x .v2-ico { width: 15px; height: 15px; }
+.sb-tip.is-x .sb-tip-x { color: var(--ink); background: var(--fill-1); }
+/* a group label under the open layer steps out of the way instead of being cut by its edge */
+.sb-grp-t { transition: color var(--d-fast) var(--e-out); }
+.sb-grp-t.is-under { color: transparent; }
+/* open, the clip stands off the edges so the layer's own shadow shows (its corners come from border-radius) */
+.sb-tip.is-title.is-on { clip-path: inset(-16px -16px -28px -16px round var(--r-sm)); transition: opacity var(--d-fast) var(--e-out), clip-path var(--d-mid) var(--e-out); }
+
+/* ── folded: the card becomes a spine. Nothing on the x = 30 line moves ───────────────────── */
+.sb[data-fold] .sb-word,
+.sb[data-fold] .sb-lbl,
+.sb[data-fold] .sb-act kbd { opacity: 0; pointer-events: none; transition-duration: var(--d-quick); }
+.sb[data-fold] .sb-list { opacity: 0; transition: opacity var(--d-quick) var(--e-out); }
+/* folded, the empty length of the spine is itself a way back: it covers the hidden list */
+.sb-spine { display: none; }
+.sb[data-fold] .sb-spine {
+  position: absolute; z-index: 5; left: 0; width: var(--spine-w); top: 192px; bottom: 164px;
+  display: grid; place-items: center; color: var(--ink-3); cursor: e-resize;
+}
+.sb-spine::before {
+  content: ""; position: absolute; inset: 0 12px; border-radius: var(--r-sm); background: var(--fill-1);
+  opacity: 0; transition: opacity var(--d-fast) var(--e-out);
+}
+.sb-spine .v2-ico { position: relative; opacity: 0; transform: translateX(-3px); transition: opacity var(--d-fast) var(--e-out), transform var(--d-mid) var(--e-spring); }
+@media (hover: hover) {
+  .sb-spine:hover::before { opacity: 1; }
+  .sb-spine:hover .v2-ico { opacity: 1; transform: none; }
+}
+.sb[data-fold] .sb-act::before { clip-path: inset(0 calc(100% - 36px) 0 0 round var(--r-sm)); }
+.sb-act > .sb-glide { clip-path: inset(0 0 0 0 round var(--r-sm)); transition: clip-path var(--d-move) var(--e-spring); }
+.sb[data-fold] .sb-act > .sb-glide { clip-path: inset(0 calc(100% - 36px) 0 0 round var(--r-sm)); }
+/* the brand survives the fold: the mark stays put on the x = 30 line, and the fold button rides the closing
+   edge onto the spine 8px under it. New chat and search step down one place to make room (transform only) */
+.sb-head { position: relative; }
+/* one 38px step down the top of the spine: mark 54, fold 92, New chat 130, search 168 (screen y at 1440 x 900) */
+.sb[data-fold] .sb-fold { position: absolute; left: 2px; top: 42px; opacity: 1; pointer-events: auto; color: var(--ink-2); }
+.sb[data-fold] .sb-acts { transform: translateY(24px); }
+.sb[data-fold] .sb-fold:hover { color: var(--ink); }
+.sb[data-fold] .sb-fold .v2-ico { transform: scaleX(-1); }
+.sb-fold .v2-ico { transition: transform var(--d-move) var(--e-spring); }
+.sb[data-fold] .sb-foot { flex-direction: column; align-items: flex-start; justify-content: flex-end; gap: 6px; }
+.sb[data-fold] .sb-tools { flex-direction: column; gap: 6px; padding: 0 0 0 2px; }
+/* folded, the room is just its swatch: the button closes round it (the dot keeps its 9px inset, so the FLIP
+   carries it straight onto the spine line) and the name fades where it stands */
+.sb[data-fold] .sb-sw { width: 32px; padding: 0 0 0 9px; }
+.sb-sw-n { transition: opacity var(--d-fast) var(--e-out); }
+.sb[data-fold] .sb-sw-n { position: absolute; left: 31px; opacity: 0; pointer-events: none; transition-duration: var(--d-quick); }
+.sb[data-fold] .sb-bal { width: 44px; margin-left: -4px; padding: 7px 0 6px; justify-items: center; }
+.sb[data-fold] .sb-bal-k, .sb[data-fold] .sb-bal-v, .sb[data-fold] .sb-bal-wait { display: none; }
+.sb[data-fold] .sb-bal-mini { display: block; animation: sbFade var(--d-mid) var(--e-out) calc(var(--d-quick) * 1.33) both; }
+.sb[data-fold] .sb-rooms { left: calc(var(--spine-w) + 10px); bottom: var(--s3); transform-origin: 0% 100%; }
+
+/* the card turned over */
+.sb .flip[data-side="wallet"] { transform: rotateY(180deg); }
+
+/* ── phone: the card is a drawer ──────────────────────────────────────────────────────────── */
+@media (max-width: 760px) {
+  :root { --row-h: 44px; --act-h: 44px; }
+  .room .rail.sb {
+    position: fixed; inset: 0 auto 0 0; z-index: 45; padding: var(--s2);
+    padding-top: calc(var(--s2) + env(safe-area-inset-top)); padding-bottom: calc(var(--s2) + env(safe-area-inset-bottom));
+    transform: translateX(-104%); opacity: 1; pointer-events: none;
+    transition: transform var(--d-move) var(--e-out);
+  }
+  .room[data-drawer="open"] .rail.sb { transform: none; pointer-events: auto; transition: transform var(--d-slow) var(--e-spring); }
+  .sb .card, .sb .card .flip { width: min(86vw, 340px); }
+  .sb[data-fold] .card { width: min(86vw, 340px); }
+  .sb-in { width: 100%; padding: 12px var(--s3) var(--s3); }
+  .sb-fold { display: none; }
+  .sb-close { display: inline-flex; width: 44px; height: 44px; margin-left: auto; margin-right: 0; color: var(--ink-2); }
+  .sb-head { height: 44px; }
+  .sb-brand { height: 44px; }
+  .sb-act { font-size: 15px; }
+  .sb-act kbd { display: none; }
+  /* no delete button on a phone, so no reserved slot: the fade sits in the row's own right padding */
+  .sb-go { font-size: 15.5px; padding-right: 14px; }
+  .sb-row, .sb-row:hover { --slot: 0px; }
+  .sb-row.is-live { --slot: 34px; }
+  .sb-row.is-unread { --slot: 22px; }
+  /* out of sight but still in reach of a screen reader: a phone deletes by swipe, TalkBack and VoiceOver by this */
+  .sb-x { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); opacity: 1; }
+  .sb-under { display: flex; }
+  .sb-grp-t { height: 34px; padding-bottom: 9px; }
+  /* the phone floor for small tracked labels */
+  .sb-grp-t { font-size: 11px; }
+  .sb-bal-k { font-size: 11px; height: 13px; line-height: 13px; }
+  .sb-mark-r { right: 16px; }
+  .sb-tools { gap: 4px; }
+  .sb-tools .ghost { width: 44px; height: 44px; }
+  .sb-sw { height: 44px; padding: 0 12px 0 11px; font-size: 14px; }
+  .sb-bal { padding: 8px 10px 7px; }
+  .sb-rooms { width: calc(100% - 2 * var(--s3)); bottom: 72px; }
+  .sb-room-auto { min-height: 56px; }
+  .sb-room-n { font-size: 14px; }
+  .sb-room-l { font-size: 12.5px; }
+  /* the only way back from a swipe is a full 44px target: the button fills the row's height */
+  .sb-undo { padding-right: 0; }
+  .sb-undo-b { height: var(--row-h); padding: 0 16px; font-size: 14px; border-radius: var(--r-sm); }
+  .sb-undo-t { font-size: 14px; }
+  /* the panel behind the drawer is plainly "behind": the scrim is laid twice (about .5 in light rooms) and the
+     strip is softened, so no chopped words read beside the drawer. shell.css */
+  .drawer-veil {
+    background: linear-gradient(var(--scrim), var(--scrim)), var(--scrim);
+    -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+    transition: opacity var(--d-move) var(--e-out);
+  }
+  .room[data-drawer="open"] > .panel { transform: translateX(14px); }
+  .room > .panel { transition: transform var(--d-slow) var(--e-spring); }
+}
+
+/* ── reduced motion ─────────────────────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .sb .flip, .sb-clip, .sb-clip-in, .sb-shade, .sb-acts, .sb-tip.is-title,
+  .room > .panel, .room > .panel :is(.panel-head .title, .thread-box, .dock .slot, .stage-in, .stage-tail > *) { transition: none; }
+  .sb-row.is-live .sb-mark-r i, .sb-row.is-live .sb-tt, .sb-row.is-titled .sb-tt { animation: none; }
+  .sb-row.is-live .sb-mark-r i { opacity: .8; }
+}
+@media (min-width: 761px) { .sb-clip, .sb-clip-in, .sb-shade { will-change: transform; } }

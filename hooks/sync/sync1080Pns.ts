@@ -52,21 +52,27 @@ export interface Create1080PnsSyncDeps {
 
 export interface Create1080PnsSyncResult {
   syncDerivedPnsTrigger$: Subject<void>;
-  triggerDerivedPnsSync: () => void;
+  /** Resolves when that sync has finished: ok, failed, or skipped (no keys or relays yet). */
+  triggerDerivedPnsSync: () => Promise<SyncOutcome>;
 
   autoSyncDerivedPns$: Observable<unknown>;
   syncDerivedPnsEvents$: Observable<NostrEvent>;
   liveDerivedPnsEvents$: Observable<NostrEvent | null>;
 }
 
+export type SyncOutcome = "ok" | "failed" | "skipped";
+
 function performDerivedPnsSync(
   pubkeys: string[],
-  relayUrls: string[]
+  relayUrls: string[],
+  onEnd?: (outcome: SyncOutcome) => void
 ): Subject<NostrEvent> {
   const results$ = new Subject<NostrEvent>();
+  let failed = false;
 
   if (pubkeys.length === 0 || relayUrls.length === 0) {
     debugLog("[sync1080Pns] performDerivedPnsSync: skipping, no pubkeys or relays");
+    onEnd?.("skipped");
     return results$;
   }
 
@@ -89,6 +95,7 @@ function performDerivedPnsSync(
           return EMPTY;
         }
         console.error("[sync1080Pns] Derived PNS sync error:", err);
+        failed = true;
         return EMPTY;
       })
     )
@@ -96,6 +103,7 @@ function performDerivedPnsSync(
       error: (err) => console.error("[sync1080Pns] performDerivedPnsSync error:", err),
       complete: () => {
         debugLog("[sync1080Pns] performDerivedPnsSync complete");
+        onEnd?.(failed ? "failed" : "ok");
         results$.complete();
       },
     });
@@ -106,6 +114,14 @@ function performDerivedPnsSync(
 export function create1080PnsSync(deps: Create1080PnsSyncDeps): Create1080PnsSyncResult {
   const syncDerivedPnsTrigger$ = new Subject<void>();
   const syncDerivedPnsResults$ = new Subject<NostrEvent>();
+
+  // everyone waiting on a manual sync hears how the next one ended
+  let waiting: ((outcome: SyncOutcome) => void)[] = [];
+  const settle = (outcome: SyncOutcome) => {
+    const w = waiting;
+    waiting = [];
+    w.forEach((r) => r(outcome));
+  };
 
   const triggerDerivedPnsSync = () => {
     const relays = deps.getCurrentRelayUrls();
@@ -125,7 +141,9 @@ export function create1080PnsSync(deps: Create1080PnsSyncDeps): Create1080PnsSyn
       );
     }
 
+    const done = new Promise<SyncOutcome>((r) => waiting.push(r));
     syncDerivedPnsTrigger$.next();
+    return done;
   };
 
   // Auto-sync once when pubkeys + relays become available.
@@ -166,9 +184,10 @@ export function create1080PnsSync(deps: Create1080PnsSyncDeps): Create1080PnsSyn
           }),
           tap((pubkeys) => {
             if (pubkeys.length > 0 && relayUrls.length > 0) {
-              const results$ = performDerivedPnsSync(pubkeys, relayUrls);
+              const results$ = performDerivedPnsSync(pubkeys, relayUrls, settle);
               results$.subscribe((event) => syncDerivedPnsResults$.next(event));
             } else {
+              settle("skipped");
               debugWarn("[sync1080Pns] Cannot sync: pubkeys or relays missing", {
                 pubkeys: pubkeys.length,
                 relays: relayUrls.length,

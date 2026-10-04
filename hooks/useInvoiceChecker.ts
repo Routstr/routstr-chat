@@ -1,17 +1,15 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 import { useInvoiceSync, StoredInvoice } from "./useInvoiceSync";
 import { Mint, Wallet, MintQuoteState, MeltQuoteState } from "@cashu/cashu-ts";
-import { useCashuStore } from "@/features/wallet";
-import { useCashuToken } from "@/features/wallet";
 import { toast } from "sonner";
 import { formatBalance } from "@/features/wallet";
 import { useTransactionHistoryStore } from "@/features/wallet";
+import { mintTokensFromPaidInvoice } from "@/lib/cashuLightning";
+import { MintRecoveryUnavailableError } from "@/lib/mintQuoteRecovery";
 
 export function useInvoiceChecker() {
-  const { invoices, getPendingInvoices, updateInvoice, cleanupOldInvoices } =
+  const { getPendingInvoices, updateInvoice, cleanupOldInvoices } =
     useInvoiceSync();
-  const cashuStore = useCashuStore();
-  const { receiveToken } = useCashuToken();
   const transactionHistoryStore = useTransactionHistoryStore();
   const [isChecking, setIsChecking] = useState(false);
   const checkIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -20,201 +18,96 @@ export function useInvoiceChecker() {
   // Check a single mint invoice
   const checkMintInvoice = useCallback(
     async (invoice: StoredInvoice) => {
+      let remoteState: MintQuoteState | undefined;
+
       try {
         const mint = new Mint(invoice.mintUrl);
-        const wallet = new Wallet(mint);
-        await wallet.loadMint();
+        const quoteStatus = await mint.checkMintQuoteBolt11(invoice.quoteId);
+        remoteState = quoteStatus.state;
 
-        const quoteStatus = await wallet.checkMintQuote(invoice.quoteId);
-
-        if (
-          (quoteStatus.state === MintQuoteState.PAID ||
-            quoteStatus.state === MintQuoteState.ISSUED) &&
-          (invoice.state as string) !== "PAID" &&
-          (invoice.state as string) !== "ISSUED"
-        ) {
-          // Invoice has been paid, update state first
-          await updateInvoice(invoice.id, {
-            state: quoteStatus.state,
-            paidAt: Date.now(),
-          });
-
-          // Only try to mint if state is PAID (not ISSUED, which means tokens already exist)
-          if (quoteStatus.state === MintQuoteState.PAID) {
-            try {
-              const proofs = await wallet.mintProofs(
-                invoice.amount,
-                invoice.quoteId
-              );
-
-              if (proofs.length > 0) {
-                // Add proofs to store
-                cashuStore.addProofs(proofs, `invoice-${invoice.id}`);
-
-                // Update to ISSUED state after successful minting
-                await updateInvoice(invoice.id, {
-                  state: MintQuoteState.ISSUED,
-                });
-
-                // Remove any pending transaction for this invoice
-                const pendingTx =
-                  transactionHistoryStore.pendingTransactions.find(
-                    (tx) => tx.quoteId === invoice.quoteId
-                  );
-                if (pendingTx) {
-                  transactionHistoryStore.removePendingTransaction(
-                    pendingTx.id
-                  );
-                }
-
-                // Show success notification
-                toast.success(
-                  `Lightning invoice paid! Received ${formatBalance(
-                    invoice.amount,
-                    "sats"
-                  )}`,
-                  { duration: 5000 }
-                );
-
-                return true;
-              }
-            } catch (mintError) {
-              console.error(
-                "Error minting tokens for paid invoice:",
-                mintError
-              );
-
-              // Check if tokens were already issued (in case of race condition)
-              try {
-                const recheckStatus = await wallet.checkMintQuote(
-                  invoice.quoteId
-                );
-                if (recheckStatus.state === MintQuoteState.ISSUED) {
-                  // Tokens were already issued, try to recover them
-                  const proofs = await wallet.mintProofs(
-                    invoice.amount,
-                    invoice.quoteId
-                  );
-                  if (proofs.length > 0) {
-                    cashuStore.addProofs(proofs, `invoice-${invoice.id}`);
-                    await updateInvoice(invoice.id, {
-                      state: MintQuoteState.ISSUED,
-                    });
-
-                    // Remove any pending transaction for this invoice
-                    const pendingTx =
-                      transactionHistoryStore.pendingTransactions.find(
-                        (tx) => tx.quoteId === invoice.quoteId
-                      );
-                    if (pendingTx) {
-                      transactionHistoryStore.removePendingTransaction(
-                        pendingTx.id
-                      );
-                    }
-
-                    toast.success(
-                      `Lightning invoice paid! Recovered ${formatBalance(
-                        invoice.amount,
-                        "sats"
-                      )}`,
-                      { duration: 5000 }
-                    );
-                    return true;
-                  }
-                }
-              } catch (recoveryError) {
-                console.error("Failed to recover tokens:", recoveryError);
-              }
-
-              toast.error(
-                "Invoice paid but failed to mint tokens. Will retry automatically."
-              );
-            }
-          } else if (quoteStatus.state === MintQuoteState.ISSUED) {
-            // Tokens were already issued, check if we need to recover them
-            // Check if we already have these tokens by checking our balance before attempting recovery
-            const proofsBefore = cashuStore.proofs;
-            const balanceBefore = proofsBefore.reduce(
-              (sum, p) => sum + p.amount,
-              0
-            );
-
-            try {
-              const proofs = await wallet.mintProofs(
-                invoice.amount,
-                invoice.quoteId
-              );
-              if (proofs.length > 0) {
-                cashuStore.addProofs(proofs, `invoice-${invoice.id}`);
-
-                // Only show success if balance actually increased (tokens were recovered)
-                const proofsAfter = cashuStore.proofs;
-                const balanceAfter = proofsAfter.reduce(
-                  (sum, p) => sum + p.amount,
-                  0
-                );
-                if (balanceAfter > balanceBefore) {
-                  // Remove any pending transaction for this invoice
-                  const pendingTx =
-                    transactionHistoryStore.pendingTransactions.find(
-                      (tx) => tx.quoteId === invoice.quoteId
-                    );
-                  if (pendingTx) {
-                    transactionHistoryStore.removePendingTransaction(
-                      pendingTx.id
-                    );
-                  }
-
-                  toast.success(
-                    `Lightning invoice paid! Recovered ${formatBalance(
-                      invoice.amount,
-                      "sats"
-                    )}`,
-                    { duration: 5000 }
-                  );
-                }
-                return true;
-              }
-            } catch (recoveryError: any) {
-              // Silently ignore "already issued" errors - this is normal
-              if (!recoveryError?.message?.includes("already issued")) {
-                console.error(
-                  "Failed to recover issued tokens:",
-                  recoveryError
-                );
-                // Only show warning for actual recovery failures, not for already-claimed tokens
-                toast.warning(
-                  "Invoice was paid but tokens need manual recovery."
-                );
-              }
-            }
+        if (quoteStatus.state === MintQuoteState.UNPAID) {
+          if (quoteStatus.state !== invoice.state) {
+            await updateInvoice(invoice.id, { state: quoteStatus.state });
           }
-        } else if (quoteStatus.state !== invoice.state) {
-          // Just update the state if it changed
-          await updateInvoice(invoice.id, { state: quoteStatus.state });
+          return false;
         }
 
-        return false;
+        if (quoteStatus.state === MintQuoteState.PAID) {
+          await updateInvoice(invoice.id, {
+            state: MintQuoteState.PAID,
+            paidAt: invoice.paidAt || Date.now(),
+            claimError: undefined,
+          });
+        }
+
+        const proofs = await mintTokensFromPaidInvoice(
+          invoice.mintUrl,
+          invoice.quoteId,
+          invoice.amount,
+          1
+        );
+        if (proofs.length === 0) {
+          throw new Error("Mint returned no proofs for the paid quote");
+        }
+
+        await updateInvoice(invoice.id, {
+          state: MintQuoteState.ISSUED,
+          paidAt: invoice.paidAt || Date.now(),
+          retryCount: 0,
+          nextRetryAt: undefined,
+          claimError: undefined,
+        });
+
+        const pendingTx = transactionHistoryStore.pendingTransactions.find(
+          (tx) => tx.quoteId === invoice.quoteId
+        );
+        if (pendingTx) {
+          transactionHistoryStore.removePendingTransaction(pendingTx.id);
+        }
+        toast.success(
+          `Received ${formatBalance(invoice.amount, "sats")} from Lightning`,
+          { duration: 5000 }
+        );
+        return true;
       } catch (error) {
         console.error(`Error checking mint invoice ${invoice.id}:`, error);
 
-        // Update retry count and next retry time
         const retryCount = (invoice.retryCount || 0) + 1;
-        const baseInterval = 30000; // 30 seconds
-        const nextRetryDelay = Math.min(
-          baseInterval * Math.pow(2, retryCount),
-          300000
-        ); // Max 5 minutes
-
         await updateInvoice(invoice.id, {
+          state:
+            remoteState === MintQuoteState.ISSUED
+              ? MintQuoteState.ISSUED
+              : remoteState === MintQuoteState.PAID
+                ? MintQuoteState.PAID
+                : invoice.state,
+          paidAt:
+            remoteState === MintQuoteState.PAID ||
+            remoteState === MintQuoteState.ISSUED
+              ? invoice.paidAt || Date.now()
+              : invoice.paidAt,
           retryCount,
-          nextRetryAt: Date.now() + nextRetryDelay,
+          claimError:
+            remoteState === MintQuoteState.ISSUED
+              ? error instanceof MintRecoveryUnavailableError
+                ? "missing_preview"
+                : "recovery_pending"
+              : invoice.claimError,
         });
 
+        if (
+          remoteState === MintQuoteState.PAID ||
+          remoteState === MintQuoteState.ISSUED
+        ) {
+          toast.error(
+            error instanceof MintRecoveryUnavailableError
+              ? "Payment was issued, but its local recovery data is missing."
+              : "Payment confirmed, but sats have not reached the wallet. Retry from invoice history."
+          );
+        }
         return false;
       }
     },
-    [cashuStore, updateInvoice]
+    [transactionHistoryStore, updateInvoice]
   );
 
   // Check a single melt invoice
@@ -318,6 +211,21 @@ export function useInvoiceChecker() {
     await checkPendingInvoices();
   }, [checkPendingInvoices]);
 
+  const retryInvoice = useCallback(
+    async (invoice: StoredInvoice) => {
+      if (isChecking) return false;
+      setIsChecking(true);
+      try {
+        return invoice.type === "mint"
+          ? await checkMintInvoice(invoice)
+          : await checkMeltInvoice(invoice);
+      } finally {
+        setIsChecking(false);
+      }
+    },
+    [isChecking, checkMintInvoice, checkMeltInvoice]
+  );
+
   // Set up automatic checking interval
   useEffect(() => {
     // Check immediately on mount
@@ -365,5 +273,6 @@ export function useInvoiceChecker() {
     isChecking,
     pendingCount: getPendingInvoices().length,
     triggerCheck,
+    retryInvoice,
   };
 }

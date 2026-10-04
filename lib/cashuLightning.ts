@@ -4,12 +4,12 @@ import {
   Wallet,
   MeltQuoteResponse,
   MeltQuoteState,
-  MintQuoteResponse,
   MintQuoteState,
   Proof,
 } from "@cashu/cashu-ts";
 import { calculateFees } from "@/features/wallet";
 import { canMakeExactChange } from "./cashu";
+import { claimPaidMintQuote } from "./mintQuoteRecovery";
 
 export interface MintQuote {
   mintUrl: string;
@@ -102,64 +102,7 @@ export async function mintTokensFromPaidInvoice(
   maxAttempts: number = 40
 ): Promise<Proof[]> {
   try {
-    const mint = new Mint(mintUrl);
-    const keysets = await mint.getKeySets();
-
-    // Get preferred unit: msat over sat if both are active
-    const activeKeysets = keysets.keysets.filter((k) => k.active);
-    const units = [...new Set(activeKeysets.map((k) => k.unit))];
-    const preferredUnit = units.includes("msat")
-      ? "msat"
-      : units.includes("sat")
-        ? "sat"
-        : "not supported";
-
-    const wallet = new Wallet(mint, { unit: preferredUnit });
-
-    // Load mint keysets
-    await wallet.loadMint();
-
-    let attempts = 0;
-    let mintQuoteChecked;
-
-    while (attempts < maxAttempts) {
-      try {
-        // Check the status of the quote
-        mintQuoteChecked = await wallet.checkMintQuote(quoteId);
-        console.log("rdlogs: THE MAIN ONE, ", mintQuoteChecked);
-
-        if (mintQuoteChecked.state === MintQuoteState.PAID) {
-          break; // Exit the loop if the invoice is paid
-        }
-
-        // Invoice not paid yet - this is normal, just wait and try again
-        attempts++;
-        if (attempts < maxAttempts) {
-          await new Promise((resolve) => setTimeout(resolve, 3000)); // Wait for 3 seconds before retrying
-        }
-      } catch (error) {
-        // Only log actual API/network errors
-        console.error("Error checking mint quote:", error);
-        attempts++;
-        if (attempts < maxAttempts) {
-          await new Promise((resolve) => setTimeout(resolve, 3000)); // Wait for 3 seconds before retrying
-        }
-      }
-    }
-
-    if (attempts === maxAttempts) {
-      throw new Error("Failed to confirm payment after multiple attempts");
-    }
-
-    // Mint proofs using the paid quote
-    const proofs = await wallet.mintProofs(amount, quoteId);
-
-    const mintQuoteUpdated = await wallet.checkMintQuote(quoteId);
-    useCashuStore
-      .getState()
-      .updateMintQuote(mintUrl, quoteId, mintQuoteUpdated as MintQuoteResponse);
-
-    return proofs;
+    return await claimPaidMintQuote(mintUrl, quoteId, amount, maxAttempts);
   } catch (error) {
     console.error("Error minting tokens from paid invoice:", error);
     throw error;
@@ -453,6 +396,8 @@ export async function payMeltQuote(
       change: meltResponse.change || [],
       keep,
       success: true,
+      // PAID, or PENDING while a slow route is still settling
+      state: meltQuoteUpdated.state,
     };
   } catch (error) {
     console.error("Error paying Lightning invoice:", error);

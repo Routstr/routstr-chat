@@ -30,6 +30,8 @@ export interface UseApiStateReturn {
   models: Model[];
   selectedModel: Model | null;
   isLoadingModels: boolean;
+  /** The first full model load, and the pick that ends it, have finished. */
+  hasPickedModel: boolean;
   setSelectedModel: (model: Model | null) => void;
   fetchModels: (balance: number) => Promise<void>;
   handleModelChange: (modelId: string, configuredKeyOverride?: string) => void;
@@ -56,6 +58,7 @@ export const useApiState = (
   const [models, setModels] = useState<Model[]>([]);
   const [selectedModel, setSelectedModel] = useState<Model | null>(null);
   const [isLoadingModels, setIsLoadingModels] = useState(true);
+  const [hasPickedModel, setHasPickedModel] = useState(false);
   const [baseUrlsList, setBaseUrlsList] = useState<string[]>([]);
   const [lowBalanceWarningForModel, setLowBalanceWarningForModel] =
     useState(false);
@@ -251,6 +254,7 @@ export const useApiState = (
         setSelectedModel(null);
       } finally {
         setIsLoadingModels(false);
+        setHasPickedModel(true);
       }
     },
     [
@@ -412,6 +416,7 @@ export const useApiState = (
     models,
     selectedModel,
     isLoadingModels,
+    hasPickedModel,
     setSelectedModel,
     fetchModels,
     handleModelChange,

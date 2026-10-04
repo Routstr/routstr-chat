@@ -1,0 +1,267 @@
+/* phone.css — the phone shell (≤ 760px), loaded last. The room is behind
+   everything; the reading panel is a card standing in it, and its header
+   stands on the room above the card. Anything that comes over the panel makes
+   it step back into the room: the drawer slides it aside and sets the rail
+   card down beside it (the two land level, top and bottom), a sheet lets it
+   recede. Every move is a transform; a finger on the drawer writes one
+   number, --p, and everything below is drawn from it. Tokens only. */
+
+/* desktop has none of these */
+.pcard, .catch, .title-chev { display: none; }
+.head-bal { display: none; }
+
+@media (max-width: 760px) {
+  :root {
+    --safe-t: env(safe-area-inset-top, 0px);
+    --safe-b: env(safe-area-inset-bottom, 0px);
+    --strip: 4px;
+    --head-h: 52px;
+    --card-top: calc(var(--safe-t) + var(--strip) + var(--head-h));
+    --rail-m: min(calc(100vw - 72px), 332px);
+    /* the drawer's frame is --s2 on every side, the gap between the two cards too */
+    --aside: calc(var(--rail-m) + 2 * var(--s2));
+    --ds: .94;
+    /* the rail card's top and bottom; the reading card is sized so that, with the panel scaled by --ds
+       about the rail's middle, it lands exactly on them. While reading it only sits lower (--pc-drop) */
+    --rail-t: calc(var(--safe-t) + var(--s2));
+    --rail-gap: max(var(--s2), calc(var(--safe-b) - var(--s1)));
+    /* (the panel's keyboard, --kb-p, holds still while a sheet is up; the rail keeps --kb) */
+    --rail-b: calc(100dvh - var(--kb-p, 0px) - var(--rail-gap-p, var(--rail-gap)));
+    --rail-mid: calc((var(--rail-t) + var(--rail-b)) / 2);
+    --pc-half: calc((var(--rail-b) - var(--rail-t)) / 2 / var(--ds));
+    --pc-top: calc(var(--rail-mid) - var(--pc-half));
+    --pc-drop: calc(var(--card-top) - var(--pc-top));
+  }
+  html[data-kb] { --rail-gap: var(--s2); }
+  /* the panel's card: the same gap, from the panel's own keyboard flag (held while a sheet is up) */
+  :root { --rail-gap-p: max(var(--s2), calc(var(--safe-b) - var(--s1))); }
+  html[data-kb-p] { --rail-gap-p: var(--s2); }
+  /* the veil behind a sheet: dark rooms dim with their scrim; light rooms sink toward the paper the
+     reader sees around the card (--ph-sink), so the panel recedes into it rather than under a grey
+     film. One veil for every sheet, at .55, and no blur, so the panel's step back shows */
+  :root { --ph-veil: var(--scrim); --ph-veil-o: .55; --ph-sink: var(--room); }
+  /* overprint's --room is its blue ink; the paper around its card is its stock */
+  html[data-room="overprint"] { --ph-sink: var(--sh-c0); }
+  html:is([data-room="paper"], [data-room="overprint"], [data-room="meridian"][data-face="day"]) { --ph-veil: var(--ph-sink); }
+  .v2 :is(.sh-veil, .pk-veil) {
+    background: color-mix(in oklab, var(--ph-veil) calc(var(--ph-veil-o) * 100%), transparent);
+    -webkit-backdrop-filter: none; backdrop-filter: none;
+  }
+  html body { overscroll-behavior: none; }
+
+  /* ══ the room and the panel ══════════════════════════════════════════════ */
+  .v2 .room { display: block; padding: 0; }
+  .room > .panel {
+    position: fixed; inset: 0 0 var(--kb-p, 0px) 0; z-index: 3;
+    width: 100%; margin: 0; padding-top: calc(var(--safe-t) + var(--strip));
+    border-radius: 0; box-shadow: none; overflow: visible;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: var(--head-h) minmax(0, 1fr);
+    grid-template-areas: "head" "main";
+    transform-origin: 0 var(--rail-mid); will-change: transform;
+    transition: transform var(--d-move) var(--e-out), opacity var(--d-mid) var(--e-out);
+    /* vertical scrolling stays the browser's; a sideways finger is the drawer's (phone.ts) */
+    touch-action: pan-y;
+  }
+  .room > .panel[data-state="empty"] {
+    padding-top: calc(var(--safe-t) + var(--strip));
+    grid-template-rows: var(--head-h) minmax(0, 1fr) auto auto;
+    grid-template-areas: "head" "main" "tail" "dock";
+  }
+  .room > .panel::before { display: none; }
+
+  /* the card: a real element in every state (a new chat too), so the drawer never fades one in */
+  .pcard, .catch {
+    display: block; position: absolute; left: 0; right: 0; top: var(--pc-top); height: calc(2 * var(--pc-half));
+    border-radius: var(--r-lg); transform: translateY(var(--pc-drop)); pointer-events: none;
+    transition: transform var(--d-move) var(--e-out), opacity var(--d-move) var(--e-out);
+  }
+  .pcard {
+    z-index: -1; will-change: transform;
+    background: linear-gradient(148deg, var(--surface-lit), var(--surface) 62%);
+    box-shadow: var(--lift-2), var(--glow-2);
+  }
+  /* a first visit belongs to the room (first.css): no card until the drawer asks the page to step aside */
+  .room > .panel[data-first] .pcard { opacity: 0; }
+  .room[data-drawer="open"] > .panel[data-first] .pcard { opacity: 1; }
+  /* a finger brings it in as far as the drawer has come, never all at once */
+  .room[data-drag] > .panel[data-first] .pcard { opacity: min(1, calc(3 * var(--p))); }
+  /* the room's own colour over the card: what peeks out sinks into the room instead of going grey */
+  .catch { z-index: 30; background: var(--ph-sink); opacity: 0; }
+
+  /* ── stepped aside: the drawer is open ─────────────────────────────────── */
+  .room[data-drawer="open"] > .panel {
+    transform: translateX(var(--aside)) scale(var(--ds));
+    transition: transform var(--d-slow) var(--e-spring);
+  }
+  .room[data-drawer="open"] > .panel :is(.pcard, .catch) {
+    transform: none;
+    transition: transform var(--d-slow) var(--e-spring), opacity var(--d-move) var(--e-out);
+  }
+  .room[data-drawer="open"] > .panel .catch { opacity: .72; }
+  .room[data-drawer="open"] > .panel > .panel-head { opacity: 0; transition-duration: var(--d-fast); transition-delay: 0s; }
+
+  /* ── stepped back: a sheet is over it ─────────────────────────────────── */
+  /* the same picture as scaling about the top centre, drawn about the panel's one origin, so
+     nothing jumps when it starts back (an origin cannot animate) */
+  .room[data-back] > .panel {
+    /* its card's top sits in the same gutter as its sides (50vw x (1 - ds)), so the frame round it
+       is even and it reads as stacked behind the sheet */
+    transform: translate(calc(50vw * (1 - var(--ds))), calc(var(--safe-t) + 50vw * (1 - var(--ds)) - var(--ds) * var(--card-top) - var(--rail-mid) * (1 - var(--ds)))) scale(var(--ds));
+    transition: transform var(--d-slow) var(--e-spring);
+  }
+  .room[data-back] > .panel .catch { opacity: .6; }
+  /* a dark room: no room colour over the card, so its lit edge survives the sheet */
+  html:not(:is([data-room="paper"], [data-room="overprint"], [data-room="meridian"][data-face="day"])) .room[data-back] > .panel .catch { opacity: 0; }
+  .room[data-back] > .panel > .panel-head { opacity: 0; transition-delay: 0s; }
+
+  /* ── held by a finger: everything follows --p, nothing eases ──────────── */
+  .room[data-drag] > .panel {
+    transform: translateX(calc(var(--aside) * var(--p))) scale(calc(1 - (1 - var(--ds)) * var(--p)));
+  }
+  .room[data-drag] > .panel :is(.pcard, .catch) { transform: translateY(calc(var(--pc-drop) * (1 - var(--p)))); }
+  .room[data-drag] > .panel .catch { opacity: calc(.72 * var(--p)); }
+  /* the header is gone by p .2, before the card rises into it, as on a tap open */
+  .room[data-drag] > .panel > .panel-head { opacity: max(0, calc(1 - 5 * var(--p))); }
+  /* (the rail's own drag rule is below the drawer's, so it wins while a finger holds it) */
+  .room[data-drag] > .panel, .room[data-drag] > .panel :is(.pcard, .catch, .panel-head),
+  .room[data-drag] > .rail.sb { transition: none !important; }
+
+  /* the panel's edge beside the open drawer: tap or drag it to go back */
+  .room .drawer-veil {
+    position: fixed; inset: 0 0 0 calc(var(--aside) - 10px); z-index: 4;
+    background: none; -webkit-backdrop-filter: none; backdrop-filter: none;
+    opacity: 0; pointer-events: none; touch-action: none;
+  }
+  .room[data-drawer="open"] .drawer-veil { pointer-events: auto; }
+
+  /* ══ header: menu, title, new chat or the balance. It stands on the room ══ */
+  .room > .panel > .panel-head {
+    grid-area: head; height: var(--head-h); min-height: 0; padding: 0 var(--s2); gap: 0;
+    /* it comes back only once the card has gone home under it (it leaves at once, above) */
+    transition: opacity var(--d-mid) var(--e-out) var(--d-fast);
+  }
+  .panel-head .lead, .panel-head .trail { flex: 0 0 auto; min-width: 44px; gap: 0; }
+  .panel-head .ghost { width: 44px; height: 44px; border-radius: var(--r-sm); color: var(--ink); }
+  .panel-head .ghost .v2-ico { width: 18px; height: 18px; }
+  .panel-head .ghost:active { background: var(--fill-2); transform: scale(.94); }
+  /* a press eases in and out like the balance beside them, never a one-frame snap */
+  .panel-head :is(.ghost, .title) { transition: background var(--d-fast), color var(--d-fast), opacity var(--d-fast), transform var(--d-fast) var(--e-spring); }
+  .panel-head .title {
+    display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+    min-height: 44px; padding: 0 var(--s3); color: var(--ink); max-width: calc(100% - 2 * 44px);
+    /* a chat's title is set as the drawer sets it, in the reading face */
+    font-family: var(--f-body); font-weight: var(--w-body); letter-spacing: 0; font-stretch: 100%; font-size: 16px;
+  }
+  /* titles never end in dots: a long one fades at its end, as the drawer's do */
+  .panel-head .title-in { overflow: hidden; text-overflow: clip; white-space: nowrap; min-width: 0; }
+  .panel-head .title-in[data-cut] { mask-image: linear-gradient(90deg, #000 calc(100% - var(--s6)), transparent); }
+  .title-chev { display: block; width: 13px; height: 13px; color: var(--ink-3); flex: none; margin-top: 2px; }
+  .panel-head .title:active { background: var(--fill-1); transform: scale(.98); }
+  .head-bal {
+    display: inline-flex; align-items: baseline; justify-content: flex-end; gap: 5px;
+    min-height: 44px; padding: 0 var(--s3); border-radius: var(--r-sm);
+    line-height: 44px;
+    transition: background var(--d-fast), transform var(--d-fast) var(--e-spring);
+  }
+  /* the same money figure the drawer and the wallet show: the display face, the unit in the UI face */
+  .head-bal .n { font-family: var(--f-display); font-weight: var(--w-display); font-stretch: var(--display-stretch, 100%); font-variant-numeric: lining-nums tabular-nums; font-size: calc(18.5px * var(--display-scale)); color: var(--ink); letter-spacing: var(--display-track); }
+  /* on the room itself, not on a card: the unit needs full ink to read */
+  .head-bal .u { font-family: var(--f-ui); font-size: 12px; color: var(--ink); }
+  .head-bal .w {
+    align-self: center; width: 52px; height: 10px; border-radius: 99px; background: var(--fill-2);
+    animation: sbGhost calc(var(--d-wave) * .82) var(--e-in-out) infinite; --i: 0;
+  }
+  .head-bal[data-zero] :is(.n, .u) { color: var(--ink-2); }
+  .head-bal .node { font-family: var(--f-ui); font-size: 12px; color: var(--ink); }
+  /* the pencil and the balance trade places the way the title does: a short fade, never a cut */
+  .panel-head .trail > * { animation: fade var(--d-mid) var(--e-out) both; }
+  .head-bal:active { background: var(--fill-1); transform: scale(.97); }
+
+  /* ══ the thread inside the card ══════════════════════════════════════════ */
+  .room > .panel .thread {
+    /* a mask, not a painted gradient, so the lines fade into the card's own gradient in every room */
+    --top-fade: calc(var(--s6) + var(--s1));
+    mask-image: linear-gradient(to bottom, transparent 0, rgb(0 0 0 / .35) calc(var(--top-fade) * .4), #000 var(--top-fade), #000 calc(100% - 22px), transparent 100%);
+    scroll-padding-top: var(--top-fade);
+  }
+  .room > .panel[data-state="chat"] .thread-in { padding-bottom: calc(var(--dock-h, 96px) + var(--s4)); }
+  /* the jump disc sits above the floating composer, never on Send */
+  .room > .panel[data-state="chat"] .rd-latest { bottom: calc(var(--dock-h, 96px) + var(--s3)); }
+  .room > .panel[data-state="chat"] .thread-wrap:has(> .rd-latest[data-on]) { grid-template-rows: minmax(0, 1fr) 0px; }
+
+  /* ══ the dock: in a chat it floats over the card's foot ═════════════════ */
+  .room > .panel .dock { padding: var(--s2) var(--s3) max(var(--s3), var(--safe-b)); }
+  html[data-kb-p] .room > .panel .dock { padding-bottom: var(--s2); }
+  .room > .panel[data-state="chat"] .dock { position: absolute; left: 0; right: 0; bottom: 0; }
+  .room > .panel[data-state="chat"] .dock::before {
+    content: ""; position: absolute; inset: calc(var(--s6) * -1) 0 0 0; z-index: -1; pointer-events: none;
+    background: linear-gradient(to bottom, transparent, var(--surface) var(--s6));
+  }
+
+  /* ══ the drawer: the rail card, set down beside the panel ════════════════ */
+  .room > .rail.sb {
+    position: fixed; z-index: 2; inset: var(--rail-t) auto calc(var(--rail-gap) + var(--kb, 0px)) var(--s2);
+    width: var(--rail-m); padding: 0; will-change: transform, opacity;
+    opacity: 0; visibility: hidden; pointer-events: none;
+    transform: translateX(-22px) scale(.97); transform-origin: 0 50%;
+    transition: transform var(--d-move) var(--e-out), opacity var(--d-mid) var(--e-out), visibility 0s linear var(--d-move);
+  }
+  .room[data-drawer="open"] > .rail.sb {
+    opacity: 1; visibility: visible; pointer-events: auto; transform: none;
+    transition: transform var(--d-slow) var(--e-spring), opacity var(--d-mid) var(--e-out) calc(var(--d-quick) / 2), visibility 0s;
+  }
+  .room[data-drag] > .rail.sb, .room[data-drag][data-drawer="open"] > .rail.sb {
+    visibility: visible; opacity: min(1, calc(1.6 * var(--p)));
+    transform: translateX(calc(-22px * (1 - var(--p)))) scale(calc(.97 + .03 * var(--p)));
+    transition: none;
+  }
+  /* the drawer scrolls up and down; a sideways finger on it pushes it away (phone.ts) */
+  .room > .rail.sb { touch-action: pan-y; }
+  .room > .rail.sb .card, .room > .rail.sb .card .flip, .room > .rail.sb[data-fold] .card { width: 100%; }
+  .room > .rail.sb .sb-in { width: 100%; padding: var(--s2); }
+  /* search at the top as a field, New chat and the balance at the bottom, under the thumb */
+  .sb-acts { display: contents; }
+  .sb-find { order: 1; margin: var(--s2) 0 var(--s1); min-height: 44px; border-radius: var(--r-sm); background: var(--fill-1); color: var(--ink-3); }
+  .sb-find .sb-lbl { color: var(--ink-3); }
+  .sb-list { order: 2; }
+  .sb-new {
+    order: 3; justify-content: center; min-height: 48px; margin-top: var(--s2);
+    border-radius: var(--r-md); background: var(--fill-1); color: var(--ink); font-weight: 500;
+  }
+  .sb-new .sb-glide { display: none; }
+  .sb-new .sb-lbl { flex: none; }
+  .sb-new > .v2-ico { stroke-width: 1.5; color: var(--ink-2); }
+  .sb-foot { order: 4; }
+  /* nothing to find yet: no search, and the one sentence sits where Today will land, as on a desktop */
+  .sb-find[aria-disabled="true"] { display: none; }
+  html[data-kb] .room[data-drawer] :is(.sb-new, .sb-foot) { display: none; }
+  /* a first page with the keyboard up: too little height for the sentence, so only the greeting
+     stays, above the ideas, and never climbs into the header */
+  html[data-kb-p] .panel[data-first] .pf-sub-clip { display: none; }
+  html[data-kb-p] .panel[data-first] .stage { overflow: hidden; }
+
+  /* a returning reader's new chat: one quiet way back to the latest chat, above the composer */
+  .resume {
+    display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: baseline; column-gap: 10px;
+    /* its words start on the composer's text edge; its time ends on the right edge the balance and Send share */
+    width: 100%; min-height: 48px; align-content: center; padding: 0 var(--s2) 0 calc(var(--s4) + 2px); border-radius: var(--r-sm); text-align: left;
+    animation: fadeUp var(--d-slow) var(--d-mid) var(--e-out) both; transition: background var(--d-fast);
+  }
+  .resume-k { font-family: var(--f-ui); font-size: 13px; color: var(--ink-3); }
+  /* one quiet size on both sides of the title */
+  /* titles never end in dots: a fade at the end, as in the drawer */
+  .resume-t { font-family: var(--f-body); font-size: 15.5px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: clip; }
+  .resume-t[data-cut] { mask-image: linear-gradient(90deg, #000 calc(100% - var(--s6)), transparent); }
+  .resume-when { font-family: var(--f-ui); font-size: 13px; color: var(--ink-3); white-space: nowrap; }
+  .resume:active { background: var(--fill-1); }
+  .resume:active .resume-t { color: var(--ink); }
+}
+
+@media (max-width: 760px) and (prefers-reduced-motion: reduce) {
+  /* the drawer only slides; sheets and pages move without the panel scaling */
+  :root { --ds: 1; }
+  .room > .rail.sb, .room[data-drawer="open"] > .rail.sb { transform: none; }
+  /* behind a sheet the panel holds still: the veil and the dim say the sheet is on top */
+  .room[data-back] > .panel { transform: none; }
+}

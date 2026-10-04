@@ -131,7 +131,7 @@ const SixtyWallet: React.FC<{
           proofsToRemove: [],
         });
         await updateInvoice(currentMeltQuoteId, {
-          state: MintQuoteState.PAID,
+          state: MintQuoteState.ISSUED,
           paidAt: Date.now(),
         });
         if (pendingTransactionId)

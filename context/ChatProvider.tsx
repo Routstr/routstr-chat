@@ -35,7 +35,7 @@ interface ChatContextType
   // Additional computed properties or methods can be added here
 }
 
-const ChatContext = createContext<ChatContextType | undefined>(undefined);
+export const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
 export const useChat = (): ChatContextType => {
   const context = useContext(ChatContext);

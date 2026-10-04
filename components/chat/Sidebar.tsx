@@ -27,7 +27,7 @@ interface SidebarProps {
     tab: "settings" | "wallet" | "history" | "api-keys"
   ) => void;
   balance: number;
-  syncWithNostr: () => Promise<void>;
+  syncWithNostr: () => Promise<unknown>;
   isSyncing: boolean;
 }
 

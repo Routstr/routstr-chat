@@ -21,7 +21,7 @@ import {
 
 export function useWalletReceive(navigateToTab: (tab: "overview" | "invoice") => void) {
   const { balance, currentMintUnit } = useChat();
-  const { addInvoice } = useInvoiceSync();
+  const { addInvoice, updateInvoice } = useInvoiceSync();
   const { receiveToken } = useCashuToken();
   const cashuStore = useCashuStore();
   const { updateProofs } = useCashuWallet();
@@ -55,7 +55,9 @@ export function useWalletReceive(navigateToTab: (tab: "overview" | "invoice") =>
 
   const [nip60Invoice, setNip60Invoice] = useState("");
   const [nip60QuoteId, setNip60QuoteId] = useState("");
+  const [nip60ExpiresAt, setNip60ExpiresAt] = useState<number | undefined>(undefined);
   const nip60QuoteIdRef = useRef<string>("");
+  const nip60InvoiceIdRef = useRef<string>("");
   const [nip60PendingTxId, setNip60PendingTxId] = useState<string | null>(null);
 
   const reset = useCallback(() => {
@@ -69,29 +71,43 @@ export function useWalletReceive(navigateToTab: (tab: "overview" | "invoice") =>
     setSuccessMessage("");
     setNip60Invoice("");
     setNip60QuoteId("");
+    setNip60ExpiresAt(undefined);
     nip60QuoteIdRef.current = "";
+    nip60InvoiceIdRef.current = "";
     setNip60PendingTxId(null);
   }, []);
 
   const checkNip60PaymentStatus = useCallback(
-    async (mintUrl: string, quoteId: string, amount: number, pendingTxId: string) => {
+    async (
+      mintUrl: string,
+      quoteId: string,
+      amount: number,
+      pendingTxId: string,
+      invoiceId: string
+    ) => {
       try {
         const proofs = await mintTokensFromPaidInvoice(mintUrl, quoteId, amount);
         if (proofs.length > 0) {
           await updateProofs({ mintUrl, proofsToAdd: proofs, proofsToRemove: [] });
+          await updateInvoice(invoiceId, {
+            state: MintQuoteState.ISSUED,
+            paidAt: Date.now(),
+            claimError: undefined,
+          });
           transactionHistoryStore.removePendingTransaction(pendingTxId);
           setNip60PendingTxId(null);
           setSuccessMessage(`Received ${formatBalance(amount, currentMintUnit)}s!`);
           setNip60Invoice("");
           setNip60QuoteId("");
           nip60QuoteIdRef.current = "";
+          nip60InvoiceIdRef.current = "";
           setMintAmount("");
           navigateToTab("overview");
           setTimeout(() => setSuccessMessage(""), 5000);
         } else {
           setTimeout(() => {
             if (nip60QuoteIdRef.current === quoteId) {
-              checkNip60PaymentStatus(mintUrl, quoteId, amount, pendingTxId);
+              checkNip60PaymentStatus(mintUrl, quoteId, amount, pendingTxId, invoiceId);
             }
           }, 5000);
         }
@@ -104,13 +120,13 @@ export function useWalletReceive(navigateToTab: (tab: "overview" | "invoice") =>
         } else {
           setTimeout(() => {
             if (nip60QuoteIdRef.current === quoteId) {
-              checkNip60PaymentStatus(mintUrl, quoteId, amount, pendingTxId);
+              checkNip60PaymentStatus(mintUrl, quoteId, amount, pendingTxId, invoiceId);
             }
           }, 5000);
         }
       }
     },
-    [updateProofs, transactionHistoryStore, currentMintUnit, navigateToTab]
+    [updateProofs, updateInvoice, transactionHistoryStore, currentMintUnit, navigateToTab]
   );
 
   const createNip60Invoice = useCallback(
@@ -125,8 +141,9 @@ export function useWalletReceive(navigateToTab: (tab: "overview" | "invoice") =>
         const invoiceData = await createLightningInvoice(cashuStore.activeMintUrl, amount);
         setNip60Invoice(invoiceData.paymentRequest);
         setNip60QuoteId(invoiceData.quoteId);
+        setNip60ExpiresAt(invoiceData.expiresAt);
         nip60QuoteIdRef.current = invoiceData.quoteId;
-        await addInvoice({
+        const storedInvoice = await addInvoice({
           type: "mint",
           mintUrl: cashuStore.activeMintUrl,
           quoteId: invoiceData.quoteId,
@@ -135,6 +152,7 @@ export function useWalletReceive(navigateToTab: (tab: "overview" | "invoice") =>
           state: MintQuoteState.UNPAID,
           expiresAt: invoiceData.expiresAt,
         });
+        nip60InvoiceIdRef.current = storedInvoice.id;
         const pendingTransaction = createPendingTransaction({
           direction: "in",
           amount,
@@ -148,7 +166,8 @@ export function useWalletReceive(navigateToTab: (tab: "overview" | "invoice") =>
           cashuStore.activeMintUrl,
           invoiceData.quoteId,
           amount,
-          pendingTransaction.id
+          pendingTransaction.id,
+          storedInvoice.id
         );
       } catch (err) {
         setError(
@@ -214,7 +233,8 @@ export function useWalletReceive(navigateToTab: (tab: "overview" | "invoice") =>
                 cashuStore.activeMintUrl,
                 quoteId,
                 amt,
-                nip60PendingTxId
+                nip60PendingTxId,
+                nip60InvoiceIdRef.current
               );
             } catch {}
           }
@@ -248,6 +268,7 @@ export function useWalletReceive(navigateToTab: (tab: "overview" | "invoice") =>
     setSuccessMessage,
     nip60Invoice,
     nip60QuoteId,
+    nip60ExpiresAt,
     reset,
     createNip60Invoice,
     handleCreateMintQuote,

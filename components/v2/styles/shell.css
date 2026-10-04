@@ -1,0 +1,422 @@
+/* shell.css — the room and the furniture in it. Tokens only. */
+
+html[data-room] body {
+  background: var(--room);
+  color: var(--ink);
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+html[data-room] ::selection { background: var(--sel); color: var(--sel-ink); }
+
+.v2 {
+  position: fixed; inset: 0;
+  font-family: var(--f-body); font-weight: var(--w-body);
+  font-size: var(--read); line-height: var(--read-lh);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+  -webkit-tap-highlight-color: transparent;
+}
+/* resets carry no weight (:where), so every component rule wins over them */
+:where(.v2) *, :where(.v2) *::before, :where(.v2) *::after { box-sizing: border-box; }
+:where(.v2) :where(button, input, textarea, select) {
+  font: inherit; color: inherit; background: none; border: 0; margin: 0; padding: 0;
+  letter-spacing: inherit;
+}
+:where(.v2) button { cursor: pointer; }
+:where(.v2) button:disabled { cursor: default; }
+:where(.v2) a { color: inherit; text-decoration: none; }
+:where(.v2) :where(h1, h2, h3, h4, p, figure, pre, ul, ol) { margin: 0; }
+:where(.v2) :focus { outline: none; }
+:where(.v2) :focus-visible { box-shadow: var(--focus); border-radius: var(--r-xs); }
+.v2-ico {
+  fill: none; stroke: currentColor; stroke-width: 1.5;
+  stroke-linecap: round; stroke-linejoin: round; flex: none;
+}
+.sr {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip-path: inset(50%); white-space: nowrap;
+}
+.v2 .scroll {
+  scrollbar-width: thin; scrollbar-color: var(--fill-2) transparent;
+}
+.v2 .scroll::-webkit-scrollbar { width: 9px; height: 9px; }
+.v2 .scroll::-webkit-scrollbar-thumb {
+  background: var(--fill-2); border-radius: 99px;
+  border: 3px solid transparent; background-clip: content-box;
+}
+.v2 .scroll::-webkit-scrollbar-track { background: transparent; }
+
+/* ══ the room: canvas, one sun, and the furniture grid ═══════════════════ */
+.v2-backdrop {
+  position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0;
+  display: block; background: var(--room);
+}
+html[data-nogl] .v2-backdrop { display: none; }
+html[data-nogl] body {
+  background:
+    radial-gradient(95% 70% at 18% -8%, var(--sh-c2), transparent 58%),
+    radial-gradient(85% 80% at 88% 108%, var(--sh-c0), transparent 62%),
+    var(--sh-c1);
+}
+.v2-light {
+  position: fixed; inset: 0; z-index: 1; pointer-events: none;
+  background:
+    radial-gradient(125% 85% at var(--light-x) -12%, var(--light-a) 0%, transparent 60%),
+    radial-gradient(130% 110% at 82% 114%, var(--light-b) 0%, transparent 62%);
+}
+
+.room {
+  position: fixed; inset: 0; z-index: 2;
+  display: grid;
+  grid-template-columns: var(--rail-w) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  gap: var(--gutter); padding: var(--gutter);
+}
+
+/* a soft entrance for the whole room on first paint */
+.room { animation: roomIn 620ms var(--e-out) both; }
+@keyframes roomIn { from { opacity: 0; } to { opacity: 1; } }
+
+/* ══ rail: a floating card holding your chats ════════════════════════════ */
+.rail {
+  grid-column: 1; grid-row: 1; min-width: 0; position: relative;
+  transition: opacity var(--d-mid) var(--e-out), transform var(--d-move) var(--e-out);
+  perspective: 1600px;
+}
+
+.card {
+  height: 100%; width: var(--rail-w);
+  border-radius: var(--r-lg);
+  background: linear-gradient(148deg, rgb(var(--surface-2) / .97), rgb(var(--surface-2) / .92));
+  box-shadow: var(--lift-2), var(--cast), var(--glow);
+}
+
+/* the card has two sides: chats, and your money. Turning it is the same
+   gesture as the composer turning into a payment card. */
+.flip {
+  position: relative; height: 100%; width: var(--rail-w);
+  transform-style: preserve-3d;
+  /* the same turn as the composer's into a payment card */
+  transition: transform calc(var(--d-slow) + var(--d-quick)) var(--e-turn);
+}
+.flip[data-side="wallet"] { transform: rotateY(180deg); }
+.face {
+  position: absolute; inset: 0;
+  backface-visibility: hidden; -webkit-backface-visibility: hidden;
+  display: flex; flex-direction: column;
+  padding: var(--s5) var(--s3) var(--s3);
+}
+.face.back { transform: rotateY(180deg); }
+
+.ghost {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; border-radius: var(--r-sm); color: var(--ink-2);
+  transition: background var(--d-fast) var(--e-out), color var(--d-fast) var(--e-out), opacity var(--d-fast);
+}
+/* a real pointer only: after a tap, a touch screen keeps :hover on the last button */
+@media (hover: hover) { .ghost:hover { background: var(--fill-1); color: var(--ink); } }
+.ghost:active { background: var(--fill-2); }
+.ghost.sm { width: 28px; height: 28px; }
+.ghost.sm .v2-ico { width: 15px; height: 15px; }
+.ghost[aria-pressed="true"] { color: var(--ink); background: var(--fill-1); }
+
+.find {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-width: 40px; padding: 0 10px; border-radius: var(--r-sm);
+  background: var(--fill-1); color: var(--ink-2);
+  transition: background var(--d-fast) var(--e-out), color var(--d-fast);
+}
+.find:hover { background: var(--fill-2); color: var(--ink); }
+.find kbd {
+  font-family: var(--f-mono); font-size: 10.5px; color: var(--ink-3); letter-spacing: .02em;
+}
+
+@keyframes breathe { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
+
+.bal {
+  display: grid; gap: 1px; text-align: left; min-width: 0;
+  padding: 6px var(--s2); margin: -6px 0 -2px; border-radius: var(--r-sm);
+  transition: background var(--d-fast) var(--e-out);
+}
+.bal:hover { background: var(--fill-1); }
+.bal-k {
+  font-family: var(--f-mono); font-size: 9.5px; letter-spacing: .11em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+
+.swatch-live { display: block; width: 100%; height: 100%; background-size: 180% 180%;
+  animation: drift 26s var(--e-in-out) infinite alternate; }
+@keyframes drift { from { background-position: 0% 0%; } to { background-position: 100% 100%; } }
+.sw-paper { background:
+  radial-gradient(70% 90% at 30% 20%, #FAFAF4 0%, rgba(250, 250, 244, 0) 60%),
+  radial-gradient(80% 80% at 75% 85%, #C3CABE 0%, rgba(195, 202, 190, 0) 65%), #E4E6DC; }
+.sw-night { background:
+  radial-gradient(70% 90% at 28% 24%, #2B5754 0%, rgba(43, 87, 84, 0) 62%),
+  radial-gradient(90% 80% at 80% 80%, #10262A 0%, rgba(16, 38, 42, 0) 70%), #070C0E; }
+.sw-overprint { background:
+  linear-gradient(100deg, #E9DCA8 0 38%, #A9BEA6 38% 50%, #C0D0DB 50% 100%); }
+.sw-auto { background: linear-gradient(135deg, #E4E6DC 0 50%, #0C1618 50% 100%); }
+.sw-meridian { background-size: 100% 100%; animation: none; }
+
+/* ══ panel: the reading room ═════════════════════════════════════════════ */
+.panel {
+  grid-column: 2; grid-row: 1; min-width: 0; min-height: 0;
+  width: min(100%, 1040px); justify-self: center;
+  display: grid; grid-template-rows: auto minmax(0, 1fr) auto;
+  border-radius: var(--r-lg);
+  position: relative; isolation: isolate;
+}
+.panel[data-state="chat"] { overflow: hidden; }
+.panel[data-arriving] .thread-wrap { animation: fadeUp var(--d-slow) 120ms var(--e-out) both; }
+
+:root {
+  --label-col: 150px; --label-gap: 30px;
+  --column: calc(var(--measure) + 2 * var(--label-col) + 2 * var(--s5));
+}
+.panel-head {
+  position: relative; display: flex; align-items: center; gap: var(--s2);
+  padding: var(--s4) var(--s4) var(--s2); min-height: 60px;
+}
+.panel-head .lead, .panel-head .trail { display: flex; align-items: center; gap: 2px; min-width: 64px; }
+.panel-head .trail { justify-content: flex-end; }
+.title {
+  /* hugs its words, centred between the head's two ends; hover lights only them */
+  flex: 0 1 auto; margin-inline: auto; min-width: 0; text-align: center;
+  font-family: var(--f-display); font-weight: var(--w-display);
+  font-size: calc(16.5px * var(--display-scale)); letter-spacing: var(--display-track);
+  font-stretch: var(--display-stretch, 100%);
+  color: var(--ink-2); line-height: 1.2;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  padding: 6px 10px; border-radius: var(--r-sm);
+  transition: color var(--d-fast), background var(--d-fast);
+}
+/* a real pointer only: after a tap, a touch screen keeps :hover on the last button */
+@media (hover: hover) { button.title:hover { color: var(--ink); background: var(--fill-1); } }
+.title-in { animation: titleIn var(--d-slow) var(--e-out) both; display: inline-block; }
+@keyframes titleIn { from { opacity: 0; filter: blur(4px); transform: translateY(3px); } to { opacity: 1; filter: none; transform: none; } }
+
+/* ══ stage: a new chat is the room itself, a greeting and the composer ══ */
+.panel {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "head" "main" "dock";
+}
+.panel-head { grid-area: head; }
+.thread-wrap, .stage { grid-area: main; }
+.dock { grid-area: dock; }
+.stage-tail { grid-area: tail; }
+/* the greeting's row is filled first, up to a fixed height, so the composer's
+   top edge holds still and a card that turns over grows downward only */
+.panel[data-state="empty"] {
+  /* a short window gives the greeting's row up first, so the ideas under the composer stay in view
+     (it changes only with the window, so the composer still holds still while its card turns) */
+  grid-template-rows: auto minmax(0, min(33vh, calc(100dvh - 460px))) auto minmax(0, 1fr);
+  grid-template-areas: "head" "main" "dock" "tail";
+}
+.stage { min-width: 0; min-height: 0; display: grid; align-content: end; justify-items: center; padding: 0 var(--s5) var(--s7); }
+/* wide enough that every rotating line holds one line at 58px in the widest face */
+.stage-in { width: min(100%, 860px); display: grid; grid-template-columns: minmax(0, 1fr); justify-items: center; }
+.greet {
+  font-family: var(--f-display); font-weight: 400;
+  font-size: calc(58px * var(--display-scale)); line-height: 1.04;
+  font-stretch: var(--display-stretch, 100%);
+  letter-spacing: var(--greet-track); color: var(--ink);
+  text-align: center; text-wrap: balance;
+}
+.greet .w {
+  display: inline-block; animation: wordIn calc(var(--d-slow) * 2.15) var(--e-out) both;
+  animation-delay: calc(var(--d-quick) * .9 + var(--i, 0) * var(--d-quick) * .78);
+}
+@keyframes wordIn {
+  from { opacity: 0; filter: blur(8px); transform: translateY(10px); }
+  to { opacity: 1; filter: none; transform: none; }
+}
+@keyframes fadeUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.slot { width: 100%; }
+.stage-tail { min-height: 0; display: grid; align-content: start; justify-items: center; padding: var(--s5) var(--s5) 0; }
+
+/* the panel's surface arrives with the first message */
+.panel::before {
+  content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit;
+  background: linear-gradient(148deg, var(--surface-lit), var(--surface) 62%);
+  box-shadow: var(--lift-2), var(--cast), var(--glow-2);
+  transition: opacity var(--d-slow) var(--e-out);
+}
+.panel[data-state="empty"]::before { opacity: 0; }
+
+/* ══ dock ════════════════════════════════════════════════════════════════ */
+.dock { min-width: 0; padding: 0 0 var(--s5); position: relative; z-index: 4; }
+.dock .slot {
+  width: min(100%, var(--column)); margin-inline: auto;
+  padding: 0 calc(var(--label-col) + var(--s5));
+  container: dock / inline-size;
+}
+/* a narrow panel reads without the right margin (read.css): in a chat the
+   composer keeps to that same column, so its edges meet the text's. The query
+   reads the slot's inner box: the thread's 900 less 2 x (label column 150 + 20) */
+@container dock (max-width: 559.98px) {
+  .panel[data-state="chat"] .dock .slot > * { margin-right: calc(-1 * var(--label-col)); }
+  /* a new chat keeps the composer centred at that same width, so the first send only moves it */
+  .panel[data-state="empty"] .dock .slot > * { margin-inline: calc(-.5 * var(--label-col)); }
+}
+/* very narrow (a tablet held upright, a half-screen window): a new chat's composer takes both label
+   columns back, so it is never narrower than the greeting over it */
+@container dock (max-width: 299.98px) {
+  .panel[data-state="empty"] .dock .slot > * { margin-inline: calc(-1 * var(--label-col)); }
+}
+
+/* ══ popovers, sheets, veils ═════════════════════════════════════════════ */
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes fadeOut { to { opacity: 0; } }
+
+@keyframes popIn { from { opacity: 0; transform: translateY(6px) scale(.975); } to { opacity: 1; transform: none; } }
+@keyframes popOut { to { opacity: 0; transform: translateY(4px) scale(.985); } }
+
+.menu { padding: 6px; min-width: 200px; }
+
+/* ══ quiet primitives ════════════════════════════════════════════════════ */
+.prime {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 44px; padding: 0 var(--s6); border-radius: var(--r-sm);
+  background: var(--tint-fill); color: var(--tint-ink);
+  font-family: var(--f-ui); font-weight: 500; font-size: 14.5px; box-shadow: var(--lift-1);
+  transition: transform var(--d-fast) var(--e-spring), filter var(--d-fast), opacity var(--d-fast);
+}
+.prime:hover { transform: translateY(-1px); filter: brightness(1.04); }
+.prime:active { transform: translateY(0) scale(.985); }
+.prime:disabled { opacity: .45; transform: none; filter: none; }
+.soft {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 38px; padding: 0 var(--s4); border-radius: var(--r-sm);
+  background: var(--fill-1); color: var(--ink);
+  font-family: var(--f-ui); font-size: 13.5px;
+  transition: background var(--d-fast), transform var(--d-fast) var(--e-spring), color var(--d-fast);
+}
+.soft:hover { background: var(--fill-2); }
+.soft:active { transform: scale(.985); }
+.soft:disabled { opacity: .5; }
+.soft .v2-ico { width: 16px; height: 16px; color: var(--ink-2); }
+.link {
+  font-size: 13px; color: var(--ink-3); text-decoration: underline;
+  text-decoration-color: var(--hair); text-underline-offset: 3px;
+  transition: color var(--d-fast), text-decoration-color var(--d-fast);
+}
+.link:hover { color: var(--ink); text-decoration-color: var(--ink-3); }
+.mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+
+.spin {
+  width: 16px; height: 16px; border-radius: 99px; flex: none;
+  border: 1.6px solid var(--fill-2); border-top-color: var(--ink-2);
+  animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ══ room change: the furniture cross-dissolves as one picture ═══════════ */
+::view-transition-old(root), ::view-transition-new(root) {
+  animation-duration: 320ms; animation-timing-function: var(--e-in-out);
+}
+
+/* ══ phone: the panel goes edge to edge, a strip of room shows above it ═ */
+@media (max-width: 760px) {
+  :root { --gutter: 0px; --label-col: 0px; --label-gap: 0px; }
+  html[data-room] { --measure: 100%; }
+  .room { grid-template-columns: minmax(0, 1fr); padding: 0; gap: 0; }
+  .v2-light { background: radial-gradient(150% 46% at 50% -6%, var(--light-a) 0%, transparent 64%); }
+  .rail {
+    position: fixed; inset: 0 auto 0 0; z-index: 45; padding: var(--s2);
+    padding-top: calc(var(--s2) + env(safe-area-inset-top));
+    transform: translateX(-104%); opacity: 1; pointer-events: none;
+    transition: transform var(--d-slow) var(--e-spring);
+  }
+  .room[data-drawer="open"] .rail { transform: none; pointer-events: auto; }
+  .card, .flip { width: min(86vw, 330px); }
+  .drawer-veil {
+    position: fixed; inset: 0; z-index: 44; background: var(--scrim);
+    opacity: 0; pointer-events: none; transition: opacity var(--d-move) var(--e-out);
+  }
+  .room[data-drawer="open"] .drawer-veil { opacity: 1; pointer-events: auto; }
+  .panel {
+    grid-column: 1; margin-top: calc(34px + env(safe-area-inset-top));
+    border-radius: 26px 26px 0 0; width: 100%;
+    box-shadow: 0 -1px 0 var(--hair), var(--lift-2);
+  }
+  .panel[data-state="empty"] { margin-top: 0; padding-top: env(safe-area-inset-top); }
+  .panel-head { padding: var(--s3) var(--s3) var(--s2); min-height: 56px; }
+  .panel-head .lead, .panel-head .trail { min-width: 44px; }
+  .ghost { width: 42px; height: 42px; }
+  .title { font-size: 15.5px; }
+  .dock { padding: var(--s2) var(--s3) calc(var(--s3) + env(safe-area-inset-bottom)); }
+  .dock .slot { padding: 0; width: 100%; }
+  .panel[data-state="empty"] {
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
+    grid-template-areas: "head" "main" "tail" "dock";
+  }
+  .stage { align-content: center; padding-bottom: 0; }
+  .greet { font-size: calc(44.8px * var(--display-scale)); }
+  .stage-tail { padding: 0 var(--s3) var(--s3); }
+  .find { min-width: 46px; }
+  .find kbd { display: none; }
+}
+@keyframes sheetIn { from { transform: translateY(100%); } to { transform: none; } }
+@keyframes sheetOut { to { transform: translateY(100%); } }
+
+@media (min-width: 761px) {
+  .only-m { display: none !important; }
+}
+@media (max-width: 760px) {
+  .only-d { display: none !important; }
+}
+
+/* ══ the existing panels, re-lit by the room ═════════════════════════════
+   They are Tailwind + shadcn variables; while a room is set those variables
+   point at the room's tokens, so they (and the toasts) take the room's light. */
+html[data-room], .legacy {
+  --background: rgb(var(--surface-hero));
+  --foreground: var(--ink);
+  --card: rgb(var(--surface-hero));
+  --card-foreground: var(--ink);
+  --popover: rgb(var(--surface-hero));
+  --popover-foreground: var(--ink);
+  --primary: var(--tint-fill);
+  --primary-foreground: var(--tint-ink);
+  --secondary: var(--fill-1);
+  --secondary-foreground: var(--ink);
+  --muted: var(--fill-1);
+  --muted-foreground: var(--ink-3);
+  --accent: var(--fill-2);
+  --accent-foreground: var(--ink);
+  --border: var(--hair);
+  --input: var(--hair);
+  --ring: var(--tint);
+  --sidebar: rgb(var(--surface-2));
+  --sidebar-foreground: var(--ink);
+  --sidebar-accent: var(--fill-1);
+  --sidebar-border: var(--hair);
+}
+.legacy { color: var(--ink); font-family: var(--f-ui); }
+html[data-room] [data-sonner-toast] {
+  font-family: var(--f-ui) !important; font-size: 13.5px !important;
+  border: 0 !important; border-radius: var(--r-md) !important;
+  background: rgb(var(--surface-hero)) !important; color: var(--ink) !important;
+  box-shadow: var(--lift-2), var(--glow) !important;
+}
+html[data-room] [data-sonner-toast] [data-button] {
+  background: var(--tint-fill) !important; color: var(--tint-ink) !important; border-radius: var(--r-xs) !important;
+  font-family: var(--f-ui) !important;
+}
+html[data-room] [data-sonner-toast] [data-icon] { color: var(--tint); }
+html[data-room] [data-sonner-toast][data-type="error"] [data-icon],
+html[data-room] [data-sonner-toast][data-type="warning"] [data-icon] { color: var(--warn); }
+.set-legacy { font-size: 14px; line-height: 1.5; margin-top: var(--s4); }
+.set-legacy h3 { font-family: var(--f-mono) !important; font-size: 10.5px !important; letter-spacing: .11em; text-transform: uppercase;
+  color: var(--ink-3) !important; font-weight: 400 !important; margin-bottom: 8px !important; }
+.set-legacy input, .set-legacy textarea, .set-legacy select { font-family: var(--f-ui); }
+.set-legacy button { font-family: var(--f-ui); }
+.set-legacy .rounded-md, .set-legacy .rounded-lg { border-radius: var(--r-sm) !important; }
+.set-legacy .rounded-xl, .set-legacy .rounded-2xl { border-radius: var(--r-md) !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  .v2 *, .v2 *::before, .v2 *::after {
+    animation-duration: .01ms !important; animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}

@@ -1,0 +1,243 @@
+/* rooms.css — every room is a complete look: colour, type, radii, depth, shader.
+   A room is one block here. The skeleton reads tokens only, so a new room needs
+   no other change. Names avoid the shadcn variables (accent, ring, border, muted)
+   so the two systems can live in one document. */
+
+:root {
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 20px; --s6: 24px;
+  --s7: 32px; --s8: 40px; --s9: 56px; --s10: 72px;
+  --gutter: 20px; --rail-w: 272px;
+
+  --d-quick: 90ms; --d-fast: 140ms; --d-mid: 200ms; --d-move: 320ms; --d-slow: 420ms;
+  /* loops and staggers: a turning glyph, the ghosts' light, the travelling hairline, one step of a stagger */
+  --d-spin: 1200ms; --d-wave: 2200ms; --d-sweep: 1600ms; --d-stagger: 20ms;
+  --e-out: cubic-bezier(.2, .86, .24, 1);
+  --e-spring: cubic-bezier(.22, 1.02, .32, 1);
+  --e-turn: cubic-bezier(.5, .03, .2, 1);
+  --e-in-out: cubic-bezier(.65, 0, .35, 1);
+
+  /* the wordmark never changes when the light does */
+  --f-brand: var(--nf-instrument-sans), system-ui, sans-serif;
+}
+
+/* ── paper: light, editorial. Pale sage stock, nearly still ────────────── */
+html[data-room="paper"] {
+  --room: #C9CDC2;
+  --surface: #F2F2ED; --surface-lit: #F7F7F3;
+  --surface-2: 246 247 242;
+  --surface-hero: 252 252 248;
+  --fill-1: rgba(23, 31, 28, .055);
+  --fill-2: rgba(23, 31, 28, .088);
+  --ink: #171A19; --ink-2: #4E5452; --ink-3: #5C6563;
+  --tint: #0C5749; --tint-fill: #0E5F50; --tint-ink: #F4F7F5;
+  --tint-soft: rgba(12, 87, 73, .10);
+  --warn: #8A3B1E;
+  --hair: rgba(23, 31, 28, .10);
+  --scrim: rgba(45, 50, 46, .30);
+  --sel: rgba(12, 87, 73, .17); --sel-ink: #0B1614;
+  --code-f: #3C4E63; --code-k: #171A19; --code-c: #5C6563; --code-s: #2F5A43;
+  --code-bg: rgba(23, 31, 28, .05); --code-lip: rgba(255, 255, 255, .7);
+  --qr-bg: #F7F7F3; --qr-ink: #171A19;
+
+  --f-display: var(--nf-instrument-serif), Georgia, serif;
+  --f-body: var(--nf-newsreader), Georgia, "Times New Roman", serif;
+  --f-mono: var(--nf-plex-mono), ui-monospace, Menlo, monospace;
+  --f-ui: var(--nf-instrument-sans), system-ui, sans-serif;
+  --w-body: 380; --w-strong: 540; --w-display: 400; --greet-track: -.018em;
+  --read: 17.25px; --read-lh: 1.68; --display-track: -.012em; --measure: 600px;
+  --display-scale: 1.12;
+
+  --r-lg: 24px; --r-md: 18px; --r-sm: 12px; --r-xs: 9px;
+  --lift-1: 0 1px 1px rgba(28, 36, 33, .05), 0 2px 6px -2px rgba(28, 36, 33, .08);
+  --lift-2: 0 1px 1px rgba(28, 36, 33, .05), 0 10px 22px -12px rgba(28, 36, 33, .20), 0 28px 60px -34px rgba(28, 36, 33, .30);
+  --lift-3: 0 1px 1px rgba(28, 36, 33, .06), 0 6px 14px -8px rgba(28, 36, 33, .16), 0 18px 34px -22px rgba(28, 36, 33, .28);
+  --cast: 14px 20px 46px -30px rgba(28, 36, 33, .30);
+  --glow: inset 0 1px 0 rgba(255, 255, 255, .85);
+  --glow-2: inset 0 1px 0 rgba(255, 255, 255, .75);
+  --lip-under: inset 0 -1px 0 rgba(23, 31, 28, .055);
+  --focus: 0 0 0 2px var(--surface), 0 0 0 4px rgba(12, 87, 73, .55);
+
+  --sh-id: fibre;
+  --sh-c0: #BCC3B6; --sh-c1: #D6DBCD; --sh-c2: #F0F1E8; --sh-c3: #98A79D;
+  --sh-speed: .30; --sh-intensity: 1.05; --sh-scale: 1.05; --sh-grain: .046;
+  --light-a: rgba(255, 255, 255, .20); --light-b: rgba(88, 104, 96, .17); --light-x: 52%;
+  --meta-theme: #C9CDC2;
+  color-scheme: light;
+}
+
+/* ── night: dark green fog, a slow deep current ────────────────────────── */
+html[data-room="night"] {
+  --room: #080D0F;
+  --surface: #101718; --surface-lit: #16201F;
+  --surface-2: 22 31 32;
+  --surface-hero: 30 42 41;
+  --fill-1: rgba(226, 239, 236, .055);
+  --fill-2: rgba(226, 239, 236, .095);
+  --ink: #E7EDEB; --ink-2: #A6B3B1; --ink-3: #94A4A2;
+  --tint: #6FD0B6; --tint-fill: #5BC2A6; --tint-ink: #04201B;
+  --tint-soft: rgba(111, 208, 182, .13);
+  --warn: #E8A48A;
+  --hair: rgba(226, 239, 236, .085);
+  --scrim: rgba(3, 7, 8, .52);
+  --sel: rgba(111, 208, 182, .26); --sel-ink: #F2FBF8;
+  --code-f: #A9BED2; --code-k: #E7EDEB; --code-c: #8A9A98; --code-s: #9FD3BF;
+  --code-bg: rgba(0, 0, 0, .26); --code-lip: rgba(233, 246, 243, .05);
+  --qr-bg: #E7EDEB; --qr-ink: #0B1213;
+
+  --f-display: var(--nf-instrument-sans), system-ui, sans-serif;
+  --f-body: var(--nf-source-serif), Georgia, serif;
+  --f-mono: var(--nf-jetbrains), ui-monospace, Menlo, monospace;
+  --f-ui: var(--nf-instrument-sans), system-ui, sans-serif;
+  --w-body: 400; --w-strong: 600; --w-display: 500; --greet-track: -.034em;
+  --read: 16.6px; --read-lh: 1.66; --display-track: -.016em; --measure: 592px;
+  --display-scale: 1;
+
+  --r-lg: 24px; --r-md: 18px; --r-sm: 12px; --r-xs: 9px;
+  --lift-1: 0 1px 2px rgba(0, 0, 0, .34), 0 4px 10px -6px rgba(0, 0, 0, .5);
+  --lift-2: 0 1px 2px rgba(0, 0, 0, .4), 0 14px 30px -14px rgba(0, 0, 0, .6), 0 40px 80px -46px rgba(0, 0, 0, .75);
+  --lift-3: 0 1px 2px rgba(0, 0, 0, .5), 0 10px 22px -10px rgba(0, 0, 0, .66), 0 26px 48px -30px rgba(0, 0, 0, .8);
+  --cast: 16px 24px 52px -30px rgba(0, 0, 0, .55);
+  --glow: inset 0 1px 0 rgba(233, 246, 243, .10);
+  --glow-2: inset 0 1px 0 rgba(233, 246, 243, .075);
+  --lip-under: inset 0 -1px 0 rgba(0, 0, 0, .35);
+  --focus: 0 0 0 2px var(--surface), 0 0 0 4px rgba(111, 208, 182, .6);
+
+  --sh-id: current;
+  --sh-c0: #05090B; --sh-c1: #0D1A1C; --sh-c2: #1C393B; --sh-c3: #46817A;
+  --sh-speed: .42; --sh-intensity: 1.0; --sh-scale: .92; --sh-grain: .042;
+  --light-a: rgba(165, 235, 222, .10); --light-b: rgba(0, 0, 0, .30); --light-x: 38%;
+  --meta-theme: #080D0F;
+  color-scheme: dark;
+}
+
+/* ── meridian: one room that knows what hour it is. Two faces ─────────────
+   The backdrop is a window onto a twenty-four hour colour strip (backdrop.ts).
+   The furniture has exactly two faces, day and dusk, switched at 06:00 and
+   18:00, and nothing with text on it is translucent. */
+html[data-room="meridian"] {
+  --f-display: var(--nf-archivo), system-ui, sans-serif;
+  --f-body: var(--nf-faustina), Georgia, "Times New Roman", serif;
+  --f-mono: var(--nf-azeret), ui-monospace, Menlo, monospace;
+  --f-ui: var(--nf-archivo), system-ui, sans-serif;
+  --w-body: 400; --w-strong: 600; --w-display: 500; --greet-track: -.026em;
+  --read: 17px; --read-lh: 1.66; --display-track: -.014em; --measure: 580px;
+  --display-scale: 1;
+  --display-stretch: 112%;
+  --r-lg: 20px; --r-md: 15px; --r-sm: 11px; --r-xs: 8px;
+  --sh-id: meridian;
+  --sh-speed: .42; --sh-intensity: 1.0; --sh-scale: 1.10; --sh-grain: .034;
+  --sh-c0: #93A695; --sh-c1: #AFBA9B; --sh-c2: #BDC0A6; --sh-c3: #93A695;
+  --light-a: transparent; --light-b: transparent; --light-x: 50%;
+  --glass: 0;
+}
+html[data-room="meridian"][data-face="day"] {
+  --room: #AFBA9B;
+  --surface: #F2F0E6; --surface-lit: #F8F7EF;
+  --surface-2: 246 244 236;
+  --surface-hero: 252 250 243;
+  --fill-1: rgba(20, 21, 15, .055);
+  --fill-2: rgba(20, 21, 15, .092);
+  --ink: #14150F; --ink-2: #494B3F; --ink-3: #545749;
+  --tint: #9C2542; --tint-fill: #A62B48; --tint-ink: #FFF4F6;
+  --tint-soft: rgba(156, 37, 66, .10);
+  --warn: #9C2542;
+  --hair: rgba(20, 21, 15, .10);
+  --scrim: rgba(40, 41, 30, .42);
+  --sel: rgba(156, 37, 66, .15); --sel-ink: #26090F;
+  --code-f: #3F5461; --code-k: #14150F; --code-c: #5A5D4D; --code-s: #5B3A1E;
+  --code-bg: rgba(20, 21, 15, .048); --code-lip: rgba(255, 255, 255, .80);
+  --qr-bg: #F8F7EF; --qr-ink: #171811;
+  --lift-1: 0 1px 1px rgba(44, 45, 34, .06), 0 2px 6px -2px rgba(44, 45, 34, .10);
+  --lift-2: 0 1px 1px rgba(44, 45, 34, .06), 0 12px 24px -12px rgba(44, 45, 34, .22), 0 30px 64px -36px rgba(44, 45, 34, .34);
+  --lift-3: 0 1px 1px rgba(44, 45, 34, .07), 0 6px 14px -8px rgba(44, 45, 34, .18), 0 18px 34px -22px rgba(44, 45, 34, .30);
+  --cast: 14px 20px 48px -30px rgba(38, 39, 28, .36);
+  --glow: inset 0 1px 0 rgba(255, 255, 255, .88);
+  --glow-2: inset 0 1px 0 rgba(255, 255, 255, .78);
+  --lip-under: inset 0 -1px 0 rgba(20, 21, 15, .055);
+  --focus: 0 0 0 2px var(--surface), 0 0 0 4px rgba(156, 37, 66, .58);
+  --room-b0: .575; --room-b1: .71;
+  --meta-theme: #AFBA9B;
+  color-scheme: light;
+}
+html[data-room="meridian"][data-face="dusk"] {
+  --room: #1B1C2A;
+  /* the ground wherever the hour strip cannot draw (no WebGL): dark with the dusk furniture,
+     never the day's sage under light ink */
+  --sh-c0: #111219; --sh-c1: #1B1C2A; --sh-c2: #2A2D40; --sh-c3: #3A3F58;
+  --surface: #191A1E; --surface-lit: #1F2126;
+  --surface-2: 33 35 40;
+  --surface-hero: 41 43 49;
+  --fill-1: rgba(233, 232, 226, .058);
+  --fill-2: rgba(233, 232, 226, .100);
+  --ink: #E9E8E2; --ink-2: #AEADA5; --ink-3: #9D9C94;
+  --tint: #F0A3B2; --tint-fill: #953150; --tint-ink: #FFEFF3;
+  --tint-soft: rgba(240, 163, 178, .14);
+  --warn: #F0A3B2;
+  --hair: rgba(233, 232, 226, .085);
+  --scrim: rgba(6, 6, 10, .52);
+  --sel: rgba(240, 163, 178, .26); --sel-ink: #FFF1F4;
+  --code-f: #A7BCC7; --code-k: #E9E8E2; --code-c: #8F8E85; --code-s: #D9B99A;
+  --code-bg: rgba(0, 0, 0, .26); --code-lip: rgba(240, 240, 232, .05);
+  --qr-bg: #E8E7DF; --qr-ink: #171811;
+  --lift-1: 0 1px 2px rgba(0, 0, 0, .36), 0 4px 10px -6px rgba(0, 0, 0, .52);
+  --lift-2: 0 1px 2px rgba(0, 0, 0, .42), 0 14px 28px -14px rgba(0, 0, 0, .62), 0 38px 76px -44px rgba(0, 0, 0, .76);
+  --lift-3: 0 1px 2px rgba(0, 0, 0, .38), 0 8px 18px -10px rgba(0, 0, 0, .52), 0 20px 40px -26px rgba(0, 0, 0, .62);
+  --cast: 14px 20px 50px -30px rgba(0, 0, 0, .62);
+  --glow: inset 0 1px 0 rgba(255, 255, 255, .055);
+  --glow-2: inset 0 1px 0 rgba(255, 255, 255, .042);
+  --lip-under: inset 0 -1px 0 rgba(0, 0, 0, .30);
+  --focus: 0 0 0 2px var(--surface), 0 0 0 4px rgba(240, 163, 178, .60);
+  --room-b0: .14; --room-b1: .34;
+  --meta-theme: #1B1C2A;
+  color-scheme: dark;
+}
+
+/* ── overprint: a two-colour press run on uncoated stock ──────────────────
+   Two spot inks, yellow and blue, laid down as wide soft tints, misregistered
+   by a hair, overprinting into green where they cross. The seam is measured
+   off the furniture so it always lands in a gutter. */
+html[data-room="overprint"] {
+  --room: #C4CCD4;
+  --surface: #F5F4F1; --surface-lit: #FBFAF9;
+  --surface-2: 250 249 247;
+  --surface-hero: 253 252 250;
+  --fill-1: rgba(20, 26, 32, .052);
+  --fill-2: rgba(20, 26, 32, .088);
+  --ink: #15181C; --ink-2: #464B53; --ink-3: #50565E;
+  --tint: #1F4F7D; --tint-fill: #22578A; --tint-ink: #F3F7FB;
+  --tint-soft: rgba(31, 79, 125, .10);
+  --warn: #A4462A;
+  --hair: rgba(20, 26, 32, .10);
+  --scrim: rgba(36, 44, 56, .40);
+  --sel: rgba(31, 79, 125, .15); --sel-ink: #0B1A2A;
+  --code-f: #1C5A78; --code-k: #1F4F7D; --code-c: #5C5E66; --code-s: #6A5710;
+  --code-bg: rgba(20, 26, 32, .045); --code-lip: rgba(255, 255, 255, .82);
+  --qr-bg: #FBFAF9; --qr-ink: #15181C;
+
+  --f-display: var(--nf-archivo), system-ui, sans-serif;
+  --f-body: var(--nf-faustina), Georgia, "Times New Roman", serif;
+  --f-mono: var(--nf-azeret), ui-monospace, Menlo, monospace;
+  --f-ui: var(--nf-archivo), system-ui, sans-serif;
+  --w-body: 400; --w-strong: 600; --w-display: 500; --greet-track: -.021em;
+  --read: 17.2px; --read-lh: 1.66; --display-track: -.004em; --measure: 590px;
+  --display-scale: 1;
+  --display-stretch: 118%;
+
+  --r-lg: 22px; --r-md: 16px; --r-sm: 11px; --r-xs: 8px;
+  --lift-1: 0 1px 1px rgba(30, 38, 50, .06), 0 2px 6px -3px rgba(30, 38, 50, .12);
+  --lift-2: 0 1px 1px rgba(30, 38, 50, .06), 0 10px 22px -13px rgba(30, 38, 50, .22), 0 30px 62px -36px rgba(30, 38, 50, .34);
+  --lift-3: 0 1px 1px rgba(30, 38, 50, .07), 0 7px 16px -9px rgba(30, 38, 50, .18), 0 20px 38px -24px rgba(30, 38, 50, .30);
+  --cast: 14px 20px 48px -32px rgba(30, 38, 50, .34);
+  --glow: inset 0 1px 0 rgba(255, 255, 255, .94);
+  --glow-2: inset 0 1px 0 rgba(255, 255, 255, .86);
+  --lip-under: inset 0 -1px 0 rgba(20, 26, 32, .05);
+  --focus: 0 0 0 2px var(--surface), 0 0 0 4px rgba(31, 79, 125, .62);
+
+  --sh-id: overprint;
+  --sh-c0: #ECEAE3; --sh-c1: #E9DCA8; --sh-c2: #C0D0DB; --sh-c3: #A9BEA6;
+  --sh-speed: .42; --sh-intensity: 1.0; --sh-scale: 1.0; --sh-grain: .034;
+  --light-a: transparent; --light-b: transparent; --light-x: 50%;
+  --glass: 0;
+  --meta-theme: #C4CCD4;
+  color-scheme: light;
+}

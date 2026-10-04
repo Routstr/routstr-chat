@@ -16,6 +16,11 @@ function tokenToSats(token: string): number {
   }
 }
 
+/** The same figure, read once, outside React (to measure what a call moved). */
+export function readSdkCachedBalance(): number {
+  return getSnapshot();
+}
+
 function getSnapshot(): number {
   const state = store.getState();
   const apiKeyTotal = state.apiKeys.reduce(

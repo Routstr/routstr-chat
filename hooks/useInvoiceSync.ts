@@ -13,7 +13,14 @@
 import { useAccountManager } from "@/components/ClientProviders";
 import { useObservableState } from "applesauce-react/hooks";
 import { useAppContext } from "@/hooks/useAppContext";
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+  useSyncExternalStore,
+} from "react";
 import { MintQuoteState, MeltQuoteState } from "@cashu/cashu-ts";
 import {
   invoices$,
@@ -27,6 +34,7 @@ import {
   configSyncEose$,
   type UserSignerInfo,
 } from "@/hooks/sync";
+import { finalizeMintClaim } from "@/lib/mintQuoteRecovery";
 
 export interface StoredInvoice {
   id: string;
@@ -43,11 +51,45 @@ export interface StoredInvoice {
   fee?: number;
   retryCount?: number;
   nextRetryAt?: number;
+  claimError?: "recovery_pending" | "missing_preview";
 }
 
 interface InvoiceStore {
   invoices: StoredInvoice[];
   lastSync: number;
+}
+
+let localInvoiceRevision = 0;
+const localInvoiceListeners = new Set<() => void>();
+let isListeningForInvoiceStorage = false;
+
+function notifyLocalInvoiceChange() {
+  localInvoiceRevision += 1;
+  localInvoiceListeners.forEach((listener) => listener());
+}
+
+function handleInvoiceStorage(event: StorageEvent) {
+  if (event.key === "lightning_invoices") notifyLocalInvoiceChange();
+}
+
+function subscribeToLocalInvoiceChanges(listener: () => void) {
+  localInvoiceListeners.add(listener);
+  if (!isListeningForInvoiceStorage && typeof window !== "undefined") {
+    window.addEventListener("storage", handleInvoiceStorage);
+    isListeningForInvoiceStorage = true;
+  }
+
+  return () => {
+    localInvoiceListeners.delete(listener);
+    if (
+      localInvoiceListeners.size === 0 &&
+      isListeningForInvoiceStorage &&
+      typeof window !== "undefined"
+    ) {
+      window.removeEventListener("storage", handleInvoiceStorage);
+      isListeningForInvoiceStorage = false;
+    }
+  };
 }
 
 export function useInvoiceSync() {
@@ -59,6 +101,11 @@ export function useInvoiceSync() {
   const cloudInvoices = useObservableState(invoices$);
   const isLoading = useObservableState(configSyncLoading$);
   const syncEose = useObservableState(configSyncEose$);
+  const localInvoiceRevisionSnapshot = useSyncExternalStore(
+    subscribeToLocalInvoiceChanges,
+    () => localInvoiceRevision,
+    () => 0
+  );
 
   // Pending state for mutations
   const [isPending, setIsPending] = useState(false);
@@ -150,6 +197,7 @@ export function useInvoiceSync() {
       lastSync: Date.now(),
     };
     localStorage.setItem("lightning_invoices", JSON.stringify(store));
+    notifyLocalInvoiceChange();
   }, []);
 
   // Merge cloud and local invoices
@@ -175,7 +223,13 @@ export function useInvoiceSync() {
     });
 
     return Array.from(mergedMap.values());
-  }, [cloudInvoices, cloudSyncEnabled, activeAccount, getLocalInvoices]);
+  }, [
+    cloudInvoices,
+    cloudSyncEnabled,
+    activeAccount,
+    getLocalInvoices,
+    localInvoiceRevisionSnapshot,
+  ]);
 
   // Save merged invoices to local storage after initial sync
   useEffect(() => {
@@ -234,6 +288,8 @@ export function useInvoiceSync() {
           signerInfo,
           config.relayUrls
         );
+      } catch (error) {
+        console.error("[useInvoiceSync] Failed to sync invoices:", error);
       } finally {
         setIsPending(false);
       }
@@ -271,10 +327,28 @@ export function useInvoiceSync() {
   const updateInvoice = useCallback(
     async (id: string, updates: Partial<StoredInvoice>) => {
       const existing = getLocalInvoices();
+      const directMatch = existing.find((invoice) => invoice.id === id);
+      const quoteMatches = directMatch
+        ? []
+        : existing.filter((invoice) => invoice.quoteId === id);
+      if (!directMatch && quoteMatches.length !== 1) {
+        throw new Error("Invoice update target is missing or ambiguous");
+      }
+      const target = directMatch || quoteMatches[0];
       const updated = existing.map((inv) =>
-        inv.id === id ? { ...inv, ...updates, checkedAt: Date.now() } : inv
+        inv.id === target.id
+          ? { ...inv, ...updates, checkedAt: Date.now() }
+          : inv
       );
       saveLocalInvoices(updated);
+
+      if (
+        target.type === "mint" &&
+        (updates.state as string) === "ISSUED" &&
+        !updates.claimError
+      ) {
+        finalizeMintClaim(target.mintUrl, target.quoteId);
+      }
 
       // Sync to cloud
       await syncToCloud(updated);
@@ -288,8 +362,11 @@ export function useInvoiceSync() {
     const MAX_RETRIES = 10;
 
     return mergedInvoices.filter((inv) => {
-      // Skip if already successfully issued (tokens minted)
-      if ((inv.state as string) === "ISSUED") {
+      // Paid mint quotes use the explicit recovery action in invoice history.
+      if (
+        (inv.state as string) === "ISSUED" ||
+        (inv.state as string) === "PAID"
+      ) {
         return false;
       }
 
@@ -326,16 +403,22 @@ export function useInvoiceSync() {
   const cleanupOldInvoices = useCallback(async () => {
     const invoices = getLocalInvoices();
     const cutoffTime = Date.now() - 30 * 24 * 60 * 60 * 1000; // 30 days
-    const recentCutoff = Date.now() - 7 * 24 * 60 * 60 * 1000; // 7 days for PAID
 
     const cleaned = invoices.filter((inv) => {
+      // A paid mint quote remains the recovery handle until proofs are received.
+      if (
+        (inv.type === "mint" && (inv.state as string) === "PAID") ||
+        inv.claimError
+      ) {
+        return true;
+      }
       // Keep all ISSUED invoices from last 30 days
       if ((inv.state as string) === "ISSUED") {
         return inv.createdAt > cutoffTime;
       }
-      // Keep PAID invoices from last 7 days (might need token recovery)
+      // Keep completed outgoing payments for seven days.
       if ((inv.state as string) === "PAID") {
-        return inv.createdAt > recentCutoff;
+        return inv.createdAt > Date.now() - 7 * 24 * 60 * 60 * 1000;
       }
       // Keep unpaid invoices from last 24 hours
       return inv.createdAt > Date.now() - 86400000;

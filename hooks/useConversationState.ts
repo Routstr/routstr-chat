@@ -1,3 +1,4 @@
+import type { SyncOutcome } from "./sync/sync1080Pns";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { firstValueFrom, map, filter, timeout } from "rxjs";
 import { Conversation, Message } from "@/types/chat";
@@ -73,7 +74,8 @@ export interface UseConversationStateReturn {
     conversationId: string,
     message: Message
   ) => Promise<string | null>;
-  syncWithNostr: () => Promise<void>;
+  /** Resolves when the sync has finished, saying how it ended. */
+  syncWithNostr: () => Promise<SyncOutcome>;
 }
 
 /**
@@ -119,8 +121,9 @@ export const useConversationState = (): UseConversationStateReturn => {
 
   const syncWithNostr = useCallback(async () => {
     console.log("[useConversationState] syncWithNostr triggered");
-    triggerDerivedPnsSync();
+    const done = triggerDerivedPnsSync();
     triggerProcessStored1081Events();
+    return done;
   }, [triggerDerivedPnsSync, triggerProcessStored1081Events]);
 
   // Migrate existing conversations when PNS keys are available

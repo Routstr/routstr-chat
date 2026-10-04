@@ -1,0 +1,381 @@
+/* composer.css: the island. One object, never re-mounted. Its light is its
+   state: three shadow layers cross-fade by opacity, nothing animates
+   box-shadow. The card can turn over into the pay face; the words on it never
+   move. Everything is scoped to .island so no other surface inherits it. */
+
+.panel { --c-pad: 8px; --c-inset: 12px; }
+.island {
+  --c-row: 36px;
+  /* the live disc; a room may point these elsewhere (meridian: ink) */
+  --c-go-fill: var(--tint-fill);
+  --c-go-ink: var(--tint-ink);
+  --c-lh: 25.5px;
+  position: relative; isolation: isolate;
+  border-radius: var(--r-lg);
+  transform-origin: 50% 100%;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform var(--d-mid) var(--e-spring);
+}
+
+/* light: rest, lift, deep. Only opacity moves. */
+.island .sh {
+  position: absolute; inset: 0; z-index: 0; border-radius: inherit; pointer-events: none;
+  opacity: 0; transition: opacity var(--d-mid) var(--e-out); will-change: opacity;
+}
+.island .sh-rest { box-shadow: var(--lift-3); opacity: 1; }
+.island .sh-lift { box-shadow: var(--lift-2), var(--cast); }
+.island .sh-deep { box-shadow: var(--lift-2), var(--lift-3), var(--cast); }
+/* docked at rest: rest. docked + focus: lift. centred: lift. centred + focus: deep. drag: deep */
+.island:focus-within .sh-lift, .island[data-place="centre"] .sh-lift { opacity: 1; }
+.island[data-place="centre"]:focus-within .sh-deep, .island[data-drag] .sh-deep { opacity: 1; }
+.island[data-place="centre"] .sh-rest { opacity: 0; }
+
+/* the card itself: two sides, so the pay face can turn it over */
+.island .turn {
+  position: absolute; inset: 0; z-index: 0; border-radius: inherit;
+  perspective: 1400px; transform-style: preserve-3d;
+  transition: transform var(--d-move) var(--e-turn);
+}
+.island[data-face="pay"] .turn, .island[data-face="auth"] .turn { transform: rotateX(-180deg); transition-duration: var(--d-slow); }
+.island .side {
+  position: absolute; inset: 0; border-radius: inherit;
+  backface-visibility: hidden; -webkit-backface-visibility: hidden;
+  background: linear-gradient(to bottom, rgb(var(--surface-hero)), color-mix(in srgb, rgb(var(--surface-hero)) 90%, var(--surface)));
+  box-shadow: var(--glow), var(--lip-under);
+}
+.island .side.back { transform: rotateX(180deg); }
+/* a send shrinks the card: the old top edge slides down into it (landing.ts) */
+.island .capw { position: absolute; left: 0; right: 0; bottom: 0; z-index: 0; overflow: hidden; pointer-events: none;
+  border-radius: 0 0 var(--r-lg) var(--r-lg); }
+.island .cap { position: absolute; left: 0; right: 0; top: 0; will-change: transform;
+  border-radius: var(--r-lg) var(--r-lg) 0 0; background: rgb(var(--surface-hero)); box-shadow: var(--glow); }
+
+/* a hairline drawn inside; the room's accent, softly, while you write */
+.island .ring {
+  position: absolute; inset: 0; z-index: 1; border-radius: inherit; pointer-events: none;
+  box-shadow: inset 0 0 0 1px var(--hair);
+  transition: box-shadow var(--d-mid) var(--e-out);
+}
+.island:focus-within .ring { box-shadow: inset 0 0 0 1px var(--tint-soft); }
+.island[data-place="centre"] .ring { box-shadow: inset 0 0 0 1px transparent; }
+.island[data-place="centre"]:focus-within .ring { box-shadow: inset 0 0 0 1px var(--tint-soft); }
+
+.island .island-in {
+  position: relative; z-index: 2; padding: var(--c-pad);
+  transition: opacity var(--d-fast) var(--e-out), transform var(--d-mid) var(--e-out);
+}
+
+/* ── the words ─────────────────────────────────────────────────────────── */
+/* 6px of face above the field, so a scrolled draft is cut under the rim, inside the card */
+.island .fw { display: grid; padding-top: 6px; }
+.island .field {
+  display: block; width: 100%; min-height: 0; resize: none; border: 0; outline: 0; background: none;
+  padding: 4px var(--c-inset) 2px;
+  font-family: var(--f-body); font-weight: var(--w-body); font-size: 17px; line-height: var(--c-lh);
+  color: var(--ink); caret-color: var(--tint);
+  overflow-y: auto; scrollbar-width: none; overscroll-behavior: contain;
+  transition: opacity var(--d-fast) var(--e-out), transform var(--d-fast) var(--e-out), color var(--d-slow) var(--e-turn);
+}
+.island .field::-webkit-scrollbar { display: none; }
+/* both: 'Reply' fades in after the first send, and the idea ghost hides the placeholder by colour */
+.island .field::placeholder { color: var(--ink-3); opacity: 1; transition: opacity var(--d-mid) var(--e-out), color var(--d-fast) var(--e-out); }
+.island .field[data-hush]::placeholder { opacity: 0; transition: none; }
+.island .field::selection { background: var(--sel); color: var(--sel-ink); }
+.island .field:focus-visible { box-shadow: none; outline: 0; }
+/* centred, the page is roomier: two lines of paper before the tools */
+.island[data-place="centre"] .field { min-height: calc(var(--c-lh) * 2 + 6px); }
+/* turned over, the words band hugs the words: no empty second line under them */
+.island[data-place="centre"]:not([data-face="write"]) .field { min-height: 0; }
+/* the cut edges of a long draft dissolve, only on the side that hides words */
+.island .fw[data-cut="top"] .field { mask-image: linear-gradient(to bottom, transparent 0, transparent 4px, #000 24px); }
+.island .fw[data-cut="bottom"] .field { mask-image: linear-gradient(to top, transparent 0, #000 22px); }
+.island .fw[data-cut="both"] .field { mask-image: linear-gradient(to bottom, transparent 0, transparent 4px, #000 24px, #000 calc(100% - 22px), transparent 100%); }
+/* the words leave for the thread */
+.island .field[data-leaving] { opacity: 0; transform: translateY(-6px); }
+.island:not([data-face="write"]) .field { color: var(--ink-2); }
+
+/* ── the tool row, and the back face in the same grid ──────────────────── */
+.island .under { display: grid; grid-template-rows: 1fr 0fr; transition: grid-template-rows var(--d-move) var(--e-out) var(--d-quick); }
+.island .under > * { min-height: 0; overflow: hidden; }
+.island:not([data-face="write"]) .under { grid-template-rows: 0fr 1fr; transition: grid-template-rows var(--d-slow) var(--e-out) var(--d-mid); }
+.island .crow {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 2px;
+  min-width: 0; padding-top: 4px;
+  transition: opacity var(--d-fast) var(--e-out);
+}
+.island .under > .crow { overflow: visible; }
+.island:not([data-face="write"]) .crow { opacity: 0; overflow: hidden; padding-top: 0; }
+.island .backside { opacity: 0; transition: opacity var(--d-mid) var(--e-out); }
+.island:not([data-face="write"]) .backside { opacity: 1; transition-delay: var(--d-move); }
+
+.island .attach {
+  display: inline-grid; place-items: center; flex: none;
+  width: var(--c-row); height: var(--c-row); border-radius: var(--r-sm); color: var(--ink-3);
+  transition: background var(--d-fast) var(--e-out), color var(--d-fast) var(--e-out), transform var(--d-fast) var(--e-spring);
+}
+.island .attach .v2-ico { transition: transform var(--d-mid) var(--e-spring); }
+.island .attach:hover { background: var(--fill-1); color: var(--ink); }
+.island .attach:hover .v2-ico { transform: rotate(-8deg); }
+.island .attach:active { background: var(--fill-2); transform: scale(.94); }
+
+/* the model: a quiet line you can press, not a pill */
+.island .chip-wrap { min-width: 0; max-width: 100%; justify-self: start; }
+.island .model {
+  display: inline-flex; align-items: center; gap: 7px; min-width: 0; max-width: 100%;
+  position: relative; height: var(--c-row); padding: 0 9px 0 7px; border-radius: var(--r-sm);
+  font-family: var(--f-ui); font-size: 13.5px; font-weight: 500; letter-spacing: -.005em; color: var(--ink-2);
+  transition: background var(--d-fast) var(--e-out), color var(--d-fast) var(--e-out);
+}
+.island .model:hover, .island .model[aria-expanded="true"] { background: var(--fill-1); color: var(--ink); }
+.island .model:active { background: var(--fill-2); }
+/* refused while models load: the chip that is loading is the one that answers */
+.island .model::before { content: ""; position: absolute; inset: 0; border-radius: inherit; background: var(--fill-2); opacity: 0; pointer-events: none; }
+.island .model[data-ping]::before { animation: cPing calc(var(--d-slow) + var(--d-move)) var(--e-out); }
+.island .model[data-ping] .dots i { animation: cDotPing var(--d-slow) var(--e-spring); }
+@keyframes cPing { 18% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes cDotPing { 35% { opacity: 1; transform: translateY(-3px); } 100% { opacity: .6; transform: none; } }
+.island .model-ico { display: inline-grid; place-items: center; flex: none; width: 16px; height: 16px; color: var(--ink-2); font-size: 15px; }
+.island .model-ico .co-ico { width: 1em; height: 1em; display: block; }
+.island .model-n { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.island[data-model="loading"] .model .chev { display: none; }
+.island .model[aria-disabled="true"] { cursor: default; }
+.island .model[aria-disabled="true"]:is(:hover, :active) { background: none; }
+.island .model .chev { flex: none; width: 12px; height: 12px; color: var(--ink-3); stroke-width: 2; transition: transform var(--d-mid) var(--e-spring); }
+.island .model[aria-expanded="true"] .chev { transform: rotate(180deg); }
+/* a new model: the mark pops, the name rises */
+.island .model-n[data-in] { animation: cUp var(--d-mid) var(--e-out) both; }
+.island .model-ico[data-in] { animation: cPop var(--d-move) var(--e-spring) both; }
+@keyframes cUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes cPop { from { opacity: 0; transform: scale(.6) rotate(-30deg); } to { opacity: 1; transform: none; } }
+/* none chosen: an empty ring where the maker's mark goes */
+.island .ring-ico { width: 14px; height: 14px; border-radius: 99px; box-shadow: inset 0 0 0 1.5px var(--ink-3); }
+.island[data-model="none"] .model { color: var(--ink); }
+/* models still arriving: a soft light passes over the words */
+.island[data-model="loading"] .model-n {
+  color: transparent;
+  background: linear-gradient(100deg, var(--ink-3) 0 38%, var(--ink) 50%, var(--ink-3) 62% 100%) 0 0 / 250% 100%;
+  -webkit-background-clip: text; background-clip: text;
+  animation: cSheen 1.8s var(--e-in-out) infinite;
+}
+@keyframes cSheen { from { background-position: 100% 0; } to { background-position: 0 0; } }
+.island .dots { display: inline-flex; gap: 3px; }
+.island .dots i { width: 3px; height: 3px; border-radius: 99px; background: var(--ink-3); animation: cDot 1.2s var(--e-in-out) infinite; }
+.island .dots i:nth-child(2) { animation-delay: .15s; }
+.island .dots i:nth-child(3) { animation-delay: .3s; }
+@keyframes cDot { 0%, 80%, 100% { opacity: .35; transform: none; } 40% { opacity: 1; transform: translateY(-2px); } }
+
+/* the voice: the price, or one short line about a file, in this one place */
+.island .voice-wrap { flex: none; min-width: max-content; display: flex; justify-content: flex-end; }
+.island .voice {
+  position: relative; display: grid; justify-items: end; align-items: center; height: 22px; min-width: 0;
+  padding: 0 10px 0 6px; overflow: hidden;
+  font-family: var(--f-ui); font-size: 12.5px; color: var(--ink-3);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.island .v { grid-area: 1 / 1; display: inline-flex; align-items: baseline; gap: 3px; animation: cVin var(--d-mid) var(--e-out) both; }
+.island .v b { font-weight: 500; color: var(--ink-2); transition: color var(--d-mid) var(--e-out); }
+.island .v[data-out] { animation: cVout var(--d-fast) var(--e-out) both; }
+.island .v[data-tone="say"] { color: var(--ink-2); }
+@keyframes cVin { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes cVout { to { opacity: 0; transform: translateY(-8px); } }
+/* while you type the price holds still and steps back by colour */
+.island .voice[data-settling] .v b { color: var(--ink-3); font-weight: 450; }
+.island .voice-wrap:not([data-price]) > .tip { display: none; }
+.island .v-short { display: none; }
+
+/* send and stop: one disc, the accent only when it can act */
+.island .go {
+  position: relative; display: grid; place-items: center; flex: none;
+  width: var(--c-row); height: var(--c-row); border-radius: 99px;
+  color: var(--ink-3); background: var(--fill-1);
+  transition: transform var(--d-fast) var(--e-spring), color var(--d-fast) var(--e-out);
+}
+.island .go::before {
+  content: ""; position: absolute; inset: 0; border-radius: inherit;
+  background: var(--c-go-fill); box-shadow: var(--lift-1), var(--glow-2);
+  opacity: 0; transform: scale(.5);
+  transition: opacity var(--d-fast) var(--e-out), transform var(--d-move) var(--e-spring);
+}
+.island .go[data-live]::before, .island .go[data-mode="stop"]::before { opacity: 1; transform: none; }
+.island .go[data-live], .island .go[data-mode="stop"] { color: var(--c-go-ink); }
+.island .go[data-live]:hover { transform: translateY(-1px); }
+.island .go:active { transform: scale(.9); }
+.island .go:not([data-live]):not([data-mode="stop"]) { cursor: default; }
+.island .go-g { position: relative; display: grid; }
+.island .go-g > .v2-ico { grid-area: 1 / 1; stroke-width: 2; transition: opacity var(--d-fast) var(--e-out), transform var(--d-mid) var(--e-spring); }
+.island .g-send { transform: none; }
+.island .g-stop { opacity: 0; transform: scale(.4) rotate(-45deg); }
+.island .go[data-mode="stop"] .g-send { opacity: 0; transform: translateY(-10px); }
+.island .go[data-mode="stop"] .g-stop { opacity: 1; transform: none; }
+@keyframes cNo { 20% { transform: translateX(-3px); } 45% { transform: translateX(2.5px); } 70% { transform: translateX(-1.5px); } 100% { transform: none; } }
+.island .go[data-no] { animation: cNo var(--d-move) var(--e-out); }
+
+/* designed focus: the room's own ring, snug to each control */
+.island .attach:focus-visible, .island .model:focus-visible, .island .go:focus-visible, .island .fx:focus-visible {
+  outline: 0; box-shadow: 0 0 0 2px rgb(var(--surface-hero)), 0 0 0 3.5px var(--tint);
+}
+.island .go:focus-visible::before { box-shadow: none; }
+
+/* ── tooltips: one line, late, and above the island, never over your words ── */
+.island .crow .tipped { position: static; }
+.island .tipped { position: relative; display: inline-flex; min-width: 0; }
+.island .tip {
+  position: absolute; bottom: calc(100% + 10px); left: var(--c-pad); z-index: 20;
+  display: inline-flex; align-items: center; gap: 8px; width: max-content; max-width: 260px;
+  padding: 7px 10px; border-radius: var(--r-xs);
+  background: rgb(var(--surface-hero)); box-shadow: var(--lift-2), var(--glow), inset 0 0 0 1px var(--hair);
+  font-family: var(--f-ui); font-size: 12px; line-height: 1.4; font-weight: 450; color: var(--ink-2); white-space: nowrap;
+  pointer-events: none; opacity: 0; transform: translateY(4px);
+  transition: opacity var(--d-fast) var(--e-out), transform var(--d-fast) var(--e-out);
+}
+.island .tip-chip { left: calc(var(--c-pad) + var(--c-row) + 2px); }
+.island .tip-end { left: auto; right: var(--c-pad); }
+.island .tip kbd { font-family: var(--f-mono); font-size: 10.5px; color: var(--ink-3); padding: 1px 5px; border-radius: var(--r-xs); background: var(--fill-1); }
+.island .tipped:hover > .tip { opacity: 1; transform: none; transition-delay: var(--d-slow); }
+.island .tipped:has(:focus-visible) > .tip { opacity: 1; transform: none; transition-delay: 0s; }
+.island .model[aria-expanded="true"] + .tip, .island:not([data-face="write"]) .tip, .island[data-drag] .tip,
+.island[data-picking] .tip { display: none; }
+@media (hover: none) { .island .tip { display: none; } }
+
+/* ══ attachments: they ride above the words ══════════════════════════════ */
+.island .tray { display: grid; grid-template-rows: 0fr; transition: grid-template-rows var(--d-move) var(--e-out); }
+.island[data-files] .tray { grid-template-rows: 1fr; }
+.island .tray-clip { min-height: 0; overflow: hidden; }
+.island .tray-in {
+  display: flex; gap: 8px; padding: 4px var(--c-inset) 2px; overflow-x: auto; scrollbar-width: none;
+  scroll-snap-type: x proximity; scroll-padding: var(--c-inset);
+}
+.island .tray-in::-webkit-scrollbar { display: none; }
+.island .tray[data-over="end"] .tray-in { mask-image: linear-gradient(to left, transparent 0, #000 40px); }
+.island .tray[data-over="start"] .tray-in { mask-image: linear-gradient(to right, transparent 0, #000 40px); }
+.island .tray[data-over="both"] .tray-in { mask-image: linear-gradient(to right, transparent 0, #000 40px, #000 calc(100% - 40px), transparent 100%); }
+
+.island .file {
+  position: relative; flex: none; display: flex; align-items: center; gap: 10px;
+  height: 60px; border-radius: var(--r-sm); scroll-snap-align: start;
+  animation: cFileIn var(--d-mid) var(--e-out) both;
+}
+@keyframes cFileIn { from { opacity: 0; transform: translateY(6px) scale(.94); } to { opacity: 1; transform: none; } }
+.island .file[data-kind="image"] { width: 60px; }
+.island .thumb { width: 60px; height: 60px; border-radius: var(--r-sm); display: block; object-fit: cover; transition: opacity var(--d-mid) var(--e-out); }
+.island .file::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; box-shadow: inset 0 0 0 1px var(--hair), var(--glow); }
+.island .file[data-kind="image"][data-sync="uploading"] .thumb { opacity: .8; }
+.island .file[data-kind="pdf"] { padding: 0 32px 0 9px; max-width: 232px; }
+/* a page tile is a fill, not a box: no hairline, and its page is a bare outline */
+.island .file[data-kind="pdf"] { background: var(--fill-1); }
+.island .file[data-kind="pdf"]::after { box-shadow: none; }
+.island .file[data-kind="pdf"] .doc { background: none; box-shadow: inset 0 0 0 1.5px var(--ink-3); opacity: .7; }
+/* a page in miniature: a folded corner and three ruled lines */
+.island .doc {
+  position: relative; flex: none; width: 34px; height: 42px; border-radius: 5px 9px 5px 5px;
+  background: var(--fill-1);
+  display: grid; align-content: end; justify-items: center; padding-bottom: 5px;
+  font-family: var(--f-mono); font-size: 8.5px; letter-spacing: .08em; color: var(--ink-2);
+}
+.island .doc::before {
+  content: ""; position: absolute; left: 7px; right: 9px; top: 9px; height: 11px;
+  background: linear-gradient(var(--hair) 0 1.5px, transparent 1.5px 4.5px, var(--hair) 4.5px 6px, transparent 6px 9px, var(--hair) 9px 10.5px, transparent 0);
+}
+.island .meta { display: grid; gap: 2px; min-width: 0; }
+.island .fname { font-family: var(--f-ui); font-size: 12.5px; font-weight: 500; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.island .fsub { font-family: var(--f-ui); font-size: 12px; color: var(--ink-3); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.island .fsub[data-reading] { color: var(--ink-2); }
+/* remove: a small disc on the corner; its hit area is 32px, 44px on phones */
+.island .fx {
+  position: absolute; top: 5px; right: 5px; z-index: 3;
+  width: 20px; height: 20px; border-radius: 99px; display: grid; place-items: center;
+  background: rgb(var(--surface-hero)); color: var(--ink-2); box-shadow: var(--lift-1), inset 0 0 0 1px var(--hair);
+  opacity: 0; transform: scale(.8);
+  transition: opacity var(--d-fast) var(--e-out), transform var(--d-fast) var(--e-spring), color var(--d-fast);
+}
+.island .fx::before { content: ""; position: absolute; inset: -6px; border-radius: 99px; }
+.island .fx .v2-ico { stroke-width: 2.2; }
+.island .fx:hover { color: var(--ink); }
+.island .file:hover .fx, .island .file:focus-within .fx { opacity: 1; transform: none; }
+.island .tip-fail[data-on] { opacity: 1; transform: none; transition-delay: var(--d-slow); }
+/* backup to your relays: an arc runs along the tile's own edge, closes the
+   loop when it lands, then fades. Failed: the edge stays --warn. */
+.island .edge { position: absolute; inset: 0; z-index: 2; width: 100%; height: 100%; overflow: visible; pointer-events: none; transition: opacity var(--d-move) var(--e-out); }
+.island .edge rect { x: 1px; y: 1px; width: calc(100% - 2px); height: calc(100% - 2px); rx: calc(var(--r-sm) - 1px); fill: none; stroke-width: 2; stroke-linecap: round; }
+.island .edge .run { stroke: var(--tint); stroke-dasharray: 18 82; animation: cRun 1.15s linear infinite; }
+.island .edge .full { stroke: var(--tint); stroke-dasharray: 100; stroke-dashoffset: 100; }
+.island .file[data-sync="done"] .edge .run { animation: none; opacity: 0; transition: opacity var(--d-fast); }
+.island .file[data-sync="done"] .edge .full { stroke-dashoffset: 0; transition: stroke-dashoffset var(--d-move) var(--e-out); }
+.island .file[data-sync="done"][data-settled] .edge { opacity: 0; }
+.island .file[data-sync="failed"] .edge .run { display: none; }
+.island .file[data-sync="failed"] .edge .full { stroke: var(--warn); stroke-width: 1.5; stroke-dashoffset: 0; }
+@keyframes cRun { to { stroke-dashoffset: -100; } }
+
+/* ══ a file over the window: the island is the target ════════════════════ */
+.island .drop {
+  position: absolute; inset: 0; z-index: 3; border-radius: inherit; pointer-events: none;
+  display: grid; place-items: center; opacity: 0;
+  transition: opacity var(--d-fast) var(--e-out);
+}
+.island .drop-in { display: grid; justify-items: center; gap: 2px; transform: translateY(4px); transition: transform var(--d-mid) var(--e-spring); }
+.island .drop-ico { color: var(--tint); margin-bottom: 4px; stroke-width: 1.8; }
+.island .drop-t { font-family: var(--f-ui); font-size: 14.5px; font-weight: 500; color: var(--ink); }
+.island .drop-s { font-family: var(--f-ui); font-size: 12px; color: var(--ink-3); }
+.island[data-drag] .drop { opacity: 1; }
+.island[data-drag] .drop-in { transform: none; }
+.island[data-drag] .drop-ico { animation: cBob 1.4s var(--e-in-out) infinite; }
+@keyframes cBob { 50% { transform: translateY(3px); } }
+.island[data-drag] .island-in { opacity: 0; transform: scale(.985); }
+.island[data-drag] .ring { box-shadow: inset 0 0 0 1.5px var(--tint); opacity: .5; }
+.island[data-drag] { transform: scale(1.012); }
+.island[data-drag][data-over] { transform: scale(1.02); }
+
+/* ══ the new-chat stage around it ════════════════════════════════════════ */
+/* the ideas step aside while the card is turned (a payment, sign in) */
+.panel[data-state="empty"]:has(.island:not([data-face="write"])) .pf-ideas { opacity: 0; pointer-events: none; }
+/* the greeting and ideas a first send leaves behind (landing.ts) */
+.ghost-out { will-change: transform, opacity; }
+
+/* docked, the thread ends clear of the tooltip band above the island */
+@media (hover: hover) { .panel[data-state="chat"] .thread-in { padding-bottom: var(--s8); } }
+
+/* ══ meridian: the island's accent is ink, never rose ════════════════════ */
+html[data-room="meridian"] .island {
+  --tint: var(--ink); --tint-soft: color-mix(in srgb, var(--ink) 16%, transparent);
+  --tint-fill: var(--ink); --tint-ink: rgb(var(--surface-hero));
+  --c-go-fill: var(--ink); --c-go-ink: rgb(var(--surface-hero));
+  --focus: 0 0 0 2px var(--surface), 0 0 0 4px color-mix(in srgb, var(--ink) 60%, transparent);
+}
+
+/* ══ forms the wallet panes share ══════════════════════════════════════ */
+.quiet { font-size: 12.5px; color: var(--ink-3); line-height: 1.5; }
+
+/* ══ phone ═══════════════════════════════════════════════════════════════ */
+@media (max-width: 760px) {
+  .panel { --c-pad: 6px; }
+  .island { --c-row: 44px; --c-lh: 24px; }
+  .island .field { font-size: 16.5px; padding: 10px var(--c-inset) 0; }
+  .island .crow { padding-top: 0; gap: 0; }
+  .island .model { padding: 0 8px 0 4px; font-size: 14px; }
+  .island .model-n { max-width: 40vw; }
+  .island .voice { padding: 0 8px 0 4px; }
+  .island .v-long { display: none; }
+  .island .v-short { display: inline; }
+  .island .go { width: 44px; height: 44px; padding: 2px; background-clip: content-box; }
+  .island .go::before { inset: 2px; }
+  .island .fx { opacity: 1; transform: none; }
+  .island .fx::before { inset: -12px; }
+  .island .file[data-kind="image"], .island .thumb { width: 64px; height: 64px; }
+  .island .file { height: 64px; }
+  .island .drop-s { display: none; }
+  .island[data-drag] { transform: scale(1.006); }
+  .island[data-drag][data-over] { transform: scale(1.01); }
+  .island[data-place="centre"] .sh-lift { opacity: 1; }
+  .island[data-place="centre"] .field { min-height: 0; }
+  .island .pa-x { width: 44px; height: 44px; top: -2px; right: -6px; }
+  /* the turned card needs the height: the ideas leave, the greeting settles */
+  .panel[data-state="empty"] .stage { transition: opacity var(--d-mid) var(--e-out); }
+  .panel[data-state="empty"]:has(.island:not([data-face="write"])) .stage,
+  .panel[data-state="empty"]:has(.island:not([data-face="write"])) .stage-tail { opacity: 0; pointer-events: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .island[data-model="loading"] .model-n { animation: none; color: var(--ink-3); background: none; }
+  .island .edge .run { animation-duration: 3s; }
+  .island[data-drag] .drop-ico { animation: none; }
+}

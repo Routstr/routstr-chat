@@ -579,7 +579,7 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
           proofsToRemove: [],
         });
         await updateInvoice(quoteId, {
-          state: MintQuoteState.PAID,
+          state: MintQuoteState.ISSUED,
           paidAt: Date.now(),
         });
         if (pendingTransactionId)
@@ -621,7 +621,7 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
           proofsToRemove: [],
         });
         await updateInvoice(qid, {
-          state: MintQuoteState.PAID,
+          state: MintQuoteState.ISSUED,
           paidAt: Date.now(),
         });
         transactionHistoryStore.removePendingTransaction(pendingId);
@@ -722,7 +722,7 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
               proofsToRemove: [],
             });
             await updateInvoice(qid, {
-              state: MintQuoteState.PAID,
+              state: MintQuoteState.ISSUED,
               paidAt: Date.now(),
             });
             transactionHistoryStore.removePendingTransaction(pendingTx.id);

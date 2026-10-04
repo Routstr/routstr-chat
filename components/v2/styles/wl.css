@@ -1,0 +1,734 @@
+/* wl.css: the back of the rail card, your money.
+   Tokens only (rooms.css). Every class is prefixed wl-. Motion is transform
+   and opacity, grid-template-rows for height. Durations are tokens. */
+
+.warn { color: var(--warn); }
+
+.wl {
+  height: 100%; display: flex; flex-direction: column; min-height: 0; position: relative;
+  --wl-in: var(--tint); --wl-live: var(--tint); --wl-warn: var(--warn);
+  /* the card's light, the wash on a new row, the done ring */
+  --wl-light: var(--tint-soft); --wl-wash: var(--tint-soft); --wl-ring: var(--tint-soft);
+  /* the lifted thumb of the switch and a chosen amount, and the track under them */
+  --wl-lift: rgb(var(--surface-hero)); --wl-lift-edge: var(--glow-2); --wl-track: var(--fill-1);
+}
+/* money in is never shown in a colour that reads as a loss: where the room's
+   accent is a red (meridian), incoming sats take the ink instead. Meridian's
+   warn is the same crimson as its accent, so a warning there is ink with the
+   warn mark: crimson stays with the one main action of a pane. Its tint-soft
+   is a rose, so the wash and the ring use a neutral fill there */
+html[data-room="meridian"] .wl { --wl-in: var(--ink); --wl-live: var(--ink-2); --wl-warn: var(--ink); --wl-wash: var(--fill-2); --wl-ring: var(--fill-1); }
+/* night's warn is a coral: orange text on near-black is never used. A warning
+   there is the ink at weight 500 with the warn mark, like meridian */
+html[data-room="night"] .wl { --wl-warn: var(--ink); }
+/* light rooms: the card's light is a highlight (the lit surface), not a colour,
+   so a still frame never shows a tinted smudge. Night and overprint keep tint-soft */
+html[data-room="paper"] .wl, html[data-room="meridian"] .wl { --wl-light: rgb(var(--surface-hero)); }
+/* dark rooms: the lifted thumb must stand off its track (3:1), so the track
+   sinks toward the room and the thumb lifts toward the ink, with a lit top edge */
+html[data-room="night"] .wl, html[data-room="meridian"][data-face="dusk"] .wl {
+  --wl-lift: color-mix(in srgb, var(--ink) 27%, rgb(var(--surface-hero)));
+  --wl-lift-edge: inset 0 1px 0 color-mix(in srgb, var(--ink) 8%, transparent);
+  --wl-track: color-mix(in srgb, var(--room) 55%, transparent);
+}
+
+/* ── head: the way back, and where you are ─────────────────────────────── */
+.wl-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 var(--s1) 0 var(--s3); min-height: 32px; position: relative; z-index: 2;
+}
+.wl-back {
+  display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px 0 6px; margin-left: -6px;
+  border-radius: var(--r-sm); font-family: var(--f-ui); font-size: 13.5px; color: var(--ink-2);
+  transition: background var(--d-fast) var(--e-out), color var(--d-fast) var(--e-out);
+}
+@media (hover: hover) and (pointer: fine) { .wl-back:hover { background: var(--fill-1); color: var(--ink); } }
+.wl-back:active { background: var(--fill-2); }
+.wl-back .v2-ico { width: 16px; height: 16px; transition: transform var(--d-mid) var(--e-spring); }
+@media (hover: hover) and (pointer: fine) { .wl-back:hover .v2-ico { transform: translateX(-2px); } }
+.wl-swap { display: inline-grid; }
+.wl-swap > * { grid-area: 1 / 1; transition: opacity var(--d-fast) var(--e-out), transform var(--d-mid) var(--e-out); white-space: nowrap; }
+.wl-swap > [data-off] { opacity: 0; transform: translateY(4px); pointer-events: none; }
+.wl-where {
+  font-family: var(--f-mono); font-size: 10px; letter-spacing: .11em; text-transform: uppercase; color: var(--ink-3);
+  padding-right: var(--s2); text-align: right;
+}
+.wl-where > * { justify-self: end; }
+
+/* a small spinner, for a busy button or line */
+.wl .spin.sm { width: 14px; height: 14px; border-width: 1.5px; }
+
+/* ── the stage: views pan sideways inside the card ─────────────────────── */
+.wl-stage { position: relative; flex: 1 1 auto; min-height: 0; margin: var(--s2) calc(var(--s3) * -1) 0; }
+.wl-view {
+  position: absolute; inset: 0; overflow-y: auto; overflow-x: hidden;
+  padding: var(--s3) var(--s6) var(--s6);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 12px, #000 calc(100% - 22px), transparent 100%);
+  opacity: 0; visibility: hidden; transform: translateX(28px);
+  transition: opacity var(--d-mid) var(--e-out), transform var(--d-move) var(--e-out), visibility 0s linear var(--d-move);
+}
+.wl-view[data-pos="left"] { transform: translateX(-28px); }
+.wl-view[data-pos="here"] {
+  opacity: 1; visibility: visible; transform: none;
+  transition: opacity var(--d-move) var(--e-out) calc(var(--d-quick) * 2 / 3), transform var(--d-slow) var(--e-spring) calc(var(--d-quick) / 2), visibility 0s;
+}
+/* exits are faster than entrances */
+.wl-view:not([data-pos="here"]) { transition-duration: var(--d-fast), var(--d-mid), 0s; transition-delay: 0s, 0s, var(--d-mid); }
+
+/* ── the number ────────────────────────────────────────────────────────── */
+.wl-hero { position: relative; padding: var(--s3) 0 var(--s5); }
+.wl-hero::before {
+  /* the card's light: blooms once when money lands, breathes while an invoice waits */
+  /* it fades to nothing well inside its own box, so the scroller never cuts it into a visible edge */
+  content: ""; position: absolute; left: -24px; right: -24px; top: -6px; height: 164px; pointer-events: none; z-index: -1;
+  background: radial-gradient(closest-side at 33% 50%, var(--wl-light), color-mix(in srgb, var(--wl-light) 40%, transparent) 55%, transparent);
+  opacity: 0; transform: scale(.9);
+  transition: opacity var(--d-slow) var(--e-out), transform var(--d-slow) var(--e-out);
+}
+/* every duration is a token or a multiple of one, so slow motion slows it too */
+.wl[data-waiting] .wl-hero::before { animation: wlBreathe calc(var(--d-slow) * 8) var(--e-in-out) infinite; }
+.wl-hero[data-bloom]::before { animation: wlBloom calc(var(--d-slow) * 4) var(--e-out) both; }
+@keyframes wlBreathe { 0%, 100% { opacity: .25; transform: scale(.94); } 50% { opacity: .7; transform: scale(1); } }
+@keyframes wlBloom { 0% { opacity: 0; transform: scale(.8); } 22% { opacity: 1; transform: scale(1.04); } 100% { opacity: 0; transform: scale(1.1); } }
+
+.wl-num {
+  display: flex; align-items: baseline; gap: 8px; min-height: 1.06em;
+  font-family: var(--f-display); font-stretch: var(--display-stretch, 100%);
+  font-weight: 400; letter-spacing: var(--display-track); line-height: 1;
+  font-size: var(--num-size, 52px); color: var(--ink);
+  font-variant-numeric: lining-nums proportional-nums; font-feature-settings: "lnum", "pnum";
+}
+.wl-num[data-zero] .wl-odo { color: var(--ink-3); }
+.wl-unit {
+  font-family: var(--f-ui); font-size: 14px; letter-spacing: 0; color: var(--ink-3);
+  transform: translateY(-.05em);
+}
+.wl-sub { margin-top: 10px; font-family: var(--f-ui); font-size: 13px; line-height: 1.45; color: var(--ink-3); text-wrap: balance; }
+.wl-sub b { font-weight: 500; color: var(--ink-2); }
+.wl-sub .l1 { display: block; font-size: 14px; color: var(--ink-2); }
+
+/* the odometer: each digit is a column that rolls to its value; the window
+   fades at its edges so a rolling digit dissolves instead of being cut */
+.wl-num { --slot: 1.2em; }
+.wl-odo {
+  display: inline-flex; align-items: flex-start; height: var(--slot); overflow: hidden; padding-right: .02em; margin: -.07em 0;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 17%, #000 83%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 17%, #000 83%, transparent 100%);
+}
+.wl-d { display: flex; justify-content: center; height: var(--slot); }
+.wl-strip { display: flex; flex-direction: column; transform: translateY(calc(var(--v, 0) * var(--slot) * -1)); }
+.wl-strip > span { display: block; height: var(--slot); line-height: var(--slot); text-align: center; white-space: nowrap; }
+.wl-odo { --stagger: calc(var(--d-quick) * .4); }
+.wl-odo[data-roll] .wl-strip { transition: transform var(--d-slow) var(--e-spring); transition-delay: calc(var(--i, 0) * var(--stagger)); }
+.wl-c { display: block; line-height: var(--slot); }
+.wl-d[data-new], .wl-c[data-new] { animation: wlDigitIn var(--d-move) var(--e-out) both; animation-delay: calc(var(--i, 0) * var(--stagger)); }
+@keyframes wlDigitIn { from { opacity: 0; transform: translateY(.3em); } to { opacity: 1; transform: none; } }
+
+/* loading: the number's place, holding still */
+.wl-ghost { display: block; border-radius: var(--r-xs); background: var(--fill-1); animation: breathe calc(var(--d-slow) * 4) var(--e-in-out) infinite; }
+.wl-ghost.num { width: 132px; height: 44px; border-radius: var(--r-sm); }
+.wl-ghost.sub { width: 190px; height: 11px; margin-top: 14px; animation-delay: var(--d-fast); }
+.wl-ghost.row { height: 11px; }
+
+/* ── two ways to move it ───────────────────────────────────────────────── */
+.wl-acts { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s2); }
+.wl-act {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 44px;
+  border-radius: var(--r-sm); background: var(--fill-1); color: var(--ink);
+  /* a button: the UI face, like every button in the app */
+  font-family: var(--f-ui); font-size: 14.5px; font-weight: 500;
+  transition: background var(--d-fast) var(--e-out), transform var(--d-fast) var(--e-spring), opacity var(--d-fast), filter var(--d-fast);
+}
+.wl-act .v2-ico { width: 16px; height: 16px; color: var(--ink-2); transition: transform var(--d-mid) var(--e-spring); }
+@media (hover: hover) and (pointer: fine) { .wl-act:hover { background: var(--fill-2); } }
+@media (hover: hover) and (pointer: fine) { .wl-act:hover .v2-ico { transform: translateY(1px); } }
+@media (hover: hover) and (pointer: fine) { .wl-act.up:hover .v2-ico { transform: translateY(-1px); } }
+.wl-act:active { transform: scale(.975); }
+.wl-act.main { background: var(--tint-fill); color: var(--tint-ink); box-shadow: var(--lift-1); }
+.wl-act.main .v2-ico { color: var(--tint-ink); }
+@media (hover: hover) and (pointer: fine) { .wl-act.main:hover { filter: brightness(1.06); } }
+.wl-act:disabled { opacity: .42; cursor: default; }
+@media (hover: hover) and (pointer: fine) { .wl-act:disabled:hover { background: var(--fill-1); } }
+@media (hover: hover) and (pointer: fine) { .wl-act:disabled:hover .v2-ico { transform: none; } }
+
+/* ── sections and rows ─────────────────────────────────────────────────── */
+.wl-sec { margin-top: var(--s6); }
+.wl-sec-t {
+  display: flex; align-items: baseline; justify-content: space-between;
+  font-family: var(--f-mono); font-size: 10px; letter-spacing: .11em; text-transform: uppercase;
+  color: var(--ink-3); margin-bottom: 6px;
+}
+.wl-sec-t + .wl-sec-t { margin-top: var(--s4); }
+.wl-rows { display: grid; }
+
+.wl-row {
+  position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: var(--s3); align-items: center;
+  width: calc(100% + var(--s6)); margin: 0 calc(var(--s3) * -1); padding: 8px var(--s3);
+  border-radius: var(--r-sm); text-align: left;
+}
+button.wl-row { transition: background var(--d-fast) var(--e-out); }
+@media (hover: hover) and (pointer: fine) { button.wl-row:hover { background: var(--fill-1); } }
+button.wl-row:active { background: var(--fill-2); }
+/* one title face for every row on the card (the body face, like the
+   activity lines and the chats on the front); sans only for the quiet line */
+.wl-row-t { position: relative; display: flex; align-items: center; gap: 8px; min-width: 0; font-family: var(--f-body); font-size: 14.5px; line-height: 1.35; color: var(--ink); }
+/* a live dot hangs in the row's gutter, so every title starts on one line */
+.wl-row-t > .wl-live { position: absolute; left: -9px; top: 50%; margin-top: -3px; }
+.wl-row-t > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wl-row-s { grid-column: 1; font-family: var(--f-ui); font-size: 12px; line-height: 1.4; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wl-row-r { grid-column: 2; grid-row: 1 / span 2; display: flex; align-items: center; gap: 4px; justify-self: end; }
+.wl-amt { font-family: var(--f-mono); font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.wl-amt.in { color: var(--wl-in); }
+.wl-chev { width: 14px; height: 14px; color: var(--ink-3); transition: transform var(--d-mid) var(--e-spring); }
+@media (hover: hover) and (pointer: fine) { button.wl-row:hover > .wl-row-r > .wl-chev { transform: translateX(2px); } }
+
+/* history: one line per movement, the same rhythm as the chats on the front
+   face (body face, 14.5px, 7px rows, mono group heads) */
+.wl-grp + .wl-grp { margin-top: var(--s5); }
+.wl-grp-t { font-family: var(--f-mono); font-size: 10px; letter-spacing: .11em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 6px; }
+.wl-line {
+  position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; column-gap: 8px; align-items: baseline;
+  width: calc(100% + var(--s6)); margin: 0 calc(var(--s3) * -1); padding: 7px var(--s3);
+  border-radius: var(--r-sm); text-align: left;
+}
+.wl-line-t { font-family: var(--f-body); font-size: 14.5px; line-height: 1.35; color: var(--ink-2); white-space: nowrap; }
+.wl-line.in .wl-line-t { color: var(--ink); }
+.wl-line-w { font-family: var(--f-ui); font-size: 12px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wl-line .wl-amt { display: inline-flex; align-items: center; gap: 2px; }
+button.wl-line { transition: background var(--d-fast) var(--e-out); }
+@media (hover: hover) and (pointer: fine) { button.wl-line:hover { background: var(--fill-1); } }
+@media (hover: hover) and (pointer: fine) { button.wl-line:hover .wl-line-t { color: var(--ink); } }
+button.wl-line:active { background: var(--fill-2); }
+.wl-line-t .wl-chev { display: inline-block; width: 13px; height: 13px; margin-left: 3px; vertical-align: -1px; }
+.wl-line.sub { grid-template-columns: minmax(0, 1fr) auto; padding-top: 4px; padding-bottom: 4px; }
+.wl-line.sub .wl-line-t { display: none; }
+.wl-line.sub .wl-line-w { padding-left: var(--s3); position: relative; }
+.wl-line.sub .wl-line-w::before { content: ""; position: absolute; left: 1px; top: -4px; bottom: -4px; width: 1px; background: var(--hair); }
+.wl-line.sub .wl-amt { font-size: 12px; color: var(--ink-3); }
+.wl-run[data-open] > .wl-line { background: var(--fill-1); }
+
+/* live things breathe; finished things do not */
+.wl-live { width: 6px; height: 6px; flex: none; border-radius: 9px; background: var(--wl-live); animation: breathe calc(var(--d-slow) * 4) var(--e-in-out) infinite; }
+
+/* a row that just arrived: space opens, then it settles with a wash of light */
+.wl-enter { display: grid; grid-template-rows: 0fr; animation: wlOpen var(--d-move) var(--e-out) forwards; }
+.wl-enter > * { min-height: 0; overflow: hidden; margin: 0 calc(var(--s3) * -1); padding: 0 var(--s3); }
+.wl-enter .wl-line { animation: wlWash calc(var(--d-slow) * 4 + var(--d-fast)) var(--e-out) both; }
+/* laid in off stage: no opening, the wash waits for the pan to land */
+.wl-enter[data-still] { grid-template-rows: 1fr; animation: none; }
+.wl-enter[data-still] .wl-line { animation-delay: var(--d-move); }
+@keyframes wlOpen { to { grid-template-rows: 1fr; } }
+@keyframes wlWash { 0% { background: var(--wl-wash); opacity: 0; transform: translateY(-4px); } 25% { opacity: 1; transform: none; } 100% { background: transparent; } }
+
+/* a note that takes the place of the row it is about: it grows while the row
+   folds (same duration), so the list under it moves once and only by the
+   difference; later it fades and folds away */
+.wl-grow { display: grid; grid-template-rows: 1fr; transition: grid-template-rows var(--d-mid) var(--e-out), opacity var(--d-fast) var(--e-out); }
+.wl-grow > * { min-height: 0; overflow: hidden; }
+/* inserted closed, opened in the same frame the row starts to fold: two
+   transitions of one length, so the sum of their heights barely moves */
+.wl-grow:is([data-closed], [data-gone]) { grid-template-rows: 0fr; opacity: 0; }
+.wl-rows .wl-grow .wl-note { padding: 10px 0; }
+.wl-done .wl-grow { justify-self: stretch; }
+.wl-done .wl-grow .wl-note { justify-content: center; padding-top: var(--s4); }
+
+/* a row that is leaving: it closes over itself */
+.wl-fold { display: grid; grid-template-rows: 1fr; transition: grid-template-rows var(--d-mid) var(--e-out), opacity var(--d-fast) var(--e-out); }
+.wl-fold > * { min-height: 0; overflow: hidden; margin: 0 calc(var(--s3) * -1); padding: 0 var(--s3); }
+.wl-fold[data-gone] { grid-template-rows: 0fr; opacity: 0; }
+
+.wl-run .wl-chev { transition: transform var(--d-mid) var(--e-spring); }
+.wl-run[data-open] .wl-chev { transform: rotate(180deg); }
+@media (hover: hover) and (pointer: fine) { button.wl-row:hover .wl-run .wl-chev { transform: none; } }
+.wl-run-body { display: grid; grid-template-rows: 0fr; transition: grid-template-rows var(--d-mid) var(--e-out); }
+.wl-run[data-open] .wl-run-body { grid-template-rows: 1fr; transition-duration: var(--d-move); }
+.wl-run-body > div { min-height: 0; overflow: hidden; margin: 0 calc(var(--s3) * -1); padding: 0 var(--s3); opacity: 0; transition: opacity var(--d-fast) var(--e-out); }
+.wl-run[data-open] .wl-run-body > div { opacity: 1; transition-duration: var(--d-mid); transition-delay: calc(var(--d-quick) * 2 / 3); }
+.wl-more { margin-top: var(--s2); }
+.wl-empty { font-family: var(--f-ui); font-size: 13px; line-height: 1.5; color: var(--ink-3); padding: 6px 0; text-wrap: pretty; }
+
+/* an inline text action inside a row */
+.wl-link {
+  font-family: var(--f-ui); font-size: 13px; color: var(--ink); height: 30px; padding: 0 10px; border-radius: var(--r-xs);
+  background: var(--fill-1); display: inline-flex; align-items: center; gap: 6px;
+  transition: background var(--d-fast) var(--e-out), transform var(--d-fast) var(--e-spring);
+}
+@media (hover: hover) and (pointer: fine) { .wl-link:hover { background: var(--fill-2); } }
+.wl-link:active { transform: scale(.97); }
+.wl-link:disabled { opacity: .6; }
+.wl-link[data-busy] { background: transparent; color: var(--ink-3); cursor: progress; padding-right: 2px; }
+
+/* status lines are text, never badges */
+.wl-note {
+  display: flex; align-items: flex-start; gap: 8px; font-family: var(--f-ui); font-size: 12.5px; line-height: 1.45; color: var(--ink-2);
+  animation: fadeUp var(--d-mid) var(--e-out) both;
+}
+.wl-note .v2-ico { width: 15px; height: 15px; flex: none; margin-top: 1px; color: var(--tint); }
+.wl-note.warn { color: var(--wl-warn); }
+.wl-note.warn .v2-ico { color: var(--wl-warn); }
+/* news that is neither good nor bad: the quiet info mark, no check */
+.wl-note.info .v2-ico { color: var(--ink-3); }
+
+/* ── the segmented switch: the chosen side lifts, the thumb glides ─────── */
+.wl-seg {
+  position: relative; display: grid; grid-template-columns: 1fr 1fr; padding: 3px; border-radius: var(--r-sm);
+  background: var(--wl-track); transition: opacity var(--d-mid) var(--e-out);
+}
+/* while a done state shows, the switch steps back and cannot be used */
+.wl-seg[data-done] { opacity: .4; }
+.wl-seg-thumb {
+  position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc(50% - 3px); border-radius: calc(var(--r-sm) - 3px);
+  background: var(--wl-lift); box-shadow: var(--lift-1), var(--wl-lift-edge);
+  transition: transform var(--d-move) var(--e-spring);
+}
+.wl-seg[data-i="1"] .wl-seg-thumb { transform: translateX(100%); }
+.wl-seg-b {
+  position: relative; z-index: 1; height: 32px; border-radius: calc(var(--r-sm) - 3px);
+  font-family: var(--f-ui); font-size: 13px; color: var(--ink-3); transition: color var(--d-fast) var(--e-out);
+}
+@media (hover: hover) and (pointer: fine) { .wl-seg-b:hover { color: var(--ink-2); } }
+.wl-seg-b[aria-selected="true"] { color: var(--ink); }
+
+/* every deeper view is one column: the switch, then the pane. A pane's
+   content starts at one fixed anchor under the switch (never centred, so
+   nothing moves when a line appears); its one action docks at the bottom.
+   The dock has a fixed shape: the button row, then a slot for one quiet line
+   or link that is always the same height, empty or not. So the main button
+   sits in exactly the same place on every pane, above the mint */
+.wl-view:is([data-v="add"], [data-v="send"], [data-v="tokens"]) { display: flex; flex-direction: column; }
+.wl-view[data-v="tokens"] > .wl-done.quiet { padding: var(--s10) 0 0; }
+.wl-view:is([data-v="add"], [data-v="send"]) > .wl-seg { flex: none; }
+.wl { --wl-anchor: calc(var(--s9) - var(--s5)); --wl-after: 40px; --wl-btn: 44px; }
+.wl-pane { flex: 1 0 auto; display: flex; flex-direction: column; padding-top: var(--s5); }
+.wl-fill { flex: 1 0 auto; display: flex; flex-direction: column; justify-content: flex-start; gap: var(--s4); padding-top: var(--wl-anchor); }
+/* panes that open on a field (paste a token, paste an invoice) start with it */
+.wl-pane.is-top .wl-fill { padding-top: 0; }
+.wl-dock { flex: none; display: grid; grid-template-rows: var(--wl-btn) var(--wl-after); gap: var(--s3); margin-top: var(--s5); }
+.wl-dock-main { display: grid; min-width: 0; }
+.wl-dock .wl-dock-main > *, .wl-dock .wl-dock-main .wl-two > * { height: var(--wl-btn); width: 100%; }
+.wl-dock-after { display: grid; align-content: start; justify-items: center; min-height: 0; }
+.wl-dock-after > .wl-textlink { margin-top: -4px; }
+.wl-dock-after > .wl-note { justify-content: center; }
+.wl-out { margin-top: var(--s2); }
+.wl-lede { font-family: var(--f-ui); font-size: 12.5px; line-height: 1.5; color: var(--ink-3); text-wrap: pretty; padding-top: var(--s2); }
+.wl-read-k { font-family: var(--f-mono); font-size: 10px; letter-spacing: .11em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 4px; }
+.wl-done.quiet { padding-top: var(--s8); }
+.wl-done.quiet .wl-done-t { font-size: 22px; }
+/* one done layout for every pane: the ring at the pane's anchor, a title, one line */
+.wl-pane .wl-done { padding: 0; }
+.wl-pane[data-dir="r"] { animation: wlFromR var(--d-move) var(--e-out) both; }
+.wl-pane[data-dir="l"] { animation: wlFromL var(--d-move) var(--e-out) both; }
+.wl-pane[data-dir="u"] { animation: fadeUp var(--d-move) var(--e-out) both; }
+@keyframes wlFromR { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
+@keyframes wlFromL { from { opacity: 0; transform: translateX(-14px); } to { opacity: 1; transform: none; } }
+
+/* ── the amount you type ───────────────────────────────────────────────── */
+.wl-amount { display: grid; justify-items: center; gap: 8px; padding: 0; }
+/* the line box is the largest step's, always: as the number steps down only
+   the glyphs shrink, and nothing under it moves while you type */
+.wl-amount { --amt-top: 60px; }
+.wl-amt-line { display: flex; align-items: baseline; justify-content: center; gap: 8px; max-width: 100%; height: calc(var(--amt-top) * 1.1); }
+.wl-amt-field {
+  display: inline-grid; min-width: .6em; max-width: 210px;
+  font-family: var(--f-display); font-stretch: var(--display-stretch, 100%); font-weight: 400;
+  font-size: var(--amt-size, 44px); line-height: calc(var(--amt-top) * 1.1); letter-spacing: -.03em; font-variant-numeric: lining-nums tabular-nums;
+}
+.wl-amt-field::after { content: attr(data-v); visibility: hidden; white-space: pre; grid-area: 1 / 1; padding-right: .06em; }
+.wl-amt-field input {
+  /* no width of its own (an input's is wider than one digit): the digits' copy
+     in ::after sizes the field, so the number and "sats" stay centred */
+  grid-area: 1 / 1; width: 0; min-width: 100%; text-align: right; color: var(--ink); caret-color: var(--tint);
+  font: inherit; letter-spacing: inherit; font-variant-numeric: inherit; padding: 0; border-radius: var(--r-xs);
+}
+.wl-amt-field input::placeholder { color: var(--ink-3); opacity: 1; }
+.wl-amt-field input:focus-visible { box-shadow: none; }
+.wl-amt-field:focus-within + .wl-unit { color: var(--ink-2); }
+.wl-amount .wl-unit { font-size: 14px; }
+.wl-amount[data-bump] .wl-amt-field { animation: wlBump var(--d-mid) var(--e-spring); }
+@keyframes wlBump { 40% { transform: translateY(-2px) scale(1.03); } }
+.wl-buys { min-height: calc(2em * 1.45); font-family: var(--f-ui); font-size: 12.5px; line-height: 1.45; color: var(--ink-3); text-align: center; }
+.wl-buys > span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wl-buys .l2 { color: var(--ink-3); }
+.wl-buys.warn .l1 { color: var(--wl-warn); }
+.wl-buys b { font-weight: 500; color: var(--ink-2); }
+.wl-buys.warn { color: var(--ink-2); }
+/* the line the number is written on: a hairline that grows and takes the
+   accent while the field has focus (the field's designed focus ring) */
+.wl-rule { width: 96px; height: 2px; border-radius: 2px; background: var(--hair); margin: -2px auto 2px; transform: scaleX(.5); transition: transform var(--d-move) var(--e-spring), background var(--d-fast) var(--e-out); }
+.wl-amount:focus-within .wl-rule { transform: none; background: var(--tint); }
+
+.wl-picks { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.wl-pick {
+  height: 34px; border-radius: var(--r-xs); background: var(--fill-1);
+  font-family: var(--f-mono); font-size: 12.5px; color: var(--ink-2); font-variant-numeric: tabular-nums;
+  transition: background var(--d-fast) var(--e-out), color var(--d-fast), transform var(--d-fast) var(--e-spring), box-shadow var(--d-fast);
+}
+@media (hover: hover) and (pointer: fine) { .wl-pick:hover { background: var(--fill-2); color: var(--ink); } }
+.wl-pick:active { transform: scale(.96); }
+.wl-pick[aria-pressed="true"] { background: var(--wl-lift); color: var(--ink); box-shadow: var(--lift-1), var(--wl-lift-edge); }
+
+/* the main button of a pane */
+.wl-go {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; height: 44px;
+  border-radius: var(--r-sm); background: var(--tint-fill); color: var(--tint-ink); box-shadow: var(--lift-1);
+  font-family: var(--f-ui); font-size: 14.5px; font-weight: 500;
+  transition: transform var(--d-fast) var(--e-spring), filter var(--d-fast), opacity var(--d-mid) var(--e-out);
+}
+@media (hover: hover) and (pointer: fine) { .wl-go:hover { filter: brightness(1.06); transform: translateY(-1px); } }
+.wl-go:active { transform: scale(.985); }
+.wl-go:disabled { background: var(--fill-1); color: var(--ink-3); transform: none; filter: none; cursor: default; box-shadow: none; }
+/* busy is not disabled: it keeps its colour and says what it is doing */
+.wl-go[data-busy] { background: var(--tint-fill); color: var(--tint-ink); box-shadow: var(--lift-1); cursor: progress; }
+.wl-soft[data-busy] { opacity: 1; cursor: progress; }
+.wl-go .spin { border-color: color-mix(in srgb, var(--tint-ink) 30%, transparent); border-top-color: var(--tint-ink); }
+.wl-soft {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 40px; padding: 0 var(--s3);
+  border-radius: var(--r-sm); background: var(--fill-1); color: var(--ink);
+  font-family: var(--f-ui); font-size: 14.5px; font-weight: 500; white-space: nowrap;
+  transition: background var(--d-fast) var(--e-out), transform var(--d-fast) var(--e-spring), color var(--d-fast);
+}
+.wl-soft .v2-ico { width: 16px; height: 16px; color: var(--ink-2); }
+@media (hover: hover) and (pointer: fine) { .wl-soft:hover { background: var(--fill-2); } }
+.wl-soft:active { transform: scale(.975); }
+.wl-soft:disabled { opacity: .5; cursor: default; }
+/* the danger button is a plain soft button: warn text, no tinted fill, in every room */
+.wl-soft.danger { color: var(--wl-warn); font-weight: 500; }
+.wl-two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px; }
+.wl-two > * { height: 44px; min-width: 0; }
+.wl-textlink {
+  justify-self: center; font-family: var(--f-ui); font-size: 13px; color: var(--ink-2); padding: 6px 8px; border-radius: var(--r-xs);
+  text-decoration: underline; text-decoration-color: var(--hair); text-underline-offset: 3px;
+  transition: color var(--d-fast), text-decoration-color var(--d-fast), background var(--d-fast);
+}
+@media (hover: hover) and (pointer: fine) { .wl-textlink:hover { color: var(--ink); text-decoration-color: var(--ink-3); } }
+.wl-hint { font-family: var(--f-ui); font-size: 12px; line-height: 1.5; color: var(--ink-3); text-align: center; text-wrap: balance; }
+
+/* ── the invoice ───────────────────────────────────────────────────────── */
+/* the amount, the code, the copy line right under the code (it is the same
+   thing as the code), then a status slot that is always two lines tall */
+.wl-inv { display: grid; justify-items: center; gap: var(--s3); }
+.wl-inv > .wl-qr + :is(.wl-lnstr, .wl-strrow) { margin-top: var(--s1); }
+.wl-inv > :is(.wl-lnstr, .wl-strrow) { width: 100%; }
+.wl-inv-t { display: flex; align-items: baseline; font-family: var(--f-display); font-stretch: var(--display-stretch, 100%); font-size: 26px; line-height: 1.1; letter-spacing: -.02em; color: var(--ink); font-variant-numeric: lining-nums tabular-nums; }
+.wl-inv-n { display: inline-block; }
+.wl-inv-t small { font-family: var(--f-ui); font-size: 13px; letter-spacing: 0; color: var(--ink-3); margin-left: 6px; }
+.wl-inv-slot { min-height: calc(2 * 1.45 * 12.5px); display: grid; justify-items: center; align-content: start; width: 100%; }
+.wl-inv .wl-status { justify-content: center; text-align: center; text-wrap: balance; max-width: 30ch; line-height: 1.45; }
+.wl-qr {
+  position: relative; display: grid; place-items: center; width: 100%; aspect-ratio: 1; max-width: 226px;
+  border-radius: var(--r-md); background: var(--qr-bg); color: var(--qr-ink);
+  box-shadow: inset 0 0 0 1px var(--hair), var(--lift-1);
+  overflow: hidden; cursor: copy;
+  transition: transform var(--d-fast) var(--e-spring);
+}
+@media (hover: hover) and (pointer: fine) { .wl-qr:hover { transform: translateY(-1px); } }
+.wl-qr:active { transform: scale(.985); }
+.wl-qr svg.wl-code { width: 84%; height: 84%; display: block; }
+.wl-qr .wl-code { animation: wlDevelop var(--d-slow) var(--e-out) both; }
+@keyframes wlDevelop { from { opacity: 0; transform: scale(.96); filter: blur(3px); } to { opacity: 1; transform: none; filter: none; } }
+/* the print head: a band of paper that lifts off the code, top to bottom */
+.wl-qr .print { position: absolute; inset: 0; background: var(--qr-bg); transform-origin: bottom; animation: wlPrint calc(var(--d-slow) + var(--d-mid)) var(--e-in-out) calc(var(--d-quick) * 2 / 3) both; pointer-events: none; }
+@keyframes wlPrint { from { transform: scaleY(1); } to { transform: scaleY(0); } }
+.wl-qr .copied {
+  position: absolute; inset: auto 50% 50% auto; transform: translate(50%, 50%) scale(.9); opacity: 0;
+  display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; height: 32px; border-radius: 99px;
+  background: var(--qr-ink); color: var(--qr-bg); font-family: var(--f-ui); font-size: 12.5px; pointer-events: none;
+  transition: opacity var(--d-fast) var(--e-out), transform var(--d-mid) var(--e-spring);
+}
+.wl-qr .copied .v2-ico { width: 14px; height: 14px; }
+.wl-qr[data-copied] .copied { opacity: 1; transform: translate(50%, 50%) scale(1); }
+.wl-qr[data-copied] svg.wl-code { opacity: .35; transition: opacity var(--d-fast); }
+.wl-qr[data-gone] { transition: transform var(--d-mid) var(--e-out), opacity var(--d-mid) var(--e-out); transform: scale(.92); opacity: 0; }
+
+/* making it: the code's three corner marks hold their places while a soft
+   band of light passes down, where the code will print */
+.wl-qr.wait { cursor: default; background: var(--fill-1); box-shadow: none; }
+@media (hover: hover) and (pointer: fine) { .wl-qr.wait:hover { transform: none; } }
+.wl-qr.wait i { position: absolute; width: 19%; aspect-ratio: 1; border-radius: 22%; box-shadow: inset 0 0 0 4px var(--fill-2); animation: breathe calc(var(--d-slow) * 4) var(--e-in-out) infinite; }
+.wl-qr.wait i::after { content: ""; position: absolute; inset: 32%; border-radius: 22%; background: var(--fill-2); }
+.wl-qr.wait i:nth-child(1) { left: 9%; top: 9%; }
+.wl-qr.wait i:nth-child(2) { right: 9%; top: 9%; animation-delay: calc(var(--d-quick) * 2); }
+.wl-qr.wait i:nth-child(3) { left: 9%; bottom: 9%; animation-delay: calc(var(--d-quick) * 4); }
+.wl-qr.wait b { position: absolute; left: 0; right: 0; top: 0; height: 38%; background: linear-gradient(to bottom, transparent, var(--fill-1) 60%, transparent); opacity: .9; animation: wlSweep calc(var(--d-slow) * 4) var(--e-in-out) infinite; }
+@keyframes wlSweep { from { transform: translateY(-100%); } to { transform: translateY(265%); } }
+.wl-qr.fail { cursor: default; aspect-ratio: auto; max-width: none; background: var(--fill-1); box-shadow: none; padding: var(--s6) var(--s4); text-align: center; align-content: center; gap: 6px; }
+.wl-qr.fail > .v2-ico { color: var(--wl-warn); margin-bottom: 4px; }
+@media (hover: hover) and (pointer: fine) { .wl-qr.fail:hover { transform: none; } }
+.wl-qr.fail p { font-family: var(--f-ui); font-size: 13.5px; line-height: 1.45; color: var(--ink); }
+.wl-qr.fail p + p { font-size: 12.5px; color: var(--ink-3); }
+
+.wl-status { display: inline-flex; align-items: center; gap: 8px; min-height: 20px; font-family: var(--f-ui); font-size: 12.5px; color: var(--ink-2); }
+.wl-status .ok { width: 15px; height: 15px; color: var(--tint); flex: none; }
+.wl-inv .wl-two { width: 100%; }
+.wl-lnstr {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px; width: 100%; height: 40px;
+  padding: 0 4px 0 var(--s3); border-radius: var(--r-sm); background: var(--fill-1); text-align: left;
+  transition: background var(--d-fast) var(--e-out);
+}
+@media (hover: hover) and (pointer: fine) { .wl-lnstr:hover { background: var(--fill-2); } }
+.wl-lnstr code { font-family: var(--f-mono); font-size: 11.5px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wl-lnstr .ic { display: grid; place-items: center; width: 32px; height: 32px; border-radius: var(--r-xs); color: var(--ink-2); }
+.wl-lnstr .swap .v2-ico { width: 15px; height: 15px; }
+.wl-lnstr .wl-ghost { height: 9px; width: 70%; }
+
+/* ── done: a ring, a number, a line ────────────────────────────────────── */
+.wl-done { display: grid; justify-items: center; gap: 10px; padding: var(--s8) 0 var(--s4); text-align: center; }
+.wl-ring { position: relative; display: grid; place-items: center; width: 56px; height: 56px; border-radius: 99px; background: var(--wl-ring); color: var(--tint);
+  animation: wlRing calc(var(--d-slow) + var(--d-fast)) var(--e-spring) both; }
+.wl-ring svg { width: 24px; height: 24px; }
+.wl-ring path { stroke-dasharray: 22; stroke-dashoffset: 22; animation: wlTick calc(var(--d-mid) + var(--d-fast)) var(--e-out) var(--d-mid) forwards; }
+@keyframes wlRing { from { transform: scale(.5); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes wlTick { to { stroke-dashoffset: 0; } }
+.wl-done-t { font-family: var(--f-display); font-stretch: var(--display-stretch, 100%); font-size: 24px; line-height: 1.15; letter-spacing: -.02em; color: var(--ink); animation: fadeUp var(--d-move) var(--e-out) var(--d-quick) both; font-variant-numeric: lining-nums tabular-nums; }
+.wl-done-s { font-family: var(--f-ui); font-size: 12.5px; color: var(--ink-3); animation: fadeUp var(--d-move) var(--e-out) var(--d-mid) both; }
+
+/* ── pasting a token or an invoice ─────────────────────────────────────── */
+.wl-paste { position: relative; }
+.wl-paste textarea {
+  display: block; width: 100%; min-height: 168px; padding: 12px var(--s3) 48px; border-radius: var(--r-sm); resize: none;
+  background: var(--fill-1); color: var(--ink); caret-color: var(--tint);
+  font-family: var(--f-mono); font-size: 12px; line-height: 1.5; word-break: break-all;
+  transition: background var(--d-fast) var(--e-out), box-shadow var(--d-fast);
+}
+.wl-paste textarea::placeholder { color: var(--ink-3); font-family: var(--f-ui); font-size: 13px; }
+.wl-paste textarea:focus-visible { background: var(--fill-2); box-shadow: inset 0 0 0 1px var(--tint-soft); border-radius: var(--r-sm); }
+.wl-paste:has(.wl-clear) textarea { padding-right: 44px; padding-bottom: 12px; }
+.wl-paste .wl-link { position: absolute; right: 8px; bottom: 8px; background: rgb(var(--surface-hero)); box-shadow: var(--lift-1), var(--glow-2); }
+@media (hover: hover) and (pointer: fine) { .wl-paste .wl-link:hover { background: rgb(var(--surface-hero)); transform: translateY(-1px); } }
+.wl-paste .wl-clear { position: absolute; right: 6px; top: 6px; width: 28px; height: 28px; border-radius: var(--r-xs); display: grid; place-items: center; color: var(--ink-3); transition: background var(--d-fast), color var(--d-fast); }
+@media (hover: hover) and (pointer: fine) { .wl-paste .wl-clear:hover { background: var(--fill-2); color: var(--ink); } }
+.wl-paste .wl-clear .v2-ico { width: 14px; height: 14px; }
+
+.wl-pasted {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px; height: 44px;
+  padding: 0 4px 0 var(--s3); border-radius: var(--r-sm); background: var(--fill-1);
+  animation: fadeUp var(--d-mid) var(--e-out) both;
+}
+.wl-pasted code { font-family: var(--f-mono); font-size: 12px; color: var(--ink-2); overflow: hidden; white-space: nowrap; }
+.wl-pasted .wl-clear { width: 34px; height: 34px; border-radius: var(--r-xs); display: grid; place-items: center; color: var(--ink-3); transition: background var(--d-fast), color var(--d-fast); }
+@media (hover: hover) and (pointer: fine) { .wl-pasted .wl-clear:hover { background: var(--fill-2); color: var(--ink); } }
+.wl-pasted .wl-clear .v2-ico { width: 14px; height: 14px; }
+
+/* what the pasted thing holds, read back before you commit */
+/* the read-back is the hero of its pane, like a typed amount: centred in the
+   space between the pasted line and the dock */
+/* the read-back sits a fixed step under the line it explains, never floated
+   to the middle of a tall card */
+.wl-read { display: grid; justify-items: center; gap: 4px; padding: var(--s2) 0; margin-top: calc(var(--s8) - var(--s4)); text-align: center; animation: fadeUp var(--d-mid) var(--e-out) both; }
+.wl-read-n { font-family: var(--f-display); font-stretch: var(--display-stretch, 100%); font-size: 52px; line-height: 1.1; letter-spacing: -.03em; color: var(--ink); font-variant-numeric: lining-nums tabular-nums; }
+.wl-read-s { max-width: 30ch; text-wrap: balance; margin-top: 4px; }
+.wl-read .wl-sum { width: 100%; margin-top: var(--s4); text-align: left; }
+.wl-pane.is-top .wl-fill > .wl-note, .wl-pane.is-top .wl-fill > .wl-status { justify-content: center; }
+.wl-pane.is-top .wl-fill > .wl-status { margin-top: calc(var(--s8) - var(--s4)); align-self: center; }
+.wl-read-n small { font-family: var(--f-ui); font-size: 14px; letter-spacing: 0; color: var(--ink-3); margin-left: 6px; }
+.wl-read-s { font-family: var(--f-ui); font-size: 12.5px; line-height: 1.5; color: var(--ink-3); }
+.wl-read-s b { font-weight: 500; color: var(--ink-2); }
+.wl-sum { display: grid; gap: 6px; padding: var(--s3) 0 0; border-top: 1px solid var(--hair); margin-top: 6px; }
+.wl-sum > div { display: flex; justify-content: space-between; font-family: var(--f-ui); font-size: 12.5px; color: var(--ink-3); }
+.wl-sum > div span:last-child { font-family: var(--f-mono); font-variant-numeric: tabular-nums; color: var(--ink-2); }
+.wl-sum > div.total { color: var(--ink); }
+.wl-sum > div.total span:last-child { color: var(--ink); }
+
+/* ── tokens that are out in the world ──────────────────────────────────── */
+.wl-tok { margin: 0 calc(var(--s3) * -1); padding: 0 var(--s3); border-radius: var(--r-sm); transition: background var(--d-mid) var(--e-out); }
+/* an open token is not a panel: the row, then the QR plate and its buttons
+   straight on the card, so there is one surface under the code */
+.wl-tok[data-open] > .wl-row .wl-row-s { color: var(--ink-2); }
+.wl-tok .wl-chev { transform: rotate(90deg); }
+.wl-tok[data-open] .wl-chev { transform: rotate(-90deg); }
+.wl-tok-body { display: grid; grid-template-rows: 0fr; transition: grid-template-rows var(--d-mid) var(--e-out); }
+.wl-tok[data-open] .wl-tok-body { grid-template-rows: 1fr; transition-duration: var(--d-move); }
+.wl-tok-in { min-height: 0; overflow: hidden; }
+.wl-tok-pad { display: grid; gap: var(--s3); padding: 2px 0 var(--s3); justify-items: center; opacity: 0; transform: translateY(-4px); transition: opacity var(--d-fast) var(--e-out), transform var(--d-mid) var(--e-out); }
+.wl-tok[data-open] .wl-tok-pad { opacity: 1; transform: none; transition-delay: calc(var(--d-quick) * 2 / 3); transition-duration: var(--d-mid), var(--d-move); }
+/* the open token runs to the full text column, like every other pane */
+.wl-tok .wl-two { width: 100%; }
+.wl-confirm { display: grid; gap: var(--s2); width: 100%; animation: fadeUp var(--d-mid) var(--e-out) both; }
+.wl-confirm p { font-family: var(--f-ui); font-size: 13px; line-height: 1.5; color: var(--ink); text-align: center; text-wrap: balance; }
+.wl-confirm p + p { font-size: 12.5px; color: var(--ink-3); margin-top: -4px; }
+
+/* ── node mode ─────────────────────────────────────────────────────────── */
+.wl-node-t { font-family: var(--f-display); font-stretch: var(--display-stretch, 100%); font-size: 32px; line-height: 1.08; letter-spacing: -.028em; color: var(--ink); }
+.wl-node-h { margin-top: 10px; display: inline-flex; align-items: center; gap: 8px; font-family: var(--f-mono); font-size: 11.5px; color: var(--ink-2); max-width: 100%; }
+.wl-node-h span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── the foot: which mint holds your sats ──────────────────────────────── */
+.wl-foot { padding: var(--s3) var(--s1) 0; display: flex; align-items: flex-end; justify-content: space-between; gap: var(--s2); position: relative; z-index: 3; }
+.wl-mint {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 8px; align-items: center; text-align: left;
+  width: 100%; padding: 6px var(--s2); margin: -6px 0 -2px; border-radius: var(--r-sm);
+  transition: background var(--d-fast) var(--e-out);
+}
+.wl-mint[aria-expanded="true"] { background: var(--fill-1); }
+@media (hover: hover) and (pointer: fine) { .wl-mint:hover { background: var(--fill-1); } }
+.wl-mint .bal-k { grid-column: 1; }
+.wl-mint-v { grid-column: 1; font-family: var(--f-ui); font-size: 14.5px; line-height: 1.35; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wl-mint-v small { font-family: var(--f-mono); font-size: 11px; color: var(--ink-3); margin-left: 6px; }
+.wl-mint > .v2-ico { grid-column: 2; grid-row: 1 / span 2; width: 15px; height: 15px; color: var(--ink-3); transition: transform var(--d-mid) var(--e-spring); }
+.wl-mint[aria-expanded="true"] > .v2-ico { transform: rotate(180deg); }
+
+.wl-menu {
+  position: absolute; left: 0; right: 0; bottom: calc(100% + 8px); z-index: 10;
+  border-radius: var(--r-md); background: rgb(var(--surface-hero)); padding: 6px;
+  box-shadow: var(--lift-2), var(--cast), var(--glow);
+  transform-origin: bottom center; animation: popIn var(--d-mid) var(--e-spring);
+}
+.wl-menu[data-closing] { animation: popOut var(--d-fast) var(--e-out) forwards; }
+.wl-menu-h { padding: 8px 10px 6px; font-family: var(--f-ui); font-size: 12px; line-height: 1.45; color: var(--ink-3); text-wrap: pretty; }
+.wl-mi {
+  display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; column-gap: 8px; align-items: center; width: 100%;
+  padding: 8px 10px 8px 8px; border-radius: var(--r-xs); text-align: left;
+  transition: background var(--d-fast) var(--e-out);
+}
+.wl-mi:focus-visible { background: var(--fill-1); }
+@media (hover: hover) and (pointer: fine) { .wl-mi:hover { background: var(--fill-1); } }
+.wl-mi .v2-ico { width: 15px; height: 15px; color: var(--ink); grid-row: 1 / span 2; }
+/* a mint named by its host has one line: the check and the amount sit on it */
+.wl-mi:not(:has(.wl-mi-h)) > * { grid-row: 1; }
+.wl-mi-n { grid-column: 2; font-family: var(--f-ui); font-size: 13.5px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wl-mi-h { grid-column: 2; font-family: var(--f-mono); font-size: 10.5px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wl-mi .wl-amt { grid-column: 3; grid-row: 1 / span 2; font-size: 12px; color: var(--ink-3); }
+.wl-mi[aria-checked="true"] .wl-amt { color: var(--ink-2); }
+.wl-mi.manage { grid-template-columns: 18px 1fr; font-family: var(--f-ui); font-size: 13px; color: var(--ink-2); }
+.wl-mi.manage .v2-ico { color: var(--ink-3); grid-row: auto; }
+.wl-menu-sep { height: 1px; background: var(--hair); margin: 5px 8px; }
+
+/* first paint: things are already where they belong, nothing plays in */
+.wl[data-first] .wl-qr .print { display: none; }
+.wl[data-first] :is(.wl-pasted, .wl-pane, .wl-code, .wl-ring, .wl-ring path, .wl-done-t, .wl-done-s, .wl-note, .wl-read, .wl-confirm, .wl-enter, .wl-enter .wl-line) { animation: none; }
+.wl[data-first] .wl-ring path { stroke-dashoffset: 0; }
+.wl[data-first] .wl-enter { grid-template-rows: 1fr; }
+
+/* ── phone: the card is the drawer; every target is 44px ───────────────── */
+@media (max-width: 760px) {
+  .wl-head { min-height: 44px; }
+  .wl-back { height: 44px; padding: 0 12px 0 8px; font-size: 15px; }
+  .wl-view { padding: var(--s3) var(--s5) var(--s7); }
+  .wl-act { height: 48px; font-size: 15px; }
+  .wl-row { padding: 11px var(--s2); min-height: 48px; }
+  .wl-row-t { font-size: 15px; }
+  .wl-row-s { font-size: 12.5px; }
+  .wl-amt { font-size: 13.5px; }
+  .wl-seg-b { height: 40px; font-size: 14px; }
+  .wl-pick { height: 44px; font-size: 13.5px; }
+  .wl-go { height: 48px; font-size: 15px; }
+  .wl-soft { height: 46px; font-size: 14.5px; }
+  .wl-two > * { height: 48px; }
+  button.wl-line { min-height: 44px; }
+  .wl-link { height: 38px; font-size: 14px; padding: 0 12px; }
+  .wl-textlink { padding: 12px; font-size: 13.5px; }
+  .wl-paste .wl-clear { width: 40px; height: 40px; right: 2px; top: 2px; }
+  .wl-pasted { height: 48px; }
+  .wl-pasted .wl-clear { width: 40px; height: 40px; }
+  .wl-mint { padding: 8px var(--s2); }
+  .wl-mint-v { font-size: 15.5px; }
+  .wl-qr { max-width: 250px; }
+  .wl-sub { font-size: 14px; }
+  .wl-buys { font-size: 13.5px; }
+  .wl-menu { position: fixed; left: 0; right: 0; bottom: 0; top: auto; border-radius: var(--r-lg); padding: 6px 10px calc(14px + env(safe-area-inset-bottom));
+    animation: sheetIn var(--d-slow) var(--e-spring); }
+  .wl-menu[data-closing] { animation: sheetOut var(--d-mid) var(--e-out) forwards; }
+  .wl-menu::before { content: ""; display: block; width: 36px; height: 4px; border-radius: 99px; background: var(--fill-2); margin: 6px auto 8px; }
+  .wl-menu-h { font-size: 13.5px; padding: 4px 12px 10px; }
+  .wl-mi { padding: 12px 12px 12px 10px; min-height: 56px; }
+  .wl-mi-n { font-size: 15.5px; }
+  .wl-mi-h { font-size: 11.5px; }
+  .wl-mi.manage { min-height: 48px; font-size: 15px; }
+  .wl-scrim { position: fixed; inset: 0; z-index: 9; background: var(--scrim); border-radius: var(--r-lg); animation: fade var(--d-move) var(--e-out); }
+  .wl-scrim[data-closing] { animation: fadeOut var(--d-mid) var(--e-out) forwards; }
+}
+@media (min-width: 761px) { .wl-scrim { display: none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .wl-view, .wl-view[data-pos] { transform: none !important; transition: opacity var(--d-fast) linear, visibility 0s !important; }
+  .wl-odo[data-roll] .wl-strip { transition: none; }
+  .wl-hero::before, .wl[data-waiting] .wl-hero::before { animation: none !important; }
+  .wl-live { animation: none; opacity: 1; }
+  .wl-qr .print { display: none; }
+  .wl-qr.wait b { animation: none; opacity: 0; }
+}
+
+/* ── polish pass 2 ─────────────────────────────────────────────────────── */
+/* first paint: the head labels are already right, nothing cross-fades in */
+.wl[data-first] .wl-swap > * { transition: none; }
+/* the amount and its picks are one set in the middle of the pane */
+.wl-amtset { display: grid; gap: var(--s6); justify-items: center; }
+.wl-amtset .wl-picks { width: 100%; }
+/* a token someone else already claimed: the amount it held, dimmed, and why */
+.wl-read.is-spent .wl-read-n { color: var(--ink-3); }
+.wl-read.is-spent .wl-note { margin-top: var(--s3); }
+.wl-note > span { text-wrap: pretty; }
+
+/* ── revision 1 ────────────────────────────────────────────────────────── */
+/* the QR sits straight on its plate: nothing from the app's code blocks
+   (.code) may reach it, whatever it is called in the port */
+.wl-qr > svg { background: none; box-shadow: none; margin: 0; border-radius: 0; }
+
+/* held with providers: Return beside the amount, the why under both */
+.wl-held { row-gap: 2px; }
+.wl-held .wl-row-r { grid-row: 1; }
+.wl-held .wl-row-s { grid-column: 1 / -1; white-space: normal; text-wrap: pretty; }
+
+/* a centred status line (under a centred number) */
+.wl-note.wl-center { display: block; text-align: center; max-width: 32ch; margin-inline: auto; text-wrap: balance; }
+.wl-note.wl-center > .v2-ico { display: inline-block; vertical-align: -3px; margin: 0 6px 0 0; }
+html:is([data-room="meridian"], [data-room="night"]) :is(.wl-note.warn, .wl-buys.warn .l1) { font-weight: 500; }
+
+/* an invoice that expired: said plainly, no alarm colour */
+.wl-qr.fail.quiet > .v2-ico { color: var(--ink-3); }
+.wl-read-n.is-none { font-size: 30px; color: var(--ink-3); padding: 8px 0 6px; }
+
+/* the copy line, and on phones the system share sheet beside it */
+.wl-strrow { display: flex; gap: 6px; }
+.wl-strrow > .wl-lnstr { flex: 1 1 auto; min-width: 0; }
+.wl-share {
+  flex: none; display: grid; place-items: center; width: 48px; border-radius: var(--r-sm); background: var(--fill-1); color: var(--ink-2);
+  transition: background var(--d-fast) var(--e-out), transform var(--d-fast) var(--e-spring);
+}
+@media (hover: hover) and (pointer: fine) { .wl-share:hover { background: var(--fill-2); color: var(--ink); } }
+.wl-share:active { transform: scale(.96); }
+.wl-share .v2-ico { width: 17px; height: 17px; }
+
+@media (max-width: 760px) {
+  /* every text column on the card starts on one line: rows, heads, the mint */
+  .wl-row { padding-left: var(--s3); padding-right: var(--s3); }
+  .wl-foot { padding-left: 0; padding-right: 0; }
+  .wl-row-t { font-size: 15.5px; }
+  /* 44px or more for every target */
+  .wl-seg-b { height: 44px; }
+  .wl-lnstr { height: 48px; }
+  .wl-link { min-height: 44px; }
+  .wl-pasted .wl-clear, .wl-paste .wl-clear { width: 44px; height: 44px; }
+  .wl-paste .wl-clear { right: 0; top: 0; }
+  .wl-amount { --amt-top: 64px; }
+  /* the same fixed anchor on the phone, a little closer to the switch */
+  .wl { --wl-anchor: var(--s3); --wl-after: 48px; --wl-btn: 48px; }
+}
+
+/* ── revision 2 ────────────────────────────────────────────────────────── */
+/* phone: the thread beside the open drawer steps back under the scrim and a
+   soft blur, so the sliver never shows words cut in half */
+@media (max-width: 760px) {
+  /* the zero line names the model only where it fits */
+  .wl-ph { display: inline; }
+}
+.wl-ph { display: none; }
+
+/* the typed number becomes the invoice's title (FLIP: translate + scale,
+   --d-slow --e-spring) while the code prints in below it; everything else
+   of the new pane fades up a beat later */
+.wl-pane[data-dir="flip"] :is(.wl-inv > :not(.wl-inv-t), .wl-inv-t small, .wl-dock, .wl-amtset > :not(.wl-amount), .wl-amount > :not(.wl-amt-line), .wl-amt-line > .wl-unit, .wl-out) {
+  animation: fadeUp var(--d-move) var(--e-out) var(--d-quick) both;
+}
+.wl[data-first] .wl-pane[data-dir="flip"] * { animation: none; }
+
+/* focus is always drawn, on top of any lift or pressed look (these buttons
+   set their own box-shadow, which would otherwise drop the ring) */
+.wl :is(.wl-go, .wl-act, .wl-pick, .wl-qr, .wl-soft, .wl-link, .wl-lnstr, .wl-row, .wl-line, .wl-share, .wl-textlink, .wl-seg-b, .wl-back, .wl-mint, .wl-clear, .wl-mi):focus-visible { box-shadow: var(--focus), var(--lift-1); }
+.wl :is(.wl-row, .wl-line, .wl-textlink, .wl-back, .wl-mint, .wl-mi, .wl-clear, .wl-seg-b):focus-visible { box-shadow: var(--focus); }
+
+.wl-bk-m { display: none; }
+@media (max-width: 760px) {
+  .wl-bk-d { display: none; }
+  .wl-bk-m { display: block; }
+}

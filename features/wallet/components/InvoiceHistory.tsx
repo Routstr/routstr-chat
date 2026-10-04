@@ -1,6 +1,5 @@
 import React, { useMemo, useState } from "react";
 import { useInvoiceSync, StoredInvoice } from "@/hooks/useInvoiceSync";
-import { MintQuoteState, MeltQuoteState } from "@cashu/cashu-ts";
 import { formatBalance } from "@/lib/cashu";
 import {
   Clock,
@@ -23,8 +22,10 @@ interface InvoiceHistoryProps {
 const InvoiceHistory: React.FC<InvoiceHistoryProps> = ({ mintUrl }) => {
   const { invoices, cloudSyncEnabled, deleteInvoice, resetInvoiceRetry } =
     useInvoiceSync();
-  const { isChecking, pendingCount, triggerCheck } = useInvoiceChecker();
+  const { isChecking, pendingCount, triggerCheck, retryInvoice } =
+    useInvoiceChecker();
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [retryingInvoice, setRetryingInvoice] = useState<string | null>(null);
 
   const filteredInvoices = useMemo(() => {
     let filtered = [...invoices];
@@ -37,13 +38,27 @@ const InvoiceHistory: React.FC<InvoiceHistoryProps> = ({ mintUrl }) => {
     return filtered.sort((a, b) => b.createdAt - a.createdAt);
   }, [invoices, mintUrl]);
 
+  const isRecoverableMint = (invoice: StoredInvoice) =>
+    invoice.type === "mint" &&
+    ((invoice.state as string) === "PAID" ||
+      invoice.claimError === "recovery_pending" ||
+      invoice.claimError === "missing_preview");
+
+  const claimPendingCount = filteredInvoices.filter(isRecoverableMint).length;
+
   const getStatusIcon = (invoice: StoredInvoice) => {
-    const isPaid =
-      (invoice.state as string) === "PAID" ||
-      (invoice.state as string) === "ISSUED";
+    const isComplete =
+      (invoice.type === "mint" &&
+        (invoice.state as string) === "ISSUED" &&
+        !invoice.claimError) ||
+      (invoice.type === "melt" && (invoice.state as string) === "PAID");
     const isExpired = invoice.expiresAt && Date.now() > invoice.expiresAt;
 
-    if (isPaid) {
+    if (invoice.claimError === "missing_preview") {
+      return <AlertCircle className="h-4 w-4 text-red-500" />;
+    } else if (isRecoverableMint(invoice)) {
+      return <AlertCircle className="h-4 w-4 text-amber-500" />;
+    } else if (isComplete) {
       return (
         <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
       );
@@ -57,12 +72,26 @@ const InvoiceHistory: React.FC<InvoiceHistoryProps> = ({ mintUrl }) => {
   };
 
   const getStatusText = (invoice: StoredInvoice) => {
-    const isPaid =
-      (invoice.state as string) === "PAID" ||
-      (invoice.state as string) === "ISSUED";
     const isExpired = invoice.expiresAt && Date.now() > invoice.expiresAt;
 
-    if (isPaid) {
+    if (invoice.claimError === "missing_preview") {
+      return "Needs recovery";
+    } else if (invoice.claimError === "recovery_pending") {
+      return "Recovery pending";
+    } else if (
+      invoice.type === "mint" &&
+      (invoice.state as string) === "ISSUED"
+    ) {
+      return "Received";
+    } else if (
+      invoice.type === "mint" &&
+      (invoice.state as string) === "PAID"
+    ) {
+      return "Paid, claim pending";
+    } else if (
+      invoice.type === "melt" &&
+      (invoice.state as string) === "PAID"
+    ) {
       return "Paid";
     } else if (isExpired) {
       return "Expired";
@@ -114,9 +143,11 @@ const InvoiceHistory: React.FC<InvoiceHistoryProps> = ({ mintUrl }) => {
         <div className="flex items-center gap-2">
           <AlertCircle className="h-4 w-4 text-muted-foreground" />
           <span className="text-sm text-muted-foreground">
-            {pendingCount > 0
-              ? `${pendingCount} pending invoice${pendingCount > 1 ? "s" : ""}`
-              : "All invoices processed"}
+            {claimPendingCount > 0
+              ? `${claimPendingCount} paid invoice${claimPendingCount > 1 ? "s" : ""} awaiting receipt`
+              : pendingCount > 0
+                ? `${pendingCount} pending invoice${pendingCount > 1 ? "s" : ""}`
+                : "All invoices processed"}
           </span>
         </div>
         <button
@@ -157,11 +188,13 @@ const InvoiceHistory: React.FC<InvoiceHistoryProps> = ({ mintUrl }) => {
                   </span>
                   <span
                     className={`text-xs px-2 py-0.5 rounded-full ${
-                      getStatusText(invoice) === "Paid"
+                      getStatusText(invoice) === "Paid" ||
+                      getStatusText(invoice) === "Received"
                         ? "bg-green-500/20 text-green-600 dark:text-green-400"
-                        : getStatusText(invoice) === "Expired"
+                        : getStatusText(invoice) === "Expired" ||
+                            getStatusText(invoice) === "Needs recovery"
                           ? "bg-red-500/20 text-red-600 dark:text-red-400"
-                          : "bg-yellow-500/20 text-yellow-600 dark:text-yellow-400"
+                          : "bg-amber-500/20 text-amber-600 dark:text-amber-400"
                     }`}
                   >
                     {getStatusText(invoice)}
@@ -199,6 +232,29 @@ const InvoiceHistory: React.FC<InvoiceHistoryProps> = ({ mintUrl }) => {
 
                 {/* Manual controls */}
                 <div className="flex items-center gap-2 mt-2">
+                  {isRecoverableMint(invoice) &&
+                    invoice.claimError !== "missing_preview" && (
+                      <button
+                        onClick={async () => {
+                          setRetryingInvoice(invoice.id);
+                          try {
+                            await retryInvoice(invoice);
+                          } finally {
+                            setRetryingInvoice(null);
+                          }
+                        }}
+                        disabled={isChecking || retryingInvoice === invoice.id}
+                        className="text-xs text-amber-600 dark:text-amber-400 hover:text-amber-500 dark:hover:text-amber-300 flex items-center gap-1 disabled:opacity-50"
+                      >
+                        <RotateCcw
+                          className={`h-3 w-3 ${retryingInvoice === invoice.id ? "animate-spin" : ""}`}
+                        />
+                        {retryingInvoice === invoice.id
+                          ? "Receiving..."
+                          : "Retry receiving"}
+                      </button>
+                    )}
+
                   {getStatusText(invoice) === "Pending" &&
                     (invoice.retryCount || 0) > 0 && (
                       <button
@@ -215,49 +271,51 @@ const InvoiceHistory: React.FC<InvoiceHistoryProps> = ({ mintUrl }) => {
                       </button>
                     )}
 
-                  {(getStatusText(invoice) === "Expired" ||
-                    (invoice.retryCount || 0) >= 10) && (
-                    <>
-                      {confirmDelete === invoice.id ? (
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-red-600 dark:text-red-400">
-                            Delete?
-                          </span>
+                  {!isRecoverableMint(invoice) &&
+                    (getStatusText(invoice) === "Expired" ||
+                      (invoice.retryCount || 0) >= 10) && (
+                      <>
+                        {confirmDelete === invoice.id ? (
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-red-600 dark:text-red-400">
+                              Delete?
+                            </span>
+                            <button
+                              onClick={async () => {
+                                await deleteInvoice(invoice.id);
+                                toast.success("Invoice deleted");
+                                setConfirmDelete(null);
+                              }}
+                              className="text-xs text-red-600 dark:text-red-400 hover:text-red-500 dark:hover:text-red-300"
+                            >
+                              Yes
+                            </button>
+                            <button
+                              onClick={() => setConfirmDelete(null)}
+                              className="text-xs text-muted-foreground hover:text-foreground/70"
+                            >
+                              No
+                            </button>
+                          </div>
+                        ) : (
                           <button
-                            onClick={async () => {
-                              await deleteInvoice(invoice.id);
-                              toast.success("Invoice deleted");
-                              setConfirmDelete(null);
-                            }}
-                            className="text-xs text-red-600 dark:text-red-400 hover:text-red-500 dark:hover:text-red-300"
+                            onClick={() => setConfirmDelete(invoice.id)}
+                            className="text-xs text-red-600 dark:text-red-400 hover:text-red-500 dark:hover:text-red-300 flex items-center gap-1"
+                            title="Delete invoice"
                           >
-                            Yes
+                            <Trash2 className="h-3 w-3" />
+                            Delete
                           </button>
-                          <button
-                            onClick={() => setConfirmDelete(null)}
-                            className="text-xs text-muted-foreground hover:text-foreground/70"
-                          >
-                            No
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => setConfirmDelete(invoice.id)}
-                          className="text-xs text-red-600 dark:text-red-400 hover:text-red-500 dark:hover:text-red-300 flex items-center gap-1"
-                          title="Delete invoice"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                          Delete
-                        </button>
-                      )}
-                    </>
-                  )}
+                        )}
+                      </>
+                    )}
 
-                  {(invoice.retryCount || 0) >= 10 && (
-                    <span className="text-xs text-red-600 dark:text-red-400">
-                      Max retries reached
-                    </span>
-                  )}
+                  {!isRecoverableMint(invoice) &&
+                    (invoice.retryCount || 0) >= 10 && (
+                      <span className="text-xs text-red-600 dark:text-red-400">
+                        Max retries reached
+                      </span>
+                    )}
                 </div>
               </div>
             </div>

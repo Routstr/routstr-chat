@@ -4,6 +4,7 @@ import {
   createLightningInvoice,
   mintTokensFromPaidInvoice,
 } from "@/lib/cashuLightning";
+import { finalizeMintClaim } from "@/lib/mintQuoteRecovery";
 import { MintQuoteState, Proof } from "@cashu/cashu-ts";
 
 /**
@@ -54,7 +55,7 @@ export async function getNWCBalance(): Promise<number | null> {
 
 export interface NWCPaymentCallbacks {
   onInvoiceCreated?: (invoice: string, quoteId: string) => void;
-  onPaymentSuccess?: (proofs: Proof[], amount: number) => void;
+  onPaymentSuccess?: (proofs: Proof[], amount: number) => void | Promise<void>;
   onPaymentError?: (error: Error) => void;
 }
 
@@ -106,7 +107,8 @@ export async function payWithNWC(
       const proofs = await mintTokensFromPaidInvoice(mintUrl, quoteId, amount);
 
       if (proofs.length > 0) {
-        callbacks?.onPaymentSuccess?.(proofs, amount);
+        await callbacks?.onPaymentSuccess?.(proofs, amount);
+        finalizeMintClaim(mintUrl, quoteId);
         return { success: true, proofs };
       } else {
         return { success: true, proofs: [] };
@@ -129,7 +131,8 @@ export async function payWithNWC(
             amount
           );
           if (proofs.length > 0) {
-            callbacks?.onPaymentSuccess?.(proofs, amount);
+            await callbacks?.onPaymentSuccess?.(proofs, amount);
+            finalizeMintClaim(mintUrl, quoteId);
             return { success: true, proofs };
           }
         } catch (e) {
@@ -167,6 +170,7 @@ export async function attemptMintFromQuote(
 ): Promise<Proof[]> {
   try {
     const proofs = await mintTokensFromPaidInvoice(mintUrl, quoteId, amount);
+    if (proofs.length > 0) finalizeMintClaim(mintUrl, quoteId);
     return proofs;
   } catch {
     return [];

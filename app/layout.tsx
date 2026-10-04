@@ -1,5 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { roomFontVariables } from "@/components/v2/fonts";
+
+const ROOM_BOOT = `try{if(location.pathname.indexOf("/classic")!==0){var d=document.documentElement,r=localStorage.getItem("routstr.room")||"auto";if(r==="auto")r=matchMedia("(prefers-color-scheme: dark)").matches?"night":"paper";d.dataset.room=r;if(!localStorage.getItem("routstr.firstlight"))d.dataset.firstlight="";if(r==="meridian"){var h=new Date().getHours();d.dataset.face=h>=6&&h<18?"day":"dusk"}}}catch(e){}`;
 import "./globals.css";
 import ClientProviders from "@/components/ClientProviders";
 import { Toaster } from "@/components/ui/sonner";
@@ -50,7 +53,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" className={roomFontVariables} suppressHydrationWarning>
+      <head>
+        {/* the room (and a first visit) is known before the first paint, so there is no flash */}
+        <script dangerouslySetInnerHTML={{ __html: ROOM_BOOT }} />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
         suppressHydrationWarning={true}

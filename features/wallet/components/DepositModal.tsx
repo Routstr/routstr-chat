@@ -205,7 +205,7 @@ const DepositModal: React.FC<DepositModalProps> = ({
           proofsToRemove: [],
         });
         await updateInvoice(currentMeltQuoteId, {
-          state: MintQuoteState.PAID,
+          state: MintQuoteState.ISSUED,
           paidAt: Date.now(),
         });
         if (pendingTransactionId)
@@ -247,7 +247,7 @@ const DepositModal: React.FC<DepositModalProps> = ({
 
         // Update stored invoice status
         await updateInvoice(quoteId, {
-          state: MintQuoteState.PAID,
+          state: MintQuoteState.ISSUED,
           paidAt: Date.now(),
         });
 

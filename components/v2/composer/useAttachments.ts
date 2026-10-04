@@ -1,0 +1,137 @@
+import { useCallback, useState } from "react";
+import type { MessageAttachment } from "@/types/chat";
+import { extractTextFromPdf } from "@/utils/pdfUtils";
+import { saveFile } from "@/utils/indexedDb";
+import { useBlossomSync } from "@/hooks/useBlossomSync";
+import { usePnsKeys } from "@/hooks/usePnsKeys";
+
+/* Taking files into the composer: the same rules the old composer applied
+   (images and PDFs, 10 MB each, no SVG, stored locally, PDF text extracted,
+   optional encrypted Blossom upload). A refused file is said once, in the
+   composer's own voice slot. */
+
+const MAX_MB = 10;
+const MAX_BYTES = MAX_MB * 1024 * 1024;
+
+const newId = () =>
+  typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID()
+    : `attachment-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+const toDataUrl = (file: File) =>
+  new Promise<string>((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result as string);
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
+
+export function useAttachments(
+  setAttachments: React.Dispatch<React.SetStateAction<MessageAttachment[]>>,
+  say: (problem: string) => void
+) {
+  // PDFs whose text is still being read
+  const [reading, setReading] = useState<ReadonlySet<string>>(new Set());
+  const { uploadToBlossomAsync, blossomSyncEnabled } = useBlossomSync();
+  const { pnsKeys } = usePnsKeys();
+
+  const patch = useCallback(
+    (id: string, fn: (a: MessageAttachment) => MessageAttachment) =>
+      setAttachments((prev) => prev.map((a) => (a.id === id ? fn(a) : a))),
+    [setAttachments]
+  );
+
+  const addFiles = useCallback(
+    async (files: File[] | FileList, source: "pick" | "paste" | "drop") => {
+      const list = Array.from(files);
+      const built: { attachment: MessageAttachment; file: File; pdf: boolean }[] = [];
+
+      for (const file of list) {
+        const isImage = file.type.startsWith("image/");
+        const isPdf = file.type === "application/pdf";
+        if (file.type === "image/svg+xml") {
+          say("SVG is not supported");
+          continue;
+        }
+        if (!isImage && !(isPdf && source !== "paste")) {
+          if (source !== "paste") say("Only images and PDFs");
+          continue;
+        }
+        if (file.size > MAX_BYTES) {
+          say(`Over ${MAX_MB} MB`);
+          continue;
+        }
+        try {
+          const dataUrl = await toDataUrl(file);
+          let storageId: string | undefined;
+          try {
+            storageId = await saveFile(file);
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : "";
+            if (msg.includes("quota")) {
+              say("Storage full, may not be kept");
+            }
+          }
+          const name =
+            file.name || `pasted-image-${Date.now()}.${file.type.split("/")[1] ?? "png"}`;
+          built.push({
+            file,
+            pdf: isPdf,
+            attachment: {
+              id: newId(),
+              name,
+              mimeType: file.type,
+              size: file.size,
+              dataUrl,
+              type: isImage ? "image" : "file",
+              storageId,
+              blossomUploadStatus: blossomSyncEnabled && pnsKeys ? "uploading" : undefined,
+            },
+          });
+        } catch (error) {
+          console.error("Could not read attachment", error);
+        }
+      }
+
+      if (!built.length) return;
+      setAttachments((prev) => [...prev, ...built.map((b) => b.attachment)]);
+
+      for (const { attachment, file, pdf } of built) {
+        if (pdf) {
+          setReading((r) => new Set(r).add(attachment.id));
+          extractTextFromPdf(file)
+            .then((text) => {
+              if (text.trim()) patch(attachment.id, (a) => ({ ...a, textContent: text }));
+            })
+            .catch((e) => console.warn("PDF text extraction failed, sending without text.", e))
+            .finally(() =>
+              setReading((r) => {
+                const n = new Set(r);
+                n.delete(attachment.id);
+                return n;
+              })
+            );
+        }
+        if (blossomSyncEnabled && pnsKeys) {
+          uploadToBlossomAsync(file, pnsKeys)
+            .then((res) =>
+              patch(attachment.id, (a) =>
+                res
+                  ? { ...a, blossomHash: res.hash, blossomServers: res.servers, blossomUploadStatus: "success" }
+                  : { ...a, blossomUploadStatus: "failed" }
+              )
+            )
+            .catch(() => patch(attachment.id, (a) => ({ ...a, blossomUploadStatus: "failed" })));
+        }
+      }
+    },
+    [blossomSyncEnabled, pnsKeys, patch, setAttachments, uploadToBlossomAsync, say]
+  );
+
+  const remove = useCallback(
+    (id: string) => setAttachments((prev) => prev.filter((a) => a.id !== id)),
+    [setAttachments]
+  );
+
+  return { addFiles, remove, reading };
+}

@@ -4,7 +4,6 @@ import React, { useEffect, useRef, useState } from "react";
 import { useInvoiceChecker } from "@/hooks/useInvoiceChecker";
 import { useInvoiceSync, StoredInvoice } from "@/hooks/useInvoiceSync";
 import { toast } from "sonner";
-import { MintQuoteState, MeltQuoteState } from "@cashu/cashu-ts";
 import { formatBalance } from "@/features/wallet";
 
 interface InvoiceRecoveryProviderProps {
@@ -73,7 +72,12 @@ export const InvoiceRecoveryProvider: React.FC<
         const currentState = inv.state as string;
 
         if (previousState && previousState !== currentState) {
-          if (currentState === "PAID" || currentState === "ISSUED") {
+          const recovered =
+            (inv.type === "mint" &&
+              currentState === "ISSUED" &&
+              !inv.claimError) ||
+            (inv.type === "melt" && currentState === "PAID");
+          if (recovered) {
             recoveredInvoices.push(inv);
             nextTracking.delete(inv.id);
             previousInvoiceStates.current.delete(inv.id);
@@ -105,8 +109,10 @@ export const InvoiceRecoveryProvider: React.FC<
         // Check if any invoices were recently paid
         const recentlyPaid = invoices.filter((inv) => {
           const isPaid =
-            (inv.state as string) === "PAID" ||
-            (inv.state as string) === "ISSUED";
+            (inv.type === "mint" &&
+              (inv.state as string) === "ISSUED" &&
+              !inv.claimError) ||
+            (inv.type === "melt" && (inv.state as string) === "PAID");
           const wasRecentlyPaid = inv.paidAt && Date.now() - inv.paidAt < 60000; // Within last minute
           return isPaid && wasRecentlyPaid && !trackingInvoices.has(inv.id);
         });

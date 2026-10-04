@@ -477,6 +477,55 @@ export const useChatActions = ({
       streamingConversationIdRef.current = originConversationId ?? null;
       let lastAppend: Promise<unknown> = Promise.resolve();
       let retryPrevApplied = false;
+      // What streamed so far: on Stop the SDK drops it and appends only
+      // "Generation stopped.", so it is kept here and stored first.
+      let streamed = "";
+      const queue = (incoming: Message) => {
+        const message = nodePays ? withNodeModeError(incoming) : incoming;
+        // Chain appends in arrival order; cost callbacks wait on the
+        // chain since both stamp the conversation's LAST stored message.
+        lastAppend = lastAppend
+          .then(async () => {
+            const messageWithImages = await enrichAssistantImages(
+              message as Message
+            );
+            let prevId;
+            if (retryMessage && !retryPrevApplied) {
+              // Only the retry's first result is the sibling; later
+              // appends chain behind it via the normal lookup.
+              retryPrevApplied = true;
+              prevId =
+                retryPrevId ??
+                getLastNonSystemMessageEventId(originConversationId, [
+                  "user",
+                  "assistant",
+                ]);
+            } else {
+              prevId = getLastNonSystemMessageEventId(
+                originConversationId
+              );
+            }
+
+            const updatedMessage = {
+              ...messageWithImages,
+              _prevId: prevId,
+              _createdAt: Date.now(),
+              _modelId: selectedModel.id,
+            };
+
+            if (originConversationId) {
+              await createAndStoreChatEvent(
+                originConversationId,
+                updatedMessage
+              );
+            }
+            // Message is committed; drop the loading UI now instead of
+            // holding the loader through the SDK's payment finalize.
+            setIsLoading(false);
+            setIsPaymentProcessing(false);
+          })
+          .catch(console.error);
+      };
 
       // Create a fresh AbortController for this request so the UI can stop
       // generation mid-stream. Aborting causes fetchAIResponse to reject
@@ -623,6 +672,7 @@ export const useChatActions = ({
             onPaymentProcessing: setIsPaymentProcessing,
             onStreamingUpdate: (content) => {
               setIsPaymentProcessing(false);
+              if (content) streamed = content;
               if (
                 streamingConversationIdRef.current !==
                 (originConversationId ?? null)
@@ -671,52 +721,16 @@ export const useChatActions = ({
               }
             },
             onMessageAppend: (incoming) => {
-              const message = nodePays
-                ? withNodeModeError(incoming)
-                : incoming;
-              // Chain appends in arrival order; cost callbacks wait on the
-              // chain since both stamp the conversation's LAST stored message.
-              lastAppend = lastAppend
-                .then(async () => {
-                  const messageWithImages = await enrichAssistantImages(
-                    message as Message
-                  );
-                  let prevId;
-                  if (retryMessage && !retryPrevApplied) {
-                    // Only the retry's first result is the sibling; later
-                    // appends chain behind it via the normal lookup.
-                    retryPrevApplied = true;
-                    prevId =
-                      retryPrevId ??
-                      getLastNonSystemMessageEventId(originConversationId, [
-                        "user",
-                        "assistant",
-                      ]);
-                  } else {
-                    prevId = getLastNonSystemMessageEventId(
-                      originConversationId
-                    );
-                  }
-
-                  const updatedMessage = {
-                    ...messageWithImages,
-                    _prevId: prevId,
-                    _createdAt: Date.now(),
-                    _modelId: selectedModel.id,
-                  };
-
-                  if (originConversationId) {
-                    await createAndStoreChatEvent(
-                      originConversationId,
-                      updatedMessage
-                    );
-                  }
-                  // Message is committed; drop the loading UI now instead of
-                  // holding the loader through the SDK's payment finalize.
-                  setIsLoading(false);
-                  setIsPaymentProcessing(false);
-                })
-                .catch(console.error);
+              if (
+                abortController.signal.aborted &&
+                incoming.role === "system" &&
+                streamed.trim()
+              ) {
+                const partial = streamed;
+                streamed = "";
+                queue({ role: "assistant", content: partial } as Message);
+              }
+              queue(incoming as Message);
             },
             onBalanceUpdate: setBalance,
             onTransactionUpdate: (transaction) => {

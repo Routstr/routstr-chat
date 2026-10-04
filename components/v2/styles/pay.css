@@ -1,0 +1,630 @@
+/* pay.css: the back of the composer. Add a few sats, or sign in. The words
+   stay on the band above; the card beneath is a tone deeper, split by one
+   hairline, and shows one thing at a time. Tokens only. */
+
+/* ── local tokens, all built from room tokens ───────────────────────────── */
+.island {
+  --pa-under: color-mix(in srgb, rgb(var(--surface-hero)) 90%, var(--room));
+  --pa-band: 72px; /* set live from the words' height */
+  --pa-seal: 56px; --pa-seal-s: .28; --pa-seal-sw: 1.07px; /* .28 = 56 / 200 */
+  --pa-qrw: 200px;
+  --pa-nh: calc(27px * var(--display-scale) * 1.15);
+  perspective: 2400px;
+}
+html[data-room="night"] .island, html[data-room="meridian"][data-face="dusk"] .island {
+  --pa-under: color-mix(in srgb, rgb(var(--surface-hero)) 80%, var(--room));
+}
+
+/* the underside: the words keep the front's ground, the card beneath is a
+   tone deeper, with one hairline where the band ends */
+.island .side.back {
+  background:
+    linear-gradient(to bottom, transparent calc(var(--pa-band) - .5px), var(--hair) var(--pa-band), transparent calc(var(--pa-band) + 1px)),
+    linear-gradient(to bottom, rgb(var(--surface-hero)) var(--pa-band), var(--pa-under) var(--pa-band));
+  box-shadow: var(--lift-3), var(--glow), var(--lip-under), inset 0 0 0 1px var(--hair);
+}
+.island[data-place="centre"] .side.back { box-shadow: var(--lift-2), var(--cast), var(--glow), inset 0 0 0 1px var(--hair); }
+
+/* the held words: a close button of their own while the card is turned */
+.island .fw { position: relative; }
+.island:not([data-face="write"]) .field { padding-right: 44px; }
+.island .pa-x {
+  position: absolute; top: 4px; right: 0; width: 36px; height: 36px;
+  opacity: 0; transform: scale(.85); pointer-events: none;
+  transition: opacity var(--d-fast) var(--e-out), transform var(--d-fast) var(--e-out), background var(--d-fast), color var(--d-fast);
+}
+.island:not([data-face="write"]) .pa-x {
+  opacity: 1; transform: none; pointer-events: auto;
+  transition-delay: var(--d-move), var(--d-move), 0s, 0s;
+}
+.island .pa-x:focus-visible { box-shadow: var(--focus); }
+/* a thumb's target on a phone (here, so it outranks the 36px above) */
+@media (max-width: 760px) { .island .pa-x { width: 44px; height: 44px; } }
+.island .field[data-leaving] { transform: translateY(-10px); }
+
+/* the card turns: the front controls leave first, the back arrives edge on */
+.island:not([data-face="write"]) .crow { transition: opacity 100ms var(--e-out) 0s; }
+.island .pa-card { transform: translateY(8px); transition: transform var(--d-move) var(--e-out) 0s; }
+.island:not([data-face="write"]) .pa-card { transform: none; transition-delay: var(--d-mid); }
+/* the foot waits until the card has grown, so it is never seen clipped */
+.island:not([data-face="write"]) .pa-foot { animation: paIn var(--d-mid) var(--e-out) 400ms both; }
+
+/* ── the card ───────────────────────────────────────────────────────────── */
+.pa-card { padding: calc(var(--s3) + var(--s5)) var(--s2) var(--s1); }
+.pa-morph {
+  display: grid; grid-template-rows: var(--pa-h, auto); grid-template-columns: minmax(0, 1fr);
+  transition: grid-template-rows calc(300ms) var(--e-out);
+  overflow: hidden;
+  /* focus rings live inside; give them room without clipping */
+  margin: -10px; padding: 10px;
+}
+.pa-inwrap { min-height: 0; display: flex; flex-direction: column; }
+/* the view scrolls inside the card only when the room runs out (cap() in the script);
+   6px of padding keeps focus rings and the code's lift from being clipped */
+.pa-stage { position: relative; flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; margin: -6px; padding: 6px; }
+.pa-foot { flex: none; }
+.pa-view { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s5); }
+/* the space between the head and the foot: its parts keep one 12px rhythm */
+.pa-mid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s3); align-content: start; }
+.pa-cur[data-in] > .pa-view { animation: paIn var(--d-mid) var(--e-out) 60ms both; }
+.pa-out { position: absolute; inset: 6px 6px auto; pointer-events: none; animation: paOut 110ms var(--e-out) both; }
+@keyframes paIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes paOut { to { opacity: 0; transform: translateY(-4px); } }
+
+.pa-head { display: grid; gap: 6px; }
+.pa-head-row { display: flex; align-items: center; gap: var(--s2); }
+.pa-back { margin-left: -8px; }
+.pa-t {
+  font-family: var(--f-display); font-weight: var(--w-display);
+  font-size: calc(24px * var(--display-scale)); line-height: 1.12;
+  letter-spacing: var(--display-track); font-stretch: var(--display-stretch, 100%);
+  color: var(--ink); text-wrap: balance;
+}
+.pa-sub { font-size: 14.5px; line-height: 1.5; color: var(--ink-2); max-width: 64ch; text-wrap: pretty; }
+.pa-sub b { font-weight: var(--w-strong); color: var(--ink); font-variant-numeric: tabular-nums; }
+
+/* ── amounts: four numbers, no boxes until you touch one ────────────────── */
+/* the cells sit on the text column: a picked cell's fill starts and ends where the words do */
+.pa-amts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s1); margin: 0; }
+.pa-amt {
+  position: relative; display: grid; justify-items: center; align-content: center; gap: 3px;
+  min-height: 76px; padding: var(--s3) var(--s1); border-radius: var(--r-sm);
+  color: var(--ink); text-align: center;
+  transition: background var(--d-fast) var(--e-out), transform var(--d-fast) var(--e-spring), opacity var(--d-fast);
+}
+.pa-amt:hover { background: var(--fill-1); }
+.pa-amt .pa-r { transition: color var(--d-fast) var(--e-out); }
+.pa-amt:hover .pa-r, .pa-amt[data-picked] .pa-r { color: var(--ink-2); }
+.pa-amt:active { transform: scale(.97); }
+.pa-amt[data-picked] { background: var(--fill-2); }
+/* too little for this model: stepped back, still legible, never a target */
+.pa-amt[aria-disabled="true"] { cursor: default; }
+.pa-amt[aria-disabled="true"] .pa-n { color: var(--ink-3); opacity: .6; }
+.pa-amt[aria-disabled="true"] .pa-u { opacity: .6; }
+.pa-amt[aria-disabled="true"] .pa-r { color: var(--ink-3); }
+.pa-amt[aria-disabled="true"]:hover { background: none; }
+.pa-amt[aria-disabled="true"]:active { transform: none; }
+.pa-keep { display: none; }
+.pa-num {
+  display: inline-flex; align-items: baseline; gap: 5px; height: var(--pa-nh);
+  font-family: var(--f-display); font-weight: var(--w-display);
+  font-size: calc(24px * var(--display-scale)); line-height: var(--pa-nh);
+  letter-spacing: var(--display-track); font-stretch: var(--display-stretch, 100%);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+/* the unit is said in the amount's own face, smaller and quieter: one face per amount */
+.pa-u { font-family: inherit; font-size: max(12px, .42em); letter-spacing: 0; color: var(--ink-3); font-weight: inherit; font-stretch: inherit; }
+.pa-r { font-family: var(--f-mono); font-size: 11px; line-height: 16px; height: 16px; color: var(--ink-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pa-other { cursor: text; }
+/* six digits step the number down once, so it and its unit stay in the cell */
+.pa-other[data-long] .pa-num { font-size: calc(22px * var(--display-scale)); }
+@media (max-width: 760px) { .pa-other[data-long] .pa-num { font-size: calc(24px * var(--display-scale)); } }
+.pa-other .pa-r { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+/* the field lies over an invisible copy of its digits, so it is exactly as wide as they are */
+.pa-o { position: relative; display: inline-block; min-width: 1ch; }
+.pa-o-size { visibility: hidden; white-space: pre; padding: 0 1px; }
+.pa-o input { position: absolute; inset: 0; }
+.pa-other[data-has] { background: var(--fill-2); }
+.pa-other:not([data-has]) [data-o-u] { display: none; }
+.pa-other input {
+  width: 100%; min-width: 0; height: var(--pa-nh); text-align: center; background: none; border: 0; outline: 0; padding: 0;
+  font: inherit; line-height: var(--pa-nh); letter-spacing: inherit;
+  font-variant-numeric: tabular-nums lining-nums;
+  color: var(--ink); caret-color: var(--tint);
+}
+/* "Other" is an amount like the rest: ink. Only its "any amount" line is quieter */
+.pa-other input::placeholder { color: var(--ink); opacity: 1; }
+.pa-other:focus-within { background: var(--fill-2); box-shadow: var(--focus); }
+.pa-other input:focus-visible { box-shadow: none; }
+.pa-other[data-bad] { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warn) 55%, transparent); }
+.pa-other[data-bad] .pa-r { color: var(--ink-2); }
+
+/* ── the invoice: code on the left, the amount as the headline ──────────── */
+.pa-inv {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: var(--s6); row-gap: var(--s4);
+  grid-template-rows: 1fr auto auto 1fr;
+  grid-template-areas: "qr ." "qr side" "qr acts" "qr .";
+}
+.pa-inv > .pa-qr { grid-area: qr; }
+.pa-inv > .pa-side { grid-area: side; }
+.pa-inv > .pa-acts { grid-area: acts; }
+.pa-qr {
+  position: relative; width: var(--pa-qrw); aspect-ratio: 1; border-radius: var(--r-md);
+  background: var(--qr-bg); color: var(--qr-ink);
+  box-shadow: var(--lift-1), inset 0 0 0 1px var(--hair);
+  display: grid; place-items: center; padding: 14px;
+  transition: background var(--d-move) var(--e-out), box-shadow var(--d-move) var(--e-out);
+}
+.pa-qr > svg { width: 100%; height: 100%; display: block; grid-area: 1 / 1; }
+.pa-qr .qr-dots { clip-path: circle(0% at 50% 50%); transition: clip-path calc(560ms) var(--e-out); }
+.pa-qr .qr-eyes { opacity: .16; transition: opacity calc(var(--d-move)) var(--e-out); }
+.pa-qr[data-s="ready"] .qr-dots { clip-path: circle(75% at 50% 50%); }
+.pa-qr[data-s="ready"] .qr-eyes { opacity: 1; }
+.pa-qr .qr-mark { transform-origin: 50% 50%; transform-box: fill-box; }
+.pa-qr[data-s="making"] .qr-mark { animation: breathe 2.2s var(--e-in-out) infinite; }
+.pa-qr .qr-check { stroke-dasharray: 30; stroke-dashoffset: 30; opacity: 0; }
+.pa-qr { transition: background var(--d-move) var(--e-out), box-shadow var(--d-move) var(--e-out), color var(--d-move) var(--e-out),
+  transform calc(460ms) var(--e-spring), border-radius calc(460ms) var(--e-spring); }
+/* paid: the code closes to its centre, then the tile folds into the seal
+   (the same .pa-seal every other ending uses: size, fill, ring, 2px check) */
+.pa-qr[data-s="done"] {
+  background: var(--tint-fill); color: var(--tint-ink);
+  box-shadow: 0 0 0 calc(6px / var(--pa-seal-s)) var(--tint-soft);
+  transform: translateX(var(--pa-gx, 0px)) scale(var(--pa-seal-s)); border-radius: 50%;
+  transition-delay: var(--d-mid), var(--d-mid), var(--d-mid), var(--d-mid), var(--d-mid);
+}
+.pa-qr[data-s="done"] .qr-dots { clip-path: circle(0% at 50% 50%); transition-duration: calc(340ms); transition-timing-function: var(--e-in-out); }
+.pa-qr[data-s="done"] .qr-eyes { opacity: 0; transition-duration: calc(var(--d-fast)); }
+.pa-qr[data-s="done"] .qr-mark { opacity: 0; transition: opacity calc(var(--d-fast)) var(--e-out) var(--d-mid); }
+.pa-qr[data-s="done"] .qr-check { opacity: 1; stroke-dashoffset: 0;
+  transition: stroke-dashoffset calc(360ms) var(--e-out) calc(520ms), opacity 1ms linear calc(520ms); }
+/* once the check is drawn, one soft ring leaves the seal */
+.pa-qr::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  box-shadow: 0 0 0 10px var(--tint-soft); opacity: 0; transform: scale(.9);
+}
+.pa-qr[data-s="done"]::after { box-shadow: 0 0 0 calc(10px / var(--pa-seal-s)) var(--tint-soft); animation: paRipple calc(900ms) var(--e-out) calc(760ms) both; }
+@keyframes paRipple { 0% { opacity: 0; transform: scale(.9); } 20% { opacity: 1; } 100% { opacity: 0; transform: scale(1.5); } }
+/* stale: nobody can scan it by mistake */
+.pa-qr[data-s="stale"] { background: var(--fill-1); box-shadow: inset 0 0 0 1px var(--hair); color: var(--ink-3); }
+.pa-qr[data-s="stale"] .qr-dots { clip-path: circle(75% at 50% 50%); opacity: .14; filter: blur(3px); }
+.pa-qr[data-s="stale"] .qr-eyes { opacity: .14; filter: blur(3px); }
+.pa-qr[data-s="stale"] .qr-mark { opacity: .5; }
+.pa-qr[data-copyable] { cursor: copy; }
+/* hovering the code: its centre mark turns into a copy glyph */
+.pa-qr .qr-copy { opacity: 0; transition: opacity var(--d-fast) var(--e-out); }
+.pa-qr .qr-mark { transition: opacity var(--d-fast) var(--e-out); }
+@media (hover: hover) {
+  .pa-qr[data-copyable]:hover .qr-mark { opacity: 0; }
+  .pa-qr[data-copyable]:hover .qr-copy { opacity: 1; }
+}
+.pa-qr[data-copyable]:hover { box-shadow: var(--lift-2), inset 0 0 0 1px var(--hair); }
+
+.pa-side { display: grid; gap: var(--s3); align-content: center; min-width: 0; }
+/* paid: the side steps in beside the seal, so seal and words read as one group */
+.pa-inv > .pa-side { transition: transform calc(460ms) var(--e-spring) var(--d-mid); }
+/* --pa-gx (set by centreGroup) moves seal and words together so the pair is centred in the card */
+.pa-inv[data-paid] > .pa-side { transform: translateX(calc((var(--pa-seal) - var(--pa-qrw)) / 2 + var(--pa-gx, 0px))); }
+.pa-inv > .pa-slot { transition: transform calc(460ms) var(--e-spring) var(--d-mid); }
+.pa-inv[data-paid] > .pa-slot { transform: translateX(var(--pa-gx, 0px)); }
+.pa-slot { grid-area: qr; width: var(--pa-qrw); aspect-ratio: 1; display: grid; place-items: center; }
+
+/* ── the seal: one "done" mark for paid, token landed and signed in ─────── */
+.pa-seal {
+  position: relative; display: grid; place-items: center; flex: none;
+  width: var(--pa-seal); height: var(--pa-seal); border-radius: 50%;
+  background: var(--tint-fill); color: var(--tint-ink);
+  box-shadow: 0 0 0 6px var(--tint-soft);
+  animation: paRing calc(480ms) var(--e-spring) both;
+}
+.pa-seal svg { width: calc(var(--pa-seal) * .8); height: calc(var(--pa-seal) * .8); fill: none; stroke: currentColor;
+  stroke-width: var(--pa-seal-sw); stroke-linecap: round; stroke-linejoin: round; }
+.pa-seal path { stroke-dasharray: 30; animation: paDraw calc(360ms) var(--e-out) var(--d-mid) backwards; }
+.pa-seal::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  box-shadow: 0 0 0 10px var(--tint-soft); opacity: 0;
+  animation: paRipple calc(900ms) var(--e-out) calc(520ms) both; }
+.pa-amount {
+  display: flex; align-items: baseline; gap: 8px;
+  font-family: var(--f-display); font-weight: var(--w-display);
+  font-size: calc(40px * var(--display-scale)); line-height: 1; letter-spacing: var(--display-track);
+  font-stretch: var(--display-stretch, 100%); font-variant-numeric: tabular-nums lining-nums; color: var(--ink);
+  transition: color var(--d-move) var(--e-out);
+}
+.pa-amount[data-done] { color: var(--tint); }
+.pa-amount-n { display: inline-block; transform-origin: 0 100%; }
+.pa-status { display: grid; gap: 4px; }
+.pa-line { display: flex; align-items: center; gap: 9px; font-family: var(--f-ui); font-size: 14.5px; color: var(--ink); min-height: 22px; }
+/* a warning is never colour alone: a small mark leads it */
+.pa-wi { display: inline-block; flex: none; width: 15px; height: 15px; vertical-align: -3px; margin-right: 6px; color: var(--warn); }
+.pa-line .pa-wi { margin-right: 0; }
+/* a warning is said in ink; only its mark and the field's ring are warn (never orange words on black) */
+.pa-line .pa-dot { width: 6px; height: 6px; border-radius: 99px; background: var(--tint); flex: none; animation: breathe 1.8s var(--e-in-out) infinite; }
+.pa-line[data-tone="warn"] { color: var(--ink); }
+.pa-line[data-tone="warn"] .pa-dot { background: var(--warn); animation: none; }
+.pa-line[data-tone="done"] .pa-dot { animation: none; }
+.pa-line .spin-s, .spin-s {
+  width: 13px; height: 13px; border-radius: 99px; flex: none;
+  border: 1.5px solid var(--fill-2); border-top-color: var(--ink-2);
+  animation: spin .8s linear infinite;
+}
+.pa-meta { font-size: 13.5px; line-height: 1.5; color: var(--ink-3); text-wrap: pretty; }
+.pa-host { color: var(--ink-2); }
+.pa-acts { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s4); }
+.pa-acts .soft { min-height: 44px; }
+.pa-link {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 2px;
+  font-family: var(--f-ui); font-size: 14px; color: var(--ink-2); border-radius: var(--r-xs);
+  text-decoration: underline; text-decoration-color: var(--hair); text-underline-offset: 4px;
+  transition: color var(--d-fast), text-decoration-color var(--d-fast);
+}
+.pa-link:hover { color: var(--ink); text-decoration-color: var(--ink-3); }
+.pa-link .v2-ico { width: 15px; height: 15px; }
+.pa-link.plain { text-decoration: none; }
+
+/* ── the Cashu token ────────────────────────────────────────────────────── */
+.pa-tok { position: relative; }
+.pa-tok textarea {
+  display: block; width: 100%; min-height: 80px; resize: none; border: 0; outline: 0;
+  padding: var(--s3) 104px var(--s3) var(--s3); border-radius: var(--r-sm);
+  background: var(--fill-1); color: var(--ink);
+  font-family: var(--f-mono); font-size: 12.5px; line-height: 1.55; word-break: break-all;
+  caret-color: var(--tint); transition: background var(--d-fast), box-shadow var(--d-fast);
+}
+.pa-tok textarea::placeholder { color: var(--ink-3); }
+.pa-tok textarea:focus-visible { background: var(--fill-2); box-shadow: var(--focus); }
+.pa-tok[data-bad] textarea { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warn) 55%, transparent); }
+.pa-tok .pa-paste { position: absolute; right: 8px; top: 8px; min-height: 36px; padding: 0 12px; background: var(--fill-2); }
+.pa-tok .pa-paste:hover { background: color-mix(in srgb, var(--fill-2), var(--ink) 6%); }
+/* the read token takes the field's place and shape: one soft fill, the coin drawn plain on it */
+.pa-tok-read { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--s4);
+  min-height: 80px; padding: var(--s3) var(--s3) var(--s3) var(--s5); border-radius: var(--r-sm); background: var(--fill-1); }
+.pa-coin { display: grid; place-items: center; width: 20px; height: 20px; color: var(--tint); }
+.pa-coin .v2-ico { width: 16px; height: 16px; }
+.pa-ic .v2-ico { width: 16px; height: 16px; }
+@media (max-width: 760px) { .pa-coin .v2-ico, .pa-ic .v2-ico { width: 18px; height: 18px; } }
+.pa-tok-read .pa-amount { font-size: calc(40px * var(--display-scale)); }
+.pa-tok-read .pa-meta { margin-top: 4px; font-size: 13px; }
+.pa-tok-read[data-bad] .pa-coin { color: var(--warn); }
+.pa-tok-read[data-bad] .pa-amount { color: var(--ink-3); }
+.pa-tok-read[data-bad] .pa-amount-n { text-decoration: line-through; text-decoration-thickness: 1.5px; text-decoration-color: var(--ink-3); }
+.pa-coin .v2-ico { transition: transform var(--d-mid) var(--e-spring); }
+.pa-say { font-size: 13.5px; line-height: 1.5; color: var(--ink-3); min-height: 20px; text-wrap: pretty; }
+.pa-say[data-tone="warn"] { color: var(--ink-2); }
+.pa-say b { font-weight: var(--w-strong); color: inherit; }
+
+/* ── the foot: how to pay on the left, the next step on the right ───────── */
+.pa-foot {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s3);
+  /* always one button tall, so a button coming or going never moves the card */
+  padding-top: var(--s5); min-height: calc(44px + var(--s5)); box-sizing: border-box;
+  transition: opacity var(--d-fast) var(--e-out);
+}
+.pa-foot[data-hide] { opacity: 0; pointer-events: none; }
+.pa-switch {
+  position: relative; display: grid; grid-template-columns: 1fr 1fr; flex: none;
+  padding: 3px; border-radius: calc(var(--r-sm) + 2px); background: var(--fill-1);
+  transition: opacity var(--d-fast) var(--e-out);
+}
+.pa-thumb {
+  position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc(50% - 3px);
+  border-radius: var(--r-sm); background: rgb(var(--surface-hero));
+  box-shadow: var(--lift-1), var(--glow);
+  transition: transform calc(240ms) var(--e-spring);
+}
+.pa-switch[data-m="token"] .pa-thumb { transform: translateX(100%); }
+/* dark rooms: the thumb is lifted a step off the track and carries the rows' hairline */
+html:is([data-room="night"], [data-room="meridian"][data-face="dusk"]) .pa-thumb {
+  background: color-mix(in srgb, rgb(var(--surface-hero)), var(--ink) 11%);
+  box-shadow: var(--lift-1), inset 0 0 0 1px var(--hair);
+}
+.pa-seg {
+  position: relative; z-index: 1; min-height: 32px; padding: 0 var(--s4);
+  font-family: var(--f-ui); font-size: 13.5px; color: var(--ink-3); white-space: nowrap;
+  border-radius: var(--r-sm); transition: color var(--d-fast) var(--e-out);
+}
+.pa-seg:hover { color: var(--ink-2); }
+.pa-seg[aria-checked="true"] { color: var(--ink); }
+.pa-cur[data-arriving] { pointer-events: none; }
+.pa-switch[hidden], .pa-lead[hidden], .pa-acts[hidden] { display: none; }
+.pa-lead { display: flex; align-items: center; min-width: 0; margin-right: auto; }
+.pa-corner .prime, .pa-corner .soft, .pa-lead .soft { white-space: nowrap; }
+a.prime[aria-disabled="true"] { opacity: .45; pointer-events: none; }
+.pa-wayfold > div, .pa-rowfold > div, [data-fold-alt] > div { padding: 3px; margin: -3px; }
+.pa-alt { padding: var(--s1) var(--s3) 0 calc(var(--s3) + 24px + var(--s3)); }
+.pa-view[data-scan] .pa-alt { padding-left: var(--s3); }
+/* while the code shows, it hangs from the card's edge, not from a row that has stepped out */
+.pa-view[data-scan] .pa-open-in { padding-left: var(--s3); padding-top: var(--s1); }
+.pa-corner { display: flex; align-items: center; justify-content: flex-end; gap: var(--s2); min-width: 0; }
+/* one button face on the whole card: the sans, 14.5px, weight 500, 44px tall.
+   Display type is kept for headlines and amounts. Two secondary styles only:
+   a text link for the way back, a soft fill for a real action. */
+.pa-card :is(.prime, .soft) {
+  min-height: 44px; padding: 0 var(--s5); gap: 8px; border-radius: var(--r-sm);
+  font-family: var(--f-ui); font-weight: 500; font-size: 14.5px; letter-spacing: 0; font-stretch: 100%;
+  white-space: nowrap;
+}
+.pa-card :is(.prime, .soft) .v2-ico { width: 16px; height: 16px; }
+.pa-card .prime .v2-ico { color: inherit; }
+/* busy keeps its full colour: the spinner takes the icon's place */
+.pa-card :is(.prime, .soft)[aria-busy="true"] { cursor: progress; transform: none; filter: none; }
+.pa-card .soft .spin-s { border-color: var(--fill-2); border-top-color: var(--ink-2); }
+/* held back while what was typed is wrong: neutral until the value changes */
+.pa-card .prime[data-hold] { background: var(--fill-2); color: var(--ink); box-shadow: none; filter: none; transform: none; }
+.pa-corner .pa-link { font-size: 14px; }
+.pa-note { font-family: var(--f-body); font-size: 13.5px; color: var(--ink-3); white-space: nowrap; }
+/* icon and label are one group, centred; both labels share one cell, so the
+   button keeps the widest label's width and the icon never drifts from it */
+.pa-swapc { display: inline-grid; grid-template-columns: auto auto; align-items: center; gap: 8px; }
+.pa-swap { display: grid; }
+.pa-swapw { display: grid; justify-items: start; }
+.pa-swapw > * { grid-area: 1 / 1; transition: opacity var(--d-fast) var(--e-out); }
+.pa-swapw > :last-child, [data-on] .pa-swapw > :first-child { opacity: 0; }
+[data-on] .pa-swapw > :last-child { opacity: 1; }
+.pa-swap > * { grid-area: 1 / 1; transition: opacity var(--d-fast) var(--e-out), transform var(--d-fast) var(--e-spring); }
+.pa-swap > :last-child { opacity: 0; transform: scale(.6); }
+[data-on] .pa-swap > :first-child { opacity: 0; transform: scale(.6); }
+[data-on] .pa-swap > :last-child { opacity: 1; transform: none; }
+.pa-swap > .spin-s { align-self: center; justify-self: center; }
+.prime .spin-s { border-color: color-mix(in srgb, var(--tint-ink) 30%, transparent); border-top-color: var(--tint-ink); }
+
+/* ── sign in ────────────────────────────────────────────────────────────── */
+.pa-ways { display: grid; gap: 2px; margin: 0 calc(var(--s2) * -1); }
+.pa-way { border-radius: var(--r-md); }
+.pa-fold { display: grid; grid-template-rows: 1fr; transition: grid-template-rows calc(280ms) var(--e-out), opacity calc(var(--d-mid)) var(--e-out); }
+.pa-fold > * { min-height: 0; overflow: hidden; }
+.pa-fold[data-folded] { grid-template-rows: 0fr; opacity: 0; }
+.pa-row {
+  display: grid; grid-template-columns: 24px minmax(0, 1fr) 18px; align-items: center; gap: var(--s3);
+  width: 100%; min-height: 52px; padding: 6px var(--s3);
+  border-radius: var(--r-md); text-align: left; color: var(--ink);
+  transition: background var(--d-fast) var(--e-out);
+}
+.pa-way:not([data-open]) .pa-row:hover { background: var(--fill-1); }
+/* a plain glyph, no tile: the row itself is the object */
+.pa-ic { display: grid; place-items: center; width: 24px; height: 24px; color: var(--ink-3); transition: color var(--d-fast) var(--e-out); }
+.pa-ic > * { grid-area: 1 / 1; transition: opacity var(--d-fast) var(--e-out); }
+.pa-ic .spin-s { width: 16px; height: 16px; opacity: 0; border-color: var(--fill-2); border-top-color: var(--ink-2); }
+/* waiting on the extension: the spinner takes the icon's place and the row holds the open fill */
+.pa-way[data-busy] .pa-ic .v2-ico { opacity: 0; }
+.pa-way[data-busy] .pa-ic .spin-s { opacity: 1; }
+.pa-way[data-busy] .pa-row { background: var(--fill-1); }
+.pa-row:hover .pa-ic, .pa-way[data-open] .pa-ic { color: var(--ink); }
+.pa-way[data-open] .pa-row-t span { color: var(--ink-2); }
+.pa-ic .v2-ico { width: 18px; height: 18px; }
+.pa-row-t { display: grid; gap: 1px; min-width: 0; }
+.pa-row-t b { font-family: var(--f-ui); font-weight: 500; font-size: 14.5px; line-height: 1.35; }
+.pa-row-t span { font-size: 13px; line-height: 1.4; color: var(--ink-3); text-wrap: pretty; transition: color var(--d-fast) var(--e-out); }
+.pa-short { display: none; }
+.pa-end { display: grid; place-items: center; width: 18px; height: 18px; }
+.pa-end > * { grid-area: 1 / 1; transition: opacity var(--d-fast) var(--e-out), transform var(--d-mid) var(--e-out); }
+.pa-way[data-busy] .pa-chev { opacity: 0; }
+.pa-way[data-busy] .pa-row { cursor: progress; }
+.pa-way[data-bad] [data-sub] { color: var(--ink-2); }
+.pa-chev { width: 16px; height: 16px; color: var(--ink-3); transition: transform var(--d-mid) var(--e-out); }
+.pa-way[data-open] .pa-chev { transform: rotate(90deg); }
+.pa-open { display: grid; grid-template-rows: 0fr; transition: grid-template-rows calc(280ms) var(--e-out); }
+.pa-way[data-open] .pa-open { grid-template-rows: 1fr; }
+.pa-open > div { min-height: 0; overflow: hidden; }
+/* the open way hangs under the row's title (12 + 24 + 12 = 48px) */
+.pa-open-in { display: grid; gap: var(--s2); padding: 2px var(--s3) var(--s4) calc(var(--s3) + 24px + var(--s3));
+  opacity: 0; transition: opacity var(--d-fast) var(--e-out); }
+.pa-way[data-open] .pa-open-in { opacity: 1; transition: opacity var(--d-mid) var(--e-out) calc(80ms); }
+.pa-form { display: flex; gap: 6px; }
+/* the fill and the ring live on the wrapper, so a long value can fade out before the paste icon */
+.pa-in { position: relative; flex: 1; min-width: 0; border-radius: var(--r-sm); background: var(--fill-1);
+  transition: box-shadow var(--d-fast), background var(--d-fast); }
+.pa-in input {
+  display: block; width: 100%; min-height: 44px; padding: 0 44px 0 var(--s3); border: 0; outline: 0; border-radius: inherit;
+  background: none; color: var(--ink); box-shadow: none;
+  font-family: var(--f-mono); font-size: 13px; letter-spacing: .01em; caret-color: var(--tint);
+}
+.pa-in input:not(:focus) { mask-image: linear-gradient(to right, #000 calc(100% - 68px), transparent calc(100% - 44px)); }
+.pa-in:focus-within { background: var(--fill-2); }
+.pa-in input::placeholder { color: var(--ink-3); }
+.pa-in input:focus-visible { box-shadow: none; }
+.pa-in:has(input:focus-visible) { box-shadow: var(--focus); }
+.pa-in[data-bad] { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warn) 60%, transparent); }
+/* focused and wrong: the warning ring stays, with a soft halo of its own */
+.pa-in[data-bad]:has(input:focus-visible) { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warn) 60%, transparent), 0 0 0 3px color-mix(in srgb, var(--warn) 18%, transparent); }
+.pa-in .ghost { position: absolute; right: 6px; top: 6px; width: 32px; height: 32px; }
+.pa-form .prime { flex: none; }
+.pa-hint { font-size: 13px; line-height: 1.5; color: var(--ink-3); text-wrap: pretty; }
+/* a warning hangs its icon; the second line starts under the words, not the icon */
+.pa-hint[data-tone="warn"]:has(> .v2-ico:first-child, > svg:first-child) { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 6px; align-items: start; }
+.pa-hint[data-tone="warn"] { color: var(--ink-2); }
+.pa-hint .pa-link { min-height: 0; font-size: 12.5px; }
+.pa-or { display: flex; align-items: center; gap: var(--s3); margin: 2px var(--s2) 4px; font-family: var(--f-mono); font-size: 10.5px;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); }
+.pa-or::before, .pa-or::after { content: ""; flex: 1; height: 1px; background: var(--hair); }
+.pa-connect { padding-top: var(--s1); column-gap: var(--s5); }
+.pa-connect .pa-acts .soft { padding: 0 var(--s4); }
+
+/* signed in: a quiet confirmation before the card moves on */
+.pa-done { display: grid; justify-items: center; gap: var(--s3); padding: var(--s6) 0 var(--s4); text-align: center; }
+.pa-done .pa-seal { margin-bottom: var(--s3); }
+@keyframes paRing { from { transform: scale(.6); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes paDraw { from { stroke-dashoffset: 30; } to { stroke-dashoffset: 0; } }
+.pa-done .pa-sub { max-width: 40ch; }
+.pa-view[data-view="auth"] .pa-sub { max-width: none; }
+
+/* focus rings: the room's own ring, on everything here */
+.pa-card :is(button, [role="radio"], a):focus-visible { box-shadow: var(--focus); outline: 0; }
+.pa-seg:focus-visible { box-shadow: var(--focus); }
+.pa-x:focus-visible { box-shadow: var(--focus); }
+
+/* frozen states and still renders: no motion at all */
+
+/* ── phone: the card is big, one composition with the room above it ─────── */
+@media (max-width: 760px) {
+  .island, .island[data-place="centre"] {
+    --pa-pt: var(--s2); --pa-pr: var(--s2); --pa-pl: var(--s3);
+    --pa-seal: 64px; --pa-seal-s: .2712; --pa-seal-sw: .94px;   /* .2712 = 64 / 236 */
+    --pa-qrw: 236px;
+    --pa-nh: 44px;
+    /* one card height for every view, sized for the tallest one (the invoice). A short phone
+       gives the card nearly the whole screen; past that the view scrolls inside it */
+    --pa-min: min(504px, calc(100dvh - var(--pa-band) - 150px));
+  }
+  .pa-card { padding: calc(var(--s3) + var(--s4)) var(--s1) var(--s1); }
+  .pa-x { width: 44px; height: 44px; top: -6px; right: -8px; }
+  .island:not([data-face="write"]) .field { padding-right: 40px; max-height: 76px; }
+  .pa-t { font-size: calc(24px * var(--display-scale)); }
+  .pa-sub { font-size: 14.5px; }
+  .pa-long { display: none; }
+  .pa-short { display: inline; }
+
+  /* one height for every view, so the words band and the greeting never jump. The head holds
+     the top, the foot is pinned to the bottom, and what sits between them is centred in the
+     space (or, for the keypad and the token field, grows into it) */
+  .pa-inwrap { height: var(--pa-min); }
+  .pa-stage { flex: 1 1 0; display: flex; flex-direction: column; }
+  .pa-view { flex: 1 0 auto; display: flex; flex-direction: column; gap: var(--s5); }
+  .pa-view > .pa-mid, .pa-view > .pa-pickbody { flex: 1 0 auto; display: flex; flex-direction: column; justify-content: center; }
+  .pa-view:is([data-view="inv"], [data-view="landed"], [data-view="done"]) { justify-content: center; }
+  .pa-out { inset: 6px; }
+  .pa-cur { flex: 1 0 auto; display: flex; flex-direction: column; }
+
+  /* the greeting stays in the room above the card, smaller and quieter; its sub line leaves */
+  .panel[data-state="empty"]:has(.island:not([data-face="write"])) .stage { opacity: .4; }
+  .panel[data-state="empty"] .stage-in { transition: transform var(--d-slow) var(--e-out); transform-origin: 50% 60%; }
+  .panel[data-state="empty"]:has(.island:not([data-face="write"])) .stage-in { transform: scale(.7); }
+  /* a new chat is left-set on a phone: it shrinks toward its own text edge */
+  .panel[data-state="empty"] .stage-in { transform-origin: 0 60%; }
+  .panel[data-state="empty"] .pf-sub { transition: opacity var(--d-fast) var(--e-out); }
+  .panel[data-state="empty"]:has(.island:not([data-face="write"])) .pf-sub { animation: none; opacity: 0; }
+
+  /* amounts: a keypad of four keys that fills the space between the words and the foot.
+     A faint resting fill says "press me" on a touch screen; the picked key is a step deeper */
+  .pa-pickbody { gap: var(--s4); }
+  .pa-amts { flex: 1 0 auto; grid-template-columns: 1fr 1fr; grid-auto-rows: minmax(112px, 1fr); gap: 6px; margin: 0; }
+  .pa-amt { min-height: 112px; padding: var(--s3) var(--s2); border-radius: var(--r-md); gap: 4px;
+    background: color-mix(in srgb, var(--fill-1) 55%, transparent); }
+  .pa-amt:hover { background: color-mix(in srgb, var(--fill-1) 55%, transparent); }
+  .pa-amt:active, .pa-amt[data-picked], .pa-other[data-has], .pa-other:focus-within { background: var(--fill-2); }
+  .pa-amt[aria-disabled="true"], .pa-amt[aria-disabled="true"]:hover { background: color-mix(in srgb, var(--fill-1) 30%, transparent); }
+  .pa-num { font-size: calc(34px * var(--display-scale)); }
+  .pa-r { font-size: 11.5px; }
+  .pa-keep { display: block; text-align: center; font-family: var(--f-body); font-size: 14px; line-height: 1.4; color: var(--ink-3); }
+
+  /* the token: a 160px field centred in the space; once read, the same slot holds the amount */
+  .pa-mid:has(.pa-tokbody) { gap: var(--s3); }
+  .pa-tok-read { min-height: 160px; grid-template-columns: minmax(0, 1fr); justify-items: center; align-content: center; text-align: center;
+    gap: var(--s2); position: relative; padding: var(--s5) var(--s4); border-radius: var(--r-md); }
+  .pa-tok-read .pa-amount { justify-content: center; font-size: calc(40px * var(--display-scale)); }
+  .pa-tok-read .pa-coin { width: 24px; height: 24px; }
+  .pa-tok-read .pa-coin .v2-ico { width: 24px; height: 24px; }
+  .pa-tok-read [data-act="tok-clear"] { position: absolute; top: 4px; right: 4px; padding: 0 var(--s3); }
+
+  /* the invoice: one centred column, the code large enough to scan across a table */
+  .pa-inv {
+    grid-template-columns: minmax(0, 1fr); grid-template-rows: none; row-gap: 0;
+    grid-template-areas: "amt" "line" "qr" "meta" "acts"; justify-items: center; text-align: center;
+  }
+  .pa-inv .pa-side, .pa-inv .pa-status { display: contents; }
+  .pa-inv .pa-amount { grid-area: amt; }
+  .pa-inv .pa-line { grid-area: line; margin-top: 8px; }
+  .pa-inv > :is(.pa-qr, .pa-slot) { margin-top: var(--s4); }
+  .pa-inv .pa-meta { grid-area: meta; margin-top: var(--s3); text-wrap: balance; }
+  .pa-inv > .pa-acts { margin-top: var(--s4); }
+  .pa-qr { width: min(100%, var(--pa-qrw)); padding: 14px; border-radius: var(--r-md); }
+  .pa-inv .pa-amount { font-size: calc(40px * var(--display-scale)); justify-content: center; }
+  .pa-inv .pa-amount-n { transform-origin: 50% 100%; }
+  .pa-line { font-size: 14.5px; justify-content: center; }
+  .pa-meta { font-size: 13.5px; max-width: 32ch; }
+  /* paid: amount, seal and sentence close in to one centred group (16px apart) */
+  .pa-inv > .pa-side { transform: none; }
+  .pa-inv :is(.pa-amount, .pa-line, .pa-meta) { transition: transform calc(460ms) var(--e-spring) var(--d-mid); }
+  .pa-inv[data-paid] :is(.pa-amount, .pa-line) { transform: translateY(calc((var(--pa-qrw) - var(--pa-seal)) / 2)); }
+  .pa-inv[data-paid] .pa-meta { transform: translateY(calc((var(--pa-seal) - var(--pa-qrw)) / 2 + 4px)); }
+  .pa-inv[data-paid] > .pa-side { transform: none; }
+  .pa-acts { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s2); width: 100%; }
+  .pa-acts .soft { min-height: 48px; width: 100%; }
+  .pa-acts:has(> :only-child) { grid-template-columns: 1fr; justify-items: center; }
+  .pa-inv[data-paid] > .pa-acts { display: none; }
+  .pa-acts:has(> :only-child) > * { width: auto; }
+  .pa-link { min-height: 44px; }
+
+  .pa-foot { padding-top: var(--s4); min-height: calc(48px + var(--s4)); }
+  .pa-foot[data-pair] { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s2); }
+  .pa-foot[data-pair] > * { margin: 0; }
+  .pa-foot[data-pair] :is(.soft, .prime) { width: 100%; }
+  .pa-card :is(.prime, .soft) { min-height: 48px; font-size: 15px; }
+  .pa-card :is(.prime, .soft) .v2-ico { width: 18px; height: 18px; }
+  .pa-foot[data-solo] .pa-switch { flex: 1; }
+  .pa-seg { min-height: 44px; padding: 0 var(--s3); font-size: 14.5px; }
+  /* beside a button the switch gives up room, the button keeps its words */
+  .pa-foot:not([data-solo]) .pa-switch { flex: 1 1 auto; min-width: 0; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .pa-foot:not([data-solo]) .pa-seg { padding: 0 var(--s2); }
+  .pa-corner { flex: none; }
+  .pa-corner .pa-link { white-space: nowrap; }
+  .pa-foot { gap: var(--s2); }
+  .pa-corner .soft { padding: 0 var(--s4); }
+  .pa-done .pa-sub { max-width: 30ch; text-wrap: balance; }
+  .pa-back { width: 44px; height: 44px; }
+  .pa-link.plain { min-width: 44px; justify-content: center; }
+  .pa-hint .pa-link { display: flex; min-height: 44px; margin-bottom: -10px; }
+  .pa-row { min-height: 60px; }
+  .pa-form { flex-direction: column; gap: var(--s2); }
+  .pa-in input { min-height: 48px; font-size: 16px; padding-right: 48px; }
+  .pa-in .ghost { width: 44px; height: 44px; top: 2px; right: 2px; }
+  .pa-tok textarea { font-size: 16px; min-height: 160px; padding-right: var(--s3); padding-bottom: 56px; }
+  .pa-tok .pa-paste { top: auto; bottom: 8px; min-height: 44px; }
+  /* sign in: an open way spans the card (no hanging indent), so what it holds centres on the card */
+  .pa-open-in, .pa-view[data-scan] .pa-open-in { padding-left: var(--s3); padding-right: var(--s3); }
+  .pa-alt { padding: 0 var(--s3); text-align: center; }
+  .pa-alt .pa-link { display: inline-flex; }
+  .pa-view[data-scan] .pa-connect { --pa-qrw: 188px; }
+  .pa-connect > .pa-acts[data-pair] { grid-template-columns: 1fr 1fr; justify-items: stretch; }
+  .pa-connect > .pa-acts[data-pair] > * { width: 100%; }
+
+  /* the composer's front: every control is a 44px target */
+  .crow .attach, .crow .go { width: 44px; height: 44px; }
+  .crow .model { min-height: 44px; }
+}
+/* the thread behind a turned card fades out before the card's edge: no half line sliced by it */
+.panel[data-state="chat"]:has(.island:not([data-face="write"])) .thread {
+  mask-image: linear-gradient(transparent 0, #000 36px, #000 calc(100% - 64px), transparent calc(100% - 8px));
+}
+@media (max-width: 760px) {
+  .panel[data-state="chat"]:has(.island:not([data-face="write"])) .thread {
+    mask-image: linear-gradient(transparent 0, #000 16px, #000 calc(100% - 56px), transparent calc(100% - 8px));
+  }
+}
+/* a desktop fresh chat: the greeting row keeps its height while the card is turned, so the
+   island's top (and the words on it) stay exactly where they were; the card grows down only */
+@media (min-width: 761px) {
+  .panel[data-state="empty"]:has(.island:not([data-face="write"])) { grid-template-rows: auto 33vh auto minmax(0, 1fr); }
+}
+/* still renders start with the greeting already in place */
+
+/* dark rooms: a warning's mark stays in ink; only the field's ring carries warn */
+html:is([data-room="night"], [data-room="meridian"][data-face="dusk"]) .pa-wi { color: var(--ink-2); }
+.pa-tok-read[data-bad] .pa-coin { color: var(--ink-2); }
+/* the mint did not answer: the making tile freezes, no ghost of a code that never was */
+.pa-inv[data-error] .pa-qr .qr-mark { animation: none; opacity: .5; }
+/* phone sign in: the closed list of ways is centred in the room it has; once a
+   way opens it sits just under the reason line, so opening never jumps it */
+@media (max-width: 760px) { .pa-view[data-view="auth"][data-open] > .pa-mid { justify-content: flex-start; padding-top: var(--s2); } }
+/* short phones: the code takes the room it has */
+@media (max-width: 760px) { .island { --pa-qrw: clamp(168px, calc(100dvh - 440px), 236px); } }
+/* the thread behind a turned card fades out before the card's edge */
+.panel[data-state="chat"]:has(.island:not([data-face="write"])) .thread {
+  mask-image: linear-gradient(transparent 0, #000 36px, #000 calc(100% - 64px), transparent calc(100% - 8px));
+}
+/* a desktop new chat: the greeting row holds its height while the card is
+   turned, so the words stay exactly where they were and the card grows down */
+@media (min-width: 761px) {
+  .panel[data-state="empty"]:has(.island:not([data-face="write"])) { grid-template-rows: auto minmax(0, 33vh) auto minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .island .turn { transition: none !important; }
+  .island .side.back { backface-visibility: visible; }
+  .island:not([data-face="write"]) .side.front { opacity: 0; }
+  .island .pa-card { transform: none !important; }
+  .pa-seal { animation-name: fade; }
+  .pa-seal::after, .pa-qr[data-s="done"]::after { animation: none; }
+  .pa-qr .qr-dots { transition: none !important; }
+  .pa-cur[data-in] > .pa-view { animation-name: fade; }
+  /* sizes and places change at once; colour and fades stay */
+  .pa-morph, .pa-thumb, .pa-fold, .pa-wayfold, .pa-rowfold, .pa-inv > .pa-side, .pa-inv > .pa-slot, .pa-qr { transition-property: opacity, color, background-color, box-shadow !important; }
+}

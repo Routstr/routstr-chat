@@ -12,6 +12,19 @@ import {
 
 const NO_ENTRIES: ProviderPricingEntry[] = [];
 
+// Ranking a model rescans the whole discovery cache, so callers rank each model
+// once and keep the result. The SDK drops disabled and on-cooldown providers and
+// sorts cheapest first; it stays the one ranking authority. Base urls are
+// normalized so they compare equal to the pinned bases parsed out of
+// `${id}@@${base}` favorite keys.
+const rankFor = (modelId: string, torMode: boolean): ProviderPricingEntry[] =>
+  providerManager
+    .getProviderPriceRankingForModel(modelId, { torMode })
+    .flatMap((item) => {
+      const baseUrl = normalizeBaseUrl(item.baseUrl);
+      return baseUrl ? [{ baseUrl, model: item.model as unknown as Model }] : [];
+    });
+
 // The SDK only ranks providers whose sats_pricing has numeric prompt AND
 // completion, so an entry's costs can always be read straight off its model.
 export type ProviderPricingEntry = {
@@ -67,39 +80,30 @@ export function useModelPricing({
   const pricingEntriesByModel = useMemo(() => {
     const torMode = isTorContext();
     const index = new Map<string, ProviderPricingEntry[]>();
-
-    // selectedModel is included explicitly: the Current row still renders it
-    // even when the filters exclude it from `models`.
-    const targets = selectedModel ? [...models, selectedModel] : models;
-
-    for (const model of targets) {
-      if (index.has(model.id)) continue;
-      // The SDK drops disabled and on-cooldown providers and sorts cheapest
-      // first. Keep it as the one ranking authority.
-      const ranking = providerManager.getProviderPriceRankingForModel(model.id, {
-        torMode,
-      });
-
-      // Base urls are normalized here so they compare equal to the pinned bases
-      // parsed out of `${id}@@${base}` favorite keys.
-      index.set(
-        model.id,
-        ranking.flatMap((item) => {
-          const baseUrl = normalizeBaseUrl(item.baseUrl);
-          return baseUrl
-            ? [{ baseUrl, model: item.model as unknown as Model }]
-            : [];
-        })
-      );
+    for (const model of models) {
+      if (!index.has(model.id)) index.set(model.id, rankFor(model.id, torMode));
     }
-
     return index;
-  }, [models, selectedModel, disabledProviders, cachedModels, providersOnCooldown]);
+  }, [models, disabledProviders, cachedModels, providersOnCooldown]);
+
+  // The Current row still renders the selected model when the filters drop it
+  // from `models`. It is ranked on its own: picking a model must not re-rank
+  // every model.
+  const selectedId = selectedModel?.id;
+  const selectedEntries = useMemo(
+    () =>
+      selectedId && !pricingEntriesByModel.has(selectedId)
+        ? rankFor(selectedId, isTorContext())
+        : null,
+    [selectedId, pricingEntriesByModel]
+  );
 
   const getProviderPricingEntries = useCallback(
     (modelId: string): ProviderPricingEntry[] =>
-      pricingEntriesByModel.get(modelId) ?? NO_ENTRIES,
-    [pricingEntriesByModel]
+      pricingEntriesByModel.get(modelId) ??
+      (modelId === selectedId ? selectedEntries : null) ??
+      NO_ENTRIES,
+    [pricingEntriesByModel, selectedId, selectedEntries]
   );
 
   // What a provider itself lists, whatever its routing state, so a row pinned to
