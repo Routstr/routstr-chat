@@ -15,7 +15,7 @@
  */
 import { beforeAll, describe, expect, it } from "vitest";
 import fs from "fs";
-import { CheckStateEnum, Mint, Wallet, type Proof } from "@cashu/cashu-ts";
+import { CheckStateEnum, Mint, Wallet, getEncodedTokenV4, type Proof } from "@cashu/cashu-ts";
 
 const MINT = process.env.CASHU_TEST_MINT;
 const INVOICE_MINT = process.env.CASHU_TEST_INVOICE_MINT;
@@ -151,6 +151,22 @@ describe.skipIf(!MINT || !INVOICE_MINT)(`payMeltQuote against a real mint (${PAY
     expect(journal.listEntries()).toHaveLength(0);
     // the fee reserve the payment did not use came back as change
     expect(sum(wallet.get())).toBeGreaterThanOrEqual(64 - 10 - quote.fee_reserve);
+    expect(new Set(await states(wallet.get()))).toEqual(new Set([CheckStateEnum.UNSPENT]));
+  });
+
+  it.skipIf(PAY_STATE !== "SETTLED")("gives the good coins back when the mint refuses a melt for a stale one", async () => {
+    const quote = await lightning.createMeltQuote(MINT!, await invoice(10));
+    // coins that pay the exact amount, so no swap; one of them was already spent elsewhere
+    const coins = await funded(quote.amount + quote.fee_reserve);
+    const stale = coins.reduce((a, b) => (a.amount < b.amount ? a : b));
+    const other = new Wallet(new Mint(MINT!), { unit: "sat" });
+    await other.loadMint();
+    await other.receive(getEncodedTokenV4({ mint: MINT!, proofs: [stale], unit: "sat" }));
+    const wallet = store(coins);
+    const result = await lightning.payMeltQuote(MINT!, quote.quote, wallet.get(), wallet.commit);
+    expect(result.state).toBe("failed");
+    expect(journal.listEntries()).toHaveLength(0);
+    expect(sum(wallet.get())).toBe(sum(coins) - stale.amount);
     expect(new Set(await states(wallet.get()))).toEqual(new Set([CheckStateEnum.UNSPENT]));
   });
 });

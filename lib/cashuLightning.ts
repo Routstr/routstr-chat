@@ -270,11 +270,13 @@ async function settleSwap(wallet: Wallet, entry: SwapEntry, commit: CommitProofs
 
 /**
  * Settles a melt from the mint's two answers: the payment's state (NUT-05) and the state of the
- * coins it was given (NUT-07). Only both agreeing settles it; anything else stays reserved.
+ * coins it was given (NUT-07). Anything they do not settle stays reserved.
  */
 async function settleMelt(wallet: Wallet, entry: MeltEntry, commit: CommitProofs): Promise<{ state: MeltOutcome; change: Proof[] }> {
-  const quote = await wallet.checkMeltQuote(entry.quoteId);
+  // coins first: a quote still UNPAID after this read means the melt never ran, so a coin the mint
+  // saw spent was a stale copy spent elsewhere, and the mint refused the melt for it
   const states = await wallet.checkProofsStates(entry.inputs);
+  const quote = await wallet.checkMeltQuote(entry.quoteId);
   const all = (s: string) => states.length === entry.inputs.length && states.every((x) => x.state === s);
   if (quote.state === MeltQuoteState.PAID && all(CheckStateEnum.SPENT)) {
     const change = await restoreOutputs(wallet, entry.keysetId, decodeOutputs(entry.blanks));
@@ -282,8 +284,8 @@ async function settleMelt(wallet: Wallet, entry: MeltEntry, commit: CommitProofs
     removeEntry(entry.id);
     return { state: "paid", change };
   }
-  if (quote.state === MeltQuoteState.UNPAID && all(CheckStateEnum.UNSPENT)) {
-    await commit(entry.inputs, []);
+  if (quote.state === MeltQuoteState.UNPAID && !states.some((s) => s.state === CheckStateEnum.PENDING)) {
+    await commit(entry.inputs.filter((_, i) => states[i]?.state === CheckStateEnum.UNSPENT), []);
     removeEntry(entry.id);
     return { state: "failed", change: [] };
   }
