@@ -13,7 +13,10 @@ interface WalletAdapterSource {
   sendToken: (
     mintUrl: string,
     amount: number,
-    p2pkPubkey?: string
+    p2pkPubkey?: string,
+    unit?: string,
+    trackUnclaimed?: boolean,
+    persistToken?: (token: string) => Promise<void>
   ) => Promise<string>;
   receiveToken: (token: string) => Promise<{ amount: number }[]>;
 }
@@ -48,12 +51,12 @@ export function useWalletAdapter(
           sourceRef.current?.cashuStore.activeMintUrl;
         return active ?? DEFAULT_MINT_URL;
       },
-      async sendToken(mintUrl: string, amount: number, p2pkPubkey?: string) {
+      async sendToken(mintUrl, amount, p2pkPubkey, persistToken) {
         const activeSource = sourceRef.current;
         if (!activeSource) {
           throw new Error("Wallet adapter is not initialized");
         }
-        return activeSource.sendToken(mintUrl, amount, p2pkPubkey);
+        return activeSource.sendToken(mintUrl, amount, p2pkPubkey, undefined, false, persistToken);
       },
       async receiveToken(token: string) {
         const activeSource = sourceRef.current;

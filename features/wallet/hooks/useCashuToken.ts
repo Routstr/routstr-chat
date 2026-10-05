@@ -142,7 +142,8 @@ export function useCashuToken() {
     amount: number,
     p2pkPubkey?: string,
     unit?: string,
-    trackUnclaimed = false
+    trackUnclaimed = false,
+    persistToken?: (token: string) => Promise<void>
   ): Promise<string> => {
     setIsLoading(true);
     setError(null);
@@ -282,7 +283,6 @@ export function useCashuToken() {
         })),
         unit: preferredUnit,
       });
-      console.log("rdlogs: token", token);
       // Wallet-send tokens must be stored before dropping the proof backup.
       if (trackUnclaimed) {
         useUnclaimedTokensStore.getState().addUnclaimedToken({
@@ -292,6 +292,8 @@ export function useCashuToken() {
           mintUrl: normalizedMintUrl,
         });
       }
+      await persistToken?.(token);
+
       // Clean up pending proofs after successful token creation
       localStorage.removeItem(pendingProofsKey);
 

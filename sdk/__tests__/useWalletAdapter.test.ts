@@ -50,4 +50,27 @@ describe("useWalletAdapter", () => {
     });
     expect(receiveToken).toHaveBeenCalledWith(shortKeysetToken);
   });
+
+  it("hands the SDK's token handoff to the wallet send", async () => {
+    const sendToken = vi.fn(async () => "fixture-token");
+    const adapter = useWalletAdapter({
+      mintBalances: {},
+      mintUnits: {},
+      cashuStore: {},
+      sendToken,
+      receiveToken: async () => [],
+    });
+    const persistToken = async () => {};
+
+    await adapter?.sendToken("https://mint.example.com", 7, undefined, persistToken);
+
+    expect(sendToken).toHaveBeenCalledWith(
+      "https://mint.example.com",
+      7,
+      undefined,
+      undefined,
+      false,
+      persistToken
+    );
+  });
 });
