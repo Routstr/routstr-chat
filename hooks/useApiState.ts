@@ -24,7 +24,12 @@ import {
   isTorContext,
 } from "@/utils/torUtils";
 import { useDiscoveryAdapter } from "./useDiscoveryAdapter";
-import { hydrate, modelManager, providerManager } from "@/sdk/sharedStore";
+import {
+  hydrate,
+  discoveryReady,
+  modelManager,
+  providerManager,
+} from "@/sdk/sharedStore";
 
 export interface UseApiStateReturn {
   models: Model[];
@@ -119,6 +124,7 @@ export const useApiState = (
 
       try {
         setIsLoadingModels(true);
+        await discoveryReady;
         const torMode = isTorContext();
         const node = nodePaysRef.current;
         let bases = baseUrlsList;
@@ -148,6 +154,8 @@ export const useApiState = (
             setIsLoadingModels(false);
             return;
           }
+        } else {
+          await modelManager.syncReviewedProvidersFromNostr(bases);
         }
 
         let firstProgress = true;
@@ -295,11 +303,11 @@ export const useApiState = (
 
     const backgroundRefresh = async () => {
       if (refreshInProgress.current) return;
-      // Re-check at run time: a node connected while this waited in the chain,
-      // and this pass would prune it from the cache.
-      if (nodePaysRef.current) return;
       refreshInProgress.current = true;
       try {
+        await discoveryReady;
+        // A node may connect while this pass waits for the cache to load.
+        if (nodePaysRef.current) return;
         const torMode = isTorContext();
         let bases = modelManager.getBaseUrls();
         if (bases.length === 0) return; // nothing to refresh yet

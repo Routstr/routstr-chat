@@ -19,6 +19,8 @@ import { ModelManager, ProviderManager, consoleLogger } from "@routstr/sdk";
 import type { SdkStore, UsageTrackingDriver } from "@routstr/sdk/storage";
 import type { DiscoveryAdapter } from "@routstr/sdk/discovery";
 import type { StorageAdapter } from "@routstr/sdk/wallet";
+import { eventStore } from "@/lib/applesauce-core";
+import { eventDatabaseReady } from "@/lib/eventDatabase";
 
 // ---------------------------------------------------------------------------
 // Driver selection
@@ -42,6 +44,7 @@ const usageTrackingDriver: UsageTrackingDriver = isBrowser
 // Singleton store
 // ---------------------------------------------------------------------------
 const { store, hydrate } = createSdkStore({ driver });
+const discoveryReady = Promise.all([hydrate, eventDatabaseReady]).then(() => {});
 
 // ---------------------------------------------------------------------------
 // Pre-built adapters (derived from the one store)
@@ -60,6 +63,7 @@ const storageAdapter: StorageAdapter = createStorageAdapterFromStore(store);
 // all consumers read from the same source of truth.
 const modelManager = new ModelManager(discoveryAdapter, {
   logger: consoleLogger,
+  eventStore,
 });
 
 // A single ProviderManager for consistent failure-tracking / cooldown state
@@ -74,6 +78,7 @@ const providerManager = new ProviderManager(discoveryAdapter, store, consoleLogg
 export {
   store,
   hydrate,
+  discoveryReady,
   discoveryAdapter,
   storageAdapter,
   usageTrackingDriver,

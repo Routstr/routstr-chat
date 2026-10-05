@@ -57,8 +57,8 @@ importers:
         specifier: ^1.1.11
         version: 1.1.15(@types/react-dom@19.2.2(@types/react@19.2.2))(@types/react@19.2.2)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       '@routstr/sdk':
-        specifier: ^0.4.1
-        version: 0.4.1(@libsql/client@0.15.15)(@noble/curves@2.2.0)(@tursodatabase/database-wasm@0.2.2(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0))(@tursodatabase/database@0.2.2)(@types/react@19.2.2)(react@19.2.0)(typescript@5.9.3)(zod@4.4.3)
+        specifier: ^0.4.5
+        version: 0.4.5(@libsql/client@0.15.15)(@noble/curves@2.2.0)(@tursodatabase/database-wasm@0.2.2(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0))(@tursodatabase/database@0.2.2)(@types/react@19.2.2)(react@19.2.0)(typescript@5.9.3)(zod@4.4.3)
       '@tailwindcss/typography':
         specifier: ^0.5.16
         version: 0.5.20(tailwindcss@4.3.1)
@@ -249,21 +249,21 @@ importers:
 
 packages:
 
-  '@ai-sdk/openai-compatible@2.0.51':
-    resolution: {integrity: sha512-A6qfyaVs4lxmRxRux6U3ViOa8mMbsSd0OaHghpei2MpiBT6791J4zFH5MN7kaW1tLfQ246rSC2DVTMOavsycjQ==}
-    engines: {node: '>=18'}
+  '@ai-sdk/openai-compatible@3.0.49':
+    resolution: {integrity: sha512-BuJp3/ujLkOf0wdMLPrI68ceyGUr85MrUvccJX+OXJ18imILzyN0B6JQf+8HbBBqqYwzTOvtwqMCbjHI1XBt6Q==}
+    engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
-  '@ai-sdk/provider-utils@4.0.30':
-    resolution: {integrity: sha512-VO7I+vPffqI5sMnPoUq5DCSqKIgQIk/naJWRdQVpz2ma2zoprC/lqiJiUEl2s6DfvTD76TbhD3q39ROjlA6rGw==}
-    engines: {node: '>=18'}
+  '@ai-sdk/provider-utils@5.0.41':
+    resolution: {integrity: sha512-hSosMII5k33z0buaZ6dugH/g8yIJjPQBILuQvr4ThdiMJxrkiZxFWTgIkvKsT6Dk493JbsnGz5W/q88Y5bR7WA==}
+    engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
-  '@ai-sdk/provider@3.0.10':
-    resolution: {integrity: sha512-Q3BZ27qfpYqnCYGvE3vt+Qi6LGOF9R5Nmzn+9JoM1lCRsD9mYaIhfJLkSunN48nfGXJ6n+XNV0J/XVpqGQl7Dw==}
-    engines: {node: '>=18'}
+  '@ai-sdk/provider@4.0.15':
+    resolution: {integrity: sha512-LIDCrT8xgWVMiVUV13+v9FXPJ8B5uX/5ByEMXxp9Sspr2SyB1PwMSCPshZoI/t+4AgxyZCFEVutdaigCnqje3w==}
+    engines: {node: '>=22'}
 
   '@alloc/quick-lru@5.2.0':
     resolution: {integrity: sha512-UrcABB+4bUrFABwbluTIBErXwvbsU/V7TZWfmbgJfbkwiBuziS9gxdODUyuiecfdGQ85jglMW6juS3+z5TsKLw==}
@@ -1163,8 +1163,8 @@ packages:
     peerDependencies:
       '@noble/curves': ^1.6.0
 
-  '@freedomofpress/sigstore-browser@0.1.13':
-    resolution: {integrity: sha512-3YfmP9JQ5h8CAO/vKJEGYrFdzss6xWxYi5ZkbR4KoHlxIaLGrnu+5TQDoZVWhuhyfDBdLQqj6ypdN0W6PsH3Jw==}
+  '@freedomofpress/sigstore-browser@0.1.14':
+    resolution: {integrity: sha512-1dqc7HojiBcr/sJSAXjBwNz4+WGeeAJP8ENQnDxm+idVV0/YIxpfwXRNSJdNw6EXJuHviq/5kSPEBCxamPcrpQ==}
 
   '@freedomofpress/tuf-browser@0.1.11':
     resolution: {integrity: sha512-d76ohB/AS5+zI+lnbiFMX/BIK3nT18hZ8q3Na6X4vyYaSYjXkeknzhAnbx1da+8ObWLwsaZLue46haEch28qtQ==}
@@ -2277,8 +2277,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@routstr/sdk@0.4.1':
-    resolution: {integrity: sha512-lUZ40djUsVcS43qIlS19vP0mSOVH8VsLjmOgNkCQ7BVk4qIIgqcuTiGig7HdgSDxvKwYs6CxnpXoHvb1PaFdng==}
+  '@routstr/sdk@0.4.5':
+    resolution: {integrity: sha512-7+/51BK8YwQEr6roDZsWjjZrzmRG3ZZeA7Z9cBuJNFW7i1HK7EiSCQbQf0ksDPRn0yU8jb0YpnYkkkjBRKENUA==}
     peerDependencies:
       typescript: '>=5.0.0'
 
@@ -2432,8 +2432,8 @@ packages:
     peerDependencies:
       react: ^18 || ^19
 
-  '@tinfoilsh/verifier@1.1.6':
-    resolution: {integrity: sha512-egZlLFU98kh48GKV5B8Gh1abGHCUGEcSijWmTv3hn5lqAMXdLsqyehKDaUen8/98CrNxiOP+mzeqVbKSyAs5ZQ==}
+  '@tinfoilsh/verifier@1.2.1':
+    resolution: {integrity: sha512-1DPIPKtyU6YHFvobidQI+gsPJOiidrqR/1103Fe7b8x0WhAXeJ0R82MU5tegTOteOFH2OeTUXrBiPhVsCh1hhg==}
     engines: {node: '>=20'}
 
   '@tursodatabase/database-common@0.2.2':
@@ -2799,6 +2799,9 @@ packages:
 
   '@webassemblyjs/wast-printer@1.14.1':
     resolution: {integrity: sha512-kPSSXE6De1XOR820C90RIo2ogvZG+c3KiHzqUoO/F34Y2shGzesfqv7o57xrxovZJH/MetF5UjroJ/R/3isoiw==}
+
+  '@workflow/serde@4.1.0':
+    resolution: {integrity: sha512-pav4F2BoirECWR7Nf1TKt+2eETcBj7jj4cBefQ8VXQCA6NPkaKeLfj/zMgi+3zYV5ZIBT4GuUiphsj0/b9hPQQ==}
 
   '@xtuc/ieee754@1.2.0':
     resolution: {integrity: sha512-DX8nKgqcGwsc0eJSqYt5lwP4DH5FlHnmuWWBRy7X0NcaGR0ZtuyeESgMwTYVEtxmsNGY+qit4QYT/MIYTOTPeA==}
@@ -3338,8 +3341,8 @@ packages:
   ee-first@1.1.1:
     resolution: {integrity: sha512-WMwm9LhRUo+WUaRN+vRuETqG89IgZphVSNkdFgeb6sS/E4OrDIN7t48CAewSHXc6C8lefD8KKfr5vY61brQlow==}
 
-  ehbp@0.2.3:
-    resolution: {integrity: sha512-f7iLlhGpeE5xNOYASR3d529PzmBD7Pq5Yb/z0R7vQcxalwNuVTHhX6i4wDJRIVai18MznwoOQ3OWyT/EWaDJ3w==}
+  ehbp@0.3.2:
+    resolution: {integrity: sha512-t6aIXrztsQC7jGypZ4Mvc7oMP2LN1q5zAWRKZUcVbgEZgXq/OoD9MAQGFOaCv5LMexx6BOKYpEfIhM/kaRMrtg==}
     engines: {node: '>=20.0.0'}
 
   ejs@3.1.10:
@@ -4800,12 +4803,21 @@ packages:
   once@1.4.0:
     resolution: {integrity: sha512-lNaJgI+2Q5URQBkccEKHTQOPaXdUxnZZElQTZY0MFUAuaEqe1E+Nyvgdz/aIyNi6Z9MzO5dv1H8n58/GELp3+w==}
 
-  openai@6.44.0:
-    resolution: {integrity: sha512-09/gH+8jH0RgUwsgWHAaxsKGRT5zVZ95IaJUnqAWj6XejIBmnFRwq2WUIF37VtDEsmGrtPmvCs5+yBSeZGWvkA==}
+  openai@6.49.0:
+    resolution: {integrity: sha512-aYCc0C6L864eR6WSYIwQGyXriw/nIyZx0ObvhzOEVuk0zoBDpynjSbrionWI7q65B5H8jJX0DXR9snEzM6bfPg==}
     peerDependencies:
+      '@aws-sdk/credential-provider-node': '>=3.972.0 <4'
+      '@smithy/hash-node': '>=4.3.0 <5'
+      '@smithy/signature-v4': '>=5.4.0 <6'
       ws: ^8.18.0
       zod: ^3.25 || ^4.0
     peerDependenciesMeta:
+      '@aws-sdk/credential-provider-node':
+        optional: true
+      '@smithy/hash-node':
+        optional: true
+      '@smithy/signature-v4':
+        optional: true
       ws:
         optional: true
       zod:
@@ -5559,11 +5571,11 @@ packages:
     resolution: {integrity: sha512-e2zZ96wSChazBsbENf/Pcm/4swHt2cEKQ92rhUjkL9GCKiTDJIaTBenjE/m9DXi0QBmTMDkFDdOomUy20A1tDQ==}
     engines: {node: '>=20'}
 
-  tinfoil@1.1.6:
-    resolution: {integrity: sha512-kAgVPuvdydLSF72GH8I5Awnc0835MQCNHb9cS/J2TxGgMF2LFgqaJhe9l1iPf7Si64h3s+Gebz0XfTJ80QZ8wQ==}
+  tinfoil@1.2.1:
+    resolution: {integrity: sha512-goql//0KY6nViV96wBdmIT6ZZ7rYy9yEhJrtIPdg9YHw3vyDsyNsuXNq/sZgu0Bu+sm5crxQObxrMGwgN572OQ==}
     engines: {node: '>=20'}
     peerDependencies:
-      ai: ^6.0.168
+      ai: ^6.0.168 || ^7.0.0
     peerDependenciesMeta:
       ai:
         optional: true
@@ -5691,6 +5703,10 @@ packages:
 
   undici-types@6.21.0:
     resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}
+
+  undici@7.29.1:
+    resolution: {integrity: sha512-RYONW2MeafgYlkVOKYKkA/Ag7BmXqgIWCa8t1m0JcxrQg9pI9lEqRhAOruOBCbAohOa/gkCF+iPi9hrgvTzu6Q==}
+    engines: {node: '>=20.18.1'}
 
   unicode-canonical-property-names-ecmascript@2.0.1:
     resolution: {integrity: sha512-dA8WbNeb2a6oQzAQ55YlT5vQAWGV9WXOsi3SskE3bcCdM0P4SDd+24zS/OCacdRq5BkdsRj9q3Pg6YyQoxIGqg==}
@@ -6074,20 +6090,22 @@ packages:
 
 snapshots:
 
-  '@ai-sdk/openai-compatible@2.0.51(zod@4.4.3)':
+  '@ai-sdk/openai-compatible@3.0.49(zod@4.4.3)':
     dependencies:
-      '@ai-sdk/provider': 3.0.10
-      '@ai-sdk/provider-utils': 4.0.30(zod@4.4.3)
+      '@ai-sdk/provider': 4.0.15
+      '@ai-sdk/provider-utils': 5.0.41(zod@4.4.3)
       zod: 4.4.3
 
-  '@ai-sdk/provider-utils@4.0.30(zod@4.4.3)':
+  '@ai-sdk/provider-utils@5.0.41(zod@4.4.3)':
     dependencies:
-      '@ai-sdk/provider': 3.0.10
+      '@ai-sdk/provider': 4.0.15
       '@standard-schema/spec': 1.1.0
+      '@workflow/serde': 4.1.0
       eventsource-parser: 3.1.0
+      undici: 7.29.1
       zod: 4.4.3
 
-  '@ai-sdk/provider@3.0.10':
+  '@ai-sdk/provider@4.0.15':
     dependencies:
       json-schema: 0.4.0
 
@@ -7041,7 +7059,7 @@ snapshots:
     dependencies:
       '@noble/curves': 2.2.0
 
-  '@freedomofpress/sigstore-browser@0.1.13':
+  '@freedomofpress/sigstore-browser@0.1.14':
     dependencies:
       '@freedomofpress/crypto-browser': 0.1.7(@noble/curves@2.2.0)
       '@freedomofpress/tuf-browser': 0.1.11(@noble/curves@2.2.0)
@@ -7980,22 +7998,25 @@ snapshots:
   '@rollup/rollup-win32-x64-msvc@4.62.2':
     optional: true
 
-  '@routstr/sdk@0.4.1(@libsql/client@0.15.15)(@noble/curves@2.2.0)(@tursodatabase/database-wasm@0.2.2(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0))(@tursodatabase/database@0.2.2)(@types/react@19.2.2)(react@19.2.0)(typescript@5.9.3)(zod@4.4.3)':
+  '@routstr/sdk@0.4.5(@libsql/client@0.15.15)(@noble/curves@2.2.0)(@tursodatabase/database-wasm@0.2.2(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0))(@tursodatabase/database@0.2.2)(@types/react@19.2.2)(react@19.2.0)(typescript@5.9.3)(zod@4.4.3)':
     dependencies:
       '@cashu/cashu-ts': 3.7.0
       applesauce-core: 5.2.0(typescript@5.9.3)
       applesauce-relay: 5.2.0(typescript@5.9.3)
       applesauce-sqlite: 6.0.0(@libsql/client@0.15.15)(@tursodatabase/database-wasm@0.2.2(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0))(@tursodatabase/database@0.2.2)(better-sqlite3@12.11.1)(typescript@5.9.3)
-      ehbp: 0.2.3
+      ehbp: 0.3.2
       rxjs: 7.8.2
-      tinfoil: 1.1.6(@noble/curves@2.2.0)(zod@4.4.3)
+      tinfoil: 1.2.1(@noble/curves@2.2.0)(zod@4.4.3)
       typescript: 5.9.3
       zustand: 5.0.14(@types/react@19.2.2)(react@19.2.0)
     optionalDependencies:
       better-sqlite3: 12.11.1
     transitivePeerDependencies:
+      - '@aws-sdk/credential-provider-node'
       - '@libsql/client'
       - '@noble/curves'
+      - '@smithy/hash-node'
+      - '@smithy/signature-v4'
       - '@tursodatabase/database'
       - '@tursodatabase/database-wasm'
       - '@types/react'
@@ -8151,10 +8172,10 @@ snapshots:
       '@tanstack/query-core': 5.101.1
       react: 19.2.0
 
-  '@tinfoilsh/verifier@1.1.6(@noble/curves@2.2.0)':
+  '@tinfoilsh/verifier@1.2.1(@noble/curves@2.2.0)':
     dependencies:
       '@freedomofpress/crypto-browser': 0.1.7(@noble/curves@2.2.0)
-      '@freedomofpress/sigstore-browser': 0.1.13
+      '@freedomofpress/sigstore-browser': 0.1.14
       '@freedomofpress/tuf-browser': 0.1.11(@noble/curves@2.2.0)
     transitivePeerDependencies:
       - '@noble/curves'
@@ -8548,6 +8569,8 @@ snapshots:
     dependencies:
       '@webassemblyjs/ast': 1.14.1
       '@xtuc/long': 4.2.2
+
+  '@workflow/serde@4.1.0': {}
 
   '@xtuc/ieee754@1.2.0': {}
 
@@ -9171,7 +9194,7 @@ snapshots:
 
   ee-first@1.1.1: {}
 
-  ehbp@0.2.3:
+  ehbp@0.3.2:
     dependencies:
       '@panva/hpke-noble': 1.1.2(hpke@1.1.2)
       hpke: 1.1.2
@@ -11101,7 +11124,7 @@ snapshots:
     dependencies:
       wrappy: 1.0.2
 
-  openai@6.44.0(ws@8.21.0)(zod@4.4.3):
+  openai@6.49.0(ws@8.21.0)(zod@4.4.3):
     optionalDependencies:
       ws: 8.21.0
       zod: 4.4.3
@@ -12003,17 +12026,20 @@ snapshots:
     dependencies:
       real-require: 1.0.0
 
-  tinfoil@1.1.6(@noble/curves@2.2.0)(zod@4.4.3):
+  tinfoil@1.2.1(@noble/curves@2.2.0)(zod@4.4.3):
     dependencies:
-      '@ai-sdk/openai-compatible': 2.0.51(zod@4.4.3)
-      '@freedomofpress/sigstore-browser': 0.1.13
-      '@tinfoilsh/verifier': 1.1.6(@noble/curves@2.2.0)
+      '@ai-sdk/openai-compatible': 3.0.49(zod@4.4.3)
+      '@freedomofpress/sigstore-browser': 0.1.14
+      '@tinfoilsh/verifier': 1.2.1(@noble/curves@2.2.0)
       '@types/ws': 8.18.1
-      ehbp: 0.2.3
-      openai: 6.44.0(ws@8.21.0)(zod@4.4.3)
+      ehbp: 0.3.2
+      openai: 6.49.0(ws@8.21.0)(zod@4.4.3)
       ws: 8.21.0
     transitivePeerDependencies:
+      - '@aws-sdk/credential-provider-node'
       - '@noble/curves'
+      - '@smithy/hash-node'
+      - '@smithy/signature-v4'
       - bufferutil
       - utf-8-validate
       - zod
@@ -12152,6 +12178,8 @@ snapshots:
       which-boxed-primitive: 1.1.1
 
   undici-types@6.21.0: {}
+
+  undici@7.29.1: {}
 
   unicode-canonical-property-names-ecmascript@2.0.1: {}
 
