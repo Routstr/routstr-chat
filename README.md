@@ -147,19 +147,6 @@ To test the 413 error scenario:
 
 The mock handler is configured in `mocks/handlers.ts` and automatically starts in development mode via `components/ClientProviders.tsx`.
 
-### Minibits Mint Mock Data
-
-**⚠️ Warning:** If you encounter unusual mint errors for Minibits in development mode (e.g., keyset errors, unexpected responses), the cached mock data in `mocks/handlers.ts` may be outdated. The mock responses for `/v1/keysets` and `/v1/info` endpoints should be updated periodically to match the current Minibits mint state.
-
-To update the mock data:
-
-1. Fetch the latest data from the real mint:
-   ```bash
-   curl https://mint.minibits.cash/Bitcoin/v1/keysets
-   curl https://mint.minibits.cash/Bitcoin/v1/info
-   ```
-2. Update the corresponding handlers in `mocks/handlers.ts` with the fresh responses.
-
 ## License
 
 MIT
