@@ -76,9 +76,16 @@ export async function connectRemoteNode(
   url: string,
   signer: Signer
 ): Promise<string> {
-  const listed = await signedFetch(signer, `${url}clients`, "GET").catch(() => {
+  // a Routstr provider answers /v1/info but has no /clients (in a browser the call fails outright,
+  // as its 404 carries no CORS headers): it is not a node to pay through
+  const provider = () => fetch(`${url}v1/info`).then((r) => r.ok).catch(() => false);
+  const notNode =
+    "That address is a Routstr provider, not a routstrd node. Providers are found on their own: pick one of its models in the model picker.";
+  const listed = await signedFetch(signer, `${url}clients`, "GET").catch(async () => {
     throw new RemoteNodeError(
-      "Could not reach that node. Check the address, and note that a browser on https cannot call an http node."
+      (await provider())
+        ? notNode
+        : "Could not reach that node. Check the address, and note that a browser on https cannot call an http node."
     );
   });
   if (listed.status === 403) {
@@ -89,7 +96,7 @@ export async function connectRemoteNode(
   }
   if (!listed.ok) {
     throw new RemoteNodeError(
-      `The node rejected the request (HTTP ${listed.status}).`
+      listed.status === 404 && (await provider()) ? notNode : `The node rejected the request (HTTP ${listed.status}).`
     );
   }
 
