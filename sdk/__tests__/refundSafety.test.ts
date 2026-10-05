@@ -3,7 +3,7 @@ import { createMemoryDriver } from "@routstr/sdk/storage";
 import type { WalletAdapter } from "@routstr/sdk/wallet";
 import { createPaymentStore, getPaymentStore } from "../paymentStore";
 import { bindPaymentWallet } from "../paymentRequest";
-import { refundStorage } from "../refundCredit";
+import { refundKeys, refundStorage } from "../refundCredit";
 
 function wallet(receive: WalletAdapter["receiveToken"]) {
   return {
@@ -149,5 +149,55 @@ describe("refund safety", () => {
     await refundStorage(wallet(async () => ({ success: true, amount: 0, unit: "sat" })), payments.storage, false);
 
     expect(payments.storage.getAllApiKeys()).toEqual([]);
+  });
+
+  it("counts another device's key as done when the provider reports it empty", async () => {
+    const fetch = vi.fn(
+      async (_url: string) => new Response(JSON.stringify({ balance: 0, reserved: 0 }))
+    );
+    vi.stubGlobal("fetch", fetch);
+    const payments = createPaymentStore(createMemoryDriver());
+    await payments.hydrate;
+
+    const [result] = await refundKeys(wallet(async () => ({ success: true, amount: 0, unit: "sat" })), payments.storage, [
+      { baseUrl: "https://provider.example/", key: "sk-gone-device", balance: 0, lastUsed: null },
+    ]);
+
+    expect(result.success).toBe(true);
+    expect(fetch.mock.calls.some(([url]) => String(url).endsWith("v1/wallet/refund"))).toBe(false);
+  });
+
+  it("keeps another device's key when its refund could not be received", async () => {
+    // The key holds 120 sats until the provider pays them out, then reads 0.
+    let paidOut = false;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (!String(url).endsWith("v1/wallet/refund")) {
+          return new Response(
+            JSON.stringify({ balance: paidOut ? 0 : 120_000, reserved: 0 })
+          );
+        }
+        paidOut = true;
+        return new Response(
+          JSON.stringify({ token: "paid-out-fixture", sats: "120" })
+        );
+      })
+    );
+    const payments = createPaymentStore(createMemoryDriver());
+    await payments.hydrate;
+    const source = wallet(async () => ({
+      success: false,
+      amount: 0,
+      unit: "sat",
+      message: "Failed to fetch",
+    }));
+
+    const [result] = await refundKeys(source, payments.storage, [
+      { baseUrl: "https://provider.example/", key: "sk-other-device", balance: 120, lastUsed: null },
+    ]);
+
+    expect(source.receiveToken).toHaveBeenCalledWith("paid-out-fixture");
+    expect(result.success).toBe(false);
   });
 });

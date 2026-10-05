@@ -41,17 +41,26 @@ const log = (...args: unknown[]) =>
   DEBUG && console.log("[configObservables]", ...args);
 
 /**
+ * Result shape for callers that need to distinguish a real empty config from
+ * an unreadable encrypted event.
+ */
+export type ConfigReadResult<T> =
+  | { status: "ok"; value: T; event: NostrEvent }
+  | { status: "none"; value: T; event: null }
+  | { status: "error"; value: T; event: NostrEvent; error: unknown };
+
+/**
  * Factory to create a decrypted config observable for any config type
  *
  * @param configDef - The config type definition
- * @returns An observable that emits decrypted config data
+ * @returns An observable that emits decrypted config data with read status
  */
-export function createConfigObservable<T>(
+export function createConfigReadObservable<T>(
   configDef: ConfigTypeDefinition<T>,
   options?: {
     wotPubkey$?: Observable<string>;
   }
-): Observable<T> {
+): Observable<ConfigReadResult<T>> {
   const activePubkey$ = options?.wotPubkey$ ?? userPubkeyDefined$;
 
   // Create a trigger for when this specific config type receives an event
@@ -79,7 +88,11 @@ export function createConfigObservable<T>(
 
       if (!event) {
         log(`No event found for ${configDef.id}, returning default`);
-        return of(configDef.defaultValue);
+        return of({
+          status: "none" as const,
+          value: configDef.defaultValue,
+          event: null,
+        });
       }
 
       log(`Found event for ${configDef.id}:`, event.id.slice(0, 8));
@@ -93,19 +106,52 @@ export function createConfigObservable<T>(
       try {
         const parsed = JSON.parse(event.content);
         const validated = configDef.parseContent(parsed);
-        return of(validated ?? configDef.defaultValue);
+        if (validated === null) {
+          return of({
+            status: "error" as const,
+            value: configDef.defaultValue,
+            event,
+            error: new Error(`Validation failed for ${configDef.id}`),
+          });
+        }
+
+        return of({ status: "ok" as const, value: validated, event });
       } catch (err) {
         console.error(
           `[configObservables] Failed to parse ${configDef.id}:`,
           err
         );
-        return of(configDef.defaultValue);
+        return of({
+          status: "error" as const,
+          value: configDef.defaultValue,
+          event,
+          error: err,
+        });
       }
     }),
     distinctUntilChanged(
-      (prev, curr) => JSON.stringify(prev) === JSON.stringify(curr)
+      (prev, curr) =>
+        prev.status === curr.status &&
+        prev.event?.id === curr.event?.id &&
+        JSON.stringify(prev.value) === JSON.stringify(curr.value)
     ),
     shareReplay(1)
+  );
+}
+
+/**
+ * Factory to create a decrypted config observable for callers that only need
+ * the value. Read errors intentionally fall back to the config default to
+ * preserve the existing settings/invoice behavior.
+ */
+export function createConfigObservable<T>(
+  configDef: ConfigTypeDefinition<T>,
+  options?: {
+    wotPubkey$?: Observable<string>;
+  }
+): Observable<T> {
+  return createConfigReadObservable(configDef, options).pipe(
+    map((result) => result.value)
   );
 }
 
@@ -131,7 +177,7 @@ async function decryptConfig<T>(
   event: NostrEvent,
   signerInfo: UserSignerInfo,
   configDef: ConfigTypeDefinition<T>
-): Promise<T> {
+): Promise<ConfigReadResult<T>> {
   try {
     const decrypted = await decryptEventContent(event, signerInfo);
     const parsed = JSON.parse(decrypted);
@@ -139,17 +185,27 @@ async function decryptConfig<T>(
 
     if (validated === null) {
       log(`Validation failed for ${configDef.id}, returning default`);
-      return configDef.defaultValue;
+      return {
+        status: "error",
+        value: configDef.defaultValue,
+        event,
+        error: new Error(`Validation failed for ${configDef.id}`),
+      };
     }
 
     log(`Successfully decrypted ${configDef.id}`);
-    return validated;
+    return { status: "ok", value: validated, event };
   } catch (err) {
     console.error(
       `[configObservables] Failed to decrypt ${configDef.id}:`,
       err
     );
-    return configDef.defaultValue;
+    return {
+      status: "error",
+      value: configDef.defaultValue,
+      event,
+      error: err,
+    };
   }
 }
 
@@ -162,6 +218,13 @@ async function decryptConfig<T>(
  * Emits decrypted array of StoredApiKey
  */
 export const apiKeys$ = createConfigObservable(CONFIG_TYPES.API_KEYS);
+
+/**
+ * Read result observable for SDK cached API keys config
+ */
+export const sdkApiKeysResult$ = createConfigReadObservable(
+  CONFIG_TYPES.SDK_API_KEYS
+);
 
 /**
  * Observable for Invoices config

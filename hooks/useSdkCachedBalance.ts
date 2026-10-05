@@ -5,6 +5,7 @@ import { createMemoryDriver } from "@routstr/sdk/storage";
 import { createPaymentStore, getPaymentStore } from "@/sdk/paymentStore";
 import { hydrate as hydrateShared, store as sharedStore } from "@/sdk/sharedStore";
 import { hasCredit, legacyCredit } from "@/sdk/refundCredit";
+import { otherDeviceKeys } from "@/hooks/useSdkApiKeysSync";
 import { loadRemoteNode } from "@/utils/storageUtils";
 import type { StorageAdapter } from "@routstr/sdk/wallet";
 import { useAccountManager } from "@/components/ClientProviders";
@@ -48,7 +49,7 @@ function creditSats(storage: StorageAdapter): number {
 
 /**
  * This account's provider credit plus pre-upgrade credit. `refundable` also
- * counts keys reading 0, so the Refund button stays reachable.
+ * counts keys reading 0 and other devices' keys, so Refund stays reachable.
  */
 export function useSdkCachedBalance(): { sats: number; refundable: boolean } {
   const { manager } = useAccountManager();
@@ -61,6 +62,10 @@ export function useSdkCachedBalance(): { sats: number; refundable: boolean } {
   const legacyBalance = useStore(sharedStore, () => creditSats(legacy));
   const held = useStore(payments.store, () => hasCredit(payments.storage));
   const legacyHeld = useStore(sharedStore, () => hasCredit(legacy));
+  const othersHeld = useStore(
+    otherDeviceKeys,
+    (state) => state.owner === account?.pubkey && state.keys.length > 0,
+  );
 
   // Trigger hydration (no-op if already resolved)
   useEffect(() => {
@@ -70,5 +75,5 @@ export function useSdkCachedBalance(): { sats: number; refundable: boolean } {
   }, [payments]);
 
   const sats = cachedBalance + legacyBalance;
-  return { sats, refundable: sats > 0 || held || legacyHeld };
+  return { sats, refundable: sats > 0 || held || legacyHeld || othersHeld };
 }

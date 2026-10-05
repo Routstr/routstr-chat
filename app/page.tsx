@@ -15,6 +15,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCashuWallet } from "@/features/wallet";
 import { useAutoRefill } from "@/hooks/useAutoRefill";
 import { useNodePays } from "@/hooks/useRemoteNode";
+import { useSdkApiKeysSync } from "@/hooks/useSdkApiKeysSync";
 import {
   KeepAliveProvider,
   useKeepAliveContext,
@@ -25,6 +26,11 @@ const FullPageLoader = () => (
     <Loader2 className="h-8 w-8 text-white/50 animate-spin" />
   </div>
 );
+
+function SdkApiKeysSyncBootstrap() {
+  useSdkApiKeysSync();
+  return null;
+}
 
 function ChatPageContent() {
   const router = useRouter();
@@ -358,6 +364,7 @@ export default function ChatPage() {
     <Suspense fallback={<FullPageLoader />}>
       <AuthProvider>
         <ChatProvider>
+          <SdkApiKeysSyncBootstrap />
           <KeepAliveProvider>
             <ChatPageContent />
           </KeepAliveProvider>

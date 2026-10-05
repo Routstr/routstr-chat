@@ -53,6 +53,7 @@ export {
   createConfigObservable,
   activeConfigPubkey$,
   apiKeys$,
+  sdkApiKeysResult$,
   invoices$,
   theme$,
   configSyncLoading$,

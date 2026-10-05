@@ -1,6 +1,7 @@
 import { noopLogger } from "@routstr/sdk";
 import { RoutstrClient } from "@routstr/sdk/client";
 import type {
+  ApiKeyEntry,
   BalanceManager,
   StorageAdapter,
   WalletAdapter,
@@ -107,5 +108,34 @@ async function refundLargeCredit(
     });
     results.push({ baseUrl: key.baseUrl, success });
   }
+  return results;
+}
+
+/** Refunds keys that are not in `storage`, such as another device's. */
+export async function refundKeys(
+  wallet: WalletAdapter,
+  storage: StorageAdapter,
+  keys: ApiKeyEntry[]
+): Promise<RefundResult[]> {
+  const balances = refundClient(wallet, storage).getBalanceManager();
+  const mintUrl = wallet.getActiveMintUrl() || DEFAULT_MINT_URL;
+  const results: RefundResult[] = [];
+  for (const key of keys) {
+    // An empty key is done, or a gone device's dead key would linger forever.
+    // After a refund attempt only its result counts: a missed payout replays.
+    const b = await balances.getTokenBalance(key.key, key.baseUrl);
+    const empty =
+      b.isInvalidApiKey || (!b.balanceUnknown && !b.amount && !b.reserved);
+    const { success } = empty
+      ? { success: true }
+      : await balances.refundApiKey({
+          mintUrl,
+          baseUrl: key.baseUrl,
+          apiKey: key.key,
+          forceRefund: true,
+        });
+    results.push({ baseUrl: key.baseUrl, success });
+  }
+  await storage.flush?.();
   return results;
 }

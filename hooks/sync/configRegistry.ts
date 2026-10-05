@@ -8,6 +8,7 @@
 import { KINDS } from "@/lib/nostr-kinds";
 import type { StoredApiKey } from "@/components/settings/ApiKeysTab";
 import type { StoredInvoice } from "@/hooks/useInvoiceSync";
+import type { ApiKeyEntry } from "@routstr/sdk/wallet";
 
 export type ThemeConfig =
   | "light-theme"
@@ -43,6 +44,21 @@ function defineConfig<T>(
   return config;
 }
 
+/** A provider key and the device that holds it as its active key. */
+export type SyncedApiKey = ApiKeyEntry & { device: string };
+
+function isSdkApiKeyEntry(value: unknown): value is SyncedApiKey {
+  if (typeof value !== "object" || value === null) return false;
+  const entry = value as Record<string, unknown>;
+  return (
+    typeof entry.device === "string" &&
+    typeof entry.baseUrl === "string" &&
+    typeof entry.key === "string" &&
+    typeof entry.balance === "number" &&
+    (entry.lastUsed === null || typeof entry.lastUsed === "number")
+  );
+}
+
 /**
  * All syncable config types
  *
@@ -68,6 +84,18 @@ export const CONFIG_TYPES = {
           typeof item.key === "string"
       );
       return valid ? (data as StoredApiKey[]) : null;
+    },
+    defaultValue: [],
+  }),
+
+  SDK_API_KEYS: defineConfig<SyncedApiKey[]>({
+    id: "sdk-api-keys",
+    kind: KINDS.ARBITRARY_APP_DATA, // 30078
+    dTag: "routstr-chat-sdk-api-keys-v1",
+    encrypted: true,
+    parseContent: (data: unknown): SyncedApiKey[] | null => {
+      if (!Array.isArray(data)) return null;
+      return data.every(isSdkApiKeyEntry) ? data : null;
     },
     defaultValue: [],
   }),

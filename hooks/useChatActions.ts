@@ -33,9 +33,11 @@ import {
 import {
   hasCredit,
   legacyCredit,
+  refundKeys,
   refundStorage,
   type RefundResult,
 } from "@/sdk/refundCredit";
+import { otherDeviceKeys } from "@/hooks/useSdkApiKeysSync";
 import { loadRemoteNode, loadSpendMode } from "@/utils/storageUtils";
 import { useAccountManager } from "@/components/ClientProviders";
 import { withNodeModeError } from "@/lib/remoteNode";
@@ -888,11 +890,24 @@ export const useChatActions = ({
           false,
           payments.hold
         );
-        return [
+        const results = [
           ...(await refundStorage(wallet, payments.storage, !onlyWhenHeld)),
           // No chat uses the old store's keys, so nothing there waits for one.
           ...(await refundStorage(wallet, legacy, true)),
         ];
+        // Other devices' keys go only through the Refund button (a lost device).
+        const others = otherDeviceKeys.getState();
+        if (!onlyWhenHeld && others.owner === owner && others.keys.length) {
+          const refunded = await refundKeys(wallet, payments.storage, others.keys);
+          const done = new Set(
+            others.keys.filter((_, i) => refunded[i].success).map((k) => k.key)
+          );
+          otherDeviceKeys.setState((state) => ({
+            keys: state.keys.filter((key) => !done.has(key.key)),
+          }));
+          results.push(...refunded);
+        }
+        return results;
       } finally {
         release();
       }
