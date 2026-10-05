@@ -169,6 +169,19 @@ describe.skipIf(!MINT || !INVOICE_MINT)(`payMeltQuote against a real mint (${PAY
     expect(sum(wallet.get())).toBe(sum(coins) - stale.amount);
     expect(new Set(await states(wallet.get()))).toEqual(new Set([CheckStateEnum.UNSPENT]));
   });
+
+  it.skipIf(PAY_STATE !== "SETTLED")("never adds back a coin the swap did not touch", async () => {
+    // the app's store publishes every added coin in a new NIP-60 event, so a re-added coin is duplicated
+    const coins = [...(await funded(64)), ...(await funded(32))];
+    const wallet = store(coins);
+    const added: Proof[] = [];
+    const quote = await lightning.createMeltQuote(MINT!, await invoice(10));
+    await lightning.payMeltQuote(MINT!, quote.quote, wallet.get(), (add, remove) => {
+      added.push(...add);
+      return wallet.commit(add, remove);
+    });
+    expect(added.filter((a) => coins.some((c) => c.secret === a.secret))).toEqual([]);
+  });
 });
 
 describe.skipIf(!MINT || !RECONCILE || !HANDOFF)(`reconcileJournal after a PENDING payment turns ${RECONCILE}`, () => {

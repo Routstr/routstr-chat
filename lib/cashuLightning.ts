@@ -337,7 +337,8 @@ export async function payMeltQuote(
     await commit([], preview.inputs);
     try {
       const res = await wallet.completeSwap(preview);
-      await commit([...res.keep, ...res.send], []);
+      // keep also holds the coins the swap did not touch, and those are still in the wallet
+      await commit([...res.keep, ...res.send].filter((p) => !proofs.some((q) => q.secret === p.secret)), []);
       removeEntry(swap.id);
       send = res.send;
     } catch (error) {
