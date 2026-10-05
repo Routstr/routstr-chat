@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import {
   Message,
   MessageContent,
@@ -12,21 +12,32 @@ import {
 } from "@/utils/messageUtils";
 import { getPendingCashuTokenAmount } from "@/utils/cashuUtils";
 import { useCashuWithXYZ } from "./useCashuWithXYZ";
-import { DEFAULT_MINT_URL } from "@/lib/utils";
 import { saveFile } from "@/utils/indexedDb";
 import { useWalletAdapter } from "./useWalletAdapter";
-import { useSdkClient } from "./useSdkClient";
 import {
-  hydrate as hydrateStore,
   discoveryAdapter,
-  storageAdapter,
+  hydrate as hydrateShared,
   modelManager,
   providerManager,
   usageTrackingDriver,
 } from "@/sdk/sharedStore";
-import { fetchAIResponse, consoleLogger, isTorContext } from "@routstr/sdk";
+import { fetchAIResponse, noopLogger, isTorContext } from "@routstr/sdk";
 import { toast } from "sonner";
 import { useNodePays } from "@/hooks/useRemoteNode";
+import { getPaymentStore } from "@/sdk/paymentStore";
+import {
+  acquirePaymentLock,
+  bindPaymentWallet,
+  bindProviderStorage,
+} from "@/sdk/paymentRequest";
+import {
+  hasCredit,
+  legacyCredit,
+  refundStorage,
+  type RefundResult,
+} from "@/sdk/refundCredit";
+import { loadRemoteNode, loadSpendMode } from "@/utils/storageUtils";
+import { useAccountManager } from "@/components/ClientProviders";
 import { withNodeModeError } from "@/lib/remoteNode";
 
 export interface UseChatActionsReturn {
@@ -91,6 +102,8 @@ export interface UseChatActionsReturn {
   ) => void;
   /** Abort the in-flight AI request / stream. */
   stopGeneration: () => void;
+  /** Refunds provider credit left when a conversation ends. */
+  refundIdleCredit: () => Promise<{ baseUrl: string; success: boolean }[]>;
   /** Refund all API keys back to the active mint */
   refundAllApiKeys: () => Promise<{
     totalRefunded: number;
@@ -142,6 +155,7 @@ export const useChatActions = ({
   onBlossomFetch,
 }: UseChatActionsParams): UseChatActionsReturn => {
   const nodePays = useNodePays();
+  const { manager } = useAccountManager();
   // Retry and edit hold closures from earlier renders, so read the mode at
   // call time or a pre-connect closure pays from the wallet.
   const nodePaysRef = useRef(nodePays);
@@ -187,6 +201,7 @@ export const useChatActions = ({
 
   // Get all balance and wallet functionality from useCashuWithXYZ
   const {
+    activeAccount,
     balance,
     setBalance,
     currentMintUnit,
@@ -210,7 +225,17 @@ export const useChatActions = ({
     sendToken,
     receiveToken,
   });
-  const { client } = useSdkClient(walletAdapter, "xcashu");
+  const runtimeRef = useRef({ walletAdapter, owner: activeAccount?.pubkey });
+  runtimeRef.current = { walletAdapter, owner: activeAccount?.pubkey };
+
+  useEffect(() => {
+    const subscription = manager.active$.subscribe(() => abortControllerRef.current?.abort());
+    return () => subscription.unsubscribe();
+  }, [manager]);
+
+  useEffect(() => {
+    abortControllerRef.current?.abort();
+  }, [nodePays?.url, nodePays?.apiKey]);
 
   const dataUrlToFile = useCallback(
     (dataUrl: string, filename: string): File => {
@@ -470,6 +495,10 @@ export const useChatActions = ({
       retryPrevId?: string
     ) => {
       const nodePays = nodePaysRef.current;
+      const owner = manager.active$.value?.pubkey;
+      const { walletAdapter, owner: walletOwner } = runtimeRef.current;
+      let releasePaymentLock: (() => void) | undefined;
+      let flushPayments: (() => Promise<void>) | undefined;
       setIsLoading(true);
       setStreamingContent("");
       setThinkingContent("");
@@ -503,9 +532,31 @@ export const useChatActions = ({
         if (!walletAdapter) {
           throw new Error("Wallet adapter is not ready");
         }
-        if (!client || !selectedModel) {
+        if (!owner || owner !== walletOwner || !selectedModel) {
           throw new Error("SDK client is not ready");
         }
+
+        const payments = getPaymentStore(owner, Boolean(nodePays));
+        releasePaymentLock = await acquirePaymentLock(
+          owner,
+          abortController.signal
+        );
+        await payments.reload();
+        if (abortController.signal.aborted) return;
+        // Only the node's key may pay while the node pays. Otherwise the SDK
+        // may fail over; the chat-end refund collects credit at any provider.
+        const storageAdapter = nodePays
+          ? bindProviderStorage(payments.storage, nodePays.url)
+          : payments.storage;
+        if (!storageAdapter.flush || !storageAdapter.replaceApiKey) {
+          throw new Error("The payment SDK needs the durable-key update before API-key mode can run.");
+        }
+        flushPayments = storageAdapter.flush;
+        const requestWallet = bindPaymentWallet(walletAdapter, () =>
+          manager.active$.value?.pubkey === owner && nodePaysRef.current === nodePays,
+          abortController.signal, Boolean(nodePays),
+          // Held refunds go where the refund sweep looks, even in node mode.
+          getPaymentStore(owner).hold);
 
         // The node's cache entry can be missing here: right after connect the
         // node pass is still queued behind the public sweep, and a refresh
@@ -533,8 +584,8 @@ export const useChatActions = ({
           nodePays &&
           storageAdapter.getApiKey(nodePays.url)?.key !== nodePays.apiKey
         ) {
-          storageAdapter.removeApiKey(nodePays.url);
-          storageAdapter.setApiKey(nodePays.url, nodePays.apiKey);
+          storageAdapter.replaceApiKey(nodePays.url, nodePays.apiKey);
+          await storageAdapter.flush();
         }
 
         // Race hydration against Stop so a stalled media server can't hold the
@@ -598,22 +649,12 @@ export const useChatActions = ({
               ? nodePays.url
               : (hasCache && baseUrl) || undefined,
             torMode: isTorContext(),
-            mode: nodePays ? "apikeys" : "xcashu",
+            mode:
+              !nodePays && loadSpendMode() === "x-cashu" ? "xcashu" : "apikeys",
             discoveryAdapter,
-            walletAdapter: nodePays
-              ? {
-                  ...walletAdapter,
-                  // The SDK tops up from the wallet on a 402 before failover is
-                  // consulted, so while the node pays, anything reaching for the
-                  // user's proofs is a bug.
-                  sendToken: async () => {
-                    throw new Error(
-                      "Node mode: refusing to pay from your wallet."
-                    );
-                  },
-                }
-              : walletAdapter,
+            walletAdapter: requestWallet,
             storageAdapter,
+            usageTrackingDriver,
             abortSignal: abortController.signal,
             ...(hasCache
               ? { modelManager, providerManager }
@@ -671,6 +712,7 @@ export const useChatActions = ({
               }
             },
             onMessageAppend: (incoming) => {
+              if (manager.active$.value?.pubkey !== owner) return;
               const message = nodePays
                 ? withNodeModeError(incoming)
                 : incoming;
@@ -736,9 +778,8 @@ export const useChatActions = ({
             },
           },
           {
-            client,
             alertLevel: "min",
-            logger: consoleLogger,
+            logger: noopLogger,
             getPendingCashuTokenAmount,
           },
         );
@@ -771,7 +812,14 @@ export const useChatActions = ({
         // The SDK resolves before the append pipeline (image enrich + event
         // store) commits the message to state; tearing down earlier leaves
         // a blank gap while big images save.
-        await lastAppend;
+        try {
+          await lastAppend;
+          await flushPayments?.();
+        } catch {
+          toast.error("Could not finish saving. Reload before sending again.");
+        } finally {
+          releasePaymentLock?.();
+        }
         setIsLoading(false);
         setIsPaymentProcessing(false);
         setStreamingContent("");
@@ -800,7 +848,7 @@ export const useChatActions = ({
       updateLastMessageSatsSpent,
       getLastNonSystemMessageEventId,
       createAndStoreChatEvent,
-      client,
+      manager,
       walletAdapter,
       enrichAssistantImages,
     ]
@@ -814,41 +862,57 @@ export const useChatActions = ({
   }, []);
 
   /**
-   * Refund all API keys AND xcashu tokens back to the user's wallet.
-   * Refreshes balances first, then calls refundProviders and refundXcashuTokens
-   * on the CashuSpender.
+   * Refunds this account's credit, plus pre-upgrade credit, into its wallet.
+   * It takes the payment lock, so it waits for a running reply.
    */
-  const refundAllApiKeys = useCallback(async () => {
-    const mintUrl = cashuStore.activeMintUrl || DEFAULT_MINT_URL;
-    const spender = client.getCashuSpender();
-    const [providerResults, xcashuResults] = await Promise.all([
-      spender.refundProviders(mintUrl, true),
-      spender.refundXcashuTokens(mintUrl).catch((error) => {
-        console.warn("Failed to refund xcashu tokens", error);
+  const refundCredit = useCallback(
+    async (onlyWhenHeld: boolean): Promise<RefundResult[]> => {
+      const owner = manager.active$.value?.pubkey;
+      const { walletAdapter, owner: walletOwner } = runtimeRef.current;
+      if (!owner || owner !== walletOwner || !walletAdapter) {
+        throw new Error("Wallet is not ready");
+      }
+      const payments = getPaymentStore(owner);
+      const legacy = legacyCredit(loadRemoteNode()?.url);
+      await Promise.all([payments.hydrate, hydrateShared]);
+      if (onlyWhenHeld && !hasCredit(payments.storage) && !hasCredit(legacy)) {
         return [];
-      }),
-    ]);
+      }
+      const release = await acquirePaymentLock(owner);
+      try {
+        await payments.reload();
+        const wallet = bindPaymentWallet(
+          walletAdapter,
+          () => manager.active$.value?.pubkey === owner,
+          new AbortController().signal,
+          false,
+          payments.hold
+        );
+        return [
+          ...(await refundStorage(wallet, payments.storage, !onlyWhenHeld)),
+          // No chat uses the old store's keys, so nothing there waits for one.
+          ...(await refundStorage(wallet, legacy, true)),
+        ];
+      } finally {
+        release();
+      }
+    },
+    [manager]
+  );
 
-    // Trigger store hydration so balance hooks pick up the changes
-    try {
-      await hydrateStore;
-    } catch {
-      // Best-effort refresh
-    }
+  const refundIdleCredit = useCallback(
+    () => refundCredit(true),
+    [refundCredit]
+  );
 
-    const totalRefunded =
-      providerResults.filter((r) => r.success).length +
-      xcashuResults.filter((r) => r.success).length;
-    const totalFailed =
-      providerResults.filter((r) => !r.success).length +
-      xcashuResults.filter((r) => !r.success).length;
-
+  const refundAllApiKeys = useCallback(async () => {
+    const results = await refundCredit(false);
     return {
-      totalRefunded,
-      totalFailed,
-      results: [...providerResults, ...xcashuResults],
+      totalRefunded: results.filter((r) => r.success).length,
+      totalFailed: results.filter((r) => !r.success).length,
+      results,
     };
-  }, [client, cashuStore.activeMintUrl]);
+  }, [refundCredit]);
 
   return {
     inputMessage,
@@ -879,6 +943,7 @@ export const useChatActions = ({
     saveInlineEdit,
     retryMessage,
     refundAllApiKeys,
+    refundIdleCredit,
     stopGeneration,
   };
 };

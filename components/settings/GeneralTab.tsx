@@ -21,6 +21,9 @@ import {
   saveAutoDeleteConversations,
   loadKeepAliveEnabled,
   saveKeepAliveEnabled,
+  loadSpendMode,
+  saveSpendMode,
+  type SpendMode,
 } from "@/utils/storageUtils";
 
 interface GeneralTabProps {
@@ -60,9 +63,7 @@ const GeneralTab: React.FC<GeneralTabProps> = ({
   } = useKind1018TrustScores();
   const [autoDeleteEnabled, setAutoDeleteEnabled] = useState<boolean>(false);
   const [keepAliveEnabled, setKeepAliveEnabled] = useState<boolean>(false);
-  const [spendMode, setSpendMode] = useState<
-    "x-cashu" | "lazy-refund" | "spillman"
-  >("x-cashu");
+  const [spendMode, setSpendMode] = useState<SpendMode>("lazy-refund");
 
   useEffect(() => {
     setAutoDeleteEnabled(loadAutoDeleteConversations());
@@ -70,12 +71,7 @@ const GeneralTab: React.FC<GeneralTabProps> = ({
     setWotPubkeyInput(
       getStorageItem<string | null>(WOT_PUBKEY_KEY, null) ?? ""
     );
-    const savedMode = localStorage.getItem("spendMode") as
-      | "x-cashu"
-      | "lazy-refund"
-      | "spillman"
-      | null;
-    if (savedMode) setSpendMode(savedMode);
+    setSpendMode(loadSpendMode());
   }, []);
 
   const normalizeWotPubkey = (value: string): string | null => {
@@ -198,23 +194,30 @@ const GeneralTab: React.FC<GeneralTabProps> = ({
         </h3>
         <div className="bg-muted/50 border border-border rounded-md p-3">
           <div className="text-xs text-muted-foreground mb-3">
-            Choose how to pay for model requests
+            API key pays each provider from one deposit. When a chat ends,
+            credit of 10 sats or more comes back and smaller credit waits for
+            the next chat. X-Cashu pays every reply with its own token.
           </div>
           <div className="flex rounded-md bg-background border border-border p-1">
-            {(["x-cashu", "lazy-refund", "spillman"] as const).map((mode) => (
+            {(
+              [
+                ["lazy-refund", "API key"],
+                ["x-cashu", "X-Cashu"],
+              ] as const
+            ).map(([mode, label]) => (
               <button
                 key={mode}
-                className={`flex-1 py-2 px-3 text-xs font-medium rounded-md transition-colors cursor-pointer capitalize ${
+                className={`flex-1 py-2 px-3 text-xs font-medium rounded-md transition-colors cursor-pointer ${
                   spendMode === mode
                     ? "bg-primary text-primary-foreground"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
                 onClick={() => {
                   setSpendMode(mode);
-                  localStorage.setItem("spendMode", mode);
+                  saveSpendMode(mode);
                 }}
               >
-                {mode.replace("-", " ")}
+                {label}
               </button>
             ))}
           </div>

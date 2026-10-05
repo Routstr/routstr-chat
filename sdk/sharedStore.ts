@@ -1,9 +1,8 @@
 /**
  * Shared SDK store singleton.
  *
- * All hooks (useSdkClient, useDiscoveryAdapter, useSdkCachedBalance, etc.)
- * import from here so there is exactly ONE store, ONE hydrate cycle, and
- * ONE set of adapters across the entire app.
+ * Discovery hooks share one cache and hydrate cycle. Payment credentials
+ * live in account-scoped paymentStore instances.
  */
 import {
   createSdkStore,

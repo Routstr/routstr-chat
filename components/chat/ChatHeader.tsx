@@ -83,11 +83,10 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
     refundAllApiKeys,
   } = useChat();
 
-  const sdkCachedBalance = useSdkCachedBalance();
+  const { sats: sdkCachedBalance, refundable } = useSdkCachedBalance();
   const cachedBalance = `${sdkCachedBalance} sats`;
 
-  const showCachedBalance =
-    isAuthenticated && sdkCachedBalance > 0;
+  const showCachedBalance = isAuthenticated && refundable;
 
   // Refund dialog state
   const [showRefundDialog, setShowRefundDialog] = useState(false);
@@ -225,13 +224,13 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
             <button
               onClick={() => setShowRefundDialog(true)}
               className="flex flex-col items-end hover:opacity-80 transition-opacity cursor-pointer"
-              title="Click to refund all cached balance"
+              title="Provider credit and recoverable tokens for this account. Click to refund."
             >
               <span className="text-xs text-muted-foreground font-medium">
                 {cachedBalance}
               </span>
               <span className="text-[10px] text-muted-foreground/60 leading-none">
-                (cached)
+                provider credit
               </span>
             </button>
           )}

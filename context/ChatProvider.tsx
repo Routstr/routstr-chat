@@ -14,6 +14,7 @@ import { useApiState, UseApiStateReturn } from "@/hooks/useApiState";
 import { useUiState, UseUiStateReturn } from "@/hooks/useUiState";
 import { useModelState, UseModelStateReturn } from "@/hooks/useModelState";
 import { useChatActions, UseChatActionsReturn } from "@/hooks/useChatActions";
+import { useAutoRefund } from "@/hooks/useAutoRefund";
 import { useCashuWithXYZ } from "@/hooks/useCashuWithXYZ";
 import { useBlossomSync } from "@/hooks/useBlossomSync";
 import { usePnsKeys } from "@/hooks/usePnsKeys";
@@ -145,6 +146,12 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     onBlossomUpload: handleBlossomUpload,
     onBlossomFetch: handleBlossomFetch,
   });
+  useAutoRefund(
+    chatActions.refundIdleCredit,
+    cashuWithXYZ.isWalletLoading ? null : (activeAccount?.pubkey ?? null),
+    conversationState.activeConversationId,
+    chatActions.isLoading
+  );
   const apiState = useApiState(
     isAuthenticated,
     cashuWithXYZ.balance,

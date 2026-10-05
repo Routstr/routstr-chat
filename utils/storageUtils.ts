@@ -509,6 +509,7 @@ export const STORAGE_KEYS = {
   AUTO_DELETE_CONVERSATIONS: "auto_delete_conversations",
   KEEP_ALIVE_ENABLED: "keep_alive_enabled",
   REMOTE_NODE: "remote_node",
+  SPEND_MODE: "spendMode",
 } as const;
 
 /** A routstrd instance that pays for requests instead of the local wallet. */
@@ -562,6 +563,26 @@ export const loadKeepAliveEnabled = (): boolean => {
  */
 export const saveKeepAliveEnabled = (enabled: boolean): void => {
   setStorageItem(STORAGE_KEYS.KEEP_ALIVE_ENABLED, enabled);
+};
+
+/** How chat pays providers: a refundable API key, or a token per request. */
+export type SpendMode = "lazy-refund" | "x-cashu";
+
+/**
+ * Load the spend mode from localStorage
+ * @returns The saved mode, defaults to API-key mode ("lazy-refund")
+ */
+export const loadSpendMode = (): SpendMode =>
+  getStorageItem<string>(STORAGE_KEYS.SPEND_MODE, "lazy-refund") === "x-cashu"
+    ? "x-cashu"
+    : "lazy-refund";
+
+/**
+ * Save the spend mode to localStorage
+ * @param mode The mode to use for new requests
+ */
+export const saveSpendMode = (mode: SpendMode): void => {
+  setStorageItem(STORAGE_KEYS.SPEND_MODE, mode);
 };
 
 /**
