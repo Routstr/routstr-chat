@@ -6,12 +6,15 @@ import { useCashuToken } from "@/features/wallet";
 import { toast } from "sonner";
 import { formatBalance } from "@/features/wallet";
 import { useTransactionHistoryStore } from "@/features/wallet";
+import { useCashuWallet } from "@/features/wallet";
+import { reconcileJournal } from "@/lib/cashuLightning";
 
 export function useInvoiceChecker() {
   const { invoices, getPendingInvoices, updateInvoice, cleanupOldInvoices } =
     useInvoiceSync();
   const cashuStore = useCashuStore();
   const { receiveToken } = useCashuToken();
+  const { updateProofs } = useCashuWallet();
   const transactionHistoryStore = useTransactionHistoryStore();
   const [isChecking, setIsChecking] = useState(false);
   const checkIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -283,6 +286,23 @@ export function useInvoiceChecker() {
     // Don't check more than once per 10 seconds
     if (now - lastCheckRef.current < 10000) return;
 
+    // payments the wallet journaled but could not finish: settle them first, whatever the invoice
+    // list still holds, and show each outcome on its invoice
+    const outcomes = await reconcileJournal((mintUrl) => (add, remove) =>
+      updateProofs({ mintUrl, proofsToAdd: add, proofsToRemove: remove })
+    );
+    for (const [quoteId, outcome] of outcomes) {
+      const invoice = invoices.find((i) => i.quoteId === quoteId);
+      if (!invoice || outcome === "pending") continue;
+      await updateInvoice(
+        invoice.id,
+        outcome === "paid"
+          ? { state: MeltQuoteState.PAID, paidAt: invoice.paidAt || Date.now() }
+          : { state: MeltQuoteState.UNPAID }
+      );
+      if (outcome === "failed") toast.info(`A payment of ${formatBalance(invoice.amount, "sats")} did not go through. The sats are back in your wallet.`);
+    }
+
     const pending = getPendingInvoices();
     if (pending.length === 0) return;
 
@@ -310,7 +330,7 @@ export function useInvoiceChecker() {
     } finally {
       setIsChecking(false);
     }
-  }, [isChecking, getPendingInvoices, checkMintInvoice, checkMeltInvoice]);
+  }, [isChecking, getPendingInvoices, checkMintInvoice, checkMeltInvoice, invoices, updateInvoice, updateProofs]);
 
   // Manual check trigger
   const triggerCheck = useCallback(async () => {

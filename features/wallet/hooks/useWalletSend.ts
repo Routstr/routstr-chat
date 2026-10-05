@@ -21,7 +21,7 @@ import { toast } from "sonner";
 export function useWalletSend() {
   const { currentMintUnit } = useChat();
   const { addInvoice, updateInvoice } = useInvoiceSync();
-  const { cleanSpentProofs, receiveToken } = useCashuToken();
+  const { receiveToken } = useCashuToken();
   const cashuStore = useCashuStore();
   const unclaimedTokensStore = useUnclaimedTokensStore();
   const { wallet, updateProofs } = useCashuWallet();
@@ -237,15 +237,21 @@ export function useWalletSend() {
         setIsNip60Processing(false);
         return;
       }
-      const result = await payMeltQuote(mintUrl, nip60MeltQuoteId, selectedProofs, cleanSpentProofs);
-      if (result.success) {
-        await updateProofs({
-          mintUrl,
-          proofsToAdd: [...result.keep, ...result.change],
-          proofsToRemove: selectedProofs,
-        });
+      const result = await payMeltQuote(mintUrl, nip60MeltQuoteId, selectedProofs, (add, remove) =>
+        updateProofs({ mintUrl, proofsToAdd: add, proofsToRemove: remove })
+      );
+      const amount = `${formatBalance(invoiceAmount, currentMintUnit)}s`;
+      if (result.state === "paid") {
         await updateInvoice(nip60MeltQuoteId, { state: MeltQuoteState.PAID, paidAt: Date.now() });
-        setSuccessMessage(`Paid ${formatBalance(invoiceAmount, currentMintUnit)}s!`);
+        setSuccessMessage(`Paid ${amount}!`);
+      } else if (result.state === "pending") {
+        await updateInvoice(nip60MeltQuoteId, { state: MeltQuoteState.PENDING });
+        setSuccessMessage(`Sending ${amount}. It finishes when the network confirms; if it fails, the sats come back.`);
+      } else {
+        await updateInvoice(nip60MeltQuoteId, { state: MeltQuoteState.UNPAID });
+        setError("The payment did not go through. Your sats are back in the wallet.");
+      }
+      if (result.state !== "failed") {
         handleNip60PaymentCancel();
         setTimeout(() => setSuccessMessage(""), 5000);
       }
@@ -266,7 +272,6 @@ export function useWalletSend() {
     currentMintUnit,
     handleNip60InvoiceInput,
     handleNip60PaymentCancel,
-    cleanSpentProofs,
     updateInvoice,
   ]);
 

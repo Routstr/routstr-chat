@@ -1,15 +1,24 @@
 import { useCashuStore } from "@/features/wallet";
 import {
+  CheckStateEnum,
   Mint,
   Wallet,
   MeltQuoteResponse,
   MeltQuoteState,
   MintQuoteResponse,
   MintQuoteState,
+  OutputData,
   Proof,
 } from "@cashu/cashu-ts";
-import { calculateFees } from "@/features/wallet";
-import { canMakeExactChange } from "./cashu";
+import {
+  decodeOutputs,
+  encodeOutputs,
+  listEntries,
+  putEntry,
+  removeEntry,
+  type MeltEntry,
+  type SwapEntry,
+} from "./meltJournal";
 
 export interface MintQuote {
   mintUrl: string;
@@ -205,260 +214,191 @@ export async function createMeltQuote(
   }
 }
 
+/** Where a payment ended up. "pending" covers PENDING and any answer that never came:
+ *  its coins stay out of the wallet until the mint says what happened. */
+export type MeltOutcome = "paid" | "failed" | "pending";
+
+/** Moves proofs in and out of the wallet store (and its NIP-60 copy) in one step. */
+export type CommitProofs = (add: Proof[], remove: Proof[]) => Promise<unknown>;
+
+async function walletFor(mintUrl: string) {
+  const mint = new Mint(mintUrl);
+  const keysets = await mint.getKeySets();
+  // Get preferred unit: msat over sat if both are active
+  const units = [...new Set(keysets.keysets.filter((k) => k.active).map((k) => k.unit))];
+  const unit = units.includes("msat") ? "msat" : units.includes("sat") ? "sat" : "not supported";
+  const wallet = new Wallet(mint, { unit });
+  await wallet.loadMint();
+  return wallet;
+}
+
+// how long a running payment may take before the reconciler treats its entry as abandoned
+const IN_FLIGHT_MS = 3 * 60_000;
+
+const newId = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+
+/** Signed outputs the mint already holds for these blinded messages (NUT-09), as proofs. */
+async function restoreOutputs(wallet: Wallet, keysetId: string, outputs: OutputData[]): Promise<Proof[]> {
+  if (!outputs.length) return [];
+  const res = await wallet.mint.restore({ outputs: outputs.map((o) => o.blindedMessage) });
+  const keyset = wallet.getKeyset(keysetId);
+  return res.outputs.flatMap((o, i) => {
+    const data = outputs.find((d) => d.blindedMessage.B_ === o.B_);
+    return data ? [data.toProof(res.signatures[i], keyset)] : [];
+  });
+}
+
 /**
- * Pay a Lightning invoice by melting tokens
- * @param mintUrl The URL of the mint to use
- * @param quoteId The quote ID from the invoice
- * @param proofs The proofs to spend
- * @returns The fee and change proofs
+ * Settles a swap whose answer never arrived. If the mint signed our outputs they come back from
+ * restore and the inputs are gone; if it signed nothing, the inputs still unspent return to the
+ * wallet. Returns the fresh proofs, or null when the mint cannot tell yet (the entry stays).
+ */
+async function settleSwap(wallet: Wallet, entry: SwapEntry, commit: CommitProofs): Promise<Proof[] | null> {
+  const restored = await restoreOutputs(wallet, entry.keysetId, decodeOutputs(entry.outputs));
+  if (restored.length) {
+    await commit(restored, []);
+    removeEntry(entry.id);
+    return restored;
+  }
+  const states = await wallet.checkProofsStates(entry.inputs);
+  if (states.some((s) => s.state === CheckStateEnum.PENDING)) return null;
+  const unspent = entry.inputs.filter((_, i) => states[i]?.state === CheckStateEnum.UNSPENT);
+  await commit(unspent, []);
+  removeEntry(entry.id);
+  return [];
+}
+
+/**
+ * Settles a melt from the mint's two answers: the payment's state (NUT-05) and the state of the
+ * coins it was given (NUT-07). Only both agreeing settles it; anything else stays reserved.
+ */
+async function settleMelt(wallet: Wallet, entry: MeltEntry, commit: CommitProofs): Promise<{ state: MeltOutcome; change: Proof[] }> {
+  const quote = await wallet.checkMeltQuote(entry.quoteId);
+  const states = await wallet.checkProofsStates(entry.inputs);
+  const all = (s: string) => states.length === entry.inputs.length && states.every((x) => x.state === s);
+  if (quote.state === MeltQuoteState.PAID && all(CheckStateEnum.SPENT)) {
+    const change = await restoreOutputs(wallet, entry.keysetId, decodeOutputs(entry.blanks));
+    await commit(change, []);
+    removeEntry(entry.id);
+    return { state: "paid", change };
+  }
+  if (quote.state === MeltQuoteState.UNPAID && all(CheckStateEnum.UNSPENT)) {
+    await commit(entry.inputs, []);
+    removeEntry(entry.id);
+    return { state: "failed", change: [] };
+  }
+  return { state: "pending", change: [] };
+}
+
+/**
+ * Pay a Lightning invoice by melting tokens. Every mint call is written to the journal (with its
+ * inputs taken out of the wallet) before it is sent, so no answer, a failure or a crash can lose
+ * coins: they are settled now or by reconcileJournal later.
+ * @param proofs The proofs at this mint to pay from
+ * @param commit Moves proofs in and out of the wallet store
  */
 export async function payMeltQuote(
   mintUrl: string,
   quoteId: string,
   proofs: Proof[],
-  cleanSpentProofs: (mintUrl: string) => Promise<Proof[]>
-) {
+  commit: CommitProofs
+): Promise<{ state: MeltOutcome; fee: number; change: Proof[] }> {
+  const wallet = await walletFor(mintUrl);
+  const meltQuote = useCashuStore.getState().getMeltQuote(mintUrl, quoteId);
+  const amountToSend = meltQuote.amount + meltQuote.fee_reserve;
+  if (proofs.reduce((sum, p) => sum + p.amount, 0) < amountToSend) {
+    throw new Error(`Not enough funds on mint ${mintUrl}`);
+  }
+
+  // the exact amount from coins already held needs no swap; otherwise swap for it, written down first
+  let send: Proof[] = [];
   try {
-    const mint = new Mint(mintUrl);
-    const keysets = await mint.getKeySets();
-    const mintDetails = useCashuStore.getState().getMint(mintUrl);
-
-    // Get preferred unit: msat over sat if both are active
-    const activeKeysets = keysets.keysets.filter((k) => k.active);
-    const units = [...new Set(activeKeysets.map((k) => k.unit))];
-    const fees = [...new Array(activeKeysets.map((k) => k.input_fee_ppk))];
-    console.log("rdlogs: lfees", fees);
-    const preferredUnit = units.includes("msat")
-      ? "msat"
-      : units.includes("sat")
-        ? "sat"
-        : "not supported";
-
-    const wallet = new Wallet(mint, { unit: preferredUnit });
-
-    // Load mint keysets
-    await wallet.loadMint();
-
-    // Get melt quote from store
-    const meltQuote = useCashuStore.getState().getMeltQuote(mintUrl, quoteId);
-
-    // Calculate total amount needed, including fee
-    const amountToSend = meltQuote.amount + meltQuote.fee_reserve;
-
-    const proofsAmount = proofs.reduce((sum, p) => sum + p.amount, 0);
-    if (proofsAmount < amountToSend) {
-      throw new Error(`Not enough funds on mint ${mintUrl}`);
-    }
-    console.log(
-      "rdlogs: proofs lfees",
-      calculateFees(proofs, activeKeysets as any)
-    );
-    const mintFees =
-      calculateFees(proofs, activeKeysets as any) / proofs.length;
-
-    let keep: Proof[], send: Proof[];
-
+    // an exact selection covers the amount and the fee for spending its own coins
+    const exact = wallet.sendOffline(amountToSend, proofs, { includeFees: true, exactMatch: true }).send;
+    if (exact.reduce((s, p) => s + p.amount, 0) === amountToSend + wallet.getFeesForProofs(exact)) send = exact;
+  } catch {
+    // no exact selection: swap below
+  }
+  if (!send.length) {
+    const preview = await wallet.prepareSwapToSend(amountToSend, proofs, { includeFees: true });
+    const swap: SwapEntry = {
+      v: 1,
+      kind: "swap",
+      id: newId(),
+      mintUrl,
+      keysetId: preview.keysetId,
+      createdAt: Date.now(),
+      inputs: preview.inputs,
+      outputs: encodeOutputs([...(preview.sendOutputs ?? []), ...(preview.keepOutputs ?? [])]),
+    };
+    putEntry(swap);
+    await commit([], preview.inputs);
     try {
-      // First, try wallet.send()
-      console.log("Attempting wallet.send() for melt quote");
-      const result = await wallet.send(amountToSend, proofs, {
-        includeFees: true,
-      });
-      keep = result.keep;
-      send = result.send;
-      console.log("Successfully used wallet.send() for melt quote");
-    } catch (error: any) {
-      // Check if error is "Token already spent"
-      if (error?.message?.includes("Token already spent")) {
-        console.log("Detected spent tokens, cleaning up and retrying...");
-
-        // Clean spent proofs
-        await cleanSpentProofs(mintUrl);
-
-        // Check if we still have enough funds after cleanup
-        const newProofsAmount = proofs.reduce((sum, p) => sum + p.amount, 0);
-        if (newProofsAmount < amountToSend) {
-          throw new Error(
-            `Not enough funds on mint ${mintUrl} after cleaning spent proofs`
-          );
-        }
-
-        // Check exact change again with fresh proofs
-        const freshDenominationCounts = proofs.reduce(
-          (acc, p) => {
-            acc[p.amount] = (acc[p.amount] || 0) + 1;
-            return acc;
-          },
-          {} as Record<number, number>
-        );
-
-        const exactChangeRetryResult = canMakeExactChange(
-          amountToSend,
-          freshDenominationCounts,
-          proofs
-        );
-
-        if (
-          exactChangeRetryResult.canMake &&
-          exactChangeRetryResult.selectedProofs
-        ) {
-          const selectedDenominations = exactChangeRetryResult.selectedProofs
-            .map((p) => p.amount)
-            .sort((a, b) => b - a);
-          const denominationCounts = selectedDenominations.reduce(
-            (acc, denom) => {
-              acc[denom] = (acc[denom] || 0) + 1;
-              return acc;
-            },
-            {} as Record<number, number>
-          );
-
-          console.log(
-            "rdlogs: Can make exact change on retry, using selected proofs directly"
-          );
-          console.log(
-            "rdlogs: Selected denominations on retry:",
-            selectedDenominations
-          );
-          console.log(
-            "rdlogs: Denomination breakdown on retry:",
-            denominationCounts
-          );
-
-          send = exactChangeRetryResult.selectedProofs;
-          keep = proofs.filter((p) => !keep.includes(p));
-        } else {
-          console.log(
-            "rdlogs: Cannot make exact change on retry, using wallet.send()"
-          );
-          const result = await wallet.send(amountToSend, proofs, {
-            includeFees: true,
-          });
-          keep = result.keep;
-          send = result.send;
-        }
-      }
-      // Check if the error is "Not enough funds available for swap"
-      else if (
-        error?.message?.includes("Not enough funds available for swap")
-      ) {
-        console.log(
-          "wallet.send() failed with insufficient funds, trying exact change methods"
-        );
-
-        // Get denomination counts for exact change attempts
-        const denominationCounts = proofs.reduce(
-          (acc, p) => {
-            acc[p.amount] = (acc[p.amount] || 0) + 1;
-            return acc;
-          },
-          {} as Record<number, number>
-        );
-        console.log("rdlogs:", denominationCounts);
-
-        // Try with 0% error tolerance first
-        let exactChangeResult = canMakeExactChange(
-          amountToSend,
-          denominationCounts,
-          proofs,
-          mintFees,
-          0
-        );
-
-        if (!exactChangeResult.canMake || !exactChangeResult.selectedProofs) {
-          console.log(
-            "Cannot make exact change with 0% tolerance, trying with 5% tolerance"
-          );
-          // Try with 5% error tolerance
-          exactChangeResult = canMakeExactChange(
-            amountToSend,
-            denominationCounts,
-            proofs,
-            mintFees,
-            0.05
-          );
-        }
-
-        if (exactChangeResult.canMake && exactChangeResult.selectedProofs) {
-          const selectedDenominations = exactChangeResult.selectedProofs
-            .map((p) => p.amount)
-            .sort((a, b) => b - a);
-          const denominationBreakdown = selectedDenominations.reduce(
-            (acc, denom) => {
-              acc[denom] = (acc[denom] || 0) + 1;
-              return acc;
-            },
-            {} as Record<number, number>
-          );
-
-          const actualAmount = exactChangeResult.actualAmount || 0;
-          const overpayment = actualAmount - amountToSend;
-          const overpaymentPercent = (overpayment / amountToSend) * 100;
-
-          console.log(
-            "rdlogs: Can make change within tolerance, using selected proofs directly"
-          );
-          console.log("rdlogs: Target amount:", amountToSend);
-          console.log("rdlogs: Actual amount:", actualAmount);
-          console.log(
-            "rdlogs: Overpayment:",
-            overpayment,
-            `(${overpaymentPercent.toFixed(2)}%)`
-          );
-          console.log("rdlogs: Selected denominations:", selectedDenominations);
-          console.log("rdlogs: Denomination breakdown:", denominationBreakdown);
-          console.log("Using proofs within tolerance for melt quote payment");
-          send = exactChangeResult.selectedProofs;
-          keep = proofs.filter((p) => !send.includes(p));
-        } else {
-          // If all methods fail, re-throw the original error
-          throw error;
-        }
-      } else {
-        // Re-throw if it's a different error
-        throw error;
-      }
-    }
-
-    // Melt the selected proofs to pay the Lightning invoice
-    let meltResponse;
-    try {
-      meltResponse = await wallet.meltProofs(meltQuote, send);
+      const res = await wallet.completeSwap(preview);
+      await commit([...res.keep, ...res.send], []);
+      removeEntry(swap.id);
+      send = res.send;
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-
-      // Check if error is "Token already spent"
-      if (message.includes("Token already spent")) {
-        console.log("Detected spent tokens, cleaning up and retrying...");
-        if (error instanceof Error) {
-          error.message =
-            "Token already spent. Please go to your wallet and press Cleanup Wallet for this mint.";
-        }
-        throw error;
-      }
+      // no answer is not "no swap": settle from what the mint holds, then stop this payment
+      await settleSwap(wallet, swap, commit).catch(() => null);
       throw error;
     }
-
-    const meltQuoteUpdated = await wallet.checkMeltQuote(meltQuote.quote);
-    useCashuStore
-      .getState()
-      .updateMeltQuote(
-        mintUrl,
-        meltQuote.quote,
-        meltQuoteUpdated as MeltQuoteResponse
-      );
-
-    return {
-      fee: meltQuote.fee_reserve || 0,
-      change: meltResponse.change || [],
-      keep,
-      success: true,
-    };
-  } catch (error) {
-    console.error("Error paying Lightning invoice:", error);
-    throw error;
   }
+
+  const preview = await wallet.prepareMelt("bolt11", meltQuote, send);
+  const melt: MeltEntry = {
+    v: 1,
+    kind: "melt",
+    id: newId(),
+    mintUrl,
+    keysetId: preview.keysetId,
+    createdAt: Date.now(),
+    quoteId,
+    inputs: send,
+    blanks: encodeOutputs(preview.outputData),
+  };
+  putEntry(melt);
+  await commit([], send);
+  try {
+    const res = await wallet.completeMelt(preview);
+    useCashuStore.getState().updateMeltQuote(mintUrl, quoteId, res.quote as MeltQuoteResponse);
+    if (res.quote.state === MeltQuoteState.PAID) {
+      await commit(res.change, []);
+      removeEntry(melt.id);
+      return { state: "paid", fee: meltQuote.fee_reserve || 0, change: res.change };
+    }
+  } catch (error) {
+    console.error("Melt request did not complete:", error);
+  }
+  // UNPAID, PENDING or no answer: only the mint's own states decide
+  const settled = await settleMelt(wallet, melt, commit).catch(() => ({ state: "pending" as const, change: [] }));
+  return { ...settled, fee: meltQuote.fee_reserve || 0 };
 }
+
+/**
+ * Settles every journal entry the mint can answer for: a swap whose answer was lost, a melt that
+ * was PENDING or unanswered. Melts report their outcome by quote id.
+ */
+export async function reconcileJournal(
+  commitFor: (mintUrl: string) => CommitProofs
+): Promise<Map<string, MeltOutcome>> {
+  const outcomes = new Map<string, MeltOutcome>();
+  for (const entry of listEntries()) {
+    // a payment still running in this or another tab owns its entry for now
+    if (Date.now() - entry.createdAt < IN_FLIGHT_MS) continue;
+    try {
+      const wallet = await walletFor(entry.mintUrl);
+      const commit = commitFor(entry.mintUrl);
+      if (entry.kind === "swap") await settleSwap(wallet, entry, commit);
+      else outcomes.set(entry.quoteId, (await settleMelt(wallet, entry, commit)).state);
+    } catch (error) {
+      // the mint did not answer: the entry stays for the next pass
+      console.error("Could not settle a pending wallet operation:", error);
+    }
+  }
+  return outcomes;
+}
+
 
 /**
  * Calculate total amount in a list of proofs

@@ -575,26 +575,26 @@ const SixtyWallet: React.FC<{
         mintUrl,
         currentMeltQuoteId,
         selectedProofs,
-        cleanSpentProofs
+        (add, remove) =>
+          updateProofs({ mintUrl, proofsToAdd: add, proofsToRemove: remove })
       );
 
-      if (result.success) {
-        // Update invoice status
-        await updateInvoice(currentMeltQuoteId, {
-          state: MeltQuoteState.PAID,
-          paidAt: Date.now(),
-          fee: result.fee,
-        });
-
-        // Remove spent proofs from the store
-        await updateProofs({
-          mintUrl,
-          proofsToAdd: [...result.keep, ...result.change],
-          proofsToRemove: selectedProofs,
-        });
+      if (result.state === "failed") {
+        await updateInvoice(currentMeltQuoteId, { state: MeltQuoteState.UNPAID });
+        setError("The payment did not go through. Your sats are back in the wallet.");
+      } else {
+        const paid = result.state === "paid";
+        await updateInvoice(
+          currentMeltQuoteId,
+          paid
+            ? { state: MeltQuoteState.PAID, paidAt: Date.now(), fee: result.fee }
+            : { state: MeltQuoteState.PENDING }
+        );
 
         setSuccessMessage(
-          `Paid ${formatBalance(invoiceAmount, `${currentMintUnit}s`)}!`
+          paid
+            ? `Paid ${formatBalance(invoiceAmount, `${currentMintUnit}s`)}!`
+            : `Sending ${formatBalance(invoiceAmount, `${currentMintUnit}s`)}. It finishes when the network confirms; if it fails, the sats come back.`
         );
         setSendInvoice("");
         setInvoiceAmount(null);
