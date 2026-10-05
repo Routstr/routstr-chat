@@ -254,14 +254,15 @@ async function restoreOutputs(wallet: Wallet, keysetId: string, outputs: OutputD
  * wallet. Returns the fresh proofs, or null when the mint cannot tell yet (the entry stays).
  */
 async function settleSwap(wallet: Wallet, entry: SwapEntry, commit: CommitProofs): Promise<Proof[] | null> {
+  // coins first: a swap the mint is still working on holds them PENDING, so restore runs only after
+  const states = await wallet.checkProofsStates(entry.inputs);
+  if (states.some((s) => s.state === CheckStateEnum.PENDING)) return null;
   const restored = await restoreOutputs(wallet, entry.keysetId, decodeOutputs(entry.outputs));
   if (restored.length) {
     await commit(restored, []);
     removeEntry(entry.id);
     return restored;
   }
-  const states = await wallet.checkProofsStates(entry.inputs);
-  if (states.some((s) => s.state === CheckStateEnum.PENDING)) return null;
   const unspent = entry.inputs.filter((_, i) => states[i]?.state === CheckStateEnum.UNSPENT);
   await commit(unspent, []);
   removeEntry(entry.id);
