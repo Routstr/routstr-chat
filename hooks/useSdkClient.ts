@@ -75,6 +75,10 @@ const createPendingDeps = (): {
     setRoutstr21Models: () => {},
     getRoutstr21ModelsLastUpdate: () => null,
     setRoutstr21ModelsLastUpdate: () => {},
+    getModelIdMappings: () => null,
+    setModelIdMappings: () => {},
+    getModelIdMappingsEvent: () => null,
+    setModelIdMappingsEvent: () => {},
   };
   const pendingStorage: StorageAdapter = {
     saveProviderInfo: pendingHandler,
