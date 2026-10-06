@@ -37,6 +37,30 @@ describe("SessionService", () => {
     expect(next.getSnapshot()).toMatchObject({
       accountId: alice.id,
       pubkey: alice.pubkey,
+      generation: 0,
+    });
+  });
+
+  it("keeps the lifetime when a first account is adopted, and bumps it on every change after", () => {
+    const session = new SessionService();
+    session.boot(memory());
+    const alice = key();
+    const bob = key();
+
+    session.add(alice);
+    expect(session.getSnapshot().generation).toBe(0);
+    session.add(bob);
+    expect(session.getSnapshot().generation).toBe(1);
+
+    // same person, another signer: still a new account instance
+    const aliceAgain = PrivateKeyAccount.fromKey<AccountMetadata>(
+      alice.signer.key
+    );
+    session.add(aliceAgain);
+    expect(session.getSnapshot()).toMatchObject({
+      accountId: aliceAgain.id,
+      pubkey: alice.pubkey,
+      generation: 2,
     });
   });
 

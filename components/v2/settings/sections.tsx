@@ -31,6 +31,7 @@ import { useUi } from "../ui";
 import { Icon, Mark } from "../icons";
 import { ROOMS, useRoom, type RoomId } from "../room/RoomProvider";
 import { useMoney } from "../useMoney";
+import { useSwitchAccount } from "../useSwitchAccount";
 import { useActiveMint } from "../wallet/Wallet";
 import {
   Btn,
@@ -178,6 +179,7 @@ export function Look() {
 /* ── Account ─────────────────────────────────────────────────────────────── */
 export function Account({ go }: { go: (id: SettingsSection) => void }) {
   const { manager, session } = useAccountManager();
+  const switchTo = useSwitchAccount();
   const accounts = useObservableState(manager.accounts$) || [];
   const active = useObservableState(manager.active$);
   const { logout } = useAuth();
@@ -387,7 +389,7 @@ export function Account({ go }: { go: (id: SettingsSection) => void }) {
                         open={rm === o.id}
                         onClick={() => setRm(rm === o.id ? null : o.id)}
                       />
-                      <Btn onClick={() => session.switchTo(o.id)}>Switch</Btn>
+                      <Btn onClick={() => switchTo(o.id)}>Switch</Btn>
                     </div>
                   </div>
                   <Fold id={`f-rmkey-${o.id}`} open={rm === o.id}>

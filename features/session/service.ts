@@ -16,6 +16,9 @@ export type Accounts = Pick<
 export interface Session {
   accountId: string | null;
   pubkey: string | null;
+  /** Bumps whenever the active account changes, and the app remounts on it.
+   *  A guest's first key keeps it, so the guest's draft carries over. */
+  generation: number;
 }
 
 type KeyValueStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
@@ -26,7 +29,7 @@ const ACTIVE_KEY = "activeAccount";
 /** The one owner of who is signed in on this device. */
 export class SessionService {
   private readonly manager = new AccountManager<AccountMetadata>();
-  private session: Session = { accountId: null, pubkey: null };
+  private session: Session = { accountId: null, pubkey: null, generation: 0 };
   private listeners = new Set<() => void>();
 
   constructor() {
@@ -79,9 +82,12 @@ export class SessionService {
   getSnapshot = (): Session => this.session;
 
   private update(account: Account | undefined): void {
+    const { session } = this;
     this.session = {
       accountId: account?.id ?? null,
       pubkey: account?.pubkey ?? null,
+      generation:
+        session.pubkey === null ? session.generation : session.generation + 1,
     };
     this.listeners.forEach((listener) => listener());
   }

@@ -7,6 +7,7 @@ import {
   ReactNode,
   useEffect,
   useState,
+  useSyncExternalStore,
   createContext,
   useContext,
 } from "react";
@@ -53,6 +54,12 @@ const queryClient = new QueryClient({
 });
 
 export default function ClientProviders({ children }: { children: ReactNode }) {
+  // a new person gets a fresh app: nothing on screen outlives the account
+  const { generation } = useSyncExternalStore(
+    session.subscribe,
+    session.getSnapshot,
+    session.getSnapshot
+  );
   const [relayUrls, setRelayUrls] = useState<string[]>(
     presetRelays.slice(0, 3).map((relay) => relay.url)
   );
@@ -119,7 +126,9 @@ export default function ClientProviders({ children }: { children: ReactNode }) {
         >
           <Kind1018ThemeBootstrap />
           <QueryClientProvider client={queryClient}>
-            <InvoiceRecoveryProvider>{children}</InvoiceRecoveryProvider>
+            <InvoiceRecoveryProvider key={generation}>
+              {children}
+            </InvoiceRecoveryProvider>
           </QueryClientProvider>
         </AppProvider>
       </ThemeProvider>
