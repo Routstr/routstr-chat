@@ -1,7 +1,7 @@
 import { RelayPool, completeOnEose, onlyEvents, type Relay } from "applesauce-relay";
 import { normalizeURL } from "applesauce-core/helpers/url";
 import { nip77, type Filter, type NostrEvent } from "nostr-tools";
-import { endWith, map, type Subscription } from "rxjs";
+import { endWith, map, timer, type Subscription } from "rxjs";
 import type { RelayPort } from "@/features/relays/ports";
 
 /** The app's relay pool. applesauce answers a silent relay with a made-up
@@ -26,8 +26,18 @@ export const poolPort = (pool: RelayPool): RelayPort => ({
         }),
         completeOnEose()
       ),
+  // live feeds outlast a sleep or a dropped network: applesauce's default
+  // gives up after three tries a second apart
   subscribe: (urls, filter) =>
-    pool.subscription(urls, filter).pipe(onlyEvents()),
+    pool
+      .subscription(urls, filter, {
+        reconnect: {
+          count: Infinity,
+          delay: (_, attempt) => timer(Math.min(30_000, 1000 * 2 ** (attempt - 1))),
+          resetOnSuccess: true,
+        },
+      })
+      .pipe(onlyEvents()),
   publish: async (url, event) => (await pool.relay(url).publish(event)).ok,
   // read without opening one (relay() would make it, and a fresh one is not
   // connected yet): bad only once it tried and failed, until then connecting
