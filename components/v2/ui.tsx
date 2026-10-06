@@ -1,6 +1,8 @@
 "use client";
 
-import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
+import React, { createContext, useCallback, useContext, useMemo, useRef, useState, type SetStateAction } from "react";
+import type { MessageAttachment } from "@/types/chat";
+import { ModelPick, PickContext } from "./pick";
 
 /* What the furniture is doing right now. Nothing here is account data. */
 
@@ -60,6 +62,35 @@ export const useUi = () => {
   return v;
 };
 
+/* What you are writing: the words and the files with them. Its own context:
+   it changes on every key, and only the writing surfaces read it. */
+export interface DraftState {
+  text: string;
+  attachments: MessageAttachment[];
+  /** Goes up on every change, so a send empties the box only if nothing changed since. */
+  rev: number;
+}
+export const typed = (d: DraftState, text: string): DraftState => ({ ...d, text, rev: d.rev + 1 });
+export const attached = (d: DraftState, update: SetStateAction<MessageAttachment[]>): DraftState => ({
+  ...d,
+  attachments: typeof update === "function" ? update(d.attachments) : update,
+  rev: d.rev + 1,
+});
+/** Empties the box, unless it changed after `rev`. */
+export const cleared = (d: DraftState, rev: number): DraftState => (d.rev === rev ? { text: "", attachments: [], rev: d.rev + 1 } : d);
+
+interface Draft extends DraftState {
+  setText: (text: string) => void;
+  setAttachments: (update: SetStateAction<MessageAttachment[]>) => void;
+  clear: (rev: number) => void;
+}
+const DraftContext = createContext<Draft | null>(null);
+export const useDraft = () => {
+  const v = useContext(DraftContext);
+  if (!v) throw new Error("useDraft must be used inside UiProvider");
+  return v;
+};
+
 // The composer's model chip: the picker hangs from it and gives the focus back to it. Its own
 // context, so the UI state above stays plain values.
 const ChipContext = createContext<React.RefObject<HTMLButtonElement | null>>({ current: null });
@@ -76,6 +107,16 @@ export function UiProvider({ children }: { children: React.ReactNode }) {
   const [sendWhenFunded, setSendWhenFunded] = useState(false);
   const [isSidebarCollapsed, setCollapsed] = useState(readFold);
   const chipRef = useRef<HTMLButtonElement>(null);
+  const [draft, setDraft] = useState<DraftState>({ text: "", attachments: [], rev: 0 });
+  const [pick] = useState(() => {
+    let storage: Pick<Storage, "getItem" | "setItem"> = { getItem: () => null, setItem: () => {} };
+    try {
+      storage = window.localStorage;
+    } catch {
+      // storage blocked: choices hold for this visit
+    }
+    return new ModelPick(storage, window.location.search);
+  });
 
   const openSettings = useCallback((section?: SettingsSection) => {
     setPicker(false);
@@ -102,9 +143,17 @@ export function UiProvider({ children }: { children: React.ReactNode }) {
     }),
     [drawer, side, face, picker, palette, settings, settingsDeep, openSettings, closeSettings, sendWhenFunded, isSidebarCollapsed, setIsSidebarCollapsed]
   );
+  const setText = useCallback((text: string) => setDraft((d) => typed(d, text)), []);
+  const setAttachments = useCallback((update: SetStateAction<MessageAttachment[]>) => setDraft((d) => attached(d, update)), []);
+  const clear = useCallback((rev: number) => setDraft((d) => cleared(d, rev)), []);
+  const writing = useMemo(() => ({ ...draft, setText, setAttachments, clear }), [draft, setText, setAttachments, clear]);
   return (
     <UiContext.Provider value={value}>
-      <ChipContext.Provider value={chipRef}>{children}</ChipContext.Provider>
+      <ChipContext.Provider value={chipRef}>
+        <PickContext.Provider value={pick}>
+          <DraftContext.Provider value={writing}>{children}</DraftContext.Provider>
+        </PickContext.Provider>
+      </ChipContext.Provider>
     </UiContext.Provider>
   );
 }
