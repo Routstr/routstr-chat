@@ -69,6 +69,8 @@ export function network() {
       }
       return true;
     },
+    status: (url) =>
+      relays.has(url) ? (relay(url).down ? "bad" : "ok") : "idle",
     reconcile: async (url, filter, local, signal) => {
       const r = relay(url);
       if (r.down) throw new Error(`${url} is down`);

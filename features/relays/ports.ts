@@ -1,6 +1,9 @@
 import type { Filter, NostrEvent } from "nostr-tools";
 import type { Observable } from "rxjs";
 
+/** ok: open. bad: it tried and failed. wait: connecting. idle: nothing opened it. */
+export type RelayStatus = "ok" | "bad" | "wait" | "idle";
+
 /** What the relay layer needs from a relay library (platform/nostr/pool.ts). */
 export interface RelayPort {
   /** Stored events for a filter; completes at EOSE, errors when the relay fails. */
@@ -9,6 +12,8 @@ export interface RelayPort {
   subscribe(urls: string[], filter: Filter): Observable<NostrEvent>;
   /** Resolves true when the relay accepted the event. */
   publish(url: string, event: NostrEvent): Promise<boolean>;
+  /** The connection as it is now; looking never opens one. */
+  status(url: string): RelayStatus;
   /**
    * NIP-77: which of `local` the relay lacks (have) and which ids it holds
    * that `local` lacks (need). Null when the relay does not do NIP-77;
