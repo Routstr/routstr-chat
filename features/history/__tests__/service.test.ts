@@ -582,6 +582,26 @@ describe("HistoryService: sync", () => {
       history.getConversations().some((c) => c.title === "from my phone")
     );
   });
+
+  it("takes a burst from another device in one disk write and one redraw", async () => {
+    const net = network();
+    const who = person();
+    const k = await keyringOn(net, who);
+    const { history, log } = device({ net, who });
+    history.start();
+    await ready(history);
+    const writes = vi.spyOn(log, "put");
+    let redraws = 0;
+    history.subscribe(() => redraws++);
+
+    for (let i = 0; i < 50; i++) {
+      net.publishElsewhere(R2, encodeMessage(`b${i}`, ask(`burst ${i}`), who.pubkey, NOW, k.keys));
+    }
+
+    await until(() => history.getConversations().length === 50);
+    expect(writes).toHaveBeenCalledTimes(1);
+    expect(redraws).toBe(1);
+  });
 });
 
 describe("HistoryService: lifetime", () => {

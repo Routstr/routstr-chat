@@ -1,5 +1,11 @@
 import { verifyEvent, type Filter, type NostrEvent } from "nostr-tools";
-import { Subscription } from "rxjs";
+import {
+  Subscription,
+  buffer,
+  connect,
+  throttleTime,
+  type Observable,
+} from "rxjs";
 import type { Conversation, Message } from "@/types/chat";
 import { KIND_PNS, createPnsDeletionEvent, type PnsKeys } from "@/lib/pns";
 import type { AccountRelays } from "@/features/relays/service";
@@ -17,6 +23,8 @@ import type { EventLog } from "./ports";
 
 const KIND_DELETE = 5;
 const FORGET_AFTER_S = 7 * 24 * 60 * 60;
+// live events that arrive this close together are written and shown together
+const LIVE_BATCH_MS = 50;
 
 type KeyValueStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
@@ -277,7 +285,8 @@ export class HistoryService {
       this.live.add(
         this.deps.relays
           .live(this.historyFilter(author))
-          .subscribe((event) => this.receive([event], keys))
+          .pipe(inBatches)
+          .subscribe((events) => this.receive(events, keys))
       );
     }
     const { events, answered } = await this.deps.relays.fetch(
@@ -473,6 +482,24 @@ export class HistoryService {
 }
 
 const nowSeconds = () => Math.floor(Date.now() / 1000);
+
+// A burst (another device uploading a whole history) is one disk write and
+// one redraw, not one per event; a quiet relay sets no timer.
+const inBatches = (events: Observable<NostrEvent>) =>
+  events.pipe(
+    connect((shared) =>
+      shared.pipe(
+        buffer(
+          shared.pipe(
+            throttleTime(LIVE_BATCH_MS, undefined, {
+              leading: false,
+              trailing: true,
+            })
+          )
+        )
+      )
+    )
+  );
 
 const older = (a: NostrEvent, b: NostrEvent) =>
   a.created_at < b.created_at || (a.created_at === b.created_at && a.id < b.id);
