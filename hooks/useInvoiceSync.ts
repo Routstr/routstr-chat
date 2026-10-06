@@ -24,6 +24,7 @@ import {
 import { MintQuoteState, MeltQuoteState } from "@cashu/cashu-ts";
 import {
   invoices$,
+  configOwner,
   configSyncLoading$,
   genericConfigSync$,
   publishConfig,
@@ -35,6 +36,7 @@ import {
   type UserSignerInfo,
 } from "@/hooks/sync";
 import { finalizeMintClaim } from "@/lib/mintQuoteRecovery";
+import { currentOwner, owned } from "@/features/session/owned";
 
 export interface StoredInvoice {
   id: string;
@@ -69,7 +71,7 @@ function notifyLocalInvoiceChange() {
 }
 
 function handleInvoiceStorage(event: StorageEvent) {
-  if (event.key === "lightning_invoices") notifyLocalInvoiceChange();
+  if (event.key === owned("lightning_invoices")) notifyLocalInvoiceChange();
 }
 
 function subscribeToLocalInvoiceChanges(listener: () => void) {
@@ -97,8 +99,11 @@ export function useInvoiceSync() {
   const { manager } = useAccountManager();
   const activeAccount = useObservableState(manager.active$);
 
-  // Subscribe to the generic config sync
-  const cloudInvoices = useObservableState(invoices$);
+  // Subscribe to the generic config sync. Right after a switch it still
+  // replays the previous account's list, which is never this account's.
+  const cloudCopy = useObservableState(invoices$);
+  const cloudInvoices =
+    configOwner(cloudCopy) === activeAccount?.pubkey ? cloudCopy : undefined;
   const isLoading = useObservableState(configSyncLoading$);
   const syncEose = useObservableState(configSyncEose$);
   const localInvoiceRevisionSnapshot = useSyncExternalStore(
@@ -177,10 +182,14 @@ export function useInvoiceSync() {
     return () => subscription.unsubscribe();
   }, [cloudSyncEnabled, activeAccount]);
 
-  // Local storage operations
+  // Local storage operations, for the account this hook was rendered for. A
+  // guest's list goes with the key that takes the guest over.
+  const owner = activeAccount?.pubkey ?? null;
   const getLocalInvoices = useCallback((): StoredInvoice[] => {
     if (typeof window === "undefined") return [];
-    const stored = localStorage.getItem("lightning_invoices");
+    const stored = localStorage.getItem(
+      owned("lightning_invoices", owner ?? currentOwner())
+    );
     if (!stored) return [];
     try {
       const data = JSON.parse(stored) as InvoiceStore;
@@ -188,17 +197,23 @@ export function useInvoiceSync() {
     } catch {
       return [];
     }
-  }, []);
+  }, [owner]);
 
-  const saveLocalInvoices = useCallback((invoices: StoredInvoice[]) => {
-    if (typeof window === "undefined") return;
-    const store: InvoiceStore = {
-      invoices,
-      lastSync: Date.now(),
-    };
-    localStorage.setItem("lightning_invoices", JSON.stringify(store));
-    notifyLocalInvoiceChange();
-  }, []);
+  const saveLocalInvoices = useCallback(
+    (invoices: StoredInvoice[]) => {
+      if (typeof window === "undefined") return;
+      const store: InvoiceStore = {
+        invoices,
+        lastSync: Date.now(),
+      };
+      localStorage.setItem(
+        owned("lightning_invoices", owner ?? currentOwner()),
+        JSON.stringify(store)
+      );
+      notifyLocalInvoiceChange();
+    },
+    [owner]
+  );
 
   // Merge cloud and local invoices
   const mergedInvoices = useMemo(() => {
@@ -235,6 +250,7 @@ export function useInvoiceSync() {
   useEffect(() => {
     if (
       syncEose &&
+      cloudInvoices &&
       !hasMergedRef.current &&
       cloudSyncEnabled &&
       activeAccount
@@ -244,6 +260,7 @@ export function useInvoiceSync() {
     }
   }, [
     syncEose,
+    cloudInvoices,
     cloudSyncEnabled,
     activeAccount,
     mergedInvoices,

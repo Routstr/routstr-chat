@@ -3,6 +3,7 @@ import { useCashuStore } from "../state/cashuStore";
 import { useUnclaimedTokensStore } from "../state/unclaimedTokensStore";
 import { useCashuWallet } from "./useCashuWallet";
 import { useCashuHistory } from "./useCashuHistory";
+import { currentOwner, owned } from "@/features/session/owned";
 import {
   Mint,
   Wallet,
@@ -15,9 +16,9 @@ import { calculateInactiveKeysetBalances } from "../core/utils/balance";
 import { MintService } from "../core/services/MintService";
 import { hashToCurve } from "@cashu/crypto/modules/common";
 
-// Global flag to track if recovery has been initiated in this session
-let recoveryInitiated = false;
-let recoveryPromise: Promise<void> | null = null;
+// Interrupted sends and receives are recovered once per account per tab,
+// when the app mounts for that account
+const recovered = new Set<string | null>();
 
 // Global map to track active cleanSpentProofs operations per mint
 const activeCleanupPromises = new Map<string, Promise<Proof[]>>();
@@ -36,10 +37,10 @@ export function useCashuToken() {
    */
   const recoverPendingProofs = async () => {
     try {
+      const send = `${owned("pending_send_proofs")}_`;
+      const receive = `${owned("pending_receive_proofs")}_`;
       const keys = Object.keys(localStorage).filter(
-        (key) =>
-          key.startsWith("pending_send_proofs_") ||
-          key.startsWith("pending_receive_proofs_")
+        (key) => key.startsWith(send) || key.startsWith(receive)
       );
 
       for (const key of keys) {
@@ -71,7 +72,7 @@ export function useCashuToken() {
         // been delivered to someone in the meantime); interrupted receives are
         // restored at any age because those proofs are the only copy left.
         const isStaleSend =
-          key.startsWith("pending_send_proofs_") &&
+          key.startsWith(send) &&
           Date.now() - timestamp >= 60 * 60 * 1000;
         if (isStaleSend) {
           localStorage.removeItem(key);
@@ -99,32 +100,11 @@ export function useCashuToken() {
     }
   };
 
-  // Recover pending proofs on hook initialization - ensure it only runs once globally
   useEffect(() => {
-    const initRecovery = async () => {
-      // If recovery is already in progress, wait for it to complete
-      if (recoveryPromise) {
-        await recoveryPromise;
-        return;
-      }
-
-      // If recovery has already been initiated in this session, skip
-      if (recoveryInitiated) {
-        return;
-      }
-
-      // Mark recovery as initiated and create the promise
-      recoveryInitiated = true;
-      recoveryPromise = recoverPendingProofs();
-
-      try {
-        await recoveryPromise;
-      } finally {
-        recoveryPromise = null;
-      }
-    };
-
-    initRecovery();
+    const owner = currentOwner();
+    if (recovered.has(owner)) return;
+    recovered.add(owner);
+    void recoverPendingProofs();
   }, []);
 
   /**
@@ -144,6 +124,7 @@ export function useCashuToken() {
     unit?: string,
     trackUnclaimed = false
   ): Promise<string> => {
+    const owner = currentOwner();
     setIsLoading(true);
     setError(null);
     try {
@@ -241,7 +222,10 @@ export function useCashuToken() {
       }
 
       // Store proofs temporarily before updating wallet state
-      const pendingProofsKey = `pending_send_proofs_${Date.now()}`;
+      const pendingProofsKey = `${owned(
+        "pending_send_proofs",
+        owner
+      )}_${Date.now()}`;
       localStorage.setItem(
         pendingProofsKey,
         JSON.stringify({
@@ -284,7 +268,7 @@ export function useCashuToken() {
       });
       // Wallet-send tokens must be stored before dropping the proof backup.
       if (trackUnclaimed) {
-        useUnclaimedTokensStore.getState().addUnclaimedToken({
+        useUnclaimedTokensStore.of(owner).getState().addUnclaimedToken({
           token,
           amount,
           unit: preferredUnit,
@@ -399,6 +383,7 @@ export function useCashuToken() {
     token: string,
     requirePersisted = false
   ): Promise<Proof[]> => {
+    const owner = currentOwner();
     setIsLoading(true);
     setError(null);
 
@@ -434,7 +419,10 @@ export function useCashuToken() {
       // Receive proofs from token
       const receivedProofs = await wallet.receive(token);
       // After wallet.receive, these proofs are the only recoverable copy.
-      const pendingReceiveKey = `pending_receive_proofs_${Date.now()}`;
+      const pendingReceiveKey = `${owned(
+        "pending_receive_proofs",
+        owner
+      )}_${Date.now()}`;
       localStorage.setItem(
         pendingReceiveKey,
         JSON.stringify({
@@ -765,8 +753,7 @@ export function useCashuToken() {
    * Useful for testing or manual recovery triggers
    */
   const resetRecoveryState = () => {
-    recoveryInitiated = false;
-    recoveryPromise = null;
+    recovered.clear();
     // Clear all recovery processed flags from sessionStorage
     const keys = Object.keys(sessionStorage).filter((key) =>
       key.startsWith("recovery_processed_")

@@ -1,5 +1,6 @@
 import { TransactionHistory } from "@/types/chat";
 import { useCashuStore } from "@/features/wallet/state/cashuStore";
+import { owned } from "@/features/session/owned";
 
 /**
  * SSR-safe check for localStorage availability
@@ -206,7 +207,10 @@ export const migrateStorageItems = (): void => {
  * @returns Array of transaction history or empty array
  */
 export const loadTransactionHistory = (): TransactionHistory[] => {
-  return getStorageItem<TransactionHistory[]>("transaction_history", []);
+  return getStorageItem<TransactionHistory[]>(
+    owned(STORAGE_KEYS.TRANSACTION_HISTORY),
+    []
+  );
 };
 
 /**
@@ -214,7 +218,7 @@ export const loadTransactionHistory = (): TransactionHistory[] => {
  * @param history Array of transaction history
  */
 export const saveTransactionHistory = (history: TransactionHistory[]): void => {
-  setStorageItem("transaction_history", history);
+  setStorageItem(owned(STORAGE_KEYS.TRANSACTION_HISTORY), history);
 };
 
 /**
@@ -569,7 +573,10 @@ export const saveKeepAliveEnabled = (enabled: boolean): void => {
  * @returns An array of CashuTokenEntry objects.
  */
 export const getLocalCashuTokens = (): CashuTokenEntry[] => {
-  return getStorageItem<CashuTokenEntry[]>(STORAGE_KEYS.LOCAL_CASHU_TOKENS, []);
+  return getStorageItem<CashuTokenEntry[]>(
+    owned(STORAGE_KEYS.LOCAL_CASHU_TOKENS),
+    []
+  );
 };
 
 /**
@@ -588,7 +595,7 @@ export const setLocalCashuToken = (baseUrl: string, token: string): void => {
   } else {
     tokens.push({ baseUrl, token });
   }
-  setStorageItem(STORAGE_KEYS.LOCAL_CASHU_TOKENS, tokens);
+  setStorageItem(owned(STORAGE_KEYS.LOCAL_CASHU_TOKENS), tokens);
 };
 
 /**
@@ -609,7 +616,7 @@ export const getLocalCashuToken = (baseUrl: string): string | null => {
 export const removeLocalCashuToken = (baseUrl: string): void => {
   const tokens = getLocalCashuTokens();
   const updatedTokens = tokens.filter((entry) => entry.baseUrl !== baseUrl);
-  setStorageItem(STORAGE_KEYS.LOCAL_CASHU_TOKENS, updatedTokens);
+  setStorageItem(owned(STORAGE_KEYS.LOCAL_CASHU_TOKENS), updatedTokens);
 };
 
 /**
@@ -877,7 +884,10 @@ const SATS_SPENT_STORAGE_KEY = "sats_spent_by_event";
  * @returns Map of eventId -> satsSpent
  */
 export const loadSatsSpentMap = (): Record<string, number> => {
-  return getStorageItem<Record<string, number>>(SATS_SPENT_STORAGE_KEY, {});
+  return getStorageItem<Record<string, number>>(
+    owned(SATS_SPENT_STORAGE_KEY),
+    {}
+  );
 };
 
 /**
@@ -888,7 +898,7 @@ export const loadSatsSpentMap = (): Record<string, number> => {
 export const saveSatsSpent = (eventId: string, satsSpent: number): void => {
   const map = loadSatsSpentMap();
   map[eventId] = satsSpent;
-  setStorageItem(SATS_SPENT_STORAGE_KEY, map);
+  setStorageItem(owned(SATS_SPENT_STORAGE_KEY), map);
 };
 
 /**

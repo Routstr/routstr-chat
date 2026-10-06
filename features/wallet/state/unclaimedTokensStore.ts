@@ -1,4 +1,4 @@
-import { create } from "zustand";
+import { ownedStore } from "@/features/session/owned";
 import { persist } from "zustand/middleware";
 
 // A generated eCash send token that has not been confirmed as delivered yet.
@@ -22,7 +22,7 @@ interface UnclaimedTokensStore {
   removeUnclaimedToken: (id: string) => void;
 }
 
-export const useUnclaimedTokensStore = create<UnclaimedTokensStore>()(
+export const useUnclaimedTokensStore = ownedStore<UnclaimedTokensStore>()(
   persist(
     (set) => ({
       unclaimedTokens: [],

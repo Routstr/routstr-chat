@@ -51,6 +51,7 @@ export { publishConfig, deleteConfig, canPublish } from "./configPublish";
 // Decrypted config observables
 export {
   createConfigObservable,
+  configOwner,
   activeConfigPubkey$,
   apiKeys$,
   invoices$,

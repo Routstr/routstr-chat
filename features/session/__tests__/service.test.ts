@@ -34,6 +34,26 @@ describe("SessionService", () => {
     expect(next.accounts.accounts$.value[0].metadata).toEqual({
       name: "Alice",
     });
-    expect(next.accounts.active$.value?.id).toBe(alice.id);
+    expect(next.getSnapshot()).toMatchObject({
+      accountId: alice.id,
+      pubkey: alice.pubkey,
+    });
+  });
+
+  it("tells its listeners before anything else that watches the active account", () => {
+    const session = new SessionService();
+    session.boot(memory());
+    const order: string[] = [];
+    session.subscribe(() =>
+      order.push(`session ${session.getSnapshot().pubkey}`)
+    );
+    session.accounts.active$.subscribe((a) =>
+      order.push(`app ${a?.pubkey ?? null}`)
+    );
+    order.length = 0;
+
+    const alice = key();
+    session.add(alice);
+    expect(order).toEqual([`session ${alice.pubkey}`, `app ${alice.pubkey}`]);
   });
 });

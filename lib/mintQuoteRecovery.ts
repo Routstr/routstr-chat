@@ -1,4 +1,5 @@
 import { useCashuStore } from "@/features/wallet/state/cashuStore";
+import { currentOwner } from "@/features/session/owned";
 import {
   Mint,
   MintOperationError,
@@ -229,13 +230,16 @@ async function restorePreview(
   return proofs;
 }
 
-function persistProofs(proofs: Proof[]): void {
-  const cashuStore = useCashuStore.getState();
+/** The wallet copy of the account a claim began for: it settles there. */
+type WalletCopy = ReturnType<typeof useCashuStore.of>;
+
+function persistProofs(store: WalletCopy, proofs: Proof[]): void {
+  const cashuStore = store.getState();
   const provisionalEventId = bytesToHex(randomBytes(32));
   cashuStore.addProofs(proofs, provisionalEventId);
 
   const persistedSecrets = new Set(
-    useCashuStore.getState().proofs.map((proof) => proof.secret)
+    store.getState().proofs.map((proof) => proof.secret)
   );
   if (!proofs.every((proof) => persistedSecrets.has(proof.secret))) {
     throw new Error("Minted proofs could not be saved locally");
@@ -278,11 +282,12 @@ function serializeKeyset(keyset: StoredKeyset): MintKeyset {
 }
 
 function persistMintKeysets(
+  store: WalletCopy,
   mintUrl: string,
   wallet: Wallet,
   proofs: Proof[]
 ): string {
-  const cashuStore = useCashuStore.getState();
+  const cashuStore = store.getState();
   const existingMint =
     cashuStore.getMint(mintUrl) ??
     cashuStore.mints.find(
@@ -302,14 +307,14 @@ function persistMintKeysets(
   });
 
   if (!existingMint) cashuStore.addMint(storageMintUrl);
-  useCashuStore
+  store
     .getState()
     .setKeysets(storageMintUrl, [
       ...keysetsById.values(),
     ] as unknown as Keyset[]);
 
   const storedKeysetIds = new Set(
-    (useCashuStore.getState().getMint(storageMintUrl)?.keysets ?? []).map(
+    (store.getState().getMint(storageMintUrl)?.keysets ?? []).map(
       (keyset) => serializeKeyset(keyset as unknown as StoredKeyset).id
     )
   );
@@ -334,6 +339,7 @@ async function completePreparedMint(
 }
 
 async function settlePaidQuoteLocked(
+  store: WalletCopy,
   normalizedMintUrl: string,
   quoteId: string,
   amount: number,
@@ -386,9 +392,14 @@ async function settlePaidQuoteLocked(
     }
   }
 
-  const storageMintUrl = persistMintKeysets(normalizedMintUrl, wallet, proofs);
-  persistProofs(proofs);
-  useCashuStore.getState().updateMintQuote(storageMintUrl, quoteId, {
+  const storageMintUrl = persistMintKeysets(
+    store,
+    normalizedMintUrl,
+    wallet,
+    proofs
+  );
+  persistProofs(store, proofs);
+  store.getState().updateMintQuote(storageMintUrl, quoteId, {
     ...quote,
     state: MintQuoteState.ISSUED,
   });
@@ -403,6 +414,7 @@ async function withSettlementLock<T>(operation: () => Promise<T>): Promise<T> {
 }
 
 async function claimPaidQuote(
+  store: WalletCopy,
   mintUrl: string,
   quoteId: string,
   amount: number,
@@ -412,13 +424,19 @@ async function claimPaidQuote(
   await waitForPaidQuote(new Mint(normalizedMintUrl), quoteId, maxAttempts);
 
   return withSettlementLock(async () => {
-    await useCashuStore.persist.rehydrate();
+    await store.persist.rehydrate();
     const quote = await waitForPaidQuote(
       new Mint(normalizedMintUrl),
       quoteId,
       1
     );
-    return settlePaidQuoteLocked(normalizedMintUrl, quoteId, amount, quote);
+    return settlePaidQuoteLocked(
+      store,
+      normalizedMintUrl,
+      quoteId,
+      amount,
+      quote
+    );
   });
 }
 
@@ -432,7 +450,13 @@ export function claimPaidMintQuote(
   const existing = activeClaims.get(key);
   if (existing) return existing;
 
-  const operation = claimPaidQuote(mintUrl, quoteId, amount, maxAttempts);
+  const operation = claimPaidQuote(
+    useCashuStore.of(currentOwner()),
+    mintUrl,
+    quoteId,
+    amount,
+    maxAttempts
+  );
   activeClaims.set(key, operation);
   operation.then(undefined, () => {
     if (activeClaims.get(key) === operation) activeClaims.delete(key);

@@ -17,6 +17,7 @@ import {
   shareReplay,
   distinctUntilChanged,
   startWith,
+  tap,
 } from "rxjs";
 import type { Observable } from "rxjs";
 import type { NostrEvent } from "nostr-tools";
@@ -39,6 +40,12 @@ import { CONFIG_TYPES } from "./configRegistry";
 const DEBUG = false;
 const log = (...args: unknown[]) =>
   DEBUG && console.log("[configObservables]", ...args);
+
+// The account each decrypted copy was read for. The observables replay their
+// last copy, which right after a switch is still the previous account's.
+const owners = new WeakMap<object, string>();
+export const configOwner = (copy: unknown): string | undefined =>
+  copy !== null && typeof copy === "object" ? owners.get(copy) : undefined;
 
 /**
  * Factory to create a decrypted config observable for any config type
@@ -72,6 +79,9 @@ export function createConfigObservable<T>(
     // Wait for EOSE before attempting to read
     filter(([_signer, _pubkey, eose]) => eose),
     switchMap(([signerInfo, pubkey]) => {
+      const readFor = tap((copy: T) => {
+        if (copy !== null && typeof copy === "object") owners.set(copy, pubkey);
+      });
       log(`Loading ${configDef.id} for pubkey:`, pubkey.slice(0, 8));
 
       // Get the event from the store
@@ -79,21 +89,21 @@ export function createConfigObservable<T>(
 
       if (!event) {
         log(`No event found for ${configDef.id}, returning default`);
-        return of(configDef.defaultValue);
+        return of(configDef.defaultValue).pipe(readFor);
       }
 
       log(`Found event for ${configDef.id}:`, event.id.slice(0, 8));
 
       if (configDef.encrypted) {
         // Decrypt and parse
-        return from(decryptConfig(event, signerInfo, configDef));
+        return from(decryptConfig(event, signerInfo, configDef)).pipe(readFor);
       }
 
       // Parse unencrypted content
       try {
         const parsed = JSON.parse(event.content);
         const validated = configDef.parseContent(parsed);
-        return of(validated ?? configDef.defaultValue);
+        return of(validated ?? configDef.defaultValue).pipe(readFor);
       } catch (err) {
         console.error(
           `[configObservables] Failed to parse ${configDef.id}:`,
@@ -102,8 +112,11 @@ export function createConfigObservable<T>(
         return of(configDef.defaultValue);
       }
     }),
+    // another account's equal copy is still a new copy
     distinctUntilChanged(
-      (prev, curr) => JSON.stringify(prev) === JSON.stringify(curr)
+      (prev, curr) =>
+        configOwner(prev) === configOwner(curr) &&
+        JSON.stringify(prev) === JSON.stringify(curr)
     ),
     shareReplay(1)
   );

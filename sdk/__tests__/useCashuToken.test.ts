@@ -4,11 +4,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({
   mint: {} as any,
   updateProofs: vi.fn(),
+  effects: false,
 }));
 
 vi.mock("react", () => ({
   useState: () => [null, vi.fn()],
-  useEffect: () => undefined,
+  useEffect: (effect: () => void) => void (state.effects && effect()),
 }));
 vi.mock("@/features/wallet/state/cashuStore", () => ({
   useCashuStore: () => ({
@@ -27,6 +28,7 @@ vi.mock("@/features/wallet/hooks/useCashuHistory", () => ({
 }));
 
 import { useCashuToken } from "@/features/wallet/hooks/useCashuToken";
+import { setOwner } from "@/features/session/owned";
 
 const mintUrl = "https://mint.example.com";
 const publicKey =
@@ -140,4 +142,44 @@ describe("useCashuToken receive", () => {
       expect(storage.size).toBe(0);
     }
   );
+});
+
+describe("useCashuToken recovery", () => {
+  it("restores only the active account's interrupted sends and receives", async () => {
+    const now = Date.now();
+    const backup = (secret: string) =>
+      JSON.stringify({
+        mintUrl,
+        proofsToSend: [{ id: "k", amount: 1, secret, C: publicKey }],
+        timestamp: now,
+      });
+    const data: Record<string, string> = {
+      [`pending_send_proofs:alice_${now}`]: backup("alice"),
+      [`pending_send_proofs:bob_${now}`]: backup("bob"),
+      [`pending_send_proofs_${now}`]: backup("guest"),
+      [`pending_receive_proofs:alice_${now}`]: backup("alice-in"),
+      [`pending_receive_proofs:bob_${now}`]: backup("bob-in"),
+    };
+    // the entries are the object's own keys, as in a browser's localStorage
+    const storage = (entries: Record<string, string>) =>
+      Object.defineProperties(entries, {
+        getItem: { value: (k: string) => entries[k] ?? null },
+        setItem: { value: (k: string, v: string) => (entries[k] = v) },
+        removeItem: { value: (k: string) => delete entries[k] },
+      });
+    vi.stubGlobal("localStorage", storage(data));
+    vi.stubGlobal("sessionStorage", storage({}));
+    state.updateProofs.mockResolvedValue(undefined);
+    setOwner("alice");
+    state.effects = true;
+
+    useCashuToken();
+    await vi.waitFor(() => expect(Object.keys(data)).toHaveLength(3));
+
+    expect(
+      state.updateProofs.mock.calls.map((c) => c[0].proofsToAdd[0].secret)
+    ).toEqual(["alice", "alice-in"]);
+    state.effects = false;
+    setOwner(null);
+  });
 });

@@ -4,7 +4,7 @@ import {
   MintQuoteResponse,
   type Proof,
 } from "@cashu/cashu-ts";
-import { create } from "zustand";
+import { ownedStore } from "@/features/session/owned";
 import { persist } from "zustand/middleware";
 import { GetInfoResponse, Keyset, MintKeys } from "@cashu/cashu-ts";
 import { CashuToken } from "../core/domain/Token";
@@ -96,7 +96,7 @@ export interface CashuStore {
 // const proofs = useStore((state) => state.proofs);
 // const addMint = useStore((state) => state.addMint);
 // const addProof = useStore((state) => state.addProof);
-export const useCashuStore = create<CashuStore>()(
+export const useCashuStore = ownedStore<CashuStore>()(
   persist(
     (set, get) => ({
       mints: [],

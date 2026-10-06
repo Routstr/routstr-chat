@@ -13,6 +13,11 @@ export type Accounts = Pick<
   "active$" | "accounts$"
 >;
 
+export interface Session {
+  accountId: string | null;
+  pubkey: string | null;
+}
+
 type KeyValueStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
 const ACCOUNTS_KEY = "accounts";
@@ -21,6 +26,8 @@ const ACTIVE_KEY = "activeAccount";
 /** The one owner of who is signed in on this device. */
 export class SessionService {
   private readonly manager = new AccountManager<AccountMetadata>();
+  private session: Session = { accountId: null, pubkey: null };
+  private listeners = new Set<() => void>();
 
   constructor() {
     registerCommonAccountTypes(this.manager);
@@ -45,6 +52,7 @@ export class SessionService {
     this.manager.active$.subscribe((account) => {
       if (account) storage.setItem(ACTIVE_KEY, account.id);
       else storage.removeItem(ACTIVE_KEY);
+      this.update(account);
     });
   }
 
@@ -61,5 +69,20 @@ export class SessionService {
 
   remove(id: string): void {
     this.manager.removeAccount(id);
+  }
+
+  subscribe = (listener: () => void): (() => void) => {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  };
+
+  getSnapshot = (): Session => this.session;
+
+  private update(account: Account | undefined): void {
+    this.session = {
+      accountId: account?.id ?? null,
+      pubkey: account?.pubkey ?? null,
+    };
+    this.listeners.forEach((listener) => listener());
   }
 }

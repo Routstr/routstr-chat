@@ -158,7 +158,6 @@ const HistoryTab: React.FC<HistoryTabProps> = ({
     ) {
       setTransactionHistory([]);
       clearHistory();
-      localStorage.removeItem("transaction_history");
       localStorage.removeItem("current_cashu_token"); // Also clear pending token
       setPendingCashuAmount(null); // Clear pending amount state
       onClose();

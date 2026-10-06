@@ -12,6 +12,7 @@ import { StoredApiKey } from "@/components/settings/ApiKeysTab";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   apiKeys$,
+  configOwner,
   configSyncLoading$,
   genericConfigSync$,
   publishConfig,
@@ -31,8 +32,11 @@ export function useApiKeysSync() {
   const activeAccount = useObservableState(manager.active$);
   const hasActiveAccount = activeAccount !== undefined;
 
-  // Subscribe to the generic config sync
-  const syncedApiKeys = useObservableState(apiKeys$);
+  // Subscribe to the generic config sync. Right after a switch it still
+  // replays the previous account's keys, which are never this account's.
+  const syncedCopy = useObservableState(apiKeys$);
+  const syncedApiKeys =
+    configOwner(syncedCopy) === activeAccount?.pubkey ? syncedCopy : undefined;
   const isLoadingApiKeys = useObservableState(configSyncLoading$);
 
   // Pending state for mutations

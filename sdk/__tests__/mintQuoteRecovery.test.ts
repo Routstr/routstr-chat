@@ -130,8 +130,10 @@ vi.mock("@cashu/cashu-ts", () => ({
 
 vi.mock("@/features/wallet/state/cashuStore", () => ({
   useCashuStore: {
-    getState: () => cashu.state.store,
-    persist: { rehydrate: () => cashu.state.rehydrate() },
+    of: () => ({
+      getState: () => cashu.state.store,
+      persist: { rehydrate: () => cashu.state.rehydrate() },
+    }),
   },
 }));
 

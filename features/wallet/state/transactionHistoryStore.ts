@@ -1,4 +1,4 @@
-import { create } from "zustand";
+import { ownedStore } from "@/features/session/owned";
 import { persist } from "zustand/middleware";
 import { SpendingHistoryEntry } from "../core/domain/Transaction";
 
@@ -45,7 +45,7 @@ interface TransactionHistoryStore {
   clearHistory: (pubkey?: string) => void;
 }
 
-export const useTransactionHistoryStore = create<TransactionHistoryStore>()(
+export const useTransactionHistoryStore = ownedStore<TransactionHistoryStore>()(
   persist(
     (set, get) => ({
       history: [],

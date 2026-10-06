@@ -582,7 +582,6 @@ export default function Usage({ view: asked }: { view?: "wallet" } = {}) {
                     // the records only: sats held with providers keep their tokens
                     chat.setTransactionHistory([]);
                     clearHistory();
-                    localStorage.removeItem("transaction_history");
                     setAsk("");
                     toast("Payment records cleared");
                   }}
