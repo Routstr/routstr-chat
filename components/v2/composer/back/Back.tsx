@@ -51,7 +51,6 @@ export default function Back({
     if (face === "auth" && from === "pay") return ui.setFace("pay");
     ui.setSendWhenFunded(false);
     ui.setFace("write");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [face, way, from, ui]);
 
   // Esc does the same, from anywhere on the card

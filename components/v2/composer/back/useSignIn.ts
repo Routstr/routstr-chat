@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { ExtensionAccount, NostrConnectAccount, PrivateKeyAccount } from "applesauce-accounts/accounts";
 import { NostrConnectSigner } from "applesauce-signers";
 import { useAccountManager } from "@/components/ClientProviders";
@@ -114,8 +114,11 @@ export function useSignIn(say: (t: string) => void, from: "pay" | "write") {
     setWay((cur) => (cur === w ? null : w));
     if (w && !touch()) window.setTimeout(() => document.querySelector<HTMLInputElement>(`.pa-way[data-way="${w}"] input`)?.focus(), 90);
   };
-  const [hasExt, setHasExt] = useState(false);
-  useEffect(() => setHasExt(!!(window as unknown as { nostr?: unknown }).nostr), []);
+  const hasExt = useSyncExternalStore(
+    () => () => {},
+    () => !!(window as unknown as { nostr?: unknown }).nostr,
+    () => false
+  );
 
   return {
     way,

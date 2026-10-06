@@ -117,7 +117,14 @@ export const numSize = (s: string) => (s.length <= 5 ? 52 : s.length <= 7 ? 46 :
 export function Odometer({ value }: { value: number }) {
   const s = fmt(value);
   const el = useRef<HTMLSpanElement>(null);
-  const prev = useRef<string | null>(null);
+  // the value it rolls from, kept from the change until the roll has run, so a render
+  // mid-roll neither cuts a new digit's entrance nor brings the old value back
+  const [last, setLast] = useState(s);
+  const [rollFrom, setRollFrom] = useState<string | null>(null);
+  if (s !== last) {
+    setLast(s);
+    setRollFrom(last);
+  }
   const [w, setW] = useState<number[] | null>(null);
   useLayoutEffect(() => {
     const measure = () => {
@@ -137,12 +144,10 @@ export function Odometer({ value }: { value: number }) {
     return () => mo.disconnect();
   }, []);
 
-  const p = prev.current;
-  const roll = p !== null && p !== s && !reduced();
+  const roll = rollFrom !== null && rollFrom !== s && !reduced();
   const chars = [...s];
-  const pc = p ? [...p] : [];
+  const pc = rollFrom ? [...rollFrom] : [];
   useLayoutEffect(() => {
-    prev.current = s;
     const box = el.current;
     if (!box || !roll) return;
     // the roll flag lives on the element, so a re-render mid-roll never cuts it short
@@ -150,9 +155,11 @@ export function Odometer({ value }: { value: number }) {
     const strips = box.querySelectorAll<HTMLElement>(".wl-strip");
     strips.forEach((x) => getComputedStyle(x).transform); // the old digit first
     strips.forEach((x) => x.style.setProperty("--v", x.dataset.to ?? "0"));
-    const t = window.setTimeout(() => box.removeAttribute("data-roll"), tokenMs("--d-slow") + 400);
+    const t = window.setTimeout(() => {
+      box.removeAttribute("data-roll");
+      setRollFrom(null);
+    }, tokenMs("--d-slow") + 400);
     return () => window.clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [s]);
 
   return (
