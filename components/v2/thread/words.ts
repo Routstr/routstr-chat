@@ -1,7 +1,7 @@
 /* While an answer streams, the words of its last block are wrapped one by one
-   (whitespace leads each word), so a word that arrived since the last render
-   can settle in once and older words are never touched. The tail caret is
-   placed right after the newest word. Code and maths keep their own markup. */
+   (whitespace leads each word), so the words that arrived since the last paint
+   can be found and settle in once. The tail caret is placed right after the
+   newest word. Code and maths keep their own markup. */
 
 type Node = {
   type: string;
@@ -18,9 +18,8 @@ const skip = (n: Node) => {
   return Array.isArray(cls) && cls.some((c) => String(c).startsWith("katex"));
 };
 
-export function rehypeWords(opts: { from: number; idle: boolean; count: { n: number } }) {
+export function rehypeWords(opts: { idle: boolean }) {
   return () => (tree: Node) => {
-    let offset = 0;
     let last: { parent: Node; at: number } | null = null;
     const walk = (node: Node) => {
       if (!node.children) return;
@@ -33,16 +32,14 @@ export function rehypeWords(opts: { from: number; idle: boolean; count: { n: num
             if (!p.trim()) {
               // trailing whitespace joins the last word
               out.push({ type: "text", value: p });
-              offset += p.length;
               continue;
             }
             out.push({
               type: "element",
               tagName: "span",
-              properties: { className: offset >= opts.from ? ["w", "new"] : ["w"] },
+              properties: { className: ["w"] },
               children: [{ type: "text", value: p }],
             });
-            offset += p.length;
             last = { parent: node, at: out.length };
           }
           continue;
@@ -53,7 +50,6 @@ export function rehypeWords(opts: { from: number; idle: boolean; count: { n: num
       node.children = out;
     };
     walk(tree);
-    opts.count.n = offset;
     const tail: Node = {
       type: "element",
       tagName: "span",

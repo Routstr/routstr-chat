@@ -1,6 +1,6 @@
 "use client";
 
-import React, { memo, useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import React, { memo, useLayoutEffect, useMemo, useRef } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
@@ -99,10 +99,10 @@ function tableNums(wrap: HTMLElement) {
   }
 }
 
-/* The block words are arriving in: each new word settles into ink once; the
-   caret rides after the newest word and breathes when the model pauses. */
-function LiveBlock({ md, from, idle, count }: { md: string; from: number; idle: boolean; count: { n: number } }) {
-  const plugins = useMemo(() => [rehypeKatex, rehypeWords({ from, idle, count })], [from, idle, count]);
+/* The block words are arriving in: the caret rides after the newest word and
+   breathes when the model pauses. */
+function LiveBlock({ md, idle }: { md: string; idle: boolean }) {
+  const plugins = useMemo(() => [rehypeKatex, rehypeWords({ idle })], [idle]);
   return (
     <ReactMarkdown remarkPlugins={REMARK} rehypePlugins={plugins} components={COMPONENTS}>
       {md}
@@ -112,15 +112,23 @@ function LiveBlock({ md, from, idle, count }: { md: string; from: number; idle: 
 
 export default function Prose({ content, streaming, words, idle = false }: { content: string; streaming?: boolean; words?: boolean; idle?: boolean }) {
   const blocks = useMemo(() => splitBlocks(stripParensAroundLinks(content)), [content]);
-  // how much of the last block was already shown, so only new words settle
-  const seen = useRef({ block: -1, n: 0 });
-  const count = useMemo(() => ({ n: 0 }), []);
   const lastIdx = blocks.length - 1;
-  const from = seen.current.block === lastIdx ? seen.current.n : 0;
-  useEffect(() => {
-    if (words) seen.current = { block: lastIdx, n: count.n };
-  });
   const root = useRef<HTMLDivElement>(null);
+  // how much of the last block was already shown: each new word is marked to
+  // settle into ink once, before it is painted. React never renders the mark,
+  // so the words arriving next frame don't take it off mid-settle.
+  const seen = useRef({ block: -1, n: 0 });
+  useLayoutEffect(() => {
+    const blk = root.current?.lastElementChild;
+    if (!words || !blk) return;
+    const from = seen.current.block === lastIdx ? seen.current.n : 0;
+    let at = 0;
+    for (const w of blk.querySelectorAll(".w")) {
+      if (at >= from) w.classList.add("new");
+      at += w.textContent?.length ?? 0;
+    }
+    seen.current = { block: lastIdx, n: at };
+  });
   useLayoutEffect(() => {
     const el = root.current;
     if (!el) return;
@@ -134,7 +142,7 @@ export default function Prose({ content, streaming, words, idle = false }: { con
     <div className="md" ref={root} data-streaming={streaming ? "" : undefined}>
       {blocks.map((b, i) => (
         <div className="blk" key={i}>
-          {words && i === lastIdx ? <LiveBlock md={b} from={from} idle={idle} count={count} /> : <Block md={b} />}
+          {words && i === lastIdx ? <LiveBlock md={b} idle={idle} /> : <Block md={b} />}
         </div>
       ))}
     </div>
