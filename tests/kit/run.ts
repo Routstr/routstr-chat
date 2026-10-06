@@ -6,6 +6,7 @@
 //   pnpm kit up             start the stack and print its env, until Ctrl-C
 //   pnpm kit locks          who holds and who waits for the locks: pid, worktree, command, age
 //   pnpm kit build [dir]    build a checkout's out/ (with the kit's provider address)
+//   pnpm kit mutate <file>  break the code on purpose and check the tests notice (see mutate.ts)
 //   pnpm kit parity --main-out <dir>   the parity checks on main's build and on v2
 //
 // Shared machine rules, built in: before a step it waits until enough memory is free
@@ -18,6 +19,12 @@ import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import {
+  restoreLeftovers,
+  runBatches,
+  type Mutation,
+  type Outcome,
+} from "./mutate";
 import { PROVIDER_ALIAS } from "./net";
 import { serveStatic } from "./services/static";
 import { envVars, startStack } from "./stack";
@@ -410,17 +417,137 @@ async function up(): Promise<number> {
   return 0;
 }
 
+/**
+ * Runs one mutation's tests and reads their report: vitest args, or ["app", ...] for in-app
+ * tests. Those need KIT_APP_URL (a dev server, so a change to the app shows without a
+ * rebuild) or, for changes to the kit itself, KIT_APP_OUT (a build).
+ */
+async function check(args: string[]): Promise<Outcome> {
+  const report = path.join(
+    os.tmpdir(),
+    `kit-mutate-${process.pid}-${Date.now()}.json`
+  );
+  try {
+    let code: number;
+    if (args[0] !== "app") {
+      code = await run(
+        path.join(BIN, "vitest"),
+        [
+          "run",
+          "--reporter=default",
+          "--reporter=json",
+          `--outputFile.json=${report}`,
+          ...args,
+        ],
+        { sealed: true }
+      );
+    } else {
+      const appUrl = process.env.KIT_APP_URL;
+      if (!appUrl && !process.env.KIT_APP_OUT)
+        throw new Error(
+          "in-app mutations need KIT_APP_URL (a dev server) or KIT_APP_OUT (a build, for kit changes)"
+        );
+      code = await run(
+        ...tsx(__filename, ["__app", "--reporter=list,json", ...args.slice(1)]),
+        { sealed: !appUrl, env: { PLAYWRIGHT_JSON_OUTPUT_NAME: report } }
+      );
+    }
+    if (!fs.existsSync(report))
+      return { error: `no test report (exit ${code})` };
+    const r = JSON.parse(fs.readFileSync(report, "utf8"));
+    // vitest: numFailedTests; playwright: stats.unexpected. A file that could not load or a
+    // setup that crashed fails no test, so it is an error, not a catch.
+    const failed: number = r.numFailedTests ?? r.stats?.unexpected ?? 0;
+    const unloaded = (r.testResults ?? []).some(
+      (f: { status: string; assertionResults: { status: string }[] }) =>
+        f.status === "failed" &&
+        !f.assertionResults.some((a) => a.status === "failed")
+    );
+    const broken = unloaded || r.errors?.length > 0;
+    if (broken || (code !== 0 && failed === 0))
+      return { error: `the tests could not run (exit ${code})` };
+    return { failed };
+  } finally {
+    fs.rmSync(report, { force: true });
+  }
+}
+
+/**
+ * A file that is mid-mutation would make any other run lie, so refuse to run (at once, not
+ * after waiting for the lock: the mutate run may be alive and holding it, or killed).
+ */
+function refuseLeftovers() {
+  for (const dir of [ROOT, process.env.KIT_CORE_DIR]) {
+    if (!dir) continue;
+    const left = spawnSync(
+      "git",
+      ["-C", dir, "ls-files", "-o", "--exclude-standard"],
+      {
+        encoding: "utf8",
+      }
+    )
+      .stdout.split("\n")
+      .filter((f) => f.endsWith(".kit-original"));
+    if (left.length)
+      throw new Error(
+        `${left.map((f) => path.join(dir, f)).join(", ")}: a file is mid-mutation. A \`kit mutate\` run is using it (see \`kit locks\`), or one was killed: then \`kit mutate\` with its list puts the original back`
+      );
+  }
+}
+
+async function mutate(file: string): Promise<number> {
+  const mutations = JSON.parse(fs.readFileSync(file, "utf8")) as Mutation[];
+  // under the lock: another mutate run only changes files while it holds it
+  const restored = await withLock("heavy", async () =>
+    restoreLeftovers(ROOT, mutations)
+  );
+  if (restored.length)
+    say(`restored files an earlier run left mutated: ${restored.join(", ")}`);
+  refuseLeftovers(); // one that another list left
+  // the tests must pass before anything is broken, or "caught" means nothing; their time
+  // says how many mutations fit in one batch
+  const took = new Map<string, number>();
+  for (const suite of new Set(mutations.map((m) => JSON.stringify(m.test)))) {
+    const outcome = await withLock("heavy", async () => {
+      const started = Date.now(); // the run itself, not the wait for the lock
+      const outcome = await check(JSON.parse(suite));
+      took.set(suite, Date.now() - started);
+      return outcome;
+    });
+    if (!("failed" in outcome) || outcome.failed > 0)
+      throw new Error(
+        `tests fail before any mutation: ${JSON.parse(suite).join(" ")}`
+      );
+  }
+  const results = await runBatches(
+    ROOT,
+    mutations,
+    10,
+    took,
+    (fn) => withLock("heavy", fn),
+    check,
+    say
+  );
+  const missed = results.filter((r) => !r.caught);
+  say(
+    `${results.length - missed.length} of ${results.length} mutations caught${missed.length ? `; missed or errors: ${missed.map((r) => r.id).join(", ")}` : ""}`
+  );
+  return missed.length ? 1 : 0;
+}
+
 async function main(argv: string[]): Promise<number> {
   const [command = "test", ...rest] = argv;
   if (unsealed && command !== "__app")
     say("KIT_NO_SEAL: tests run without the network seal");
   if (command === "__app") return appInside(rest);
+  if (command !== "locks" && command !== "mutate") refuseLeftovers();
   if (command === "up") return up();
   if (command === "locks") return locks();
   if (command === "build")
     return withLock("heavy", () => build(path.resolve(rest[0] ?? ROOT))).then(
       () => 0
     );
+  if (command === "mutate") return mutate(rest[0]);
   if (command === "parity") return parity(rest);
   if (command !== "test") throw new Error(`unknown command ${command}`);
   const [step, ...args] = rest;

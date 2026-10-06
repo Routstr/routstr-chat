@@ -1,0 +1,65 @@
+[
+  {
+    "id": "relay-keeps-older-replaceable",
+    "file": "tests/kit/services/relay.ts",
+    "find": "        old.created_at > e.created_at ||",
+    "replace": "        old.created_at < e.created_at ||",
+    "test": ["--project", "money", "tests/kit/__tests__/stack.mint.test.ts"]
+  },
+  {
+    "id": "relay-skips-signature-check",
+    "file": "tests/kit/services/relay.ts",
+    "find": "!verifyEvent(e))",
+    "replace": "false)",
+    "test": ["--project", "money", "tests/kit/__tests__/stack.mint.test.ts"]
+  },
+  {
+    "id": "client-mints-one-sat-short",
+    "file": "tests/kit/client.ts",
+    "find": "return wallet.mintProofs(sats, quote.quote);",
+    "replace": "return wallet.mintProofs(sats - 1, quote.quote);",
+    "test": ["--project", "money", "tests/kit/__tests__/stack.mint.test.ts"]
+  },
+  {
+    "id": "upstream-ignores-fail",
+    "file": "tests/kit/services/upstream.ts",
+    "find": "else if (name === \"fail\") found.fail = Number(value ?? 500);",
+    "replace": "else if (name === \"fail\") found.fail = undefined;",
+    "test": ["--project", "money", "tests/kit/__tests__/core.mint.test.ts"]
+  },
+  {
+    "id": "idb-shares-one-database",
+    "file": "tests/kit/idb.ts",
+    "find": "globalThis.indexedDB = new IDBFactory();",
+    "replace": "void IDBFactory;",
+    "test": ["--project", "unit", "tests/kit/__tests__/idb.test.ts"]
+  },
+  {
+    "id": "core-overcharges-a-sat",
+    "file": "$KIT_CORE_DIR/routstr/upstream/base.py",
+    "find": "                    route=\"chat.streaming\",\n                    model=model,\n                    content_str=content_str,\n                    amount=amount,\n                    unit=unit,\n                )\n            if cost_data:\n                if unit == \"msat\":\n                    refund_amount = amount - cost_data.total_msats\n                elif unit == \"sat\":\n                    refund_amount = amount - (cost_data.total_msats + 999) // 1000",
+    "replace": "                    route=\"chat.streaming\",\n                    model=model,\n                    content_str=content_str,\n                    amount=amount,\n                    unit=unit,\n                )\n            if cost_data:\n                if unit == \"msat\":\n                    refund_amount = amount - cost_data.total_msats\n                elif unit == \"sat\":\n                    refund_amount = amount - (cost_data.total_msats + 1999) // 1000",
+    "test": ["--project", "money", "tests/kit/__tests__/core.mint.test.ts"]
+  },
+  {
+    "id": "core-keeps-a-sat-on-upstream-error",
+    "file": "$KIT_CORE_DIR/routstr/upstream/base.py",
+    "find": "                    \"Upstream request failed, processing refund\",\n                    extra={\n                        \"status_code\": response.status_code,\n                        \"path\": path,\n                        \"amount\": amount,\n                        \"unit\": unit,\n                    },\n                )\n\n                refund_token = await self.send_refund(\n                    amount,",
+    "replace": "                    \"Upstream request failed, processing refund\",\n                    extra={\n                        \"status_code\": response.status_code,\n                        \"path\": path,\n                        \"amount\": amount,\n                        \"unit\": unit,\n                    },\n                )\n\n                refund_token = await self.send_refund(\n                    amount - 1,",
+    "test": ["--project", "money", "tests/kit/__tests__/core.mint.test.ts"]
+  },
+  {
+    "id": "core-refunds-a-sat-short",
+    "file": "$KIT_CORE_DIR/routstr/refund.py",
+    "find": "    amount = amount_in_unit(refund.amount_msats, refund.unit)\n    await renew_lease(session, refund)",
+    "replace": "    amount = amount_in_unit(refund.amount_msats, refund.unit) - 1\n    await renew_lease(session, refund)",
+    "test": ["--project", "money", "tests/kit/__tests__/core.mint.test.ts"]
+  },
+  {
+    "id": "relay-down-keeps-publishers",
+    "file": "tests/kit/services/relay.ts",
+    "find": "if (down) for (const ws of store.sockets) ws.terminate();",
+    "replace": "if (down) for (const s of store.subs) s.ws.terminate();",
+    "test": ["--project", "money", "tests/kit/__tests__/stack.mint.test.ts"]
+  }
+]
