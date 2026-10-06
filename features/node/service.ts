@@ -1,4 +1,4 @@
-import type { NodeLink, NodeSigner } from "./ports";
+import { NodeError, type NodeLink, type NodeSigner } from "./ports";
 
 /** A routstrd node that pays for replies instead of the wallet. */
 export interface RemoteNode {
@@ -55,8 +55,14 @@ export class NodeSetting {
     return node?.enabled && node.apiKey && node.pubkey === pubkey ? node : null;
   }
 
+  /** Throws NodeError when this device cannot store it: kept only in
+   *  memory, the old engine (reading storage) would pay by another answer. */
   save(node: RemoteNode | null): void {
-    this.storage?.setItem(NODE_KEY, JSON.stringify(node));
+    try {
+      this.storage?.setItem(NODE_KEY, JSON.stringify(node));
+    } catch {
+      throw new NodeError("This device's storage is full, so the node setting could not be saved.");
+    }
     this.reload();
   }
 
