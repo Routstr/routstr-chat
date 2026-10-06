@@ -23,6 +23,7 @@ import { eventStore, relayPool } from "@/lib/applesauce-core";
 import { useEventDatabase } from "@/lib/eventDatabase";
 import {
   relayUrlsDefined$,
+  userPubkey$,
   userPubkeyDefined$,
   userSignerDefined$,
   eventDatabaseReady$,
@@ -126,7 +127,9 @@ async function decrypt1081Event(
   }
 }
 
-function extractAndDerivePnsKeys(content: Decrypted1081Content): PnsKeys | null {
+function extractAndDerivePnsKeys(
+  content: Decrypted1081Content
+): PnsKeys | null {
   if (!content.nsec || typeof content.nsec !== "string") {
     debugLog("[sync1081Keyring] No nsec found in decrypted content");
     return null;
@@ -173,7 +176,10 @@ async function createAndPublishInitial1081Event(
     debugLog("[sync1081Keyring] Created initial 1081 event:", signedEvent.id);
 
     await relayPool.publish(relayUrls, signedEvent);
-    debugLog("[sync1081Keyring] Published initial 1081 event to relays", relayUrls);
+    debugLog(
+      "[sync1081Keyring] Published initial 1081 event to relays",
+      relayUrls
+    );
 
     eventStore.add(signedEvent);
 
@@ -183,7 +189,10 @@ async function createAndPublishInitial1081Event(
 
     return signedEvent;
   } catch (error) {
-    console.error("[sync1081Keyring] Failed to create initial 1081 event:", error);
+    console.error(
+      "[sync1081Keyring] Failed to create initial 1081 event:",
+      error
+    );
     return null;
   }
 }
@@ -222,7 +231,9 @@ export const sync1081Event$ = combineLatest([
           });
 
           if (existing1081Events.length === 0) {
-            return from(createAndPublishInitial1081Event(signerInfo, relayUrls)).pipe(
+            return from(
+              createAndPublishInitial1081Event(signerInfo, relayUrls)
+            ).pipe(
               filter((event): event is NostrEvent => event !== null),
               catchError((err) => {
                 console.error(
@@ -270,10 +281,19 @@ export const processStored1081Events$ = combineLatest([
   userPubkeyDefined$,
 ]).pipe(
   filter(([count]) => count > 0),
-  switchMap(([_, signerInfo, userPubkey]) => {
-    const events = eventStore.getByFilters({ kinds: [1081], authors: [userPubkey] });
+  // combineLatest briefly pairs the old signer with the new pubkey mid-switch.
+  filter(([, signerInfo, userPubkey]) => signerInfo.pubkey === userPubkey),
+  // Not switchMap: a relay echo would cancel the in-flight decrypt, whose id is
+  // already reserved, so the keyring would never arrive.
+  mergeMap(([_, signerInfo, userPubkey]) => {
+    const events = eventStore.getByFilters({
+      kinds: [1081],
+      authors: [userPubkey],
+    });
 
-    const newEvents = events.filter((event) => !processed1081EventIds.has(event.id));
+    const newEvents = events.filter(
+      (event) => !processed1081EventIds.has(event.id)
+    );
     if (newEvents.length === 0) return EMPTY;
 
     return from(newEvents).pipe(
@@ -283,8 +303,13 @@ export const processStored1081Events$ = combineLatest([
           map((decryptedContent) => ({ event, decryptedContent }))
         );
       }),
-      tap(({ decryptedContent }) => {
-        if (!decryptedContent) return;
+      tap(({ event, decryptedContent }) => {
+        // Release the id either way: a discarded or failed decrypt must stay
+        // retryable rather than locking the keyring for the session.
+        if (userPubkey$.value !== signerInfo.pubkey || !decryptedContent) {
+          processed1081EventIds.delete(event.id);
+          return;
+        }
         const pnsKeys = extractAndDerivePnsKeys(decryptedContent);
         if (pnsKeys) newDerivedPnsKey$.next(pnsKeys);
       }),
