@@ -10,7 +10,7 @@ const empty: CatalogSnapshot = { models: [], loading: true };
 const none = () => () => {};
 
 /** The models providers serve, and whether the first list is still coming. */
-export function useModels(): CatalogSnapshot {
+export function useCatalogModels(): CatalogSnapshot {
   const catalog = useCatalogService();
   return useSyncExternalStore(
     catalog?.subscribe ?? none,

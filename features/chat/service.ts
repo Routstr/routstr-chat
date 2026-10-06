@@ -159,7 +159,7 @@ export class ChatService {
         _prevId: parentAt(branch, depth),
       });
     } catch (error) {
-      this.release(conversationId, claim);
+      this.release(conversationId);
       throw error;
     }
     // sent as attached: nothing is read back, and a file this device could
@@ -186,7 +186,7 @@ export class ChatService {
     const settled = run.start(this.transport(history, model));
     const reply = run.ended
       .then(() => this.saveReply(conversationId, run, parentId, model, claim))
-      .finally(() => this.release(conversationId, claim));
+      .finally(() => this.release(conversationId));
     const turn = Promise.all([settled, reply]);
     this.open.add(turn);
     turn.finally(() => {
@@ -260,8 +260,7 @@ export class ChatService {
     return claim;
   }
 
-  private release(conversationId: string, claim: AbortController): void {
-    if (this.claims.get(conversationId) !== claim) return;
+  private release(conversationId: string): void {
     this.claims.delete(conversationId);
     this.notify();
   }

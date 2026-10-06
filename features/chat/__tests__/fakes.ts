@@ -116,10 +116,4 @@ export const contents = (messages: { content: unknown }[]) =>
   messages.map((m) => m.content);
 
 /** localStorage, in memory. */
-export function memoryStorage(): Pick<Storage, "getItem" | "setItem"> {
-  const map = new Map<string, string>();
-  return {
-    getItem: (key) => map.get(key) ?? null,
-    setItem: (key, value) => void map.set(key, value),
-  };
-}
+export { memoryStorage } from "@/features/book/journal";

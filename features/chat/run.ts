@@ -96,9 +96,7 @@ export class RequestRun {
       if (!isTerminal(this.snapshot.phase)) {
         this.finish("failed", { error: message });
       } else if ((error as Error)?.name !== "AbortError") {
-        this.warn(
-          `The payment did not finish cleanly (${message}). Reload before sending again.`
-        );
+        this.warn(`The payment did not finish cleanly (${message}).`);
       }
     }
   }
