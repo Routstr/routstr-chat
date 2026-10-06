@@ -5,6 +5,7 @@
 
 export * from "./useCashuWallet";
 export * from "./useCashuToken";
+export { holdsRecords } from "./useBook";
 export * from "./useCreateCashuWallet";
 export * from "./useNutzaps";
 export * from "./useCashuHistory";

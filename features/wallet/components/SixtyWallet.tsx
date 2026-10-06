@@ -38,7 +38,6 @@ import InvoiceModal from "./InvoiceModal";
 import {
   createLightningInvoice,
   mintTokensFromPaidInvoice,
-  payMeltQuote,
   parseInvoiceAmount,
   createMeltQuote,
 } from "@/lib/cashuLightning";
@@ -48,6 +47,7 @@ import { createPendingTransaction } from "@/utils/transactionUtils";
 import { getBalanceFromStoredProofs } from "@/utils/cashuUtils";
 import { useInvoiceSync } from "@/hooks/useInvoiceSync";
 import { useInvoiceChecker } from "@/hooks/useInvoiceChecker";
+import { useBook } from "@/features/wallet/hooks/useBook";
 import InvoiceHistory from "./InvoiceHistory";
 import { useCashuWithXYZ } from "@/hooks/useCashuWithXYZ";
 import { DEFAULT_MINT_URL } from "@/lib/utils";
@@ -253,6 +253,7 @@ const SixtyWallet: React.FC<{
   const { manager } = useAccountManager();
   const activeAccount = useObservableState(manager.active$);
   const { wallet, isLoading, updateProofs } = useCashuWallet();
+  const { activeExecutor } = useBook();
   const {
     mutate: handleCreateWallet,
     isPending: isCreatingWallet,
@@ -262,7 +263,6 @@ const SixtyWallet: React.FC<{
   const {
     receiveToken,
     cleanSpentProofs,
-    cleanupPendingProofs,
     isLoading: isTokenLoading,
     error: hookError,
     addMintIfNotExists,
@@ -453,9 +453,9 @@ const SixtyWallet: React.FC<{
 
       if (result.status === "success" && result.token) {
         setGeneratedToken(result.token);
-        // sendToken already persisted this token to unclaimedTokensStore,
-        // so it stays recoverable from the balance popover's send tab even
-        // if this view is closed before copying.
+        // sendToken already listed this token in the wallet book, so it
+        // stays recoverable from the balance popover's send tab even if this
+        // view is closed before copying.
         setSuccessMessage(
           `Token generated for ${formatBalance(amountValue, currentMintUnit)}`
         );
@@ -573,30 +573,35 @@ const SixtyWallet: React.FC<{
       });
 
       // Pay the invoice
-      const result = await payMeltQuote(
-        mintUrl,
-        currentMeltQuoteId,
-        selectedProofs,
-        cleanSpentProofs
-      );
+      const executor = activeExecutor();
+      if (!executor) throw new Error("User not logged in");
+      const quote = cashuStore.getMeltQuote(mintUrl, currentMeltQuoteId);
+      const result = await executor.pay(mintUrl, quote, selectedProofs);
 
-      if (result.success) {
-        // Update invoice status
+      if (result.state === "failed") {
         await updateInvoice(currentMeltQuoteId, {
-          state: MeltQuoteState.PAID,
-          paidAt: Date.now(),
-          fee: result.fee,
+          state: MeltQuoteState.UNPAID,
         });
-
-        // Remove spent proofs from the store
-        await updateProofs({
-          mintUrl,
-          proofsToAdd: [...result.keep, ...result.change],
-          proofsToRemove: selectedProofs,
-        });
+        setError(
+          "The payment did not go through. Your sats are back in the wallet."
+        );
+      } else {
+        const paid = result.state === "paid";
+        await updateInvoice(
+          currentMeltQuoteId,
+          paid
+            ? {
+                state: MeltQuoteState.PAID,
+                paidAt: Date.now(),
+                fee: result.fee,
+              }
+            : { state: MeltQuoteState.PENDING }
+        );
 
         setSuccessMessage(
-          `Paid ${formatBalance(invoiceAmount, `${currentMintUnit}s`)}!`
+          paid
+            ? `Paid ${formatBalance(invoiceAmount, `${currentMintUnit}s`)}!`
+            : `Sending ${formatBalance(invoiceAmount, `${currentMintUnit}s`)}, waiting for the network to confirm.`
         );
         setSendInvoice("");
         setInvoiceAmount(null);

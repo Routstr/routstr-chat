@@ -12,7 +12,6 @@ import {
   getLocalCashuTokens,
   CashuTokenEntry,
 } from "@/utils/storageUtils";
-import { owned } from "@/features/session/owned";
 
 /**
  * Gets both wallet + current Token balance from stored proofs and routstr API
@@ -373,19 +372,11 @@ export const unifiedRefund = async (
   }
 };
 
-export const getPendingCashuTokenAmount = (): number => {
-  const distribution = getPendingCashuTokenDistribution();
-  const tempKeys = Object.keys(localStorage).filter((key) =>
-    key.startsWith(`${owned("pending_send_proofs")}_`)
+export const getPendingCashuTokenAmount = (): number =>
+  getPendingCashuTokenDistribution().reduce(
+    (total, item) => total + item.amount,
+    0
   );
-  const tempAmount = tempKeys.reduce((total, key) => {
-    const data = JSON.parse(localStorage.getItem(key) || "{}");
-    return total + data.tokenAmount;
-  }, 0);
-  return (
-    distribution.reduce((total, item) => total + item.amount, 0) + tempAmount
-  );
-};
 
 export const getPendingCashuTokenDistribution = (): {
   baseUrl: string;

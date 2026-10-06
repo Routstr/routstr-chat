@@ -1,23 +1,17 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useCashuStore } from "../state/cashuStore";
-import { useUnclaimedTokensStore } from "../state/unclaimedTokensStore";
 import { useCashuWallet } from "./useCashuWallet";
 import { useCashuHistory } from "./useCashuHistory";
-import { currentOwner, owned } from "@/features/session/owned";
+import { useBook } from "./useBook";
 import {
   Mint,
   Wallet,
   Proof,
   getTokenMetadata,
   CheckStateEnum,
-  getEncodedTokenV4,
 } from "@cashu/cashu-ts";
 import { MintService } from "../core/services/MintService";
 import { hashToCurve } from "@cashu/crypto/modules/common";
-
-// Interrupted sends and receives are recovered once per account per tab,
-// when the app mounts for that account
-const recovered = new Set<string | null>();
 
 // Global map to track active cleanSpentProofs operations per mint
 const activeCleanupPromises = new Map<string, Promise<Proof[]>>();
@@ -26,94 +20,19 @@ export function useCashuToken() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const cashuStore = useCashuStore();
-  const { wallet, createWallet, updateProofs, tokens } = useCashuWallet();
+  const { wallet, createWallet, updateProofs } = useCashuWallet();
+  const { activeExecutor } = useBook();
 
   const { createHistory } = useCashuHistory();
-
-  /**
-   * Recover any pending proofs that were interrupted during token creation
-   * This should be called on app startup
-   */
-  const recoverPendingProofs = async () => {
-    try {
-      const send = `${owned("pending_send_proofs")}_`;
-      const receive = `${owned("pending_receive_proofs")}_`;
-      const keys = Object.keys(localStorage).filter(
-        (key) => key.startsWith(send) || key.startsWith(receive)
-      );
-
-      for (const key of keys) {
-        const recoveryKey = `recovery_processed_${key}`;
-        if (sessionStorage.getItem(recoveryKey)) {
-          console.log("rdlogs: Skipping already processed pending proof:", key);
-          continue;
-        }
-
-        let mintUrl: string | undefined;
-        let proofsToSend: Proof[] | undefined;
-        let timestamp = 0;
-        try {
-          const pendingData = JSON.parse(localStorage.getItem(key) || "{}");
-          ({ proofsToSend, timestamp } = pendingData);
-          mintUrl = pendingData.mintUrl ?? pendingData.normalizedMintUrl;
-        } catch (error) {
-          console.error("Removing malformed pending proofs entry:", key, error);
-          localStorage.removeItem(key);
-          continue;
-        }
-
-        if (!mintUrl || !proofsToSend) {
-          localStorage.removeItem(key);
-          continue;
-        }
-
-        // Interrupted sends are only restored while fresh (the token may have
-        // been delivered to someone in the meantime); interrupted receives are
-        // restored at any age because those proofs are the only copy left.
-        const isStaleSend =
-          key.startsWith(send) &&
-          Date.now() - timestamp >= 60 * 60 * 1000;
-        if (isStaleSend) {
-          localStorage.removeItem(key);
-          continue;
-        }
-
-        console.log("rdlogs: Recovering pending proofs:", key);
-        sessionStorage.setItem(recoveryKey, "true");
-        try {
-          await updateProofs({
-            mintUrl,
-            proofsToAdd: proofsToSend,
-            proofsToRemove: [],
-          });
-          // Only drop the backup once the proofs are durably stored
-          localStorage.removeItem(key);
-        } catch (error) {
-          console.error("Error recovering pending proofs for key:", key, error);
-          // Keep the backup and allow a retry on the next startup
-          sessionStorage.removeItem(recoveryKey);
-        }
-      }
-    } catch (error) {
-      console.error("Error during pending proofs recovery:", error);
-    }
-  };
-
-  useEffect(() => {
-    const owner = currentOwner();
-    if (recovered.has(owner)) return;
-    recovered.add(owner);
-    void recoverPendingProofs();
-  }, []);
 
   /**
    * Generate a send token
    * @param mintUrl The URL of the mint to use
    * @param amount Amount to send in satoshis
    * @param p2pkPubkey The P2PK pubkey to lock the proofs to
-   * @param unit Optional unit override
-   * @param trackUnclaimed Persist the token to unclaimedTokensStore (wallet
-   *   UI sends) so it stays recoverable until the user claims/dismisses it
+   * @param unit Unused: the wallet book uses msat when the mint offers it, else sat
+   * @param trackUnclaimed Keep the token listed (wallet UI sends) until the
+   *   user takes it back or dismisses it
    * @returns Encoded token string
    */
   const sendToken = async (
@@ -123,165 +42,59 @@ export function useCashuToken() {
     unit?: string,
     trackUnclaimed = false
   ): Promise<string> => {
-    const owner = currentOwner();
     setIsLoading(true);
     setError(null);
     try {
-      const mint = new Mint(mintUrl);
+      const executor = activeExecutor();
+      if (!executor) throw new Error("User not logged in");
       const normalizedMintUrl = await addMintIfNotExists(mintUrl);
-      const mintDetails = cashuStore.getMint(normalizedMintUrl);
-      const keysets = mintDetails?.keysets;
-
-      // Get preferred unit: msat over sat if both are active
-      const activeKeysets = keysets?.filter((k) => k.active);
-      if (!activeKeysets)
-        throw new Error("No active keysets found for mint: " + mintUrl);
-      let preferredUnit = "not supported";
-      if (unit) {
-        preferredUnit = unit as "sat" | "msat";
-      } else {
-        const units = [...new Set(activeKeysets.map((k) => k.unit))];
-        preferredUnit = units.includes("msat")
-          ? "msat"
-          : ((units.includes("sat") ? "sat" : "not supported") as
-              | "sat"
-              | "msat");
-      }
-
-      const wallet = new Wallet(mint, { unit: preferredUnit });
-
-      // Load mint keysets
-      await wallet.loadMint();
-
-      // Get all proofs from store
       let proofs = await cashuStore.getMintProofs(normalizedMintUrl);
 
-      const proofsAmount = proofs.reduce((sum, p) => sum + p.amount, 0);
-
-      // console.log('rdlogs: Proof denomination groups:', denominationCounts);
-      amount = preferredUnit == "msat" ? amount * 1000 : amount;
-      console.log("amount being sent", amount);
-      if (proofsAmount < amount) {
-        throw new Error(`Not enough funds on mint ${normalizedMintUrl}`);
-      }
-
-      let proofsToKeep: Proof[], proofsToSend: Proof[];
-
+      let token: string;
       try {
-        // Pass keysetId to force swap and skip offline send functionality
-        const result = await wallet.send(amount, proofs, {
-          keysetId: wallet.keysetId,
-          includeFees: true,
+        token = await executor.send(normalizedMintUrl, amount, proofs, {
+          track: trackUnclaimed,
         });
-        proofsToKeep = result.keep;
-        proofsToSend = result.send;
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-
         if (
-          message.includes("Not enough funds available") ||
-          message.includes("Token already spent") ||
-          message.includes("proofs already spent") ||
-          message.includes("Not enough balance to send")
+          !message.includes("Not enough funds available") &&
+          !message.includes("Token already spent") &&
+          !message.includes("proofs already spent") &&
+          !message.includes("Not enough balance to send")
         ) {
-          console.log(
-            "rdlogs: wallet.send() failed with insufficient funds, trying exact change with tolerance"
-          );
-
-          // Clean spent proofs
-          await cleanSpentProofs(normalizedMintUrl);
-
-          // Get fresh proofs after cleanup
-          proofs = await cashuStore.getMintProofs(normalizedMintUrl);
-
-          // Check if we still have enough funds after cleanup
-          const newProofsAmount = proofs.reduce((sum, p) => sum + p.amount, 0);
-          if (newProofsAmount < amount) {
+          throw error;
+        }
+        // the wallet may list coins already spent: drop those and try once more
+        await cleanSpentProofs(normalizedMintUrl);
+        proofs = await cashuStore.getMintProofs(normalizedMintUrl);
+        try {
+          token = await executor.send(normalizedMintUrl, amount, proofs, {
+            track: trackUnclaimed,
+            includeFees: false,
+          });
+        } catch (retry) {
+          // the chat path tries another mint on this one
+          if (String(retry).includes("Not enough funds")) {
             throw new Error(
               `Not enough funds on mint ${normalizedMintUrl} after cleaning spent proofs`
             );
           }
-
-          try {
-            // Pass keysetId to force swap and skip offline send functionality
-            const result = await wallet.send(amount, proofs, {
-              keysetId: wallet.keysetId,
-            });
-            proofsToKeep = result.keep;
-            proofsToSend = result.send;
-          } catch (error2) {
-            throw new Error(
-              `Having issues with the mint ${normalizedMintUrl}, please refresh your app try again. `
-            );
-          }
-        } else {
-          // Re-throw the error if it's not a "Token already spent" error
-          throw error;
+          throw new Error(
+            `Having issues with the mint ${normalizedMintUrl}, please refresh your app try again. `
+          );
         }
       }
 
-      // Store proofs temporarily before updating wallet state
-      const pendingProofsKey = `${owned(
-        "pending_send_proofs",
-        owner
-      )}_${Date.now()}`;
-      localStorage.setItem(
-        pendingProofsKey,
-        JSON.stringify({
-          mintUrl: normalizedMintUrl,
-          proofsToSend: proofsToSend.map((p) => ({
-            id: p.id || "",
-            amount: p.amount,
-            secret: p.secret || "",
-            C: p.C || "",
-          })),
-          timestamp: Date.now(),
-          tokenAmount: amount,
-        })
-      );
-      // Remove the spent inputs even when the swap produced no change
-      // (proofsToKeep empty), otherwise stale proofs linger in the store,
-      // inflating the balance and causing later "Token already spent" errors.
-      await updateProofs({
-        mintUrl: normalizedMintUrl,
-        proofsToAdd: proofsToKeep,
-        proofsToRemove: [...proofsToSend, ...proofs],
-      });
-
-      // Create history event
+      // in the mint's unit, as received tokens are recorded
       await createHistory({
         direction: "out",
-        amount: amount.toString(),
+        amount: getTokenMetadata(token).amount.toString(),
       });
-
-      // Create encoded token from proofs
-      const token = getEncodedTokenV4({
-        mint: normalizedMintUrl,
-        proofs: proofsToSend.map((p) => ({
-          id: p.id || "",
-          amount: p.amount,
-          secret: p.secret || "",
-          C: p.C || "",
-        })),
-        unit: preferredUnit,
-      });
-      // Wallet-send tokens must be stored before dropping the proof backup.
-      if (trackUnclaimed) {
-        useUnclaimedTokensStore.of(owner).getState().addUnclaimedToken({
-          token,
-          amount,
-          unit: preferredUnit,
-          mintUrl: normalizedMintUrl,
-        });
-      }
-      // Clean up pending proofs after successful token creation
-      localStorage.removeItem(pendingProofsKey);
-
       return token;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setError(`Failed to generate token: ${message}`);
-      console.log("rdlogs: amount adn error", amount, message);
       throw error;
     } finally {
       setIsLoading(false);
@@ -374,7 +187,7 @@ export function useCashuToken() {
    * Receive a token
    * @param token The encoded token string
    * @param requirePersisted Throw if the received proofs could not be stored
-   *   (instead of relying on startup recovery), so callers like reclaim
+   *   (instead of leaving them to the wallet book's recovery), so callers like reclaim
    *   don't report success on unpersisted funds
    * @returns The received proofs
    */
@@ -382,80 +195,21 @@ export function useCashuToken() {
     token: string,
     requirePersisted = false
   ): Promise<Proof[]> => {
-    const owner = currentOwner();
     setIsLoading(true);
     setError(null);
 
     let tokenMintUrl: string | undefined;
     try {
-      // Metadata only: wallet.receive() below resolves the token's proofs
-      // itself, once loadMint() has supplied the keysets.
       tokenMintUrl = getTokenMetadata(token).mint;
-
+      const executor = activeExecutor();
+      if (!executor) throw new Error("User not logged in");
       // if we don't have the mintUrl yet, add it
-      const normalizedMintUrl = await addMintIfNotExists(tokenMintUrl);
-      const mintDetails = cashuStore.getMint(normalizedMintUrl);
+      await addMintIfNotExists(tokenMintUrl);
 
-      // Setup wallet for receiving
-      const mint = new Mint(normalizedMintUrl);
-      const keysets = mintDetails?.keysets;
+      const receivedProofs = await executor.receive(token, {
+        requirePersisted,
+      });
 
-      const activeKeysets = keysets?.filter((k) => (k as any)._active);
-      const units = [...new Set(activeKeysets?.map((k) => (k as any)._unit))];
-      const preferredUnit = units?.includes("msat")
-        ? "msat"
-        : units?.includes("sat")
-          ? "sat"
-          : units?.[0];
-
-      console.log(activeKeysets, units, preferredUnit);
-
-      const wallet = new Wallet(mint, { unit: preferredUnit });
-
-      // Load mint keysets
-      await wallet.loadMint();
-
-      // Receive proofs from token
-      const receivedProofs = await wallet.receive(token);
-      // After wallet.receive, these proofs are the only recoverable copy.
-      const pendingReceiveKey = `${owned(
-        "pending_receive_proofs",
-        owner
-      )}_${Date.now()}`;
-      localStorage.setItem(
-        pendingReceiveKey,
-        JSON.stringify({
-          mintUrl: normalizedMintUrl,
-          proofsToSend: receivedProofs.map((p) => ({
-            id: p.id || "",
-            amount: p.amount,
-            secret: p.secret || "",
-            C: p.C || "",
-          })),
-          timestamp: Date.now(),
-        })
-      );
-      // Create token event in Nostr
-      try {
-        // Attempt to create token in Nostr, but don't rely on the return value
-        await updateProofs({
-          mintUrl: normalizedMintUrl,
-          proofsToAdd: receivedProofs,
-          proofsToRemove: [],
-        });
-        localStorage.removeItem(pendingReceiveKey);
-      } catch (err) {
-        // Keep the backup so startup recovery can restore the proofs.
-        console.error("Error storing token in Nostr:", err);
-        if (requirePersisted) {
-          throw new Error(
-            "Token redeemed, but storing the funds failed - they will be restored on next app start. " +
-              (err instanceof Error ? err.message : String(err))
-          );
-        }
-      }
-
-      // Create history event
       const totalAmount = receivedProofs.reduce((sum, p) => sum + p.amount, 0);
       await createHistory({
         direction: "in",
@@ -577,40 +331,12 @@ export function useCashuToken() {
     return cleanupPromise;
   };
 
-
-  /**
-   * Clean up pending proofs after successful token creation
-   * @param pendingProofsKey The key used to store pending proofs
-   */
-  const cleanupPendingProofs = (pendingProofsKey: string) => {
-    try {
-      localStorage.removeItem(pendingProofsKey);
-    } catch (error) {
-      console.error("Error cleaning up pending proofs:", error);
-    }
-  };
-
-  /**
-   * Reset the recovery state to allow re-running recovery
-   * Useful for testing or manual recovery triggers
-   */
-  const resetRecoveryState = () => {
-    recovered.clear();
-    // Clear all recovery processed flags from sessionStorage
-    const keys = Object.keys(sessionStorage).filter((key) =>
-      key.startsWith("recovery_processed_")
-    );
-    keys.forEach((key) => sessionStorage.removeItem(key));
-  };
-
   return {
     sendToken,
     receiveToken,
     cleanSpentProofs,
-    cleanupPendingProofs,
     addMintIfNotExists,
     removeMint,
-    resetRecoveryState,
     isLoading,
     error,
   };

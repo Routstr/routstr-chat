@@ -568,6 +568,7 @@ export function useCashuWallet() {
       localStorage.getItem("cashu_relays_timeout") === "true");
 
   return {
+    owner: activeAccount?.pubkey,
     wallet: walletQuery.data?.wallet,
     walletId: walletQuery.data?.id,
     tokens: getNip60TokensQuery.data || [],
