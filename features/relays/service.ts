@@ -7,16 +7,7 @@ import {
   timeout,
   toArray,
 } from "rxjs";
-
-/** What the relay layer needs from a relay library (platform/nostr/pool.ts). */
-export interface RelayPort {
-  /** Stored events for a filter; completes at EOSE, errors when the relay fails. */
-  request(url: string, filter: Filter): Observable<NostrEvent>;
-  /** Events as relays receive them. */
-  subscribe(urls: string[], filter: Filter): Observable<NostrEvent>;
-  /** Resolves true when the relay accepted the event. */
-  publish(url: string, event: NostrEvent): Promise<boolean>;
-}
+import type { RelayPort } from "./ports";
 
 export interface Fetched {
   events: NostrEvent[];
@@ -45,6 +36,9 @@ const PAGE_MS = 10_000;
 // relays judge `since` by the writer's clock, which can be behind ours
 const LIVE_SLACK_S = 600;
 const UPLOAD_BATCH = 10;
+// a NIP-77 sync not done by then gives way to reading page by page
+const RECONCILE_MS = 20_000;
+const IDS_PER_REQUEST = 500;
 
 const isRelayUrl = (url: unknown): url is string =>
   typeof url === "string" && /^wss?:\/\/[^\s]+$/i.test(url);
@@ -120,17 +114,19 @@ export class Relays {
     return relays;
   }
 
-  /** Every relay's stored events for a filter, page by page. Events the
-   *  caller holds that a relay did not return are sent to that relay. */
+  /** Every relay's stored events for a filter. `ours` is what this device
+   *  holds for it: a relay that does NIP-77 then sends only what we lack,
+   *  and each relay is sent what it lacks of ours. */
   async fetch(
     urls: string[],
     filter: Filter,
-    upload?: () => Promise<NostrEvent[]>
+    ours?: () => Promise<NostrEvent[]>
   ): Promise<Fetched> {
+    const held = ours ? await ours() : [];
     const results = await Promise.all(
       urls.map(async (url) => ({
         url,
-        events: await this.fetchOne(url, filter),
+        ...(await this.syncOne(url, filter, held)),
       }))
     );
     const events = new Map<string, NostrEvent>();
@@ -140,20 +136,46 @@ export class Relays {
       answered.push(result.url);
       result.events.forEach((event) => events.set(event.id, event));
     }
-    if (upload && answered.length > 0) {
-      const mine = await upload();
-      await Promise.all(
-        results.map(({ url, events: had }) =>
-          had
-            ? this.send(
-                url,
-                mine.filter((e) => !had.has(e.id))
-              )
-            : null
-        )
-      );
-    }
+    await Promise.all(
+      results.map(({ url, events: got, lacks }) =>
+        got ? this.send(url, lacks) : null
+      )
+    );
     return { events: [...events.values()], answered };
+  }
+
+  // Once we hold some, a NIP-77 relay is asked only for the difference; any
+  // other relay, or a NIP-77 sync that fails, is read page by page.
+  private async syncOne(
+    url: string,
+    filter: Filter,
+    held: NostrEvent[]
+  ): Promise<{ events: Map<string, NostrEvent> | null; lacks: NostrEvent[] }> {
+    const synced = held.length > 0 && (await this.reconcile(url, filter, held));
+    if (synced) return synced;
+    const events = await this.fetchOne(url, filter);
+    return { events, lacks: held.filter((e) => !events?.has(e.id)) };
+  }
+
+  private async reconcile(url: string, filter: Filter, held: NostrEvent[]) {
+    const stop = new AbortController();
+    const timer = setTimeout(() => stop.abort(), RECONCILE_MS);
+    try {
+      const diff = await this.port.reconcile(url, filter, held, stop.signal);
+      if (!diff) return null;
+      const events = new Map<string, NostrEvent>();
+      for (let i = 0; i < diff.need.length; i += IDS_PER_REQUEST) {
+        const ids = diff.need.slice(i, i + IDS_PER_REQUEST);
+        const page = await collect(this.port.request(url, { ...filter, ids }));
+        page.forEach((event) => events.set(event.id, event));
+      }
+      const lacking = new Set(diff.have);
+      return { events, lacks: held.filter((e) => lacking.has(e.id)) };
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   // A relay may cap one answer (strfry sends 500), so older pages follow
@@ -246,11 +268,8 @@ export class AccountRelays {
     return accepted;
   }
 
-  fetch(
-    filter: Filter,
-    upload?: () => Promise<NostrEvent[]>
-  ): Promise<Fetched> {
-    return this.hub.fetch(this.urls(), filter, upload);
+  fetch(filter: Filter, ours?: () => Promise<NostrEvent[]>): Promise<Fetched> {
+    return this.hub.fetch(this.urls(), filter, ours);
   }
 
   /** Events published from about now on, from every relay in the list as it changes. */

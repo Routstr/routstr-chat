@@ -1,28 +1,31 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useReducedMotion } from "../motion";
 
 /* Networks deliver words in bursts. The page lets them out at an even pace:
    each frame reveals a share of the backlog (about a quarter second to catch
    up, whatever the burst), always ending on a word boundary. */
 export function useSmoothText(target: string, live: boolean) {
+  const reduce = useReducedMotion();
+  const smooth = live && !reduce;
   const [shown, setShown] = useState(target);
+  if (!smooth && shown !== target) setShown(target);
+  // a new answer, or the words were held back: start again from nothing
+  if (smooth && target.length < shown.length) setShown("");
   const len = useRef(target.length);
   const raf = useRef(0);
   const targetRef = useRef(target);
-  targetRef.current = target;
+  useLayoutEffect(() => {
+    targetRef.current = target;
+  });
 
   useEffect(() => {
-    if (!live || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    if (!smooth) {
       cancelAnimationFrame(raf.current);
       raf.current = 0;
       len.current = target.length;
-      setShown(target);
       return;
     }
-    if (target.length < len.current) {
-      // a new answer, or the words were held back: start again from nothing
-      len.current = 0;
-      setShown("");
-    }
+    if (target.length < len.current) len.current = 0;
     if (raf.current) return;
     const step = () => {
       const t = targetRef.current;
@@ -41,7 +44,7 @@ export function useSmoothText(target: string, live: boolean) {
       raf.current = requestAnimationFrame(step);
     };
     raf.current = requestAnimationFrame(step);
-  }, [target, live]);
+  }, [target, smooth]);
 
   // a loop cancelled from outside must not look like one still running
   useEffect(
@@ -51,7 +54,7 @@ export function useSmoothText(target: string, live: boolean) {
     },
     []
   );
-  return live ? shown : target;
+  return smooth ? shown : target;
 }
 
 /* Reasoning is only kept while it streams (the SDK stores text-only answers

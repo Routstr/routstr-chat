@@ -1,7 +1,7 @@
 import { SessionService, type Switcher } from "@/features/session/service";
 import { savedInIndexedDB } from "@/features/session/saved";
 import { bindOwner } from "./owner";
-import { relays } from "./nostr";
+import { bindHistory, relays } from "./nostr";
 import { startKeys } from "./keys";
 
 /* The composition root: built once per tab, before the first render. */
@@ -23,8 +23,10 @@ if (typeof window !== "undefined") {
     }
   });
   // the first listener, so stores follow the owner before anything reads them
-  const bind = () =>
+  const bind = () => {
     bindOwner(session.getSnapshot().pubkey, window.localStorage);
+    bindHistory(session.accounts.active$.value);
+  };
   bind();
   session.subscribe(bind);
 

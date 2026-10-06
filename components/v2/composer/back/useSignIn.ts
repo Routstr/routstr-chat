@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { ExtensionAccount, PrivateKeyAccount } from "applesauce-accounts/accounts";
 import {
   fromBunkerLink,
@@ -11,6 +11,7 @@ import {
   type AccountMetadata,
 } from "@/features/session/view";
 import { useUi } from "../../ui";
+import { writeKeyFlag } from "../../wallet/bits";
 import { touch } from "./bits";
 
 /* Signing in on the back of the composer: which way is open, what was typed
@@ -60,7 +61,10 @@ export function useSignIn(say: (t: string) => void, from: "pay" | "write") {
     const secret = readSecret(keyText);
     if (!("key" in secret)) return setWayState("bad");
     try {
-      adopt(PrivateKeyAccount.fromKey<AccountMetadata>(secret.key), "in", `Account ${count()}`);
+      const account = PrivateKeyAccount.fromKey<AccountMetadata>(secret.key);
+      adopt(account, "in", `Account ${count()}`);
+      // a key pasted in is a key already kept somewhere else
+      writeKeyFlag(account.pubkey, "saved");
       setKeyText("");
     } catch {
       // 64 hex characters that are not a valid key
@@ -113,8 +117,11 @@ export function useSignIn(say: (t: string) => void, from: "pay" | "write") {
     setWay((cur) => (cur === w ? null : w));
     if (w && !touch()) window.setTimeout(() => document.querySelector<HTMLInputElement>(`.pa-way[data-way="${w}"] input`)?.focus(), 90);
   };
-  const [hasExt, setHasExt] = useState(false);
-  useEffect(() => setHasExt(!!(window as unknown as { nostr?: unknown }).nostr), []);
+  const hasExt = useSyncExternalStore(
+    () => () => {},
+    () => !!(window as unknown as { nostr?: unknown }).nostr,
+    () => false
+  );
 
   return {
     way,

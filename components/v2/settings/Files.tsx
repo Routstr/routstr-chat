@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useObservableState } from "applesauce-react/hooks";
 import { useAccountManager } from "@/features/session/view";
 import { useBlossomSync } from "@/hooks/useBlossomSync";
@@ -40,7 +40,9 @@ export default function Files() {
   // undo reads the list as it is then (a server added meanwhile stays)
   const isDefault = blossomServers.length === DEFAULT_BLOSSOM_SERVERS.length && DEFAULT_BLOSSOM_SERVERS.every((u) => blossomServers.includes(u));
   const serversNow = useRef(blossomServers);
-  serversNow.current = blossomServers;
+  useEffect(() => {
+    serversNow.current = blossomServers;
+  });
   const removeServer = (u: string) => {
     const i = blossomServers.indexOf(u);
     setBlossomServers(blossomServers.filter((x) => x !== u));

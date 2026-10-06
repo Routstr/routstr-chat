@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { finalizeEvent, generateSecretKey, getPublicKey } from "nostr-tools";
 import { firstValueFrom, filter, toArray, take } from "rxjs";
 import { DEFAULT_RELAYS, Relays } from "../service";
@@ -160,6 +160,50 @@ describe("AccountRelays", () => {
         .received.map((e) => e.id)
         .sort()
     ).toEqual(mine.map((e) => e.id).sort());
+  });
+
+  it("asks a NIP-77 relay only for what this device lacks, and sends it only what it lacks", async () => {
+    const net = network();
+    const [theirs, both, ours] = [sign(1080, 1), sign(1080, 2), sign(1080, 3)];
+    net.relay(R1).nip77 = true;
+    [theirs, both].forEach((e) => net.relay(R1).events.set(e.id, e));
+    const account = new Relays(net.port, memoryStorage(), `?relays=${R1}`).of(OWNER);
+
+    const { events, answered } = await account.fetch(
+      { kinds: [1080], authors: [OWNER] },
+      async () => [both, ours]
+    );
+
+    expect(events.map((e) => e.id)).toEqual([theirs.id]);
+    expect(answered).toEqual([R1]);
+    expect(net.relay(R1).received.map((e) => e.id)).toEqual([ours.id]);
+    expect(net.relay(R1).asked).toEqual([{ kinds: [1080], authors: [OWNER], ids: [theirs.id] }]);
+  });
+
+  it("reads page by page when a NIP-77 sync fails, stalls, or this device holds nothing yet", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      for (const setup of ["fails", "hangs", "empty"] as const) {
+        const net = network();
+        const [theirs, ours] = [sign(1080, 1), sign(1080, 2)];
+        Object.assign(net.relay(R1), { nip77: true, syncFails: setup === "fails", syncHangs: setup === "hangs" });
+        net.relay(R1).events.set(theirs.id, theirs);
+        const account = new Relays(net.port, memoryStorage(), `?relays=${R1}`).of(OWNER);
+
+        const fetching = account.fetch({ kinds: [1080], authors: [OWNER] }, async () =>
+          setup === "empty" ? [] : [ours]
+        );
+        await vi.advanceTimersByTimeAsync(20_000);
+        const { events, answered } = await fetching;
+
+        expect(events.map((e) => e.id)).toEqual([theirs.id]);
+        expect(answered).toEqual([R1]);
+        expect(net.relay(R1).asked[0]).toEqual({ kinds: [1080], authors: [OWNER] });
+        expect(net.relay(R1).received.map((e) => e.id)).toEqual(setup === "empty" ? [] : [ours.id]);
+      }
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("follows the device list as it changes", async () => {

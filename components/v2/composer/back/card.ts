@@ -7,18 +7,18 @@ import { phoneNow, reduced, touch } from "./bits";
 type Ref<T> = React.RefObject<T | null>;
 
 /* ── height: the card follows its content, gliding; it never pushes the words ── */
-export function useCardHeight(morph: Ref<HTMLDivElement>, stage: Ref<HTMLDivElement>, foot: Ref<HTMLDivElement>, island: Ref<HTMLDivElement>, footHidden: boolean, view: string) {
+export function useCardHeight(morphRef: Ref<HTMLDivElement>, stageRef: Ref<HTMLDivElement>, footRef: Ref<HTMLDivElement>, islandRef: Ref<HTMLDivElement>, footHidden: boolean, view: string) {
   const measure = useCallback(
     (instant: boolean) => {
-      const m = morph.current;
-      const st = stage.current;
-      const isl = island.current;
+      const m = morphRef.current;
+      const st = stageRef.current;
+      const isl = islandRef.current;
       if (!m || !st || !isl) return;
       const viewEl = st.querySelector<HTMLElement>(".pa-cur > .pa-view");
       let h: number;
       if (phoneNow()) h = m.querySelector<HTMLElement>(".pa-inwrap")?.offsetHeight ?? 0;
       else {
-        const natural = (viewEl?.offsetHeight ?? 0) + (foot.current && !footHidden ? foot.current.offsetHeight : 0);
+        const natural = (viewEl?.offsetHeight ?? 0) + (footRef.current && !footHidden ? footRef.current.offsetHeight : 0);
         // the card may grow down only to the panel's floor (a new chat) or keep the
         // thread's last 160px (docked); past that the view scrolls inside
         const ir = isl.getBoundingClientRect();
@@ -37,7 +37,7 @@ export function useCardHeight(morph: Ref<HTMLDivElement>, stage: Ref<HTMLDivElem
         m.style.transition = "";
       } else m.style.setProperty("--pa-h", `${h}px`);
     },
-    [island, footHidden]
+    [islandRef, footHidden]
   );
   const firstMeasure = useRef(true);
   useLayoutEffect(() => {
@@ -46,9 +46,9 @@ export function useCardHeight(morph: Ref<HTMLDivElement>, stage: Ref<HTMLDivElem
   });
   useEffect(() => {
     const ro = new ResizeObserver(() => measure(false));
-    if (stage.current) ro.observe(stage.current);
-    if (foot.current) ro.observe(foot.current);
-    stage.current?.querySelectorAll(".pa-view").forEach((v) => ro.observe(v));
+    if (stageRef.current) ro.observe(stageRef.current);
+    if (footRef.current) ro.observe(footRef.current);
+    stageRef.current?.querySelectorAll(".pa-view").forEach((v) => ro.observe(v));
     return () => ro.disconnect();
   }, [measure, view]);
 }
@@ -85,7 +85,7 @@ export function useViewSwap(view: string, body: React.ReactNode) {
 
 /* focus the first useful thing once the card has turned, and again when a
    view swap took the focused control away (never on touch) */
-export function useCardFocus(morph: Ref<HTMLDivElement>, spot: string) {
+export function useCardFocus(morphRef: Ref<HTMLDivElement>, spot: string) {
   const firstFocus = useRef(true);
   useEffect(() => {
     if (touch()) return;
@@ -94,21 +94,20 @@ export function useCardFocus(morph: Ref<HTMLDivElement>, spot: string) {
     const t = window.setTimeout(() => {
       const a = document.activeElement;
       if (!turned && a && a !== document.body && a.isConnected && !a.closest(".pa-out")) return;
-      const root = morph.current;
+      const root = morphRef.current;
       const el =
         root?.querySelector<HTMLElement>('.pa-cur .pa-amt[data-picked], .pa-cur .pa-amt[tabindex="0"]:not([aria-disabled])') ??
         root?.querySelector<HTMLElement>(".pa-cur .pa-row, .pa-corner .prime:not(:disabled), .pa-corner .soft, .pa-cur textarea, .pa-cur input, .pa-acts .soft, .pa-lead .soft");
       el?.focus({ preventScroll: true });
     }, turned ? 440 : tokenMs("--d-mid"));
     return () => window.clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [spot]);
 }
 
 /* paid: seal and words close into one group, centred in the card */
-export function usePaidCentre(stage: Ref<HTMLDivElement>, view: string, ln: string) {
+export function usePaidCentre(stageRef: Ref<HTMLDivElement>, view: string, ln: string) {
   useLayoutEffect(() => {
-    const inv = stage.current?.querySelector<HTMLElement>(".pa-cur .pa-inv[data-paid]");
+    const inv = stageRef.current?.querySelector<HTMLElement>(".pa-cur .pa-inv[data-paid]");
     if (!inv) return;
     const place = () => {
       if (phoneNow()) return inv.style.removeProperty("--pa-gx");

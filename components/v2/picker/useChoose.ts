@@ -2,9 +2,8 @@ import React, { useCallback } from "react";
 import type { useChat } from "@/context/ChatProvider";
 import { setProviderLastUpdate } from "@/utils/storageUtils";
 import { useDisabledProviders } from "@/hooks/useDisabledProviders";
-import type { useUi } from "../ui";
+import { useChipRef, type useUi } from "../ui";
 import { shortModelName } from "../format";
-import { chipAnchor } from "../composer/Composer";
 import type { Catalog } from "./useCatalog";
 import { LEAVE_MS, NO_FILTERS, SHEET_LEAVE_MS, type Filters } from "./helpers";
 import { fmt, parseKey, type Row } from "./catalog";
@@ -52,10 +51,11 @@ export function useChoose({
   onDetail?: () => void;
   onList?: () => void;
 }) {
+  const chipRef = useChipRef();
   /* ── actions ────────────────────────────────────────────────────────── */
   // on a phone the keyboard stays down: the chip takes focus instead of the field
   const refocusField = () =>
-    requestAnimationFrame(() => (phone ? chipAnchor.el?.focus({ preventScroll: true }) : document.querySelector<HTMLTextAreaElement>(".island textarea")?.focus()));
+    requestAnimationFrame(() => (phone ? chipRef.current?.focus({ preventScroll: true }) : document.querySelector<HTMLTextAreaElement>(".island textarea")?.focus()));
 
   const commit = useCallback(
     (id: string, pin: string | null) => {

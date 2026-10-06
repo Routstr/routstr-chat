@@ -4,7 +4,7 @@ import type { SortKey } from "./catalog";
 export function useSortMenu({
   menu,
   setMenu,
-  listEl,
+  listEl: listElRef,
   sortBtn,
   menuEl,
   card,
@@ -29,7 +29,7 @@ export function useSortMenu({
     if (!menu) return;
     // the menu never runs past the list's bottom edge; if it still has to
     // scroll, its last row fades into the menu's own surface
-    const bottom = Math.min(listEl.current?.getBoundingClientRect().bottom ?? Infinity, window.visualViewport?.height ?? window.innerHeight);
+    const bottom = Math.min(listElRef.current?.getBoundingClientRect().bottom ?? Infinity, window.visualViewport?.height ?? window.innerHeight);
     const top = sortBtn.current?.getBoundingClientRect().bottom ?? 0;
     const cap = Math.max(180, Math.min(470, bottom - top - 14));
     const el = menuEl.current;

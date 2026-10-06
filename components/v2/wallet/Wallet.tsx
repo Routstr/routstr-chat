@@ -1,7 +1,9 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useObservableState } from "applesauce-react/hooks";
 import { useChat } from "@/context/ChatProvider";
+import { useAccountManager } from "@/features/session/view";
 import { useCashuStore, useTransactionHistoryStore } from "@/features/wallet";
 import { useUnclaimedTokensStore } from "@/features/wallet/state/unclaimedTokensStore";
 import { useInvoiceSync } from "@/hooks/useInvoiceSync";
@@ -13,7 +15,7 @@ import { shortModelName } from "../format";
 import { estimateSats, promptTokens } from "../price";
 import { useMoney } from "../useMoney";
 import { tokenMs } from "../motion";
-import { Note, Odometer, dayOf, fmt, host, left, mintLabel, numSize, pairChange, phoneNow, reduced, span, toMs, whenIn } from "./bits";
+import { Note, Odometer, dayOf, fmt, host, left, mintLabel, numSize, pairChange, phoneNow, readKeyFlag, reduced, span, toMs, whenIn, writeKeyFlag } from "./bits";
 import Add, { type Reopen } from "./Add";
 import Send, { Tokens } from "./Send";
 
@@ -243,6 +245,12 @@ function Home({ go, freeze, bloom }: { go: (v: View, o?: { reopen?: Reopen | nul
   const paid = usePaidUnclaimed();
   const { per, name } = usePerReply();
   const hero = useRef<HTMLDivElement>(null);
+  const ui = useUi();
+  // a key kept only in this browser, now holding sats: one quiet reminder until it is saved or waved away
+  const { manager } = useAccountManager();
+  const active = useObservableState(manager.active$);
+  const [keyNoteGone, setKeyNoteGone] = useState(false);
+  const keyNote = active?.type === "nsec" && money.total > 0 && !keyNoteGone && !readKeyFlag(active.pubkey);
 
   // the card light blooms once when money lands
   const lastTotal = useRef(money.total);
@@ -493,6 +501,33 @@ function Home({ go, freeze, bloom }: { go: (v: View, o?: { reopen?: Reopen | nul
           </span>
         )}
       </div>
+
+      {keyNote && (
+        <div className="wl-sec">
+          <div className="wl-row wl-held">
+            <span className="wl-row-t">
+              <span>Back up your key</span>
+            </span>
+            <span className="wl-row-r">
+              <button type="button" className="wl-link" onClick={() => ui.openSettings("account")}>
+                Back up
+              </button>
+              <button
+                type="button"
+                className="wl-link wl-hide"
+                aria-label="Hide this reminder"
+                onClick={() => {
+                  writeKeyFlag(active.pubkey, "hidden");
+                  setKeyNoteGone(true);
+                }}
+              >
+                <Icon name="close" size={14} />
+              </button>
+            </span>
+            <span className="wl-row-s">Only this browser has your key. Clearing it loses the key and its sats.</span>
+          </div>
+        </div>
+      )}
 
       {(invoices.length > 0 || tokens.length > 0 || paid.list.length > 0) && (
         <div className="wl-sec">

@@ -83,7 +83,6 @@ export default function ChatPane({ it, toks, ctx }: { it: Item; toks: string[]; 
       live = false;
     };
     // measured again whenever what it shows changes (a new query can keep the same chat)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [it.found?.idx, toks.join(" ")]);
   return (
     <>

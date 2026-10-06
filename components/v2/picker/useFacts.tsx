@@ -35,7 +35,6 @@ export function useFacts(flat: Row[], cat: Catalog, routeOf: (r: Row) => ReturnT
           ] as const;
         })
       ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [flat, cat, routeOf, only]
   );
   return facts;

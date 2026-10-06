@@ -40,6 +40,10 @@ for (const [name, def] of Object.entries(LANGS)) Prism.registerLanguage(name, de
 // Copy feedback survives the remounts a streaming answer causes.
 const copiedAt = new Map<string, number>();
 
+function Pre({ label, ...props }: React.HTMLAttributes<HTMLPreElement> & { label: string }) {
+  return <pre {...props} className="rd-pre scroll" tabIndex={0} aria-label={`${label} code`} style={undefined} />;
+}
+
 /* A code block is a figure in the page: "python · 19 lines" in lower case,
    Copy that says Done in the same width, and Wrap only when a line overflows.
    Past 12 lines the numbers sit in their own gutter that does not scroll
@@ -89,14 +93,6 @@ function Code({ lang, code }: { lang: string; code: string }) {
     }
   };
 
-  const Pre = useMemo(
-    () =>
-      function PreTag(props: React.HTMLAttributes<HTMLPreElement>) {
-        return <pre {...props} className="rd-pre scroll" tabIndex={0} aria-label={`${name} code`} style={undefined} />;
-      },
-    [name]
-  );
-
   return (
     <figure className="rd-code" ref={fig} data-nums={nums ? "" : "off"} data-wrap={wrap ? "on" : "off"}>
       <figcaption className="rd-code-cap">
@@ -140,13 +136,14 @@ function Code({ lang, code }: { lang: string; code: string }) {
             language={name}
             useInlineStyles={false}
             PreTag={Pre}
+            label={name}
             wrapLines
             lineProps={(n: number) => ({ className: "ln", style: { "--i": indents[n - 1] ?? 0 } as React.CSSProperties })}
           >
             {code}
           </Prism>
         ) : (
-          <Pre>
+          <Pre label={name}>
             <code>
               {lines.map((l, i) => (
                 <span key={i} className="ln" style={{ "--i": indents[i] } as React.CSSProperties}>

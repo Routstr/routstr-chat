@@ -10,7 +10,8 @@ import { migrateStorageItems } from "@/utils/storageUtils";
 import { InvoiceRecoveryProvider } from "@/components/InvoiceRecoveryProvider";
 import { session } from "@/runtime";
 import { AccountContext } from "@/features/session/view";
-import { relays } from "@/runtime/nostr";
+import { activeHistory, relays } from "@/runtime/nostr";
+import { HistoryContext } from "@/features/history/view";
 import { RelaysContext } from "@/features/relays/view";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -47,6 +48,11 @@ export default function ClientProviders({ children }: { children: ReactNode }) {
     session.getSnapshot,
     session.getSnapshot
   );
+  const history = useSyncExternalStore(
+    activeHistory.subscribe,
+    activeHistory.get,
+    activeHistory.get
+  );
   // Run storage migration on app startup
   useEffect(() => {
     migrateStorageItems();
@@ -77,9 +83,11 @@ export default function ClientProviders({ children }: { children: ReactNode }) {
         <RelaysContext.Provider value={relays}>
           <AppProvider presetRelays={presetRelays}>
             <QueryClientProvider client={queryClient}>
-              <InvoiceRecoveryProvider key={generation}>
-                {children}
-              </InvoiceRecoveryProvider>
+              <HistoryContext.Provider value={history}>
+                <InvoiceRecoveryProvider key={generation}>
+                  {children}
+                </InvoiceRecoveryProvider>
+              </HistoryContext.Provider>
             </QueryClientProvider>
           </AppProvider>
         </RelaysContext.Provider>

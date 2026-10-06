@@ -77,7 +77,7 @@
   transition: opacity var(--d-fast) var(--e-out), transform var(--d-fast) var(--e-out), color var(--d-slow) var(--e-turn);
 }
 .island .field::-webkit-scrollbar { display: none; }
-/* both: 'Reply' fades in after the first send, and the idea ghost hides the placeholder by colour */
+/* 'Reply' fades in after the first send (landing.ts hushes the placeholder while the words travel) */
 .island .field::placeholder { color: var(--ink-3); opacity: 1; transition: opacity var(--d-mid) var(--e-out), color var(--d-fast) var(--e-out); }
 .island .field[data-hush]::placeholder { opacity: 0; transition: none; }
 .island .field::selection { background: var(--sel); color: var(--sel-ink); }
@@ -327,9 +327,7 @@
 .island[data-drag][data-over] { transform: scale(1.02); }
 
 /* ══ the new-chat stage around it ════════════════════════════════════════ */
-/* the ideas step aside while the card is turned (a payment, sign in) */
-.panel[data-state="empty"]:has(.island:not([data-face="write"])) .pf-ideas { opacity: 0; pointer-events: none; }
-/* the greeting and ideas a first send leaves behind (landing.ts) */
+/* the greeting a first send leaves behind (landing.ts) */
 .ghost-out { will-change: transform, opacity; }
 
 /* docked, the thread ends clear of the tooltip band above the island */
@@ -369,7 +367,7 @@ html[data-room="meridian"] .island {
   .island[data-place="centre"] .sh-lift { opacity: 1; }
   .island[data-place="centre"] .field { min-height: 0; }
   .island .pa-x { width: 44px; height: 44px; top: -2px; right: -6px; }
-  /* the turned card needs the height: the ideas leave, the greeting settles */
+  /* the turned card needs the height: the greeting steps back */
   .panel[data-state="empty"] .stage { transition: opacity var(--d-mid) var(--e-out); }
   .panel[data-state="empty"]:has(.island:not([data-face="write"])) .stage,
   .panel[data-state="empty"]:has(.island:not([data-face="write"])) .stage-tail { opacity: 0; pointer-events: none; }

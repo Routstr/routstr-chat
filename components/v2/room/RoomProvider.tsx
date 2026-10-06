@@ -104,7 +104,9 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
   const client = typeof window !== "undefined";
   const [room, setRoomState] = useState<RoomId>(() => (client ? readStored() : "auto"));
   const roomNow = useRef(room);
-  roomNow.current = room;
+  useLayoutEffect(() => {
+    roomNow.current = room;
+  });
   const [prefersDark, setPrefersDark] = useState(() => client && systemDark());
   const [hour, setHour] = useState(() => (client ? hourNow() : 12));
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -211,7 +213,6 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
   const setRoomRef = useRef(setRoom);
-  setRoomRef.current = setRoom;
 
   // The older panels still read light or dark from next-themes' class; keep
   // it in step with the room so their dark: styles agree with the light.

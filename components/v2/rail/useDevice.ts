@@ -1,15 +1,12 @@
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
+import { usePhone } from "../phone";
 
 export function useDevice() {
-  const [phone, setPhone] = useState(false);
-  const [mac, setMac] = useState(false);
-  useEffect(() => {
-    setMac(/Mac|iPhone|iPad/.test(navigator.platform));
-    const mq = window.matchMedia("(max-width: 760px)");
-    const on = () => setPhone(mq.matches);
-    on();
-    mq.addEventListener("change", on);
-    return () => mq.removeEventListener("change", on);
-  }, []);
+  const phone = usePhone();
+  const mac = useSyncExternalStore(
+    () => () => {},
+    () => /Mac|iPhone|iPad/.test(navigator.platform),
+    () => false
+  );
   return { phone, mac };
 }

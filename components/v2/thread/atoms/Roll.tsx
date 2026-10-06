@@ -1,19 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { reduced } from "./helpers";
+import { useReducedMotion } from "../../motion";
 
 /** A digit that rolls to its new value: up when it grows, down when it shrinks. */
 export function Roll({ value }: { value: number }) {
+  const reduce = useReducedMotion();
   const [shown, setShown] = useState({ now: value, was: null as number | null, up: true });
+  if (value !== shown.now) setShown(reduce ? { now: value, was: null, up: true } : { now: value, was: shown.now, up: value > shown.now });
   useEffect(() => {
-    if (value === shown.now) return;
-    if (reduced()) return setShown({ now: value, was: null, up: true });
-    setShown((s) => ({ now: value, was: s.now, up: value > s.now }));
+    if (shown.was === null) return;
     const t = window.setTimeout(() => setShown((s) => ({ ...s, was: null })), 220);
     return () => window.clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value]);
+  }, [shown]);
   const dir = shown.up ? "up" : "down";
   return (
     <span className="rd-roll">

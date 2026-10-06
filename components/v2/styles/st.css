@@ -463,9 +463,6 @@ html[data-room="meridian"] .v2 {
 
 /* ── Account ──────────────────────────────────────────────────────────── */
 .st-id { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; column-gap: 16px; padding: 6px 0 18px; }
-.st-av { width: 48px; height: 48px; border-radius: 99px; box-shadow: var(--lift-1), inset 0 0 0 1px var(--hair);
-  background: conic-gradient(from var(--av-a, 200deg), var(--tint), var(--sh-c3, var(--tint)), var(--tint-soft), var(--tint)); }
-.st-av.sm { width: 28px; height: 28px; }
 .st-id-k { font-family: var(--f-mono); font-size: 14px; color: var(--ink); letter-spacing: .01em; }
 .st-id-n { margin-top: 2px; font-family: var(--f-body); font-size: 13.5px; color: var(--ink-3); }
 
@@ -599,9 +596,6 @@ html[data-room="meridian"] .v2 {
 .st-roomc[aria-checked="true"] .st-pv-tick { transform: none; opacity: 1; }
 
 /* Account */
-.st-av.lg { width: 44px; height: 44px; }
-.st-av.idle { background: var(--fill-1); box-shadow: inset 0 0 0 1px var(--hair); display: grid; place-items: center; color: var(--ink-3); }
-.st-av:not(.lg) { width: 28px; height: 28px; margin: 0 2px; }
 .st-id { padding: 18px 0 16px; }
 .st-id-m { min-width: 0; }
 .st-signin { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 16px; padding: 18px 0 14px; }

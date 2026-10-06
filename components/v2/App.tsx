@@ -6,6 +6,7 @@ import { getDecodedToken } from "@cashu/cashu-ts";
 import { toast } from "sonner";
 import { AuthProvider, useAuth } from "@/context/AuthProvider";
 import { ChatProvider, useChat } from "@/context/ChatProvider";
+import { useConversations, useHistoryLoaded } from "@/features/history/view";
 import { KeepAliveProvider, useKeepAliveContext } from "@/components/pwa/KeepAliveProvider";
 import { QueryTimeoutModal } from "@/components/QueryTimeoutModal";
 import { useCashuToken, useCashuWallet } from "@/features/wallet";
@@ -29,11 +30,11 @@ function Behaviour() {
   const {
     balance,
     isLoading: isStreaming,
-    conversations,
-    conversationsLoaded,
     loadConversation,
     activeConversationId,
   } = useChat();
+  const conversations = useConversations();
+  const conversationsLoaded = useHistoryLoaded();
   const ui = useUi();
   const { startKeepAlive, stopKeepAlive, isEnabled: keepAliveEnabled } = useKeepAliveContext();
   const {
@@ -72,7 +73,6 @@ function Behaviour() {
     if (tab !== "apikeys" || !isAuthenticated) return;
     ui.openSettings("keys");
     replaceQuery((p) => p.delete("tab"));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, isAuthenticated]);
 
   // ?cashu=<token>: redeem it once, on arrival, then take it out of the address
@@ -97,7 +97,6 @@ function Behaviour() {
         toast.error(e instanceof Error ? e.message : "That token could not be received");
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authChecked, cashuParam, isAuthenticated, isWalletLoading]);
 
   // the open chat lives in the address bar, both ways
@@ -116,7 +115,6 @@ function Behaviour() {
     if (chatIdFromUrl === activeConversationId) return;
     pendingUrlSync.current = true;
     replaceQuery((p) => p.set("chatId", activeConversationId));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeConversationId, chatIdFromUrl]);
 
   useEffect(() => {

@@ -1,5 +1,5 @@
 import React, { useRef } from "react";
-import { chipAnchor } from "../composer/Composer";
+import { useChipRef } from "../ui";
 import type { Lay } from "./Details";
 import type { Row, Scope } from "./catalog";
 
@@ -52,6 +52,7 @@ export function useKeys({
   hints: boolean;
   setHints: (h: boolean) => void;
 }) {
+  const chipRef = useChipRef();
   /* ── keys ───────────────────────────────────────────────────────────── */
   const onKey = (e: React.KeyboardEvent) => {
     const t = e.target as HTMLElement;
@@ -72,7 +73,7 @@ export function useKeys({
       e.preventDefault();
       e.stopPropagation();
       onClose();
-      chipAnchor.el?.focus();
+      chipRef.current?.focus();
       return;
     }
     const inList = t === input.current || t === card.current || !!t.closest?.(".mp-list");
@@ -82,7 +83,7 @@ export function useKeys({
       if (view === "detail" && lay === "one") return push("list");
       if (q && t === input.current) return setQ("");
       onClose();
-      chipAnchor.el?.focus();
+      chipRef.current?.focus();
       return;
     }
     if (e.key === "ArrowLeft" && lay === "one" && view === "detail" && !t.closest?.(".rte")) {

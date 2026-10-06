@@ -5,7 +5,7 @@ import { nip19 } from "nostr-tools";
 import { useObservableState } from "applesauce-react/hooks";
 import { useExportedKeys } from "@/features/keys/view";
 import { useAccountManager } from "@/features/session/view";
-import { useChatSync } from "@/hooks/useChatSync";
+import { useSyncSetting } from "@/features/history/view";
 import { useSdkUsageHistory } from "@/features/wallet/hooks/useSdkUsageHistory";
 import { loadRemoteNode } from "@/utils/storageUtils";
 import { useBitcoinConnectStatus } from "@/hooks/useBitcoinConnect";
@@ -103,14 +103,13 @@ export default function Settings() {
   const ui = useUi();
   const [mounted, setMounted] = useState(false);
   const [leaving, setLeaving] = useState(false);
+  if (ui.settings && (!mounted || leaving)) {
+    setMounted(true);
+    setLeaving(false);
+  }
+  if (!ui.settings && mounted && !leaving) setLeaving(true);
   useEffect(() => {
-    if (ui.settings) {
-      setMounted(true);
-      setLeaving(false);
-      return;
-    }
-    if (!mounted) return;
-    setLeaving(true);
+    if (ui.settings || !mounted) return;
     // focus goes back to the gear as the layer leaves (from here: the layer's own timer dies with it)
     const t = window.setTimeout(() => {
       setMounted(false);
@@ -120,7 +119,6 @@ export default function Settings() {
       if (document.activeElement !== gear) document.querySelector<HTMLElement>(".panel-head .lead .only-m")?.focus({ preventScroll: true });
     }, reducedMotion() ? 0 : tokenMs("--d-mid"));
     return () => window.clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ui.settings]);
   if (!mounted) return null;
   return <Layer leaving={leaving} />;
@@ -130,7 +128,7 @@ function Layer({ leaving }: { leaving: boolean }) {
   const ui = useUi();
   const room = useRoom();
   const money = useMoney();
-  const { chatSyncEnabled } = useChatSync();
+  const [chatSyncEnabled] = useSyncSetting();
   const { manager } = useAccountManager();
   const active = useObservableState(manager.active$);
   const week = useMemo(() => Date.now() - 7 * 86_400_000, []);
@@ -171,7 +169,6 @@ function Layer({ leaving }: { leaving: boolean }) {
       window.clearTimeout(f);
       cancelAnimationFrame(r);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leaving]);
   useEffect(
     () => () => {

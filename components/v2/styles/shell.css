@@ -207,8 +207,8 @@ html[data-nogl] body {
 /* the greeting's row is filled first, up to a fixed height, so the composer's
    top edge holds still and a card that turns over grows downward only */
 .panel[data-state="empty"] {
-  /* a short window gives the greeting's row up first, so the ideas under the composer stay in view
-     (it changes only with the window, so the composer still holds still while its card turns) */
+  /* a short window gives the greeting's row up first (it changes only with the window, so the
+     composer still holds still while its card turns) */
   grid-template-rows: auto minmax(0, min(33vh, calc(100dvh - 460px))) auto minmax(0, 1fr);
   grid-template-areas: "head" "main" "dock" "tail";
 }

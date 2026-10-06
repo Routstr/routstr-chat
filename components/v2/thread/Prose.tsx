@@ -7,7 +7,7 @@ import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
 import Code from "./Code";
-import Picture from "./Picture";
+import Picture, { RemotePicture } from "./Picture";
 import { splitBlocks } from "./splitBlocks";
 import { cleanUrl, safeHref, safeImageSrc, stripParensAroundLinks } from "./links";
 import { rehypeWords } from "./words";
@@ -52,7 +52,8 @@ const COMPONENTS: Components = {
   },
   img: ({ src, alt }) => {
     const ok = safeImageSrc(src);
-    return ok ? <Picture src={ok} alt={alt ?? ""} /> : null;
+    if (!ok) return null;
+    return /^https?:/i.test(ok) ? <RemotePicture src={ok} alt={alt ?? ""} /> : <Picture src={ok} alt={alt ?? ""} />;
   },
   table: ({ children }) => (
     <div className="rd-table scroll" tabIndex={0}>

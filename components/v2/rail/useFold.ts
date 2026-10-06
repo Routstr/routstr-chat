@@ -6,7 +6,7 @@ import { ease, phoneNow, reduced } from "./helpers";
 export function useFold({
   root,
   list,
-  shade,
+  shade: shadeRef,
   folded,
   isSidebarCollapsed,
   setIsSidebarCollapsed,
@@ -40,7 +40,7 @@ export function useFold({
       flipFrom.current = reduced() ? null : flipEls().map((el) => el.getBoundingClientRect());
       flipEls().forEach((el) => el.getAnimations().forEach((a) => a.cancel()));
       // leaving the rest box: back on the scaled form first, so the shadow grows with the card
-      const s = shade.current;
+      const s = shadeRef.current;
       if (s?.classList.contains("is-rest")) {
         s.style.transition = "none";
         s.classList.remove("is-rest");
@@ -57,12 +57,11 @@ export function useFold({
       if (back && a === fold)
         requestAnimationFrame(() => list.current?.querySelector<HTMLElement>('.sb-go[tabindex="0"]')?.focus({ preventScroll: true }));
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [isSidebarCollapsed, setIsSidebarCollapsed]
   );
   const lastFold = useRef<boolean | null>(null);
   useLayoutEffect(() => {
-    const s = shade.current;
+    const s = shadeRef.current;
     const was = lastFold.current;
     lastFold.current = folded;
     if (was === folded) return;
@@ -111,7 +110,6 @@ export function useFold({
       window.clearTimeout(t);
       s.removeEventListener("transitionend", rest);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [folded]);
   return setFold;
 }

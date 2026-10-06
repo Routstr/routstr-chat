@@ -2,12 +2,13 @@
 
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useChat } from "@/context/ChatProvider";
+import { useConversations, useHistoryLoaded } from "@/features/history/view";
 import type { Conversation } from "@/types/chat";
 import type { Model } from "@/types/models";
 import { useUi } from "../ui";
 import { useRoom, type RoomId } from "../room/RoomProvider";
 import { useMoney } from "../useMoney";
-import { phoneNow } from "./helpers";
+import { phoneNow, withCosts } from "./helpers";
 import { tokens } from "./rank";
 import { runItem } from "./run";
 import { useModels } from "./useModels";
@@ -30,17 +31,18 @@ export default function Body({ closing }: { closing: boolean }) {
   const room = useRoom();
   const money = useMoney();
   const {
-    conversations,
     activeConversationId,
     loadConversation,
     startNewConversation,
     setInputMessage,
-    syncWithNostr,
-    conversationsLoaded,
     models,
     selectedModel,
     isSidebarCollapsed,
+    replyCosts,
   } = useChat();
+  const stored = useConversations();
+  const conversations = useMemo(() => withCosts(stored, replyCosts), [stored, replyCosts]);
+  const conversationsLoaded = useHistoryLoaded();
   const [phone, setPhone] = useState(phoneNow);
   useEffect(() => {
     const m = window.matchMedia("(max-width: 760px)");
@@ -93,7 +95,7 @@ export default function Body({ closing }: { closing: boolean }) {
   useGlide({ list, glide, at, groups, instant, instantTwice, scrollNext });
   useShowArrival(list, came, page, q);
   useRoomPreview({ page, it, quiet, room, roomTimer, roomSeq });
-  const runSync = useSync({ it, conversations, sync, setSync, setCame, syncWithNostr });
+  const runSync = useSync({ it, conversations, sync, setSync, setCame });
   const run = (x: Item | undefined) =>
     runItem(x, { q, onEmpty, current, ui, room, origRoom, instant, setPage, setQ, setEnter, setActive, runSync, cancelPreview, close, loadConversation, startNewConversation, setInputMessage });
   const { back, setQuery, escape, onKey } = useKeys({
@@ -140,7 +142,7 @@ export default function Body({ closing }: { closing: boolean }) {
                   page,
                   sync,
                   came,
-                  origRoom: origRoom.current,
+                  origRoom,
                   roomNow: room.room,
                   roomResolved: room.resolved,
                   first,
