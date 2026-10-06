@@ -266,6 +266,58 @@ describe("ChatService: what the model is sent", () => {
   });
 });
 
+describe("ChatService: what a reply keeps", () => {
+  it("saves a text-only reply's reasoning, sources and notes", async () => {
+    chat = new ChatService({
+      history,
+      attachments: createAttachments({
+        load: vi.fn(async () => undefined),
+        store: vi.fn(async () => ({})),
+      }),
+      pay: provider.pay,
+      costs,
+    });
+    const sourced = [
+      {
+        type: "text" as const,
+        text: "See [1].",
+        citations: ["https://a.example"],
+        annotations: [
+          {
+            type: "url_citation" as const,
+            start_index: 4,
+            end_index: 7,
+            url: "https://a.example",
+            title: "A",
+          },
+        ],
+      },
+    ];
+
+    // SDK 0.4.9 hands a text-only reply over as a bare string
+    let turn = await chat.send("c", "why?", model);
+    await flush();
+    provider.last.callbacks.onThinkingUpdate("Weighing BDHKE.");
+    provider.answer("Because.");
+    await turn.reply;
+    // a fixed SDK hands its sources over in the text part
+    turn = await chat.send("c", "source?", model);
+    await flush();
+    provider.last.callbacks.onMessageAppend({
+      role: "assistant",
+      content: sourced,
+    });
+    provider.last.settle();
+    await turn.reply;
+
+    const replies = history.saves.filter((s) => s.message.role === "assistant");
+    expect(replies.map((s) => s.message.content)).toEqual([
+      [{ type: "text", text: "Because.", thinking: "Weighing BDHKE." }],
+      sourced,
+    ]);
+  });
+});
+
 describe("ChatService: files", () => {
   const IMAGE = "data:image/png;base64,iVBORw0KGgo=";
 
