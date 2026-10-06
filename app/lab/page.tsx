@@ -7,6 +7,7 @@ import { RoomProvider } from "@/components/v2/room/RoomProvider";
 import { UiProvider } from "@/components/v2/ui";
 import { FakeChatProvider } from "@/components/v2/lab/FakeChat";
 import { labHistory } from "./labHistory";
+import { labCatalog, labChat } from "./labChat";
 import Shell from "@/components/v2/Shell";
 import Boot from "@/components/v2/Boot";
 import "@/components/v2/styles/index.css";
@@ -26,6 +27,8 @@ export default function Lab() {
     () => false
   );
   const signedOut = ready && new URLSearchParams(window.location.search).has("signedout");
+  const [params] = useState(() => new URLSearchParams(typeof window === "undefined" ? "" : window.location.search));
+  const [catalog] = useState(() => labCatalog(params));
   const { manager, session: real } = useAccountManager();
   // who is signed in is made up; everything else (a key made on first money) is the real session
   const account = useMemo(() => {
@@ -45,7 +48,7 @@ export default function Lab() {
     <Suspense>
       <RoomProvider>
         <AccountContext.Provider value={account}>
-          <FakeChatProvider history={labHistory}>
+          <FakeChatProvider history={labHistory} chat={(history) => labChat(history, params)} catalog={catalog}>
             <UiProvider>
               <Shell />
               <LabBoot />

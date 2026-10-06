@@ -94,6 +94,42 @@ describe("ChatService: saving before paying", () => {
   });
 });
 
+describe("ChatService: a save that never finishes", () => {
+  const never = () => new Promise<never>(() => {});
+
+  it("gives up on a question's save after ten seconds, Stop or not, paying nothing", async () => {
+    vi.useFakeTimers();
+    try {
+      history.save.mockImplementationOnce(never);
+      const sending = chat.send("c", "hello", model);
+      chat.stop("c");
+      const failed = expect(sending).rejects.toThrow("the signer did not answer");
+      await vi.advanceTimersByTimeAsync(10_000);
+      await failed;
+      expect(chat.asking("c")).toBe(false);
+      expect(provider.pay).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("gives up on an answer's save after ten seconds and says so", async () => {
+    vi.useFakeTimers();
+    try {
+      const turn = await chat.send("c", "hello", model);
+      await vi.advanceTimersByTimeAsync(0);
+      history.save.mockImplementationOnce(never);
+      provider.answer("hi");
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(await turn.reply).toBeUndefined();
+      expect(turn.run.getSnapshot().warning).toMatch(/could not be saved: the signer did not answer/);
+      expect(chat.asking("c")).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe("ChatService: what the model is sent", () => {
   it("sends the branch on screen with the new question", async () => {
     await exchange("Q1", "A1");
@@ -248,6 +284,27 @@ describe("ChatService: what the model is sent", () => {
     expect(history.saves[0].message.content).toEqual(kept);
     const [sent] = vi.mocked(attachments.forRequest).mock.calls[0];
     expect(sent.at(-1)?.content).toEqual(image);
+  });
+
+  it("pays nothing and warns of nothing when stopped while files load", async () => {
+    let loaded!: () => void;
+    vi.mocked(attachments.forRequest).mockImplementationOnce(
+      (history) =>
+        new Promise((resolve) => {
+          loaded = () =>
+            resolve(history.map(({ role }) => ({ role, content: "" })));
+        })
+    );
+    const turn = await chat.send("c", [{ type: "text", text: "see" }], model);
+    await flush();
+
+    chat.stop("c");
+    loaded();
+    await turn.settled;
+
+    expect(provider.pay).not.toHaveBeenCalled();
+    expect(turn.run.getSnapshot()).toMatchObject({ phase: "stopped" });
+    expect(turn.run.getSnapshot().warning).toBeUndefined();
   });
 
   it("pays nothing when the question's attachments cannot be loaded", async () => {
@@ -493,6 +550,25 @@ describe("ChatService: what a reply cost", () => {
 
     expect(costs.record).not.toHaveBeenCalled();
     expect(warn).not.toHaveBeenCalled();
+  });
+});
+
+describe("ChatService: which chat is answering", () => {
+  it("is the one asked last, until its answer is saved, then the one before", async () => {
+    expect(chat.answering()).toBeNull();
+    const first = await chat.send("a", "one", model);
+    const second = await chat.send("b", "two", model);
+    await flush();
+    expect(chat.answering()).toBe("b");
+
+    provider.answer("done");
+    await second.reply;
+    expect(chat.answering()).toBe("a");
+
+    provider.calls[0].callbacks.onMessageAppend({ role: "assistant", content: "x" });
+    provider.calls[0].settle();
+    await first.reply;
+    expect(chat.answering()).toBeNull();
   });
 });
 

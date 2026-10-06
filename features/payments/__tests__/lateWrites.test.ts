@@ -41,6 +41,44 @@ describe("lockedAfter", () => {
     expect(held(keys)).toEqual([tokenOf(11), tokenOf(22)].sort());
   });
 
+  it("leaves a provider's newer key alone when the SDK changes the old one late", async () => {
+    const { keys, reader } = await tab();
+    keys.storage().setApiKey(PROVIDER, "cashuBootstrap");
+    await keys.flush();
+    const late = lockedAfter(keys.storage(), () => true, keys, "direct");
+
+    // another tab refunds that key and makes a new one at the same provider
+    const there = reader();
+    await there.ready();
+    const release = await there.lock();
+    await there.reload();
+    there.storage().removeApiKey(PROVIDER);
+    there.storage().setApiKey(PROVIDER, "sk-newer");
+    await there.flush();
+    release();
+    // the SDK's balance update after Stop names the old key's real id
+    late.replaceApiKey!(PROVIDER, "sk-older");
+    late.updateApiKeyBalance(PROVIDER, 0);
+    await late.flush?.();
+
+    await there.reload();
+    expect(there.storage().getApiKey(PROVIDER)?.key).toBe("sk-newer");
+  });
+
+  it("makes a late change to a provider's key that is still the same", async () => {
+    const { keys, reader } = await tab();
+    keys.storage().setApiKey(PROVIDER, "cashuBootstrap");
+    await keys.flush();
+    const late = lockedAfter(keys.storage(), () => true, keys, "direct");
+
+    late.replaceApiKey!(PROVIDER, "sk-real");
+    await late.flush?.();
+
+    const disk = reader();
+    await disk.ready();
+    expect(disk.storage().getApiKey(PROVIDER)?.key).toBe("sk-real");
+  });
+
   it("makes no change after one that failed, and says so on flush", async () => {
     const { keys, reader } = await tab();
     const token = tokenOf(33);

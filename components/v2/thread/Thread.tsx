@@ -1,9 +1,12 @@
 "use client";
 
-import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useChat } from "@/context/ChatProvider";
+import { useAccountChat, useAsking, useReplyCosts } from "@/features/chat/view";
 import { useHistory, useThread, type ThreadSlot } from "@/features/history/view";
 import { useActions } from "../useActions";
+import { useChatModel } from "../useChatModel";
+import { useNotes } from "./useNotes";
 import { shortModelName } from "../format";
 import { Icon } from "../icons";
 import { tokenMs } from "../motion";
@@ -19,20 +22,22 @@ const NO_SLOTS: ThreadSlot[] = [];
 
 /* ══ the thread ════════════════════════════════════════════════════════════ */
 export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) {
-  const {
-    models,
-    selectedModel,
-    isLoading,
-    streamingConversationId,
-    activeConversationId,
-    getStreamingContentFor,
-    messages,
-  } = useChat();
+  const { activeConversationId } = useChat();
+  const { models, model: selectedModel } = useChatModel();
   // the versions picked live in history, so the model is sent the branch shown here
   const history = useHistory();
   const slots = useThread(activeConversationId) ?? NO_SLOTS;
-  // messages: the same branch with what each reply cost, then the last request's notes
-  const notes = messages.slice(slots.length);
+  // the same branch with what each reply cost, then what the last requests left to say
+  const costs = useReplyCosts();
+  const messages = useMemo(
+    () => slots.map(({ displayed: m }) => (costs[m._eventId] === undefined ? m : { ...m, satsSpent: costs[m._eventId] })),
+    [slots, costs]
+  );
+  const notes = useNotes(
+    activeConversationId,
+    slots.findLast((s) => s.displayed.role === "user")?.displayed._eventId,
+    slots.at(-1)?.displayed._eventId
+  );
   // a stop after some words belongs to that answer
   const stoppedAnswer = notes.length === 1 && isStopped(notes[0]) && slots.at(-1)?.displayed.role === "assistant";
 
@@ -43,10 +48,11 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
   const modelName = useCallback((id?: string) => (id ? shortModelName(modelOf(id)?.name, id).toLowerCase() : "assistant"), [modelOf]);
   const fullName = useCallback((id?: string) => (id ? shortModelName(modelOf(id)?.name, id) : "assistant"), [modelOf]);
 
-  const liveHere =
-    isLoading && (!streamingConversationId || streamingConversationId === activeConversationId);
-  // the stored answer and the streaming copy can overlap for a frame
-  const streamingText = getStreamingContentFor(activeConversationId);
+  const liveHere = useAsking(activeConversationId);
+  // the stored answer and the streaming copy can overlap for a frame. Read, not
+  // followed: the thread draws again when the stored one lands, and not per word
+  const chat = useAccountChat()?.chat;
+  const streamingText = (liveHere && activeConversationId && chat?.getRun(activeConversationId)?.getSnapshot().text) || "";
 
   // stable handlers, so memoised messages do not re-render on every token
   const slotsRef = useRef(slots);
@@ -120,7 +126,7 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
   useLayoutEffect(() => {
     if (!userKey || userKey === lastUserKey.current) return;
     lastUserKey.current = userKey;
-    if (!isLoading) return;
+    if (!liveHere) return;
     const el = scroller.current;
     const q = el?.querySelector<HTMLElement>(`.rd-me[data-index="${lastUserDepth}"]`);
     if (!el || !q) return;
@@ -134,7 +140,7 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
       if (h2 !== h) setReserve(Math.max(0, el.clientHeight - h2 - 120));
       requestAnimationFrame(() => el.scrollTo({ top: q.offsetTop - 28, behavior: "smooth" }));
     });
-  }, [userKey, isLoading]);
+  }, [userKey, liveHere]);
 
   // a fold already handed its space back
   const folding = useRef(false);
@@ -149,7 +155,7 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
       const grew = h - lastH;
       lastH = h;
       if (!grew) return;
-      if (!isLoading) {
+      if (!liveHere) {
         // a picture landed in a chat you are reading at its end: stay at the end
         if (pinned.current && grew > 0) el.scrollTop = el.scrollHeight;
         const gap = el.scrollHeight - reserve - (el.scrollTop + el.clientHeight);
@@ -177,7 +183,7 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
     });
     ro.observe(box);
     return () => ro.disconnect();
-  }, [isLoading, reserve]);
+  }, [liveHere, reserve]);
 
   useEffect(() => {
     const el = scroller.current;
@@ -219,8 +225,8 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
   }, [reserve]);
 
   useEffect(() => {
-    if (!isLoading) userScrolled.current = false;
-  }, [isLoading]);
+    if (!liveHere) userScrolled.current = false;
+  }, [liveHere]);
 
   // the composer grew (a longer draft, attachments): the thread gives up the
   // height from its top, so the words you were reading at the end stay put
@@ -341,14 +347,14 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
             const key = slot.displayed._eventId;
             if (msg.role === "user")
               return (
-                <Mine key={key} msg={msg} index={depth} {...v} isLast={isLast} busy={isLoading}
+                <Mine key={key} msg={msg} index={depth} {...v} isLast={isLast} busy={liveHere}
                   editing={editing === depth} fresh={!known.keys.has(key)}
                   onVersion={onVersion} onEdit={setEditing} />
               );
             if (DECLINED.test(textOf(msg.content)))
               return <Trouble key={key} msgs={[msg]} index={depth} isLast={isLast} label={modelName(msg._modelId)} model={fullName(msg._modelId)} onEdit={setEditing} />;
             return (
-              <Answer key={key} msg={msg} index={depth} {...v} isLast={isLast} busy={isLoading}
+              <Answer key={key} msg={msg} index={depth} {...v} isLast={isLast} busy={liveHere}
                 label={modelName(msg._modelId)} full={fullName(msg._modelId)} stopped={stoppedAnswer && depth === slots.length - 1} onVersion={onVersion} onRetry={onRetry} />
             );
           })
@@ -359,8 +365,10 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
         {liveHere && (
           <Live
             key={userKey ?? "live"}
+            conversationId={activeConversationId}
             label={modelName(selectedModel?.id)}
             prompt={lastUser ? textOf(lastUser.displayed.content) : ""}
+            makesImages={(selectedModel?.architecture?.output_modalities ?? []).includes("image")}
             onFold={onFold}
           />
         )}

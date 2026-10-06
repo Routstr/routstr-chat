@@ -482,8 +482,6 @@ describe("createPay in node mode", () => {
       mode: "xcashu",
       node: NODE,
     });
-    credit.stores.node.storage.setApiKey("https://other.example/", "other-key");
-
     void pay(request, callbacks(), new AbortController().signal);
     await tick();
     const [options] = fetch.calls[0].args;
@@ -494,17 +492,22 @@ describe("createPay in node mode", () => {
       mode: "apikeys",
     });
     expect(options.storageAdapter!.getApiKey(NODE.url)?.key).toBe("node-key");
-    expect(() =>
-      options.storageAdapter!.getApiKey("https://other.example/")
-    ).toThrow("only your node");
-    expect(options.storageAdapter!.getAllApiKeys().map((k) => k.key)).toEqual([
-      "node-key",
-    ]);
     expect(credit.keys.flush).toHaveBeenCalledWith("node");
     await expect(options.walletAdapter!.sendToken(MINT, 7)).rejects.toThrow(
       "refusing to pay"
     );
     expect(wallet.sent).toEqual([]);
+  });
+
+  it("pays with the node's new key after it was connected again", async () => {
+    const { pay, fetch, credit } = await setup({ mode: "apikeys", node: NODE });
+    credit.stores.node.storage.setApiKey(NODE.url, "old-node-key");
+
+    void pay(request, callbacks(), new AbortController().signal);
+    await tick();
+
+    const [options] = fetch.calls[0].args;
+    expect(options.storageAdapter!.getApiKey(NODE.url)?.key).toBe("node-key");
   });
 
   it("stops spending when the node changes mid-request", async () => {

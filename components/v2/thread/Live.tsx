@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { useChat } from "@/context/ChatProvider";
+import { useRun } from "@/features/chat/view";
 import { useRoom, type Phase } from "../room/RoomProvider";
 import { useUi } from "../ui";
 import Prose from "./Prose";
@@ -85,13 +85,25 @@ function Transcript({ text }: { text: string }) {
   );
 }
 
-export default function Live({ label, prompt, onFold }: { label: string; prompt: string; onFold: (height: number, ms: number) => void }) {
-  const { activeConversationId, getStreamingContentFor, getThinkingContentFor, isPaymentProcessing, selectedModel } = useChat();
+export default function Live({
+  conversationId,
+  label,
+  prompt,
+  makesImages,
+  onFold,
+}: {
+  conversationId: string | null;
+  label: string;
+  prompt: string;
+  makesImages: boolean;
+  onFold: (height: number, ms: number) => void;
+}) {
+  const run = useRun(conversationId);
   const room = useRoom();
   const ui = useUi();
-  const raw = getStreamingContentFor(activeConversationId);
-  const thinking = cleanThinking(getThinkingContentFor(activeConversationId));
-  const makesImages = (selectedModel?.architecture?.output_modalities ?? []).includes("image");
+  const raw = run?.text ?? "";
+  const thinking = cleanThinking(run?.thinking ?? "");
+  const paying = run?.phase === "paying";
 
   // the clock only chooses the words; nothing on screen counts
   const [t0] = useState(() => performance.now());
@@ -143,7 +155,7 @@ export default function Live({ label, prompt, onFold }: { label: string; prompt:
   else if (thinking) {
     phase = "think";
     verb = "Thinking";
-  } else if (isPaymentProcessing && elapsed < 0.9) {
+  } else if (paying && elapsed < 0.9) {
     phase = "pay";
     verb = "Paying";
   } else if (elapsed < 2.6) verb = "Finding a provider";

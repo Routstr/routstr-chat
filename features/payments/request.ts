@@ -4,7 +4,7 @@ import { withNodeModeError } from "./nodeErrors";
 import { lockedAfter } from "./lateWrites";
 import type { Keys, Purse, Sdk, Spending } from "./ports";
 
-export interface PayDeps {
+interface PayDeps {
   keys: Keys;
   purse: Purse;
   sdk: Sdk;
@@ -13,9 +13,7 @@ export interface PayDeps {
   live(): boolean;
 }
 
-const slash = (url: string) => (url.endsWith("/") ? url : `${url}/`);
-
-const changed = () =>
+const sourceChanged = () =>
   new DOMException(
     "Account or payment source changed. Send again.",
     "AbortError"
@@ -33,7 +31,7 @@ export function sdkWallet(
   node: boolean
 ): WalletAdapter {
   const check = () => {
-    if (!canSpend()) throw changed();
+    if (!canSpend()) throw sourceChanged();
   };
   return {
     getBalances: async () => {
@@ -70,26 +68,6 @@ export function sdkWallet(
   };
 }
 
-/** Only the node's key may pay while the node pays. */
-function nodeOnly(storage: StorageAdapter, url: string): StorageAdapter {
-  const base = slash(url);
-  return {
-    ...storage,
-    getApiKey(provider) {
-      if (slash(provider) !== base) {
-        throw new Error("Node mode: only your node can answer.");
-      }
-      return storage.getApiKey(provider);
-    },
-    getAllApiKeys: () =>
-      storage.getAllApiKeys().filter((key) => slash(key.baseUrl) === base),
-    getApiKeyDistribution: () =>
-      storage
-        .getApiKeyDistribution()
-        .filter((key) => slash(key.baseUrl) === base),
-  };
-}
-
 /** Pays for each request of one account through the Routstr SDK. */
 export function createPay(deps: PayDeps): Pay {
   return async ({ messages, model }, callbacks, signal) => {
@@ -119,11 +97,9 @@ export function createPay(deps: PayDeps): Pay {
     try {
       await deps.keys.reload(source);
       if (signal.aborted) return;
-      if (!sameSource()) throw changed();
+      if (!sameSource()) throw sourceChanged();
       const storage = lockedAfter(
-        node
-          ? nodeOnly(deps.keys.storage("node"), node.url)
-          : deps.keys.storage("direct"),
+        deps.keys.storage(source),
         () => released,
         deps.keys,
         source
@@ -135,7 +111,7 @@ export function createPay(deps: PayDeps): Pay {
           storage.replaceApiKey!(node.url, node.apiKey);
           await deps.keys.flush("node");
         }
-        if (!sameSource()) throw changed();
+        if (!sameSource()) throw sourceChanged();
       }
       const wallet = sdkWallet(
         purse,

@@ -67,6 +67,11 @@ export class CatalogService {
     return this.chain;
   }
 
+  /** The models Routstr recommends, best first. */
+  picks(): string[] {
+    return this.deps.discoveryAdapter.getRoutstr21Models();
+  }
+
   /** Providers that serve this model, cheapest first, as routing ranks them. */
   routes(modelId: string) {
     return this.deps.providerManager.getProviderPriceRankingForModel(modelId, {

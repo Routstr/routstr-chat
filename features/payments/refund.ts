@@ -13,7 +13,7 @@ export interface RefundResult {
   success: boolean;
 }
 
-export interface RefundDeps {
+interface RefundDeps {
   keys: Keys;
   purse: Purse;
   sdk: Sdk;
@@ -173,12 +173,14 @@ async function refundOthers(deps: RefundDeps, wallet: WalletAdapter) {
   const results: RefundResult[] = [];
   const refunded: string[] = [];
   for (const key of deps.otherDevices.keys()) {
-    // An empty key is done, or a gone device's dead key would linger forever.
-    // After a refund attempt only its result counts: a missed payout replays.
-    const b = await balances.getTokenBalance(key.key, key.baseUrl);
-    const empty =
-      b.isInvalidApiKey || (!b.balanceUnknown && !b.amount && !b.reserved);
-    const { success } = empty
+    // A key the provider forgot is done. Every other one goes to the
+    // provider, even when it reads empty: a payout this wallet missed is
+    // paid again.
+    const { isInvalidApiKey } = await balances.getTokenBalance(
+      key.key,
+      key.baseUrl
+    );
+    const { success } = isInvalidApiKey
       ? { success: true }
       : await balances.refundApiKey({
           mintUrl,

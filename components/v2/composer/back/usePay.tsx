@@ -2,11 +2,11 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { getTokenMetadata } from "@cashu/cashu-ts";
-import { useChat } from "@/context/ChatProvider";
 import { useSession } from "@/features/session/view";
 import { getRequiredSatsForModel } from "@/utils/modelUtils";
 import { useUi } from "../../ui";
 import { useMoney } from "../../useMoney";
+import { useChatModel } from "../../useChatModel";
 import { useFunding } from "../../wallet/useFunding";
 import { fmt, reduced } from "./bits";
 
@@ -17,7 +17,7 @@ import { fmt, reduced } from "./bits";
 export type Pay = ReturnType<typeof usePay>;
 
 export function usePay(say: (t: string) => void) {
-  const { selectedModel } = useChat();
+  const { model: selectedModel } = useChatModel();
   const isAuthenticated = useSession().pubkey !== null;
   const ui = useUi();
   const money = useMoney();

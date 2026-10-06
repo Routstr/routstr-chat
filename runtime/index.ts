@@ -6,6 +6,7 @@ import { startKeys } from "./keys";
 import { bindBook } from "./book";
 import { node } from "./node";
 import { createRouting } from "./routing";
+import { startChat, activeChat } from "./accountChat";
 
 /* The composition root: built once per tab, before the first render. */
 
@@ -22,10 +23,15 @@ export const routing = createRouting({
 });
 
 if (typeof window !== "undefined") {
-  // The one switch path. The account's chat will stop here first, once the
-  // chat engine is built here (and settle runs even if that fails); history
-  // and keys follow the session after it.
-  const switchAccount: Switcher = () => session.settle();
+  // The one switch path: the account's chat stops first, so a reply still
+  // being saved or paid finishes in its own account (and settle runs even if
+  // that fails); history, keys and chat then follow the session.
+  const switchAccount: Switcher = () => {
+    const chat = activeChat.get()?.chat;
+    // nothing running: at once, so a screen that signs in can act right after
+    if (!chat || (!chat.busy() && chat.answering() === null)) session.settle();
+    else void chat.stopAll().finally(() => session.settle());
+  };
   session.boot(window.localStorage, savedInIndexedDB(), switchAccount);
   // another tab added or removed an account, or a main tab from before the
   // update cleared localStorage when someone signed out there
@@ -45,6 +51,9 @@ if (typeof window !== "undefined") {
   bind();
   session.subscribe(bind);
 
+  // the models providers serve: the last visit's at once, then fresh ones
+  routing.catalog.start();
+
   // node mode turned on or off, or another account in use: the models follow
   let paying = payingNode();
   const followNode = () => {
@@ -60,7 +69,11 @@ if (typeof window !== "undefined") {
   const follow = () => {
     keys?.stop();
     const account = session.accounts.active$.value;
-    keys = account ? startKeys(account, relays.of(account.pubkey)) : null;
+    const started = account
+      ? startKeys(account, relays.of(account.pubkey))
+      : null;
+    keys = started;
+    startChat(account?.pubkey ?? null, routing.payments, started?.otherDevices);
   };
   follow();
   session.subscribe(follow);

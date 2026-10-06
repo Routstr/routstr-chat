@@ -146,6 +146,26 @@ describe("refundCredit", () => {
     expect(direct.getAllApiKeys()).toEqual([]);
   });
 
+  it("keeps the last known balance when the provider cannot say, and still asks for a refund", async () => {
+    const asked: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        asked.push(String(url));
+        return new Response("busy", { status: 503 });
+      })
+    );
+    const { deps, credit, direct } = await setup();
+    direct.setApiKey(LARGE, "sk-large");
+    direct.updateApiKeyBalance(LARGE, 50, 0);
+    lastUsed(credit, 0);
+
+    await refundCredit(deps, false);
+
+    expect(direct.getApiKey(LARGE)?.balance).toBe(50);
+    expect(asked.some((u) => u.endsWith("v1/wallet/refund"))).toBe(true);
+  });
+
   it("clears a key the provider no longer knows", async () => {
     const notFound = JSON.stringify({
       detail: {
@@ -232,9 +252,10 @@ describe("refundCredit", () => {
     expect(deps.otherDevices.drop).toHaveBeenCalledWith(["sk-lost-device"]);
   });
 
-  it("counts a lost device's key as done when the provider reports it empty", async () => {
+  it("still asks the provider about a lost device's key that reads empty", async () => {
+    // an emptied key may hold a payout the wallet missed: the provider pays it again
     const refunded = provider({ [LARGE]: 0 });
-    const { deps, others } = await setup();
+    const { deps, others, wallet } = await setup();
     others.push({
       baseUrl: LARGE,
       key: "sk-gone-device",
@@ -244,7 +265,8 @@ describe("refundCredit", () => {
 
     await refundCredit(deps, true);
 
-    expect(refunded).toEqual([]);
+    expect(refunded).toEqual([LARGE]);
+    expect(wallet.received).toEqual([`refund-${LARGE}`]);
     expect(deps.otherDevices.drop).toHaveBeenCalledWith(["sk-gone-device"]);
   });
 

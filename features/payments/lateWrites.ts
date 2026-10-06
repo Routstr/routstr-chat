@@ -3,6 +3,14 @@ import type { Keys, PaySource } from "./ports";
 
 type HeldTokens = Parameters<StorageAdapter["setCachedReceiveTokens"]>[0];
 
+// writes to the one key stored for a provider
+const ONE_KEY = new Set([
+  "replaceApiKey",
+  "updateApiKeyBalance",
+  "touchApiKeyLastUsed",
+  "removeApiKey",
+]);
+
 /**
  * `storage` for an SDK client that can write after the payment lock is
  * released: a top-up it did not wait for, its balance update after Stop, or
@@ -37,7 +45,11 @@ export function lockedAfter(
       const write =
         name === "setCachedReceiveTokens"
           ? heldTokensChange(storage, args[0] as HeldTokens)
-          : () => method.apply(storage, args);
+          : ONE_KEY.has(name)
+            ? whileSameKey(storage, args[0] as string, () =>
+                method.apply(storage, args)
+              )
+            : () => method.apply(storage, args);
       late = late.then(() => replay(write));
       late.catch((error) =>
         console.warn("Could not record a late change to credit", error)
@@ -49,6 +61,19 @@ export function lockedAfter(
     await storage.flush?.();
   };
   return wrapped as unknown as StorageAdapter;
+}
+
+/** A change to a provider's key is made only while that key is still the one
+ *  the SDK changed: another tab may have refunded it and stored a new one. */
+function whileSameKey(
+  storage: StorageAdapter,
+  baseUrl: string,
+  write: () => void
+) {
+  const key = storage.getApiKey(baseUrl)?.key;
+  return () => {
+    if (storage.getApiKey(baseUrl)?.key === key) write();
+  };
 }
 
 /** The one write that takes a whole list, built from this tab's memory: only

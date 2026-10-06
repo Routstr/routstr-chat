@@ -14,6 +14,8 @@ export interface AccountChatView {
   chat: ChatService;
   costs: ReplyCosts;
   refund(): Promise<RefundResult[]>;
+  /** Sats this account holds at providers, main's old shared credit too. */
+  held: { subscribe(listener: () => void): () => void; get(): number };
   viewing(conversationId: string | null): void;
 }
 
@@ -51,6 +53,36 @@ export function useAsking(conversationId: string | null): boolean {
   );
 }
 
+/** The chat whose turn started last, until its answer is saved. */
+export function useAnswering(): string | null {
+  const chat = useAccountChat()?.chat;
+  return useSyncExternalStore(
+    chat?.subscribe ?? none,
+    () => chat?.answering() ?? null,
+    () => null
+  );
+}
+
+/** A turn of this account has not finished paying yet. */
+export function useBusy(): boolean {
+  const chat = useAccountChat()?.chat;
+  return useSyncExternalStore(
+    chat?.subscribe ?? none,
+    () => chat?.busy() ?? false,
+    () => false
+  );
+}
+
+/** Sats the active account holds at providers, until a refund brings them home. */
+export function useHeldCredit(): number {
+  const held = useAccountChat()?.held;
+  return useSyncExternalStore(
+    held?.subscribe ?? none,
+    () => held?.get() ?? 0,
+    () => 0
+  );
+}
+
 const noCosts: Record<string, number> = {};
 
 /** What each reply of the active account cost, by reply event id. */
@@ -62,3 +94,7 @@ export function useReplyCosts(): Record<string, number> {
     () => noCosts
   );
 }
+
+export { editedOf, questionOf } from "./question";
+export type { ChatModel } from "./ports";
+export type { RunSnapshot } from "./run";

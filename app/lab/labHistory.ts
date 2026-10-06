@@ -1,8 +1,9 @@
-import type { Conversation } from "@/types/chat";
+import type { Conversation, Message } from "@/types/chat";
 import type { FakeHistory, FakeHistoryHooks } from "@/components/v2/lab/FakeChat";
 import type { SyncOutcome } from "@/features/history/service";
 import type { Stored } from "@/features/history/codec";
-import { buildThread, type ThreadSlot } from "@/features/history/thread";
+import { ROOT_ID } from "@/features/history/codec";
+import { buildThread, type StoredMessage, type ThreadSlot } from "@/features/history/thread";
 
 /* Development only. The lab's simulated chats behind the history view, so the
    real screens read them the way they read an account's history. */
@@ -13,6 +14,7 @@ class LabHistory {
   private listeners = new Set<() => void>();
   private chats: Conversation[] = [];
   private selected = new Map<string, Map<number, string>>();
+  private saved = 0;
   private views = new Map<string, { messages: Conversation["messages"]; picks: Map<number, string>; slots: ThreadSlot[] }>();
 
   constructor(private hooks: FakeHistoryHooks) {}
@@ -39,6 +41,18 @@ class LabHistory {
     const slots = buildThread(chat.messages as Stored[], picks);
     this.views.set(id, { messages: chat.messages, picks, slots });
     return slots;
+  };
+  branch = (id: string): StoredMessage[] => (this.getThread(id) ?? []).map((s) => s.displayed);
+  // the chat's engine saves here; a new version shows at its place, as in history
+  save = async (id: string, message: Message & { _prevId: string }): Promise<StoredMessage> => {
+    const at = Date.now();
+    const saved = { ...message, _createdAt: at, _eventId: `${message.role}-${at}-${++this.saved}` } as StoredMessage;
+    const depth = message._prevId === ROOT_ID ? 0 : this.branch(id).findIndex((m) => m._eventId === message._prevId) + 1;
+    const picks = new Map(this.selected.get(id));
+    picks.delete(depth);
+    this.selected.set(id, picks);
+    this.hooks.append(id, saved);
+    return saved;
   };
   selectVersion = (id: string, depth: number, key: string) => {
     this.selected.set(id, new Map(this.selected.get(id)).set(depth, key));

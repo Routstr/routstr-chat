@@ -1,5 +1,5 @@
 import React, { useCallback } from "react";
-import type { useChat } from "@/context/ChatProvider";
+import type { useModelPick } from "../pick";
 import { setProviderLastUpdate } from "@/utils/storageUtils";
 import { useDisabledProviders } from "@/hooks/useDisabledProviders";
 import { useChipRef, type useUi } from "../ui";
@@ -9,7 +9,8 @@ import { LEAVE_MS, NO_FILTERS, SHEET_LEAVE_MS, type Filters } from "./helpers";
 import { fmt, parseKey, type Row } from "./catalog";
 
 export function useChoose({
-  chat,
+  pick,
+  refresh,
   cat,
   ui,
   phone,
@@ -30,7 +31,9 @@ export function useChoose({
   onDetail,
   onList,
 }: {
-  chat: ReturnType<typeof useChat>;
+  pick: ReturnType<typeof useModelPick>;
+  /** Asks the providers again for what they serve. */
+  refresh: () => void;
   cat: Catalog;
   ui: ReturnType<typeof useUi>;
   phone: boolean;
@@ -59,12 +62,10 @@ export function useChoose({
 
   const commit = useCallback(
     (id: string, pin: string | null) => {
-      if (pin) {
-        chat.setModelProviderFor(id, pin);
-        chat.handleModelChange(id, `${id}@@${pin}`);
-      } else chat.handleModelChange(id);
+      if (pin) pick.pin(id, pin);
+      pick.choose(pin ? { id, provider: pin } : { id });
     },
-    [chat]
+    [pick]
   );
 
   const choose = useCallback(
@@ -97,12 +98,12 @@ export function useChoose({
     (r: Row) => {
       const name = shortModelName(r.model.name, r.model.id);
       const was = isFavRow(r);
-      if (r.pin || favKeys.includes(r.key)) chat.toggleConfiguredModel(r.key);
-      else if (favIds.has(r.model.id)) favKeys.filter((k) => parseKey(k).id === r.model.id).forEach(chat.toggleConfiguredModel);
-      else chat.toggleConfiguredModel(r.model.id);
+      if (r.pin || favKeys.includes(r.key)) pick.toggle(r.key);
+      else if (favIds.has(r.model.id)) favKeys.filter((k) => parseKey(k).id === r.model.id).forEach(pick.toggle);
+      else pick.toggle(r.model.id);
       say(was ? `${name} removed from favorites` : `${name} added to favorites`);
     },
-    [chat, favKeys, favIds, isFavRow, say]
+    [pick, favKeys, favIds, isFavRow, say]
   );
 
   const fund = useCallback(() => {
@@ -122,7 +123,7 @@ export function useChoose({
   const allOn = () => {
     disabledProviders.forEach((u) => setProviderLastUpdate(u, 0));
     setDisabledProviders([]);
-    void chat.fetchModels(0).catch(() => {});
+    refresh();
   };
 
   const push = useCallback(

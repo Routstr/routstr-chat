@@ -16,6 +16,8 @@ import { AccountContext } from "@/features/session/view";
 import { activeHistory, relays } from "@/runtime/nostr";
 import { purseFor } from "@/runtime/wallet";
 import { HistoryContext } from "@/features/history/view";
+import { activeChat } from "@/runtime/accountChat";
+import { AccountChatContext } from "@/features/chat/view";
 import { RelaysContext } from "@/features/relays/view";
 import { PurseContext } from "@/features/wallet/view";
 import { PurseContext as KeysPurseContext } from "@/features/keys/view";
@@ -49,6 +51,11 @@ export default function ClientProviders({ children }: { children: ReactNode }) {
     activeHistory.subscribe,
     activeHistory.get,
     activeHistory.get
+  );
+  const chat = useSyncExternalStore(
+    activeChat.subscribe,
+    activeChat.get,
+    activeChat.get
   );
   // Run storage migration on app startup
   useEffect(() => {
@@ -85,9 +92,11 @@ export default function ClientProviders({ children }: { children: ReactNode }) {
               <HistoryContext.Provider value={history}>
                 <PurseContext.Provider value={purseFor}>
                 <KeysPurseContext.Provider value={purseFor}>
+                <AccountChatContext.Provider value={chat}>
                   <InvoiceRecoveryProvider key={generation}>
                     {children}
                   </InvoiceRecoveryProvider>
+                </AccountChatContext.Provider>
                 </KeysPurseContext.Provider>
                 </PurseContext.Provider>
               </HistoryContext.Provider>

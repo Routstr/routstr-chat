@@ -2,6 +2,8 @@
 
 import React, { useState } from "react";
 import { useChat } from "@/context/ChatProvider";
+import { useAsking } from "@/features/chat/view";
+import { useThread } from "@/features/history/view";
 import type { Message } from "@/types/chat";
 import { useActions } from "../useActions";
 import { useMoney } from "../useMoney";
@@ -62,7 +64,9 @@ export default function Trouble({
   /** Opens one of your messages for editing. */
   onEdit: (index: number) => void;
 }) {
-  const { isLoading, messages } = useChat();
+  const { activeConversationId } = useChat();
+  const asking = useAsking(activeConversationId);
+  const slots = useThread(activeConversationId);
   const { retry } = useActions();
   const money = useMoney();
   const ui = useUi();
@@ -71,7 +75,7 @@ export default function Trouble({
   const last = msgs[msgs.length - 1];
   const raw = textOf(last.content).trim();
   const kind = kindOf(raw);
-  const canAct = isLast && !isLoading;
+  const canAct = isLast && !asking;
   const many = msgs.length > 1;
 
   // from the keyboard, the focus lands in the composer, not on the page body
@@ -152,7 +156,7 @@ export default function Trouble({
     sub = "Their filter stopped it before the model answered. Rewording it, or another model, may help.";
     // the question this answered: the nearest message of yours above it
     const mine = (() => {
-      for (let i = index - 1; i >= 0; i--) if (messages[i]?.role === "user") return i;
+      for (let i = index - 1; i >= 0; i--) if (slots?.[i]?.displayed.role === "user") return i;
       return -1;
     })();
     prime = canAct && mine >= 0 && (

@@ -66,6 +66,9 @@ export class RequestRun {
   private notifyScheduled = false;
   private resolveEnded!: () => void;
 
+  /** `parentId`: the message the answer hangs off, the question it answers. */
+  constructor(readonly parentId?: string) {}
+
   /** Resolves at the first end state (done, stopped or failed); the answer
    *  is then the snapshot's `message`. */
   readonly ended = new Promise<void>((resolve) => {
@@ -96,9 +99,7 @@ export class RequestRun {
       if (!isTerminal(this.snapshot.phase)) {
         this.finish("failed", { error: message });
       } else if ((error as Error)?.name !== "AbortError") {
-        this.warn(
-          `The payment did not finish cleanly (${message}). Reload before sending again.`
-        );
+        this.warn(`The payment did not finish cleanly (${message}).`);
       }
     }
   }

@@ -4,7 +4,6 @@ import { MintDiscovery } from "@routstr/sdk";
 import { Model } from "@/types/models";
 import {
   loadLastUsedModel,
-  saveLastUsedModel,
   loadBaseUrlsList,
   saveBaseUrlsList,
   loadModelProviderMap,
@@ -239,7 +238,6 @@ export const useApiState = (
             ) || null;
         }
 
-        const lastUsedModelId = loadLastUsedModel();
         if (!modelToSelect) {
           modelToSelect = await modelSelectionStrategy(
             combinedModels,
@@ -249,13 +247,6 @@ export const useApiState = (
         }
 
         setSelectedModel(modelToSelect);
-        if (
-          modelToSelect &&
-          lastUsedModelId &&
-          !lastUsedModelId.includes("@@")
-        ) {
-          saveLastUsedModel(modelToSelect.id);
-        }
       } catch (error) {
         console.error("Error while fetching models", error);
         setModels([]);
@@ -386,6 +377,8 @@ export const useApiState = (
     nodePays,
   ]);
 
+  // The saved choice is v2's pick state's (components/v2/pick.ts): a visit's
+  // ?model= link or this engine's own pick must not replace it
   const handleModelChange = useCallback(
     (modelId: string, configuredKeyOverride?: string) => {
       if (configuredKeyOverride && configuredKeyOverride.includes("@@")) {
@@ -407,7 +400,6 @@ export const useApiState = (
           : undefined;
         if (providerSpecific) {
           setSelectedModel(providerSpecific);
-          saveLastUsedModel(configuredKeyOverride);
           return;
         }
       }
@@ -415,7 +407,6 @@ export const useApiState = (
       const model = models.find((m: Model) => m.id === modelId);
       if (!model) return;
       setSelectedModel(model);
-      saveLastUsedModel(modelId);
     },
     [models]
   );

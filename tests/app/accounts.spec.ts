@@ -146,7 +146,9 @@ test("a switch picked during a reply waits for it, and the reply's change lands 
     .toBe(0);
 
   // back on the first key: what the stopped reply did not spend came back to it
+  // (with an API key, the default, it waits on the key until it is returned)
   await pick(page, 0);
+  await v2.returnCredit(page);
   await expect
     .poll(() => v2.balance(page).catch(() => -1), { timeout: 30_000 })
     .toBeGreaterThanOrEqual(299);

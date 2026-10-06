@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useChat } from "@/context/ChatProvider";
+import { useAnswering, useBusy } from "@/features/chat/view";
 import { useConversations, useHistoryLoaded } from "@/features/history/view";
 import { useObservableState } from "applesauce-react/hooks";
 import { useAccountManager, useSession } from "@/features/session/view";
@@ -47,9 +48,9 @@ export default function Rail() {
     activeConversationId,
     loadConversation,
     startNewConversation,
-    isLoading,
-    streamingConversationId,
   } = useChat();
+  const liveId = useAnswering();
+  const busy = useBusy();
   const conversations = useConversations();
   const conversationsLoaded = useHistoryLoaded();
   const isAuthenticated = useSession().pubkey !== null;
@@ -77,7 +78,6 @@ export default function Rail() {
 
   const finding = isAuthenticated && !conversationsLoaded;
   const none = !finding && conversations.length === 0;
-  const liveId = isLoading ? streamingConversationId : null;
 
   const [focusId, setFocusId] = useState<string | null>(null);
   /* ── rooms, accounts ────────────────────────────────────────────────── */
@@ -243,7 +243,7 @@ export default function Rail() {
       {accounts && (
         <AccountMenu
           total={balWait || money.node ? null : money.total}
-          busy={isLoading || streamingConversationId !== null}
+          busy={busy || liveId !== null}
           switchTo={switchTo}
           onClose={(refocus) => {
             setAccounts(false);

@@ -2,10 +2,11 @@
 
 import { useLayoutEffect, useRef, useState } from "react";
 import { useChat } from "@/context/ChatProvider";
+import { useAsking } from "@/features/chat/view";
 import { useActions } from "../../useActions";
 
 export function Edit({ index, initial, onClose }: { index: number; initial: string; onClose: () => void }) {
-  const { isLoading } = useChat();
+  const asking = useAsking(useChat().activeConversationId);
   const [text, setText] = useState(initial);
   const { saveEdit } = useActions();
   const area = useRef<HTMLTextAreaElement>(null);
@@ -28,7 +29,7 @@ export function Edit({ index, initial, onClose }: { index: number; initial: stri
     requestAnimationFrame(() => art?.querySelector<HTMLElement>('.rd-tool[aria-label="Edit"]')?.focus());
   };
   const send = () => {
-    if (!text.trim() || isLoading) return;
+    if (!text.trim() || asking) return;
     void saveEdit(index, text, onClose);
     requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>(".island textarea")?.focus());
   };
@@ -62,7 +63,7 @@ export function Edit({ index, initial, onClose }: { index: number; initial: stri
             <button type="button" className="rd-btn" onClick={cancel}>
               Cancel
             </button>
-            <button type="button" className="rd-btn rd-btn-prime" onClick={send} disabled={!text.trim() || isLoading}>
+            <button type="button" className="rd-btn rd-btn-prime" onClick={send} disabled={!text.trim() || asking}>
               Send
             </button>
           </span>

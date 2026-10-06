@@ -215,6 +215,16 @@ describe("FileStore: Blossom", () => {
     expect(await keeping).toEqual({ storageId: expect.any(String) });
   });
 
+  it("uploads on browsers that have no AbortSignal.any", async () => {
+    vi.stubGlobal("AbortSignal", { ...AbortSignal, any: undefined });
+
+    expect(await store().store(PNG, signal())).toEqual({
+      storageId: expect.any(String),
+      blossomHash: expect.stringMatching(/^[0-9a-f]{64}$/),
+      blossomServers: [A, B],
+    });
+  });
+
   it("stops waiting for an upload that never answers, keeping the copy here", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     blossom.silent.add(A).add(B);

@@ -1,12 +1,15 @@
 import { createContext, useCallback, useContext, useMemo } from "react";
 import { useChat } from "@/context/ChatProvider";
+import { useCatalogService } from "@/features/catalog/view";
+import { useThread } from "@/features/history/view";
 import type { Model } from "@/types/models";
 import { formatProviderLabel, useModelPricing } from "@/components/chat/model-selector/useModelPricing";
 import { useDisabledProviders } from "@/hooks/useDisabledProviders";
 import { getRequiredSatsForModel, normalizeBaseUrl } from "@/utils/modelUtils";
-import { loadLastUsedModel } from "@/utils/storageUtils";
 import { webSearchModels } from "@/lib/preconfiguredModels";
-import { discoveryAdapter } from "@/sdk/sharedStore";
+import { keyOf } from "../pick";
+import { useDraft } from "../ui";
+import { useChatModel } from "../useChatModel";
 import { useMoney } from "../useMoney";
 import { textOf } from "../format";
 import { estimateSats, promptTokens } from "../price";
@@ -17,7 +20,6 @@ import { answers, parseKey, priceScale, type Route, type Row } from "./catalog";
 export interface CatalogStandIn {
   routes: (id: string) => Route[];
   picks: string[];
-  currentKey: string | null;
 }
 export const CatalogStandInContext = createContext<CatalogStandIn | null>(null);
 
@@ -32,24 +34,27 @@ const needOf = (m: Model) => {
 /** Everything the picker reads, in one place: models, who serves them, what a
  *  message costs on each, what you can afford, what is in use. */
 export function useCatalog() {
-  const chat = useChat();
+  const catalog = useCatalogService();
+  const { models: all, model: selectedModel, pins, configured, chosen } = useChatModel();
+  const slots = useThread(useChat().activeConversationId);
+  const { text } = useDraft();
   const standIn = useContext(CatalogStandInContext);
   const money = useMoney();
   const { disabledProviders } = useDisabledProviders();
   const pricing = useModelPricing({
-    models: chat.models,
+    models: all,
     disabledProviders,
-    modelProviderMap: chat.modelProviderMap,
-    configuredModels: chat.configuredModels,
-    selectedModel: chat.selectedModel,
+    modelProviderMap: pins,
+    configuredModels: configured,
+    selectedModel,
   });
 
   // the same estimate the composer shows: this conversation plus the draft
-  const history = useMemo(() => chat.messages.map((m) => textOf(m.content)).join(" "), [chat.messages]);
-  const tokens = useMemo(() => promptTokens(history, chat.inputMessage), [history, chat.inputMessage]);
+  const history = useMemo(() => (slots ?? []).map((s) => textOf(s.displayed.content)).join(" "), [slots]);
+  const tokens = useMemo(() => promptTokens(history, text), [history, text]);
   const cost = useCallback((m: Model | null | undefined) => estimateSats(m, tokens), [tokens]);
 
-  const models = useMemo(() => chat.models.filter(answers), [chat.models]);
+  const models = useMemo(() => all.filter(answers), [all]);
   // the pricing object is new each render; its callbacks are stable
   const { getProviderPricingEntries, getCachedModelFor } = pricing;
 
@@ -109,20 +114,20 @@ export function useCatalog() {
   );
 
   const picks = useMemo(
-    () => new Set(standIn ? standIn.picks : discoveryAdapter.getRoutstr21Models()),
+    () => new Set(standIn ? standIn.picks : catalog?.picks() ?? []),
     // the discovery store hydrates late; re-read it whenever models change
-    [standIn, chat.models]
+    [standIn, catalog, all]
   );
   const web = useMemo(() => new Set(webSearchModels), []);
 
   // which provider the model in use is pinned to, if any
-  const currentKey = standIn ? standIn.currentKey : loadLastUsedModel();
+  const currentKey = chosen && keyOf(chosen);
   const current = useMemo(() => {
-    const id = chat.selectedModel?.id ?? null;
+    const id = selectedModel?.id ?? null;
     const k = currentKey ? parseKey(currentKey) : null;
     const pin = k && k.id === id && k.base ? normalizeBaseUrl(k.base) || null : null;
     return { id, pin };
-  }, [chat.selectedModel?.id, currentKey]);
+  }, [selectedModel?.id, currentKey]);
 
   // one object per real change, so memoised rows and details can hold still
   return useMemo(

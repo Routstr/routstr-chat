@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { useChat } from "@/context/ChatProvider";
+import { useBusy } from "@/features/chat/view";
 import { useNodePays } from "@/features/node/view";
 import { getPendingCashuTokenAmount } from "@/utils/cashuUtils";
 
 /** What you can spend: the wallet plus sats held in provider tokens (the same
  *  figure the old balance showed). `node` is set when a remote node pays. */
 export function useMoney() {
-  const { balance, isBalanceLoading, isLoading } = useChat();
+  const { balance, isBalanceLoading } = useChat();
+  const paying = useBusy();
   const node = useNodePays();
   const [pending, setPending] = useState(0);
   const last = useRef(0);
@@ -20,9 +22,9 @@ export function useMoney() {
       }
     };
     tick();
-    const id = window.setInterval(tick, isLoading ? 400 : 1500);
+    const id = window.setInterval(tick, paying ? 400 : 1500);
     return () => window.clearInterval(id);
-  }, [isLoading, balance]);
+  }, [paying, balance]);
 
   return {
     total: balance + pending,
