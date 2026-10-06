@@ -1,3 +1,4 @@
+import { CoreErrorType, parseCoreError } from "@routstr/sdk";
 import {
   BalanceManager,
   type StorageAdapter,
@@ -181,6 +182,41 @@ export class ExportedKeys {
       this.push();
     });
     return made!;
+  }
+
+  /** A token handed to this provider that the wallet could not take back (the
+   *  mint says it is spent): the provider made a key from it, and answers that
+   *  key to the same token. Stores the key and returns its sats; 0 when the
+   *  provider says the token was spent elsewhere, and only then is it gone.
+   *  Throws when the provider does not answer. */
+  async adopt(token: string, baseUrl: string): Promise<number> {
+    const url = slash(baseUrl);
+    const response = await fetch(`${url}v1/wallet/info`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!response.ok) {
+      const error = parseCoreError(await response.text(), response.status);
+      if (error.type === CoreErrorType.TOKEN_ALREADY_SPENT) return 0;
+      throw new Error("The provider did not answer. Try again later.");
+    }
+    const info: { api_key: string; balance: number } = await response.json();
+    const found: ExportedKey = {
+      key: info.api_key,
+      balance: info.balance,
+      label: "Recovered",
+      baseUrl: url,
+    };
+    this.change((keys) =>
+      has(keys, found)
+        ? keys.map((k) =>
+            k.key === found.key ? { ...k, balance: found.balance } : k
+          )
+        : [...keys, found]
+    );
+    await this.keep(found);
+    this.push();
+    return Math.floor(info.balance / 1000);
   }
 
   /** Waits until the key is in IndexedDB, unless localStorage already has it. */

@@ -553,6 +553,83 @@ describe("a new key when storage fails", () => {
   });
 });
 
+describe("adopt: a token the wallet could not take back", () => {
+  // the provider's answer to the token, as routstr-core gives it
+  const answer = (status: number, body: unknown) =>
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify(body), { status }))
+    );
+  const spent = {
+    message: "Cashu token already spent",
+    type: "token_already_spent",
+    code: "cashu_token_already_spent",
+  };
+
+  it("stores the key the provider made from it for good, and says its sats", async () => {
+    const storage = memory();
+    const saved = kept();
+    const keys = new ExportedKeys("alice", storage, provider(), saved);
+    await settle();
+    // localStorage full and IndexedDB slow: the key is in IndexedDB when adopt ends
+    storage.setItem = () => {
+      throw new DOMException("full", "QuotaExceededError");
+    };
+    const put = saved.put;
+    saved.put = async (k, v) => {
+      await new Promise((r) => setTimeout(r, 20));
+      return put(k, v);
+    };
+    answer(200, { api_key: "sk-made", balance: 21000 });
+
+    expect(await keys.adopt("cashuBspent", "https://p.test")).toBe(21);
+    expect(keys.list()).toEqual([
+      {
+        key: "sk-made",
+        balance: 21000,
+        label: "Recovered",
+        baseUrl: "https://p.test/",
+      },
+    ]);
+    expect(JSON.parse((await saved.get("api_keys:alice"))!)).toHaveLength(1);
+  });
+
+  it("keeps a key it already lists, with its own label, at the new balance", async () => {
+    const storage = memory();
+    storage.setItem(
+      "api_keys:alice",
+      JSON.stringify([key({ key: "sk-made" })])
+    );
+    const keys = new ExportedKeys("alice", storage, provider(), kept());
+    answer(200, { api_key: "sk-made", balance: 7000 });
+
+    expect(await keys.adopt("cashuBspent", "https://p.test/")).toBe(7);
+    expect(keys.list()).toEqual([key({ key: "sk-made", balance: 7000 })]);
+  });
+
+  it("says 0 only when the provider says the token was spent elsewhere", async () => {
+    const keys = new ExportedKeys("alice", memory(), provider(), kept());
+    answer(400, { detail: { error: spent }, error: spent });
+    expect(await keys.adopt("cashuBspent", "https://p.test/")).toBe(0);
+    expect(keys.list()).toEqual([]);
+
+    // anything else: the token may still be the key's, so it is not gone
+    answer(503, { detail: "upstream down" });
+    await expect(keys.adopt("cashuBspent", "https://p.test/")).rejects.toThrow(
+      "did not answer"
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new TypeError("Failed to fetch");
+      })
+    );
+    await expect(
+      keys.adopt("cashuBspent", "https://p.test/")
+    ).rejects.toThrow();
+  });
+});
+
 describe("refresh, as the SDK reads the provider's answer", () => {
   const notFound = {
     message:
