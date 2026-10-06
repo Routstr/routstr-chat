@@ -1,7 +1,6 @@
 // Money bugs hunted the way a person would cause them, on the real app, the kit's real core
 // and mints. Every check ends on the mint's answer: what the wallet shows must be money.
 import type { BrowserContext, Page } from "@playwright/test";
-import { getDecodedToken, getEncodedToken } from "@cashu/cashu-ts";
 import { generateSecretKey, nip19 } from "nostr-tools";
 import { expect, test } from "./fixtures";
 import { v2 } from "./drivers/v2";
@@ -195,27 +194,13 @@ test("two tabs on one account agree on the balance after one of them sends", asy
   await addsUp(other, kit, 300, 1);
 });
 
-// KNOWN BUG (wallet): the first top-up always goes to the default mint (or the first mint the
-// wallet knows), not to one the provider takes. When the chosen provider does not take it (the
-// kit's core takes only the kit mint), the 100 sats land and the held message then fails with
-// "No funded mint accepted by <provider>: need 7". Fixed when the first top-up picks a mint the
-// provider accepts; then this passes and test.fail below reports it: delete that line.
-test("first run: who's writing, a new account, 100 sats by Lightning, then the held message sends (known bug)", async ({
+// the first top-up lands at a mint the provider about to be paid takes (the kit's core takes
+// only the kit mint), so the held message can pay from it
+test("first run: who's writing, a new account, 100 sats by Lightning, then the held message sends", async ({
   page,
-  context,
   kit,
   appUrl,
 }) => {
-  test.fail(
-    true,
-    "the first 100 sats land at a mint the provider does not take"
-  );
-  // the first top-up goes to the app's default mint: the kit mint answers in its place
-  const DEFAULT_MINT = "https://mint.minibits.cash/Bitcoin";
-  await context.route(`${DEFAULT_MINT}/**`, async (route) => {
-    const url = route.request().url().replace(DEFAULT_MINT, kit.env.mintUrl);
-    await route.fulfill({ response: await route.fetch({ url }) });
-  });
   await v2.open(page, appUrl);
   await seedKitProvider(page, kit.coreUrl, "kit-cheap");
 
@@ -241,7 +226,7 @@ test("first run: who's writing, a new account, 100 sats by Lightning, then the h
   await v2.waitIdle(page);
   await expect(page.locator("article.rd-me")).toHaveCount(1);
 
-  // and the 100 less the reply is money (its tokens name the default mint: ask the kit mint)
+  // and the 100 less the reply is money, at the kit mint
   await expect
     .poll(
       async () => {
@@ -252,10 +237,7 @@ test("first run: who's writing, a new account, 100 sats by Lightning, then the h
     )
     .toBeGreaterThanOrEqual(99);
   const left = await v2.balance(page);
-  const token = getDecodedToken(await v2.makeToken(page, left));
-  expect(
-    await kit.redeem(getEncodedToken({ ...token, mint: kit.env.mintUrl }))
-  ).toBe(left);
+  expect(await kit.redeem(await v2.makeToken(page, left))).toBe(left);
 });
 
 // with no pay mode picked the app pays through an API key (its credit waits at the provider
