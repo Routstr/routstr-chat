@@ -222,6 +222,16 @@ describe("RequestRun", () => {
     });
   });
 
+  it("stays stopped when the SDK reports paying after Stop", () => {
+    const { wire, run } = startRun();
+    run.stop();
+
+    // the SDK still says "paying" once routing ends, even after the abort
+    wire.cb.onPaymentProcessing?.(true);
+
+    expect(run.getSnapshot().phase).toBe("stopped");
+  });
+
   it("says nothing when the transport rejects only because Stop aborted it", async () => {
     const { wire, run, settled } = startRun();
     run.stop();
@@ -239,6 +249,8 @@ describe("RequestRun", () => {
     wire.cb.onThinkingUpdate("The user wants BDHKE.");
     vi.advanceTimersByTime(9000);
     wire.cb.onStreamingUpdate("Blind");
+    // the answer streaming on does not count as thinking
+    vi.advanceTimersByTime(4000);
     wire.cb.onMessageAppend({
       role: "assistant",
       content: "Blind signatures.",

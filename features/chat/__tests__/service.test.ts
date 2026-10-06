@@ -250,6 +250,27 @@ describe("ChatService: what the model is sent", () => {
     expect(sent.at(-1)?.content).toEqual(image);
   });
 
+  it("pays nothing and warns of nothing when stopped while files load", async () => {
+    let loaded!: () => void;
+    vi.mocked(attachments.forRequest).mockImplementationOnce(
+      (history) =>
+        new Promise((resolve) => {
+          loaded = () =>
+            resolve(history.map(({ role }) => ({ role, content: "" })));
+        })
+    );
+    const turn = await chat.send("c", [{ type: "text", text: "see" }], model);
+    await flush();
+
+    chat.stop("c");
+    loaded();
+    await turn.settled;
+
+    expect(provider.pay).not.toHaveBeenCalled();
+    expect(turn.run.getSnapshot()).toMatchObject({ phase: "stopped" });
+    expect(turn.run.getSnapshot().warning).toBeUndefined();
+  });
+
   it("pays nothing when the question's attachments cannot be loaded", async () => {
     vi.mocked(attachments.forRequest).mockResolvedValueOnce([
       { role: "user", content: "" },
