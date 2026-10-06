@@ -4,9 +4,9 @@ import { getEncodedToken, type Proof } from "@cashu/cashu-ts";
 import { finalizeEvent, generateSecretKey } from "nostr-tools";
 import WebSocket from "ws";
 import { describe, expect, it } from "vitest";
-import { useKit } from "..";
+import { getKit } from "..";
 
-const kit = useKit();
+const kit = getKit();
 const sum = (proofs: Pick<Proof, "amount">[]) =>
   proofs.reduce((s, p) => s + p.amount, 0);
 

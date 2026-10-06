@@ -4,10 +4,10 @@
 // token core hands back is redeemed at the mint: that is what proves it real.
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { useKit, type Behaviour } from "..";
+import { getKit, type Behaviour } from "..";
 import { fcParams } from "../props";
 
-const kit = useKit();
+const kit = getKit();
 
 async function chat(
   auth: Record<string, string>,
