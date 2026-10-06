@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState } from "react";
-import { useChat } from "@/context/ChatProvider";
 import { useBitcoinConnectStatus } from "@/hooks/useBitcoinConnect";
 import { useCashuStore } from "@/features/wallet";
 import { useCashuWallet } from "@/features/wallet/hooks/useCashuWallet";
@@ -11,7 +10,7 @@ import { Icon } from "../icons";
 import { useUi } from "../ui";
 import { useMoney } from "../useMoney";
 import { usePhone } from "../phone";
-import { usePerReply, satsOf } from "../wallet/Wallet";
+import { usePerReply } from "../wallet/Wallet";
 import { Btn, Fold, Grp, Head, Ib, Row, Say, Sw, hostOf, n0, plural, useToast } from "./parts";
 import { satUnit } from "../format";
 
@@ -36,14 +35,21 @@ export default function Payments() {
     saveAutoRefillNWCSettings(next);
   };
   const conn = nwc.status === "connected";
+  // main's key, read as the root reads it: "x-cashu" pays each reply with a token, anything else through an API key
+  const [perRequest] = useState(() => {
+    try {
+      return window.localStorage.getItem("spendMode")?.replace(/"/g, "") === "x-cashu";
+    } catch {
+      return false;
+    }
+  });
 
   /* ── mints ─────────────────────────────────────────────────────────────── */
   const cashu = useCashuStore();
   const { wallet } = useCashuWallet();
-  const { mintBalances, mintUnits } = useChat();
   const { addMintIfNotExists, removeMint, cleanSpentProofs } = useCashuToken();
   const urls = wallet?.mints?.length ? wallet.mints : cashu.mints.map((m) => m.url);
-  const mints = urls.map((url) => ({ url, bal: satsOf(mintBalances?.[url] ?? 0, mintUnits?.[url]) }));
+  const mints = urls.map((url) => ({ url, bal: money.balances[url] ?? 0 }));
   const tot = mints.reduce((a, x) => a + x.bal, 0) || 1;
   const [adding, setAdding] = useState(false);
   const [mintIn, setMintIn] = useState("");
@@ -129,27 +135,31 @@ export default function Payments() {
       </Grp>
 
       <Grp id="g-paying" k="Paying">
-        {/* the one way replies are paid today: the drawing says it, with no made-up numbers */}
+        {/* the way replies are paid on this device: the drawing says it, with no made-up numbers */}
         <div className="st-block">
           <div className="st-payhead">
             <p className="st-rt">How replies are paid</p>
-            <p className="st-payv">Per request</p>
+            <p className="st-payv">{perRequest ? "Per request" : "API key"}</p>
           </div>
-          <div className="st-flow" data-mode="x-cashu" aria-hidden="true">
+          <div className="st-flow" data-mode={perRequest ? "x-cashu" : "api-key"} aria-hidden="true">
             <span className="st-flow-end">You</span>
             <span className="st-lanes">
               <span className="st-lane out" data-k="solid">
-                <em>ecash for the reply</em>
+                <em>{perRequest ? "ecash for the reply" : "sats to a key"}</em>
                 <i className="st-run" />
               </span>
-              <span className="st-lane back" data-k="solid">
-                <em>change back</em>
+              <span className="st-lane back" data-k={perRequest ? "solid" : "dash"}>
+                <em>{perRequest ? "change back" : "change on Return"}</em>
                 <i className="st-run" />
               </span>
             </span>
             <span className="st-flow-end">Provider</span>
           </div>
-          <p className="st-seg-note">Each message carries its own ecash and the change comes back to your wallet.</p>
+          <p className="st-seg-note">
+            {perRequest
+              ? "Each message carries its own ecash and the change comes back to your wallet."
+              : "Sats go to a key at the provider. What replies do not use waits there until you return it to the wallet."}
+          </p>
         </div>
       </Grp>
 

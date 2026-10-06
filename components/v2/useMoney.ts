@@ -1,13 +1,35 @@
-import { useEffect, useRef, useState } from "react";
-import { useChat } from "@/context/ChatProvider";
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useBusy } from "@/features/chat/view";
-import { useNodePays } from "@/features/node/view";
+import { useNodePays, type RemoteNode } from "@/features/node/view";
+import { useWallet } from "@/features/wallet/view";
 import { getPendingCashuTokenAmount } from "@/utils/cashuUtils";
 
-/** What you can spend: the wallet plus sats held in provider tokens (the same
- *  figure the old balance showed). `node` is set when a remote node pays. */
-export function useMoney() {
-  const { balance, isBalanceLoading } = useChat();
+export interface Money {
+  /** What you can spend: the wallet plus sats held in provider tokens. */
+  total: number;
+  /** The wallet alone. */
+  wallet: number;
+  /** The wallet's sats per mint. */
+  balances: Record<string, number>;
+  /** The wallet's coins may still be arriving. */
+  loading: boolean;
+  /** Set when a remote node pays. */
+  node: RemoteNode | null;
+}
+
+/** One reading of the money for the whole screen: the wallet reads its coins
+ *  once here, not once per screen that shows a number. The lab fills it with
+ *  its own. */
+export const MoneyContext = createContext<Money | null>(null);
+
+export function useMoney(): Money {
+  const money = useContext(MoneyContext);
+  if (!money) throw new Error("useMoney must be used inside MoneyProvider");
+  return money;
+}
+
+export function MoneyProvider({ children }: { children: React.ReactNode }) {
+  const wallet = useWallet();
   const paying = useBusy();
   const node = useNodePays();
   const [pending, setPending] = useState(0);
@@ -24,14 +46,13 @@ export function useMoney() {
     tick();
     const id = window.setInterval(tick, paying ? 400 : 1500);
     return () => window.clearInterval(id);
-  }, [paying, balance]);
+  }, [paying, wallet.total]);
 
-  return {
-    total: balance + pending,
-    wallet: balance,
-    loading: isBalanceLoading,
-    node,
-  };
+  const money = useMemo(
+    () => ({ total: wallet.total + pending, wallet: wallet.total, balances: wallet.balances, loading: wallet.loading, node }),
+    [wallet.total, wallet.balances, wallet.loading, pending, node]
+  );
+  return React.createElement(MoneyContext.Provider, { value: money }, children);
 }
 
 /** A number that counts to its new value once, and never while you read. */

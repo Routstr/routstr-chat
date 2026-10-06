@@ -2,7 +2,6 @@
 
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { useChat } from "@/context/ChatProvider";
 import { useAnswering } from "@/features/chat/view";
 import { Icon } from "./icons";
 import { useUi } from "./ui";
@@ -18,14 +17,16 @@ import Settings from "./settings/Settings";
 import Greeting, { Resume } from "./Greeting";
 import { useCountUp, useMoney } from "./useMoney";
 import { useSession } from "@/features/session/view";
-import { useConversations, useHistoryLoaded } from "@/features/history/view";
+import { useConversations, useHistoryLoaded, useThread } from "@/features/history/view";
+import { useOpenChat } from "./openChat";
 import { sats } from "./format";
 import { useDrawerDrag, useKeyboardInset, usePhone } from "./phone";
 
 function Panel() {
   const searchParams = useSearchParams();
   const chatIdFromUrl = searchParams.get("chatId");
-  const { messages, activeConversationId, startNewConversation } = useChat();
+  const { id: activeConversationId, openNew: startNewConversation } = useOpenChat();
+  const shownCount = useThread(activeConversationId)?.length ?? 0;
   const conversations = useConversations();
   const conversationsLoaded = useHistoryLoaded();
   const ui = useUi();
@@ -41,9 +42,9 @@ function Panel() {
 
   const loadingFromUrl =
     !!chatIdFromUrl &&
-    !(chatIdFromUrl === activeConversationId && messages.length > 0) &&
+    !(chatIdFromUrl === activeConversationId && shownCount > 0) &&
     !conversationsLoaded;
-  const empty = messages.length === 0 && !loadingFromUrl;
+  const empty = shownCount === 0 && !loadingFromUrl;
   // whether this new page is a first visit is decided once, when the chats have loaded, and
   // kept for the page: chats that arrive later (a sync) fade the first-run extras, they do not
   // reshape the page under the reader
@@ -193,7 +194,7 @@ function Panel() {
 }
 
 export default function Shell() {
-  const { startNewConversation } = useChat();
+  const { openNew: startNewConversation } = useOpenChat();
   const answering = useAnswering() !== null;
   const conversations = useConversations();
   const ui = useUi();

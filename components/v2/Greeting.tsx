@@ -2,7 +2,7 @@
 
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
-import { useChat } from "@/context/ChatProvider";
+import { useOpenChat } from "./openChat";
 import { useConversations } from "@/features/history/view";
 import { commitLine, peekLine } from "./palette/greet";
 import { lastActivity, timeAgo } from "./format";
@@ -83,7 +83,7 @@ function Pool({ gone }: { gone: boolean }) {
 /* Phone, a returning reader's new chat: one quiet way back to the latest
    chat, above the composer (the rail is a drawer away there). */
 export function Resume() {
-  const { loadConversation } = useChat();
+  const { open: loadConversation } = useOpenChat();
   const conversations = useConversations();
   const latest = useMemo(() => {
     let best: (typeof conversations)[number] | null = null;

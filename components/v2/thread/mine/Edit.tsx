@@ -1,12 +1,12 @@
 "use client";
 
 import { useLayoutEffect, useRef, useState } from "react";
-import { useChat } from "@/context/ChatProvider";
+import { useOpenChat } from "../../openChat";
 import { useAsking } from "@/features/chat/view";
 import { useActions } from "../../useActions";
 
 export function Edit({ index, initial, onClose }: { index: number; initial: string; onClose: () => void }) {
-  const asking = useAsking(useChat().activeConversationId);
+  const asking = useAsking(useOpenChat().id);
   const [text, setText] = useState(initial);
   const { saveEdit } = useActions();
   const area = useRef<HTMLTextAreaElement>(null);

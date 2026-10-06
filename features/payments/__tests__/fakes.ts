@@ -175,5 +175,11 @@ export function emptyDevice() {
       lock: () => fakeLock().lock(),
     },
     otherDevices: { keys: () => [], drop: async () => {} },
+    adopt: noAdopt,
   };
 }
+
+/** No provider to ask: a token found spent is kept, as when one does not answer. */
+export const noAdopt = async (): Promise<number> => {
+  throw new Error("no provider to ask in this test");
+};

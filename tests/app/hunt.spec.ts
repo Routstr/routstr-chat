@@ -258,17 +258,14 @@ test("first run: who's writing, a new account, 100 sats by Lightning, then the h
   ).toBe(left);
 });
 
-// KNOWN BUG (UI): with no pay mode picked the app pays through an API key (its credit waits at
-// the provider until Return), but Settings → Payments says replies are paid per request, the
-// change coming straight back. Fixed when Settings names the mode in use; then this passes and
-// test.fail below reports it: delete that line.
-test("Settings names the way replies are really paid (known bug)", async ({
+// with no pay mode picked the app pays through an API key (its credit waits at the provider
+// until Return), and Settings → Payments names that mode, not per request
+test("Settings names the way replies are really paid", async ({
   page,
   context,
   kit,
   appUrl,
 }) => {
-  test.fail(true, "Settings says per request; the app pays through an API key");
   await seedAccounts(context, [newKey()]);
   await funded(page, kit, appUrl, 100);
   await v2.send(page, `${TINY} hello`);
