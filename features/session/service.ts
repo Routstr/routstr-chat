@@ -37,6 +37,14 @@ const merge = (a: SavedAccounts, b: SavedAccounts) => [
 ];
 const report = (error: unknown) =>
   console.error("[session] saving accounts", error);
+// localStorage full or blocked: the IndexedDB copy still gets it
+const mirrorTo = (storage: KeyValueStorage, key: string, value: string) => {
+  try {
+    storage.setItem(key, value);
+  } catch (error) {
+    report(error);
+  }
+};
 
 /** The one owner of who is signed in on this device. */
 export class SessionService {
@@ -94,7 +102,8 @@ export class SessionService {
     this.manager.addAccount(account);
     this.manager.setActive(account);
     const mirror = parse(this.storage.getItem(ACCOUNTS_KEY));
-    this.storage.setItem(
+    mirrorTo(
+      this.storage,
       ACCOUNTS_KEY,
       JSON.stringify(merge(mirror, [account.toJSON()]))
     );
@@ -149,7 +158,7 @@ export class SessionService {
       (a) => !this.gone.has(a.id)
     );
     const json = JSON.stringify(list);
-    this.storage.setItem(ACCOUNTS_KEY, json);
+    mirrorTo(this.storage, ACCOUNTS_KEY, json);
     this.seen = new Set(list.map((a) => a.id));
     this.load(list, activeId ?? this.storage.getItem(ACTIVE_KEY));
     // removed in another tab
@@ -171,7 +180,7 @@ export class SessionService {
   }
 
   private saveActive(id: string): void {
-    this.storage.setItem(ACTIVE_KEY, id);
+    mirrorTo(this.storage, ACTIVE_KEY, id);
     this.saved.put(ACTIVE_KEY, id).catch(report);
   }
 

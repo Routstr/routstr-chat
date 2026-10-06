@@ -339,4 +339,24 @@ describe("SessionService", () => {
       JSON.parse(data.get("accounts")!).map((a: { id: string }) => a.id)
     ).toEqual([alice.id, bob.id]);
   });
+
+  it("keeps a new key in IndexedDB when localStorage is full", async () => {
+    const storage = memory();
+    const { saved, data } = savedCopy();
+    const session = new SessionService();
+    session.boot(storage, saved);
+    await settle();
+    storage.setItem = () => {
+      throw new DOMException("full", "QuotaExceededError");
+    };
+
+    const alice = key();
+    session.add(alice);
+    await settle();
+
+    expect(session.getSnapshot().pubkey).toBe(alice.pubkey);
+    expect(
+      JSON.parse(data.get("accounts")!).map((a: { id: string }) => a.id)
+    ).toEqual([alice.id]);
+  });
 });
