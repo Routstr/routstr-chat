@@ -17,7 +17,7 @@ import {
 } from "rxjs";
 import { nip19, generateSecretKey } from "nostr-tools";
 import type { NostrEvent } from "nostr-tools";
-import { PnsKeys, derivePnsKeys } from "@/lib/pns";
+import { PnsKeys, SALT_PNS, derivePnsKeys } from "@/lib/pns";
 import { decodePrivateKey } from "@/lib/nostr";
 import { eventStore, relayPool } from "@/lib/applesauce-core";
 import { useEventDatabase } from "@/lib/eventDatabase";
@@ -65,20 +65,57 @@ export const derivedPnsKeys$ = new BehaviorSubject<Map<string, PnsKeys>>(
   new Map()
 );
 
-// Subject to emit newly derived PNS keys
-const newDerivedPnsKey$ = new Subject<PnsKeys>();
+const newDerivedPnsKey$ = new Subject<{ owner: string; keys: PnsKeys }>();
 
-// Accumulate derived PNS keys in the BehaviorSubject
+const derivedPnsKeysByOwner$ = new BehaviorSubject<
+  Map<string, Map<string, PnsKeys>>
+>(new Map());
+
 newDerivedPnsKey$
   .pipe(
-    scan((acc, pnsKeys) => {
-      const newMap = new Map(acc);
+    scan((acc, { owner, keys }) => {
+      const byOwner = new Map(acc);
+      const forOwner = new Map(byOwner.get(owner) ?? []);
       // Use pubkey as the key to avoid duplicates
-      newMap.set(pnsKeys.pnsKeypair.pubKey, pnsKeys);
-      return newMap;
-    }, new Map<string, PnsKeys>())
+      forOwner.set(keys.pnsKeypair.pubKey, keys);
+      byOwner.set(owner, forOwner);
+      return byOwner;
+    }, new Map<string, Map<string, PnsKeys>>())
+  )
+  .subscribe(derivedPnsKeysByOwner$);
+
+// Unscoped on purpose: the kind-1080 sync subscribes by every PNS pubkey.
+derivedPnsKeysByOwner$
+  .pipe(
+    map(
+      (byOwner) =>
+        new Map(
+          Array.from(byOwner.values()).flatMap((forOwner) =>
+            Array.from(forOwner)
+          )
+        )
+    )
   )
   .subscribe(derivedPnsKeys$);
+
+// Picking the first SALT_PNS key out of the flat map returns whichever account
+// derived first and survives an account switch, so consumers must read this.
+export const activeAccountPnsKeys$ = combineLatest([
+  userPubkey$,
+  derivedPnsKeysByOwner$,
+]).pipe(
+  map(([owner, byOwner]) => {
+    if (!owner) return null;
+    const forOwner = byOwner.get(owner);
+    if (!forOwner) return null;
+    return (
+      Array.from(forOwner.values()).find((keys) => keys.salt === SALT_PNS) ??
+      null
+    );
+  }),
+  distinctUntilChanged(),
+  shareReplay(1)
+);
 
 /**
  * Observable that emits array of all derived PNS pubkeys for syncing kind-1080.
@@ -185,7 +222,8 @@ async function createAndPublishInitial1081Event(
 
     // Also derive and emit PNS keys from the new nsec
     const pnsKeys = extractAndDerivePnsKeys(contentObj);
-    if (pnsKeys) newDerivedPnsKey$.next(pnsKeys);
+    if (pnsKeys)
+      newDerivedPnsKey$.next({ owner: signerInfo.pubkey, keys: pnsKeys });
 
     return signedEvent;
   } catch (error) {
@@ -311,7 +349,8 @@ export const processStored1081Events$ = combineLatest([
           return;
         }
         const pnsKeys = extractAndDerivePnsKeys(decryptedContent);
-        if (pnsKeys) newDerivedPnsKey$.next(pnsKeys);
+        if (pnsKeys)
+          newDerivedPnsKey$.next({ owner: signerInfo.pubkey, keys: pnsKeys });
       }),
       catchError((err) => {
         console.error("[sync1081Keyring] Error processing stored events:", err);

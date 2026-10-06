@@ -1,6 +1,6 @@
 import type { SyncOutcome } from "./sync/sync1080Pns";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { firstValueFrom, map, filter, timeout } from "rxjs";
+import { firstValueFrom, filter, timeout } from "rxjs";
 import { Conversation, Message } from "@/types/chat";
 import {
   loadConversationsFromStorage,
@@ -26,8 +26,9 @@ import {
   decryptPnsEventToInner,
 } from "@/utils/eventProcessing";
 import { eventStore } from "@/lib/applesauce-core";
-import { useChatSync1081, derivedPnsKeys$ } from "./useChatSync1081";
-import { PnsKeys, SALT_PNS, createPnsDeletionEvent } from "@/lib/pns";
+import { useChatSync1081, activeAccountPnsKeys$ } from "./useChatSync1081";
+import { userPubkey$ } from "./sync/chatSyncInputs";
+import { PnsKeys, createPnsDeletionEvent } from "@/lib/pns";
 import { useDeletionSync } from "./useDeletionSync";
 
 export interface UseConversationStateReturn {
@@ -515,22 +516,23 @@ export const useConversationState = (): UseConversationStateReturn => {
         );
         triggerProcessStored1081Events();
 
+        // Pinned: switching mid-wait would encrypt this message to the new account.
+        const owner = userPubkey$.value;
+        if (!owner) return null;
+
         // Wait for keys to be derived
         try {
           const keys = await firstValueFrom(
-            derivedPnsKeys$.pipe(
-              map((keysMap) => {
-                // Find the first PNS keys with SALT_PNS
-                return Array.from(keysMap.values()).find(
-                  (pnsKeys) => pnsKeys.salt === SALT_PNS
-                );
-              }),
-              filter((keys) => !!keys),
+            activeAccountPnsKeys$.pipe(
+              filter(
+                (keys): keys is PnsKeys =>
+                  keys !== null && userPubkey$.value === owner
+              ),
               timeout(5000) // Timeout after 5 seconds
             )
           );
 
-          if (keys) {
+          if (keys && userPubkey$.value === owner) {
             return publishMessage(
               conversationId,
               strippedMessage,

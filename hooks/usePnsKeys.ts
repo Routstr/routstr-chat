@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { PnsKeys, SALT_PNS } from "@/lib/pns";
-import { derivedPnsKeys$ } from "./useChatSync1081";
+import { PnsKeys } from "@/lib/pns";
+import { activeAccountPnsKeys$ } from "./useChatSync1081";
 
 /**
  * Hook to access the current PNS keys for encryption/decryption operations.
@@ -14,14 +14,12 @@ export function usePnsKeys(): {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const subscription = derivedPnsKeys$.subscribe((keysMap) => {
-      // Find the PNS keys with the default salt
-      const matchingKeys = Array.from(keysMap.values()).find(
-        (keys) => keys.salt === SALT_PNS
-      );
-      setPnsKeys(matchingKeys || null);
-      setIsLoading(false);
-    });
+    const subscription = activeAccountPnsKeys$.subscribe(
+      (keys: PnsKeys | null) => {
+        setPnsKeys(keys);
+        setIsLoading(false);
+      }
+    );
 
     return () => subscription.unsubscribe();
   }, []);

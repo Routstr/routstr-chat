@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { NostrEvent } from "nostr-tools";
-import { PnsKeys, SALT_PNS } from "@/lib/pns";
+import { PnsKeys } from "@/lib/pns";
 import { eventDatabaseReady } from "@/lib/eventDatabase";
 import { useAppContext } from "@/hooks/useAppContext";
 import {
@@ -12,6 +12,7 @@ import {
   updateChatSyncEnabled,
 } from "./sync/chatSyncInputs";
 import {
+  activeAccountPnsKeys$,
   derivedPnsKeys$,
   derivedPnsPubkeys$,
   processStored1081Events$,
@@ -51,6 +52,7 @@ export {
   relayUrls$,
   userPubkey$,
   userSigner$,
+  activeAccountPnsKeys$,
   derivedPnsKeys$,
   derivedPnsPubkeys$,
   triggerProcessStored1081Events,
@@ -104,12 +106,9 @@ export function useChatSync1081() {
   }, []);
 
   useEffect(() => {
-    // Find the first PNS keys with SALT_PNS from currentDerivedPnsKeys
-    const firstPnsKeysWithSalt = Array.from(
-      currentDerivedPnsKeys.values()
-    ).find((pnsKeys) => pnsKeys.salt === SALT_PNS);
-    setCurrentPnsKeys(firstPnsKeysWithSalt || null);
-  }, [currentDerivedPnsKeys]);
+    const sub = activeAccountPnsKeys$.subscribe(setCurrentPnsKeys);
+    return () => sub.unsubscribe();
+  }, []);
 
   // Update relay URLs when config changes
   useEffect(() => {

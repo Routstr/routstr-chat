@@ -200,3 +200,61 @@ describe("kind-1081 keyring", () => {
     sub.unsubscribe();
   });
 });
+
+describe("activeAccountPnsKeys$", () => {
+  it("follows the signed-in account across a switch", async () => {
+    const m = await load();
+    const sub = m.processStored1081Events$.subscribe();
+    const active = () =>
+      firstValueFrom(m.activeAccountPnsKeys$.pipe(timeout(1000)));
+
+    m.userPubkey$.next("alice");
+    m.userSigner$.next(signerFor("alice") as never);
+    fake.events = [event("e1", "alice", "a")];
+    m.triggerProcessStored1081Events();
+    await settle();
+    expect((await active())?.pnsKeypair.pubKey).toBe("pns-of-a");
+
+    m.userPubkey$.next("bob");
+    m.userSigner$.next(signerFor("bob") as never);
+    await settle();
+    expect(await active()).toBeNull();
+
+    fake.events = [event("e2", "bob", "b")];
+    m.triggerProcessStored1081Events();
+    await settle();
+    expect((await active())?.pnsKeypair.pubKey).toBe("pns-of-b");
+
+    m.userPubkey$.next("alice");
+    m.userSigner$.next(signerFor("alice") as never);
+    await settle();
+    expect((await active())?.pnsKeypair.pubKey).toBe("pns-of-a");
+    sub.unsubscribe();
+  });
+
+  it("keeps the flat all-accounts view for the kind-1080 author filter", async () => {
+    const m = await load();
+    const sub = m.processStored1081Events$.subscribe();
+
+    m.userPubkey$.next("alice");
+    m.userSigner$.next(signerFor("alice") as never);
+    fake.events = [event("e1", "alice", "a")];
+    m.triggerProcessStored1081Events();
+    await settle();
+
+    m.userPubkey$.next("bob");
+    m.userSigner$.next(signerFor("bob") as never);
+    fake.events = [event("e2", "bob", "b")];
+    m.triggerProcessStored1081Events();
+    await settle();
+
+    const pubkeys = await firstValueFrom(
+      m.derivedPnsPubkeys$.pipe(
+        filter((k) => k.length === 2),
+        timeout(1000)
+      )
+    );
+    expect([...pubkeys].sort()).toEqual(["pns-of-a", "pns-of-b"]);
+    sub.unsubscribe();
+  });
+});
