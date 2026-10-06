@@ -51,10 +51,10 @@ html[data-room="meridian"] { --pf-accent: var(--ink); }
   .pf-pool { width: 150vw; height: 150vw; margin: -75vw 0 0 -75vw; }
   .panel[data-first] .stage-tail { padding-top: 0; }
   /* one axis: the greeting is left-set on the composer's text edge; the free space falls at the top */
-  .panel[data-first] .stage { align-content: end; padding: 0 var(--s3) var(--s8) var(--pf-edge, 30px); }
+  .panel[data-first] .stage { align-content: end; padding: 0 var(--s3) var(--s8) 30px; }
   /* every new chat on a phone keeps that one axis: the greeting on the composer's text edge, like
      the Continue line under it */
-  .panel[data-state="empty"] .stage { justify-items: start; align-content: end; padding-left: var(--pf-edge, 30px); padding-bottom: var(--s8); }
+  .panel[data-state="empty"] .stage { justify-items: start; align-content: end; padding-left: 30px; padding-bottom: var(--s8); }
   .panel[data-state="empty"] .stage-in { justify-items: start; }
   .panel[data-state="empty"] .greet { text-align: left; }
 }

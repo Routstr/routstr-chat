@@ -147,7 +147,7 @@ export function land(isl: HTMLElement) {
   const travel = Math.abs(dy) >= 4; // on a phone the island is already at the bottom
   const capDur = travel ? Math.round(slow * 0.86) : ms("--d-move");
 
-  // the greeting and the ideas leave as ghosts, under the dock
+  // the greeting leaves as a ghost, under the dock
   if (panel) {
     const p = panel.getBoundingClientRect();
     f.ghosts.forEach((g) => {

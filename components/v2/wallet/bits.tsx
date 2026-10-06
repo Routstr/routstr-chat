@@ -25,10 +25,10 @@ const MIN = 60_000;
 const HOUR = 60 * MIN;
 const DAY = 24 * HOUR;
 /** Whether this browser's key was backed up ("saved") or its reminder waved away ("hidden"), per account. */
-export const keyFlag = (pubkey: string) => `routstr.keysaved:${pubkey}`;
-export function readKeyFlag(pubkey?: string): string | null {
+const keyFlag = (pubkey: string) => `routstr.keysaved:${pubkey}`;
+export function readKeyFlag(pubkey: string): string | null {
   try {
-    return pubkey ? localStorage.getItem(keyFlag(pubkey)) : null;
+    return localStorage.getItem(keyFlag(pubkey));
   } catch {
     return null;
   }

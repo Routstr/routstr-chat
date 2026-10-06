@@ -52,7 +52,7 @@ export default function Node() {
               unauth: true,
             }
           : {
-              // the node code says what went wrong in words meant for the person
+              // remoteNode.ts words its errors for the person
               text: e instanceof RemoteNodeError ? e.message : "Could not reach a routstrd node at that address. Check it, and that the node is running.",
             }
       );

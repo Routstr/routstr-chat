@@ -6,7 +6,7 @@
 
 // [deep, body, lift, light]: twelve hues spread round the wheel, so two lights
 // are told apart by colour alone at sidebar size
-export const FAMILIES: [string, string, string, string][] = [
+const FAMILIES: [string, string, string, string][] = [
   ["#08201c", "#0f4a40", "#2f9c84", "#bff5e3"], // jade
   ["#0b1a33", "#173f7a", "#3f86d6", "#cfe9ff"], // sea
   ["#1a1236", "#3b2a86", "#7a63de", "#e3dbff"], // violet
@@ -21,12 +21,8 @@ export const FAMILIES: [string, string, string, string][] = [
   ["#14141c", "#2c2e3a", "#5c6177", "#c9cde0"], // ink
 ];
 
-const bytes = (hex: string) => {
-  const b: number[] = [];
-  for (let i = 0; i + 1 < hex.length && b.length < 32; i += 2) b.push(parseInt(hex.slice(i, i + 2), 16) || 0);
-  while (b.length < 32) b.push((b.length * 37) % 256);
-  return b;
-};
+// a pubkey is 64 hex characters: its 32 bytes
+const bytes = (hex: string) => Array.from({ length: 32 }, (_, i) => parseInt(hex.slice(i * 2, i * 2 + 2), 16));
 const rgb = (h: string) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
 const mix = (a: number[], b: number[], t: number) => a.map((v, i) => v + (b[i] - v) * t);
 const ss = (e0: number, e1: number, x: number) => {

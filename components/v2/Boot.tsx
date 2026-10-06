@@ -219,9 +219,6 @@ export default function Boot({ ready, onDone, first: forceFirst }: { ready: bool
           delay: full ? 520 : 80,
           easing: S,
         });
-        document.querySelectorAll(".panel .pf-idea").forEach((el, i) =>
-          A(el, [{ opacity: 0, transform: "translateY(5px)" }, { opacity: 1, transform: "none" }], { duration: 520, delay: (full ? 860 : 260) + i * 60, easing: E })
-        );
         window.addEventListener("keydown", hurry, true);
         window.addEventListener("pointerdown", hurry, true);
         Promise.all(anims.map((x) => x.finished.catch(() => undefined))).then(end);

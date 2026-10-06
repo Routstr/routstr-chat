@@ -6,7 +6,6 @@ import { useChat } from "@/context/ChatProvider";
 import { commitLine, peekLine } from "./palette/greet";
 import { lastActivity, timeAgo } from "./format";
 
-
 const phoneNow = () => window.matchMedia("(max-width: 760px)").matches;
 
 /* The empty room: one line, the composer under it, nothing else that is not
