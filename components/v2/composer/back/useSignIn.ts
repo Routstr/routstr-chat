@@ -6,6 +6,7 @@ import { NostrConnectSigner } from "applesauce-signers";
 import { useAccountManager } from "@/components/ClientProviders";
 import type { Account, AccountMetadata } from "@/features/session/service";
 import { useUi } from "../../ui";
+import { writeKeyFlag } from "../../wallet/bits";
 import { touch } from "./bits";
 
 /* Signing in on the back of the composer: which way is open, what was typed
@@ -59,7 +60,10 @@ export function useSignIn(say: (t: string) => void, from: "pay" | "write") {
       return;
     }
     try {
-      adopt(PrivateKeyAccount.fromKey<AccountMetadata>(v), "in", `Account ${count()}`);
+      const account = PrivateKeyAccount.fromKey<AccountMetadata>(v);
+      adopt(account, "in", `Account ${count()}`);
+      // a key pasted in is a key already kept somewhere else
+      writeKeyFlag(account.pubkey, "saved");
       setKeyText("");
     } catch {
       setWayState("bad");

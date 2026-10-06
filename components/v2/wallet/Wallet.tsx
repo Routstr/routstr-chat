@@ -524,7 +524,7 @@ function Home({ go, freeze, bloom }: { go: (v: View, o?: { reopen?: Reopen | nul
                 <Icon name="close" size={14} />
               </button>
             </span>
-            <span className="wl-row-s">Your sats and chats live only in this browser. Save the key, or clearing the browser loses them.</span>
+            <span className="wl-row-s">Only this browser has your key. Clearing it loses the key and its sats.</span>
           </div>
         </div>
       )}
