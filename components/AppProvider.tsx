@@ -1,38 +1,20 @@
 import { ReactNode } from "react";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
-import {
-  AppContext,
-  type AppConfig,
-  type AppContextType,
-} from "@/context/AppContext";
+import { AppContext, type AppContextType } from "@/context/AppContext";
+import { useDeviceRelays } from "@/features/relays/view";
 
 interface AppProviderProps {
   children: ReactNode;
-  /** Application storage key */
-  storageKey: string;
-  /** Default app configuration */
-  defaultConfig: AppConfig;
   /** Optional list of preset relays to display in the RelaySelector */
   presetRelays?: { name: string; url: string }[];
 }
 
-export function AppProvider(props: AppProviderProps) {
-  const { children, storageKey, defaultConfig, presetRelays } = props;
-
-  // App configuration state with localStorage persistence
-  const [config, setConfig] = useLocalStorage<AppConfig>(
-    storageKey,
-    defaultConfig
-  );
-
-  // Generic config updater with callback pattern
-  const updateConfig = (updater: (currentConfig: AppConfig) => AppConfig) => {
-    setConfig(updater);
-  };
-
+/** The old screens' view of the relay list: the relay layer owns it. */
+export function AppProvider({ children, presetRelays }: AppProviderProps) {
+  const [relayUrls, updateRelays] = useDeviceRelays();
   const appContextValue: AppContextType = {
-    config,
-    updateConfig,
+    config: { relayUrls },
+    updateConfig: (updater) =>
+      updateRelays((urls) => updater({ relayUrls: urls }).relayUrls),
     presetRelays,
   };
 

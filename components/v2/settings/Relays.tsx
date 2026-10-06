@@ -2,13 +2,13 @@
 
 import React, { useEffect, useState } from "react";
 import { normalizeURL } from "applesauce-core/helpers/url";
-import { useAppContext } from "@/hooks/useAppContext";
+import { useDeviceRelays } from "@/features/relays/view";
 import { relayPool } from "@/lib/applesauce-core";
 import { Icon } from "../icons";
 import { Btn, GoneRow, Grp, Ib, at, hostOf, plural, useGone } from "./parts";
 
 export default function Relays() {
-  const { config, updateConfig } = useAppContext();
+  const [relays, updateRelays] = useDeviceRelays();
   const [relayIn, setRelayIn] = useState("");
   const [relayErr, setRelayErr] = useState("");
   const [, tick] = useState(0);
@@ -17,7 +17,6 @@ export default function Relays() {
     const id = window.setInterval(() => tick((n) => n + 1), 3000);
     return () => window.clearInterval(id);
   }, []);
-  const relays = config.relayUrls;
   // read without opening one (relay() would create it, and a fresh relay is not yet connected): a
   // relay is 'bad' only after it has tried and failed, until then it is connecting. One nothing has
   // opened (signed out, nothing syncs) is idle
@@ -33,20 +32,15 @@ export default function Relays() {
       return setRelayErr("Relay addresses look like wss://relay.example.com");
     if (relays.includes(v))
       return setRelayErr("That relay is already in your list.");
-    updateConfig((c) => ({ ...c, relayUrls: [...c.relayUrls, v] }));
+    updateRelays((urls) => [...urls, v]);
     setRelayIn("");
     setRelayErr("");
   };
   const goneRelays = useGone();
   const removeRelay = (u: string) => {
-    const i = config.relayUrls.indexOf(u);
-    updateConfig((c) => ({
-      ...c,
-      relayUrls: c.relayUrls.filter((x) => x !== u),
-    }));
-    goneRelays.drop(u, hostOf(u), i, () =>
-      updateConfig((c) => ({ ...c, relayUrls: at(c.relayUrls, u, i) }))
-    );
+    const i = relays.indexOf(u);
+    updateRelays((urls) => urls.filter((x) => x !== u));
+    goneRelays.drop(u, hostOf(u), i, () => updateRelays((urls) => at(urls, u, i)));
   };
   return (
     <Grp

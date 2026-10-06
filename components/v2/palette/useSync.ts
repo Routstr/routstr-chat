@@ -3,7 +3,7 @@ import type { useChat } from "@/context/ChatProvider";
 import type { Conversation } from "@/types/chat";
 import { useObservableState } from "applesauce-react/hooks";
 import { useAccountManager } from "@/features/session/view";
-import { useAppContext } from "@/hooks/useAppContext";
+import { useDeviceRelays } from "@/features/relays/view";
 import type { Item, Sync, SyncOutcome } from "./types";
 
 /* ── sync: the row turns its glyph, then says what came in ────────────── */
@@ -37,9 +37,9 @@ export function useSync({
   convRef.current = conversations;
   const { manager } = useAccountManager();
   const account = useObservableState(manager.active$);
-  const { config } = useAppContext();
+  const [deviceRelays] = useDeviceRelays();
   const syncCtx = useRef({ active: false, relays: 0 });
-  syncCtx.current = { active: !!account, relays: config.relayUrls?.length ?? 0 };
+  syncCtx.current = { active: !!account, relays: deviceRelays.length };
   const finishSync = useCallback((outcome: SyncOutcome) => {
     const s = syncT.current;
     // the glyph turns for a moment at least, so a quick sync still reads as one
