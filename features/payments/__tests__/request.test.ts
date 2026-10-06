@@ -207,6 +207,19 @@ describe("sdkWallet", () => {
     expect(state.mintBalances).toEqual({ [MINT]: 5_000 });
   });
 
+  it("counts a payout the wallet already took as received", async () => {
+    const { purse } = fakePurse();
+    purse.receive.mockRejectedValueOnce(
+      Object.assign(new Error("proofs already spent"), { code: 11001 })
+    );
+
+    const result = await sdkWallet(purse, () => true, false).receiveToken(
+      tokenOf(5)
+    );
+
+    expect(result).toEqual({ success: true, amount: 0, unit: "sat" });
+  });
+
   it("tells the SDK a refund did not land, so it keeps the token", async () => {
     const { purse } = fakePurse();
     purse.receive.mockRejectedValueOnce(new Error("mint unreachable"));

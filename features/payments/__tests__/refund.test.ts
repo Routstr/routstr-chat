@@ -232,9 +232,10 @@ describe("refundCredit", () => {
     expect(deps.otherDevices.drop).toHaveBeenCalledWith(["sk-lost-device"]);
   });
 
-  it("counts a lost device's key as done when the provider reports it empty", async () => {
+  it("still asks the provider about a lost device's key that reads empty", async () => {
+    // an emptied key may hold a payout the wallet missed: the provider pays it again
     const refunded = provider({ [LARGE]: 0 });
-    const { deps, others } = await setup();
+    const { deps, others, wallet } = await setup();
     others.push({
       baseUrl: LARGE,
       key: "sk-gone-device",
@@ -244,7 +245,8 @@ describe("refundCredit", () => {
 
     await refundCredit(deps, true);
 
-    expect(refunded).toEqual([]);
+    expect(refunded).toEqual([LARGE]);
+    expect(wallet.received).toEqual([`refund-${LARGE}`]);
     expect(deps.otherDevices.drop).toHaveBeenCalledWith(["sk-gone-device"]);
   });
 

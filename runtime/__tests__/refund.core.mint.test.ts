@@ -46,9 +46,10 @@ function spendAll(key: string) {
 }
 
 /** An account whose wallet only takes refunds in. `others` are keys a lost
- *  device made. */
+ *  device made; forgetting them succeeds unless `relayDown` is set. */
 async function account(others: ApiKeyEntry[] = []) {
   const received: number[] = [];
+  const state = { mintDown: false, relayDown: false };
   const purse: Purse = {
     balances: async () => ({ [kit.env.mintUrl]: 0 }),
     activeMint: () => kit.env.mintUrl,
@@ -56,6 +57,7 @@ async function account(others: ApiKeyEntry[] = []) {
       throw new Error("these tests never pay");
     },
     receive: async (token) => {
+      if (state.mintDown) throw new Error("Failed to fetch");
       const sats = await kit.redeem(token);
       received.push(sats);
       return sats;
@@ -78,14 +80,25 @@ async function account(others: ApiKeyEntry[] = []) {
     sdk: payments,
     spending: () => ({ mode: "apikeys" }),
     oldCredit: emptyDevice().oldCredit,
-    otherDevices: { keys: () => others, drop: async () => {} },
+    otherDevices: {
+      keys: () => others,
+      drop: async (keys) => {
+        if (state.relayDown) throw new Error("relay down");
+        keys.forEach((k) =>
+          others.splice(
+            others.findIndex((o) => o.key === k),
+            1
+          )
+        );
+      },
+    },
   });
   /** A key this account holds; just used, so only the button refunds it. */
   const hold = (key: string) => {
     storage.setApiKey(kit.coreUrl, key);
     storage.touchApiKeyLastUsed(kit.coreUrl);
   };
-  return { chat, storage, hold, received };
+  return { chat, storage, hold, received, state };
 }
 
 describe("the Refund button against this node's core", () => {
@@ -134,6 +147,50 @@ describe("the Refund button against this node's core", () => {
     expect(storage.getAllApiKeys()).toEqual([]);
     expect(received).toHaveLength(1);
     expect(received[0]).toBeGreaterThan(0);
+  }, 30_000);
+
+  it("brings back a lost device's credit on the next press when the wallet missed it", async () => {
+    const key = await newKey(60);
+    const others: ApiKeyEntry[] = [
+      { baseUrl: kit.coreUrl, key, balance: 60, lastUsed: null },
+    ];
+    const { chat, received, state } = await account(others);
+
+    state.mintDown = true;
+    expect(await chat.refund()).toEqual([
+      { baseUrl: kit.coreUrl, success: false },
+    ]);
+    state.mintDown = false;
+    // core has paid the key out to zero by now, and pays the same out again
+    expect(await chat.refund()).toEqual([
+      { baseUrl: kit.coreUrl, success: true },
+    ]);
+
+    expect(received).toHaveLength(1);
+    expect(received[0]).toBeGreaterThan(50);
+    await vi.waitFor(() => expect(others).toHaveLength(0));
+  }, 30_000);
+
+  it("counts a lost device's credit taken once as done when forgetting it failed", async () => {
+    const key = await newKey(40);
+    const others: ApiKeyEntry[] = [
+      { baseUrl: kit.coreUrl, key, balance: 40, lastUsed: null },
+    ];
+    const { chat, received, state } = await account(others);
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    state.relayDown = true;
+    await chat.refund();
+    await vi.waitFor(() => expect(console.warn).toHaveBeenCalled());
+    expect(others).toHaveLength(1);
+    state.relayDown = false;
+    // core replays the payout this wallet already took
+    expect(await chat.refund()).toEqual([
+      { baseUrl: kit.coreUrl, success: true },
+    ]);
+
+    await vi.waitFor(() => expect(others).toHaveLength(0));
+    expect(received).toHaveLength(1);
   }, 30_000);
 
   it("forgets a lost device's key the node does not know, without a refund call", async () => {
