@@ -30,7 +30,6 @@ function useTakeBack(s: ReturnType<typeof useWalletSend>, onDone: (id: string, k
     if (/already redeemed/i.test(s.warningMessage)) onDone(w.id, "info", "That token was already claimed, so it has left this list.");
     else if (s.error) onDone(w.id, "warn", "It could not be taken back just now. Nothing changed. Try again in a moment.");
     else onDone(w.id, "ok", `Took back ${fmt(w.amount)} sats.`);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [s.reclaimingTokenId]);
   return (t: UnclaimedToken) => {
     was.current = { id: t.id, amount: satsOf(t.amount, t.unit) };
@@ -109,20 +108,31 @@ export default function Send({
   // paid, or sent and still settling on a slow route
   const [lnPaid, setLnPaid] = useState<{ n: number; pending: boolean } | null>(null);
   const lnAmt = useRef(0);
-  const read = (v: string) => {
-    const t = v.trim().replace(/^lightning:/i, "");
-    setLn(t);
+  const bare = (v: string) => v.trim().replace(/^lightning:/i, "");
+  const lookUp = (t: string) => {
     s.setError("");
     if (!/^ln(bc|tb|bcrt)/i.test(t) || noAmount(t)) return;
     void s.handleNip60InvoiceInput(t);
   };
+  const read = (v: string) => {
+    const t = bare(v);
+    setLn(t);
+    lookUp(t);
+  };
+  // an invoice handed over from elsewhere opens on the Lightning tab, read at once
+  const [handed, setHanded] = useState<string | null>(null);
+  if (prefill !== handed) {
+    setHanded(prefill);
+    if (prefill) {
+      setTab(0);
+      setDir("l");
+      setLn(bare(prefill));
+    }
+  }
   useEffect(() => {
     if (!prefill) return;
-    setTab(0);
-    setDir("l");
-    read(prefill);
+    lookUp(bare(prefill));
     clearPrefill();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefill]);
   const cancel = (refocus = true) => {
     s.handleNip60PaymentCancel();
@@ -140,7 +150,6 @@ export default function Send({
       say(pending ? `Sending ${fmt(lnAmt.current)} sats. Waiting for the network.` : `Paid ${fmt(lnAmt.current)} sats`);
     }
     wasPaying.current = s.isNip60Processing;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [s.isNip60Processing, s.successMessage]);
   const pay = () => {
     lnAmt.current = s.invoiceAmount ?? 0;

@@ -1,5 +1,5 @@
 import { deriveKeysetId, getEncodedTokenV4 } from "@cashu/cashu-ts";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
   mint: {} as any,
@@ -17,10 +17,7 @@ vi.mock("@/features/wallet/state/cashuStore", () => ({
   useCashuStore: Object.assign(
     () => ({ mints: [state.mint], getMint: () => state.mint }),
     {
-      // nothing saved yet: every received coin is new
-      of: () => ({
-        persist: { getOptions: () => ({ name: "cashu", storage: null }) },
-      }),
+      of: () => ({ persist: { getOptions: () => ({ name: "cashu" }) } }),
     }
   ),
 }));
@@ -42,6 +39,11 @@ const mintUrl = "https://mint.example.com";
 const publicKey =
   "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
 const keys = { 1: publicKey, 2: publicKey, 4: publicKey };
+
+// nothing saved yet: every received coin is new
+beforeEach(() => {
+  vi.stubGlobal("localStorage", { getItem: () => null });
+});
 
 afterEach(() => {
   vi.unstubAllGlobals();

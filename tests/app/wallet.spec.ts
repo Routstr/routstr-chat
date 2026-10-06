@@ -63,18 +63,23 @@ test("switches between two keys on one device, each with its own money", async (
   await shows(40);
 });
 
-// KNOWN GAP in v2 (and main), owned by the wallet thread: each tab keeps its own copy of the
-// tokens you made and saves the whole list, so a tab that saves after another tab made a token
-// writes over it, and that token can no longer be taken back (checked on v2/ui f69383f: one
-// token of two left). The wallet's IndexedDB store fixes it; then this passes and test.fail
-// below reports it: delete that line.
-test("keeps a token another tab made when this tab saves next (known gap)", async ({
+// the second mint always serves new-style keyset ids ("01…"), which a token carries short
+test("receives a token from the second mint", async ({ page, kit, appUrl }) => {
+  await v2.open(page, appUrl);
+  const token = await kit.mintToken(30, { otherMint: true });
+  await v2.receive(page, token);
+  expect(await v2.balance(page)).toBe(30);
+  expect(new Set(await kit.tokenStates(token))).toEqual(new Set(["SPENT"]));
+});
+
+// each made token is its own record in the wallet book, so a tab that saves after another
+// tab made a token cannot write over it
+test("keeps a token another tab made when this tab makes one next", async ({
   page,
   context,
   kit,
   appUrl,
 }) => {
-  test.fail(true, "two tabs: the later save drops the other tab's token");
   await seedAccounts(context, [newKey()]);
   await v2.open(page, appUrl);
   await v2.receive(page, await kit.mintToken(50));
@@ -84,7 +89,7 @@ test("keeps a token another tab made when this tab saves next (known gap)", asyn
   await v2.open(other, appUrl);
   await expect.poll(() => v2.balance(other)).toBe(50);
   await v2.makeToken(other, 10);
-  // the first tab, which has not seen that token, saves its list next
+  // the first tab, which has not seen that token, makes one next
   await v2.makeToken(page, 5);
 
   await page.reload();

@@ -183,6 +183,12 @@ export default function Wallet() {
 export function usePendingInvoices() {
   const history = useTransactionHistoryStore();
   const { invoices } = useInvoiceSync();
+  // deadlines are read against this clock, a minute at a time
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
   return useMemo(() => {
     const byQuote = new Map(invoices.map((i) => [i.quoteId, i]));
     return history.pendingTransactions
@@ -191,13 +197,13 @@ export function usePendingInvoices() {
         const t = toMs(p.timestamp);
         // a quote with no deadline is treated as good for an hour, as the sync does
         const exp = byQuote.get(p.quoteId)?.expiresAt ?? t + HOUR;
-        return { ...p, amount: Number(p.amount) || 0, t, exp, expired: Date.now() > exp };
+        return { ...p, amount: Number(p.amount) || 0, t, exp, expired: now > exp };
       })
       // an expired one says so for a while, then leaves the list (only the
       // list: the record stays, so a payment that raced the deadline still lands)
-      .filter((x) => !x.expired || Date.now() - x.exp < 10 * 60_000)
+      .filter((x) => !x.expired || now - x.exp < 10 * 60_000)
       .sort((a, b) => b.t - a.t);
-  }, [history.pendingTransactions, invoices]);
+  }, [history.pendingTransactions, invoices, now]);
 }
 
 /* ── paid invoices whose ecash never came in ─────────────────────────────── */
@@ -564,7 +570,7 @@ function Home({ go, freeze, bloom }: { go: (v: View, o?: { reopen?: Reopen | nul
               </div>
             ))}
             {invoices.map((x) => (
-              <button type="button" key={x.id} className="wl-row" onClick={() => go("add", { reopen: { id: x.id, quoteId: x.quoteId, amount: x.amount, pr: x.paymentRequest, exp: x.exp, mintUrl: x.mintUrl } })}>
+              <button type="button" key={x.id} className="wl-row" onClick={() => go("add", { reopen: { id: x.id, quoteId: x.quoteId, amount: x.amount, pr: x.paymentRequest, exp: x.exp, mintUrl: x.mintUrl, openedAt: Date.now() } })}>
                 <span className="wl-row-t">
                   {!x.expired && <span className="wl-live" />}
                   <span>Invoice for {fmt(x.amount)} sats</span>
@@ -666,19 +672,26 @@ function MintFoot() {
   const [closing, setClosing] = useState(false);
   const btn = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
-  const close = (focus: boolean) => {
-    if (!open) return;
-    setClosing(true);
+  const leave = (focus: boolean) => {
     window.setTimeout(() => {
       setOpen(false);
       setClosing(false);
     }, reduced() ? 0 : phoneNow() ? tokenMs("--d-mid") : tokenMs("--d-fast"));
     if (focus) btn.current?.focus({ preventScroll: true });
   };
+  const close = (focus: boolean) => {
+    if (!open) return;
+    setClosing(true);
+    leave(focus);
+  };
   // the palette opening over it closes it: nothing stays open behind the veil to take its Esc
+  const [palette, setPalette] = useState(false);
+  if (ui.palette !== palette) {
+    setPalette(ui.palette);
+    if (ui.palette && open) setClosing(true);
+  }
   useEffect(() => {
-    if (ui.palette) close(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (ui.palette && open) leave(false);
   }, [ui.palette]);
   useEffect(() => {
     if (!open) return;
@@ -699,7 +712,6 @@ function MintFoot() {
       window.removeEventListener("pointerdown", down);
       window.removeEventListener("keydown", key, true);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
   const onKey = (e: React.KeyboardEvent) => {
     if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
