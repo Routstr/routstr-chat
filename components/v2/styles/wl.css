@@ -256,6 +256,7 @@ button.wl-line:active { background: var(--fill-2); }
 @media (hover: hover) and (pointer: fine) { .wl-link:hover { background: var(--fill-2); } }
 .wl-link:active { transform: scale(.97); }
 .wl-link:disabled { opacity: .6; }
+.wl-link.wl-hide { width: 30px; padding: 0; justify-content: center; background: none; color: var(--ink-3); }
 .wl-link[data-busy] { background: transparent; color: var(--ink-3); cursor: progress; padding-right: 2px; }
 
 /* status lines are text, never badges */

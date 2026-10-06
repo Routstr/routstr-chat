@@ -24,6 +24,23 @@ export const mintLabel = (m?: { url: string; mintInfo?: { name?: string } } | nu
 const MIN = 60_000;
 const HOUR = 60 * MIN;
 const DAY = 24 * HOUR;
+/** Whether this browser's key was backed up ("saved") or its reminder waved away ("hidden"), per account. */
+export const keyFlag = (pubkey: string) => `routstr.keysaved:${pubkey}`;
+export function readKeyFlag(pubkey?: string): string | null {
+  try {
+    return pubkey ? localStorage.getItem(keyFlag(pubkey)) : null;
+  } catch {
+    return null;
+  }
+}
+export function writeKeyFlag(pubkey: string, v: "saved" | "hidden") {
+  try {
+    localStorage.setItem(keyFlag(pubkey), v);
+  } catch {
+    // storage blocked: the reminder simply shows again next time
+  }
+}
+
 /** Seconds or milliseconds, as the stores keep them. */
 export const toMs = (t?: number) => (!t ? 0 : t < 1e12 ? t * 1000 : t);
 

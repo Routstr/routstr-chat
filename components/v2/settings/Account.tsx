@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { nip19 } from "nostr-tools";
 import { useObservableState } from "applesauce-react/hooks";
 import { useAccountManager } from "@/components/ClientProviders";
+import { writeKeyFlag } from "../wallet/bits";
 import { Btn, Grp, Head, Row, narrow, short, useCopied } from "./parts";
 import SignedOut from "./SignedOut";
 import OtherKeys from "./OtherKeys";
@@ -43,8 +44,10 @@ export default function Account() {
       if (
         key instanceof Uint8Array &&
         (await copy(nip19.nsecEncode(key), "nsec"))
-      )
+      ) {
         setCopiedKey(true);
+        writeKeyFlag(active.pubkey, "saved");
+      }
     } catch {
       // this key cannot be exported: nothing was copied, so nothing is claimed
     }
