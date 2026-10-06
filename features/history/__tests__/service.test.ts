@@ -275,8 +275,11 @@ describe("HistoryService: the keyring", () => {
       [...net.relay(R1).events.values()].filter((e) => e.kind === KIND_KEYRING)
     ).toHaveLength(1);
 
+    // a sync that could open no key synced nothing, and says so
+    await expect(history.sync()).resolves.toBe("failed");
+
     refuse = false;
-    await history.sync();
+    await expect(history.sync()).resolves.toBe("ok");
     expect(history.getStatus()).toBe("ready");
   });
 

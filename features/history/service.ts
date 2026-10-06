@@ -40,7 +40,8 @@ export interface HistoryDeps {
 /**
  * loading: opening keyrings, or waiting for the first relay answer.
  * ready: messages can be saved.
- * locked: a keyring exists but the signer will not open it.
+ * locked: a keyring exists but the signer will not open it, or the signer
+ *   cannot make a first one.
  * offline: no keyring here and no relay answered, so none can be made safely.
  * failed: it could not start, most likely this device's storage would not open.
  */
@@ -283,6 +284,8 @@ export class HistoryService {
     this.settle();
     if (found.answered.length === 0) return "offline";
     if (!this.syncOn()) return "ok";
+    // no key opened (locked): nothing could be synced
+    if (this.followed.size === 0) return "failed";
     const pulled = await Promise.all(
       [...this.followed].map(([author, keys]) => this.pull(author, keys))
     );
@@ -378,7 +381,7 @@ export class HistoryService {
     });
   }
 
-  /** Events from relays: checked, kept on disk, then shown. */
+  /** Events from relays: checked, then shown and written to this device. */
   private receive(events: NostrEvent[], keys: PnsKeys): void {
     const fresh = events.filter(
       (event) =>
