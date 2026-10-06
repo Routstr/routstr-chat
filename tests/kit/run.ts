@@ -87,8 +87,10 @@ export async function withLock<T>(
     await waitForMemory();
     if (!file) return fn();
     // flock holds the lock while `cat` reads our stdin; it ends when we close stdin or die
+    // its own process group, so a Ctrl-C at the terminal cannot drop the lock mid-step
     const holder = spawn("flock", [file, "-c", "echo held; exec cat"], {
       stdio: ["pipe", "pipe", "inherit"],
+      detached: true,
     });
     const waiting = setTimeout(
       () => say(`waiting for the ${kind} lock (${file})`),
@@ -106,10 +108,16 @@ export async function withLock<T>(
       release(); // memory dropped while we waited for the lock: let it recover first
       continue;
     }
+    const held = Date.now();
     try {
       return await fn();
     } finally {
       release();
+      const minutes = (Date.now() - held) / 60_000;
+      if (minutes > 10)
+        say(
+          `held the ${kind} lock ${minutes.toFixed(1)} minutes; keep one hold under 10`
+        );
     }
   }
 }
@@ -149,12 +157,19 @@ function run(
           { stdio: "inherit", env, cwd: ROOT }
         )
       : spawn(cmd, args, { stdio: "inherit", env, cwd: ROOT });
-  const forward = (sig: NodeJS.Signals) => child.kill(sig);
+  // Ctrl-C: pass it on, then stop the whole kit (not just this step) once the child is gone;
+  // the error unwinds through the finally blocks that restore files and release locks
+  let stopped: NodeJS.Signals | undefined;
+  const forward = (sig: NodeJS.Signals) => {
+    stopped = sig;
+    child.kill(sig);
+  };
   process.on("SIGINT", forward).on("SIGTERM", forward);
-  return new Promise((resolve) =>
+  return new Promise((resolve, reject) =>
     child.on("exit", (code, signal) => {
       process.off("SIGINT", forward).off("SIGTERM", forward);
-      resolve(code ?? (signal ? 1 : 0));
+      if (stopped) reject(new Error(`stopped by ${stopped}`));
+      else resolve(code ?? (signal ? 1 : 0));
     })
   );
 }
@@ -202,7 +217,7 @@ if (require.main === module) {
     (code) => process.exit(code),
     (e) => {
       console.error(`[kit] ${(e as Error).message}`);
-      process.exit(1);
+      process.exit(/^stopped by/.test((e as Error).message) ? 130 : 1);
     }
   );
 }
