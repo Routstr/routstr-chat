@@ -433,32 +433,10 @@ export const saveSidebarCollapsed = (isCollapsed: boolean): void => {
 };
 
 /**
- * Load active conversation ID from localStorage
- * @returns Active conversation ID or null
- */
-export const loadActiveConversationId = (): string | null => {
-  return getStorageItem<string | null>(
-    STORAGE_KEYS.ACTIVE_CONVERSATION_ID,
-    null
-  );
-};
-
-/**
- * Save active conversation ID to localStorage
- * @param conversationId Conversation ID to save
- */
-export const saveActiveConversationId = (
-  conversationId: string | null
-): void => {
-  setStorageItem(STORAGE_KEYS.ACTIVE_CONVERSATION_ID, conversationId);
-};
-
-/**
  * Storage keys used throughout the application
  */
 export const STORAGE_KEYS = {
   CONVERSATIONS: "saved_conversations",
-  ACTIVE_CONVERSATION_ID: "active_conversation_id",
   TRANSACTION_HISTORY: "transaction_history",
   FAVORITE_MODELS: "favorite_models",
   CONFIGURED_MODELS: "configured_models",

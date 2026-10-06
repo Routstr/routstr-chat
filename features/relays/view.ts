@@ -2,8 +2,6 @@ import { createContext, useContext, useEffect, useState, useSyncExternalStore } 
 import type { RelayStatus } from "./ports";
 import type { Relays } from "./service";
 
-export type { RelayStatus } from "./ports";
-
 /** The tab's relay layer. Filled by the composition root. */
 export const RelaysContext = createContext<Relays | null>(null);
 

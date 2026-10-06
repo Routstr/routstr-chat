@@ -85,7 +85,7 @@ export function buildThread(
 }
 
 /** The visible text of a message: its first part that is not hidden. */
-export function textOf(content: string | MessageContent[]): string {
+function textOf(content: string | MessageContent[]): string {
   if (typeof content === "string") return content;
   return (
     content.find((part) => part.type === "text" && !part.hidden)?.text ?? ""

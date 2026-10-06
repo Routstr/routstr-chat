@@ -34,15 +34,6 @@ const AccountContext = createContext<AccountContextType>(accountContext);
 
 export const useAccountManager = () => useContext(AccountContext);
 
-const presetRelays = [
-  { url: "wss://relay.routstr.com", name: "Routstr Relay" },
-  { url: "wss://nos.lol", name: "nos.lol" },
-  { url: "wss://relay.primal.net", name: "Primal" },
-  { url: "wss://relay.damus.io", name: "Damus" },
-  { url: "wss://relay.nostr.band", name: "Nostr.Band" },
-  { url: "wss://relay.chorus.community", name: "Chorus Relay" },
-];
-
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -93,7 +84,7 @@ export default function ClientProviders({ children }: { children: ReactNode }) {
     <AccountContext.Provider value={accountContext}>
       <ThemeProvider>
         <RelaysContext.Provider value={relays}>
-          <AppProvider presetRelays={presetRelays}>
+          <AppProvider>
             <QueryClientProvider client={queryClient}>
               <HistoryContext.Provider value={history}>
                 <InvoiceRecoveryProvider key={generation}>
