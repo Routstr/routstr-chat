@@ -97,7 +97,7 @@ export function useCardFocus(morphRef: Ref<HTMLDivElement>, spot: string) {
       const root = morphRef.current;
       const el =
         root?.querySelector<HTMLElement>('.pa-cur .pa-amt[data-picked], .pa-cur .pa-amt[tabindex="0"]:not([aria-disabled])') ??
-        root?.querySelector<HTMLElement>(".pa-cur .pa-row, .pa-corner .prime:not(:disabled), .pa-corner .soft, .pa-cur textarea, .pa-cur input, .pa-acts .soft, .pa-lead .soft");
+        root?.querySelector<HTMLElement>(".pa-cur .pa-who-me, .pa-cur .pa-row, .pa-corner .prime:not(:disabled), .pa-corner .soft, .pa-cur textarea, .pa-cur input, .pa-acts .soft, .pa-lead .soft");
       el?.focus({ preventScroll: true });
     }, turned ? 440 : tokenMs("--d-mid"));
     return () => window.clearTimeout(t);

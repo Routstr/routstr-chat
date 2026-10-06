@@ -35,7 +35,7 @@ const total = (proofs: Pick<Proof, "amount">[]) =>
 
 /** Whole sats: an msat amount is rounded down, never up, and a unit that is
  *  not bitcoin (usd, eur) is worth none. */
-const toSats = (amount: number, unit: string) =>
+export const toSats = (amount: number, unit: string) =>
   unit === "sat" ? amount : unit === "msat" ? Math.floor(amount / 1000) : 0;
 
 /** Spendable sats per mint: each unit's coins added up first, then rounded. */
@@ -52,6 +52,12 @@ export function balancesOf(coins: Coin[]): Record<string, number> {
       [...units].reduce((sum, [unit, amount]) => sum + toSats(amount, unit), 0),
     ])
   );
+}
+
+/** What a token says, without asking its mint: for a preview before receiving. */
+export function peek(token: string): { mint: string; sats: number } {
+  const { mint, amount, unit } = getTokenMetadata(token);
+  return { mint, sats: toSats(amount, unit) };
 }
 
 /** The purse of `owner`: every move goes through the wallet book. */
@@ -79,9 +85,6 @@ export function createPurse(
         total(await executor.receive(token)),
         getTokenMetadata(token).unit
       ),
-    peek: (token) => {
-      const { mint, amount, unit } = getTokenMetadata(token);
-      return { mint, sats: toSats(amount, unit) };
-    },
+    peek,
   };
 }

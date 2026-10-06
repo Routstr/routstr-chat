@@ -45,8 +45,8 @@ if (typeof window !== "undefined") {
   const bind = () => {
     const { pubkey } = session.getSnapshot();
     bindOwner(pubkey, window.localStorage);
-    bindHistory(session.accounts.active$.value);
     bindBook(pubkey);
+    bindHistory(session.accounts.active$.value);
   };
   bind();
   session.subscribe(bind);

@@ -14,6 +14,8 @@ export interface MintOptions {
   payState?: PayState; // what a melt (paying an invoice) ends as
   /** "v2" (default): keyset ids "01…" as nutshell 0.20 makes them; "v1": "00…", as most mints still have */
   keysets?: "v1" | "v2";
+  /** also offer the msat unit, as some mints do */
+  msat?: boolean;
 }
 
 export interface MintProcess {
@@ -60,6 +62,13 @@ async function launch(
       env: {
         ...process.env,
         MINT_BACKEND_BOLT11_SAT: "FakeWallet",
+        // msat needs its backend and its own keyset (derivation path m/0'/1'/…: unit 1 = msat)
+        ...(opts.msat
+          ? {
+              MINT_BACKEND_BOLT11_MSAT: "FakeWallet",
+              MINT_DERIVATION_PATH_LIST: JSON.stringify(["m/0'/1'/0'"]),
+            }
+          : {}),
         MINT_LISTEN_HOST: "127.0.0.1",
         MINT_LISTEN_PORT: String(port),
         MINT_PRIVATE_KEY: `kit-test-only-${port}`,

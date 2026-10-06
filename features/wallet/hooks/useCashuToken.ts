@@ -3,6 +3,7 @@ import { useCashuStore } from "../state/cashuStore";
 import { useCashuWallet } from "./useCashuWallet";
 import { useCashuHistory } from "./useCashuHistory";
 import { useBook } from "./useBook";
+import { peek, toSats } from "../purse";
 import {
   Mint,
   Wallet,
@@ -86,10 +87,10 @@ export function useCashuToken() {
         }
       }
 
-      // in the mint's unit, as received tokens are recorded
+      // activity is in sats, whatever unit the mint counts in
       await createHistory({
         direction: "out",
-        amount: getTokenMetadata(token).amount.toString(),
+        amount: peek(token).sats.toString(),
       });
       return token;
     } catch (error) {
@@ -213,7 +214,7 @@ export function useCashuToken() {
       const totalAmount = receivedProofs.reduce((sum, p) => sum + p.amount, 0);
       await createHistory({
         direction: "in",
-        amount: totalAmount.toString(),
+        amount: toSats(totalAmount, getTokenMetadata(token).unit).toString(),
       });
 
       return receivedProofs;

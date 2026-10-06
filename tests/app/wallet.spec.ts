@@ -1,4 +1,5 @@
 // The wallet and accounts the way a person uses them, checked against the mint's answers.
+import { getEncodedTokenV4, Mint, Wallet } from "@cashu/cashu-ts";
 import { generateSecretKey, nip19 } from "nostr-tools";
 import { expect, test } from "./fixtures";
 import { v2 } from "./drivers/v2";
@@ -63,18 +64,23 @@ test("switches between two keys on one device, each with its own money", async (
   await shows(40);
 });
 
-// KNOWN GAP in v2 (and main), owned by the wallet thread: each tab keeps its own copy of the
-// tokens you made and saves the whole list, so a tab that saves after another tab made a token
-// writes over it, and that token can no longer be taken back (checked on v2/ui f69383f: one
-// token of two left). The wallet's IndexedDB store fixes it; then this passes and test.fail
-// below reports it: delete that line.
-test("keeps a token another tab made when this tab saves next (known gap)", async ({
+// the second mint always serves new-style keyset ids ("01…"), which a token carries short
+test("receives a token from the second mint", async ({ page, kit, appUrl }) => {
+  await v2.open(page, appUrl);
+  const token = await kit.mintToken(30, { otherMint: true });
+  await v2.receive(page, token);
+  expect(await v2.balance(page)).toBe(30);
+  expect(new Set(await kit.tokenStates(token))).toEqual(new Set(["SPENT"]));
+});
+
+// each made token is its own record in the wallet book, so a tab that saves after another
+// tab made a token cannot write over it
+test("keeps a token another tab made when this tab makes one next", async ({
   page,
   context,
   kit,
   appUrl,
 }) => {
-  test.fail(true, "two tabs: the later save drops the other tab's token");
   await seedAccounts(context, [newKey()]);
   await v2.open(page, appUrl);
   await v2.receive(page, await kit.mintToken(50));
@@ -84,7 +90,7 @@ test("keeps a token another tab made when this tab saves next (known gap)", asyn
   await v2.open(other, appUrl);
   await expect.poll(() => v2.balance(other)).toBe(50);
   await v2.makeToken(other, 10);
-  // the first tab, which has not seen that token, saves its list next
+  // the first tab, which has not seen that token, makes one next
   await v2.makeToken(page, 5);
 
   await page.reload();
@@ -98,11 +104,111 @@ test("keeps a token another tab made when this tab saves next (known gap)", asyn
   ).toContainText("2 tokens not claimed yet15 sats you can still take back");
 });
 
-// the second mint always serves new-style keyset ids ("01…"), which a token carries short
-test("receives a token from the second mint", async ({ page, kit, appUrl }) => {
+test("pays the invoice Add hands over, never one quoted before", async ({
+  page,
+  kit,
+  appUrl,
+}) => {
   await v2.open(page, appUrl);
-  const token = await kit.mintToken(30, { otherMint: true });
+  await v2.receive(page, await kit.mintToken(50));
+  await v2.useMint(page, kit.env.mintUrl);
+  const home = page.getByRole("region", { name: "Wallet", exact: true });
+  const send = page.getByRole("region", { name: "Send", exact: true });
+  const add = page.getByRole("region", { name: "Add funds", exact: true });
+
+  // Send quotes an invoice for 20, and the person leaves without paying it
+  await page
+    .getByRole("button", { name: /^Open wallet\./ })
+    .first()
+    .click();
+  await home.getByRole("button", { name: "Send", exact: true }).click();
+  await send.getByRole("tab", { name: "Lightning" }).click();
+  const field = send.getByRole("textbox", { name: "Lightning invoice" });
+  await field.fill(await kit.invoice(20));
+  await field.press("Enter");
+  await expect(send.getByRole("button", { name: /^Pay 20 sats$/ })).toBeVisible(
+    { timeout: 30_000 }
+  );
+  await page.getByRole("button", { name: "Back to wallet" }).first().click();
+
+  // Add gets an invoice for 8 pasted and hands it to Send
+  await home.getByRole("button", { name: "Add", exact: true }).click();
+  await add.getByRole("tab", { name: "Cashu token" }).click();
+  await add
+    .getByRole("textbox", { name: "Cashu token" })
+    .fill(await kit.invoice(8));
+  await add.getByRole("button", { name: "Pay this invoice instead" }).click();
+  await send
+    .getByRole("button", { name: /^Pay 8 sats$/ })
+    .click({ timeout: 30_000 });
+  await expect(
+    send.getByRole("button", { name: "Pay another invoice" })
+  ).toBeVisible({ timeout: 30_000 });
+  // 8 left the wallet (and the network's fee, if any), not 20
+  await expect.poll(() => v2.balance(page)).toBeGreaterThanOrEqual(40);
+});
+
+test("shows and pays an invoice in sats at a mint that counts in msat", async ({
+  page,
+  kit,
+  appUrl,
+}) => {
+  await v2.open(page, appUrl);
+  const mint = new Wallet(new Mint(kit.env.msatMintUrl), { unit: "msat" });
+  await mint.loadMint();
+  const quote = await mint.createMintQuote(50_000);
+  await expect
+    .poll(async () => (await mint.checkMintQuote(quote.quote)).state)
+    .toBe("PAID");
+  const proofs = await mint.mintProofs(50_000, quote.quote);
+  await v2.receive(
+    page,
+    getEncodedTokenV4({ mint: kit.env.msatMintUrl, unit: "msat", proofs })
+  );
+  await v2.useMint(page, kit.env.msatMintUrl);
+  expect(await v2.balance(page)).toBe(50);
+
+  // the invoice is for 8 sats: Send says 8, not 8,000, and does not say "not enough"
+  await page
+    .getByRole("button", { name: /^Open wallet\./ })
+    .first()
+    .click();
+  await page
+    .getByRole("region", { name: "Wallet", exact: true })
+    .getByRole("button", { name: "Send", exact: true })
+    .click();
+  const send = page.getByRole("region", { name: "Send", exact: true });
+  await send.getByRole("tab", { name: "Lightning" }).click();
+  const field = send.getByRole("textbox", { name: "Lightning invoice" });
+  await field.fill(await kit.invoice(8));
+  await field.press("Enter");
+  await send
+    .getByRole("button", { name: "Pay 8 sats" })
+    .click({ timeout: 30_000 });
+  await expect(
+    send.getByRole("button", { name: "Pay another invoice" })
+  ).toBeVisible({ timeout: 30_000 });
+  const left = await v2.balance(page);
+  expect(left).toBeLessThanOrEqual(42);
+  expect(left).toBeGreaterThanOrEqual(41); // the network may keep a few msat
+});
+
+test("lands a token whose swap answer never arrives, and says it was added", async ({
+  page,
+  kit,
+  appUrl,
+}) => {
+  await v2.open(page, appUrl);
+  let lost = false;
+  await page.route(`${kit.env.mintUrl}/v1/swap`, async (route) => {
+    if (lost) return route.fallback();
+    lost = true;
+    await route.fetch(); // the mint swaps the token
+    await route.abort("failed"); // and its answer never reaches the app
+  });
+  const token = await kit.mintToken(30);
   await v2.receive(page, token);
+  expect(lost).toBe(true);
   expect(await v2.balance(page)).toBe(30);
   expect(new Set(await kit.tokenStates(token))).toEqual(new Set(["SPENT"]));
 });

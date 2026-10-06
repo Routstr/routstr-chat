@@ -61,17 +61,18 @@ async function restoreOutputs(
  * A swap whose answer never came. If the mint signed our outputs they come
  * back from restore. If it signed nothing, our own unspent inputs come back;
  * a received token's inputs are the sender's, so they stay with the token.
- * Returns false while the mint is still working on it (the record stays).
+ * Returns the coins restored, or null while the mint is still working on it
+ * (the record stays).
  */
 export async function settleSwap(
   wallet: Wallet,
   record: SwapRecord,
   commit: CommitProofs,
   journal: Journal
-): Promise<boolean> {
+): Promise<Proof[] | null> {
   // coins first: a swap still running holds its inputs PENDING, so restore runs only after
   const { states, unspent } = await unspentOf(wallet, record.inputs);
-  if (states.some((s) => s.state === CheckStateEnum.PENDING)) return false;
+  if (states.some((s) => s.state === CheckStateEnum.PENDING)) return null;
   const restored = await restoreOutputs(
     wallet,
     record.keysetId,
@@ -80,7 +81,7 @@ export async function settleSwap(
   if (restored.length) await commit(restored, []);
   else if (!record.incoming) await commit(unspent, []);
   journal.remove(record.id);
-  return true;
+  return restored;
 }
 
 /**

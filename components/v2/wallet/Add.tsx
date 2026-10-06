@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { getTokenMetadata } from "@cashu/cashu-ts";
+import { peek } from "@/features/wallet/view";
 import { Icon } from "../icons";
 import { useMoney } from "../useMoney";
 import { useFunding } from "./useFunding";
@@ -13,7 +13,7 @@ import { Amount, Clock, Code, CopyLine, Done, Note, NumT, Pane, Pasted, Picks, S
    Cashu token: paste it, see what it holds and from where, then take it.
    Money only moves through useFunding, which calls the wallet's own hooks. */
 
-export type Reopen = { id: string; quoteId: string; amount: number; pr: string; exp: number; mintUrl: string };
+export type Reopen = { id: string; quoteId: string; amount: number; pr: string; exp: number; mintUrl: string; openedAt: number };
 const isLn = (t: string) => /^ln(bc|tb|bcrt)/i.test(t.trim().replace(/^lightning:/i, ""));
 const PAID_HOLD = 1500;
 
@@ -62,9 +62,13 @@ export default function Add({
 
   // the code prints in once, when the mint answers
   const [printed, setPrinted] = useState(true);
+  const [seenStatus, setSeenStatus] = useState(funding.status);
+  if (funding.status !== seenStatus) {
+    setSeenStatus(funding.status);
+    if (funding.status === "waiting") setPrinted(false);
+  }
   useEffect(() => {
     if (funding.status !== "waiting") return;
-    setPrinted(false);
     const t = window.setTimeout(() => setPrinted(true), 900);
     window.setTimeout(() => {
       const a = document.activeElement;
@@ -75,22 +79,24 @@ export default function Add({
 
   // the connected wallet started to pay and stopped while the invoice still waits
   const [walletFail, setWalletFail] = useState(false);
-  const wasPaying = useRef(false);
-  useEffect(() => {
-    if (wasPaying.current && !funding.walletPaying && funding.status === "waiting") setWalletFail(true);
-    if (funding.walletPaying) setWalletFail(false);
-    wasPaying.current = funding.walletPaying;
-  }, [funding.walletPaying, funding.status]);
+  const [wasPaying, setWasPaying] = useState(funding.walletPaying);
+  if (funding.walletPaying !== wasPaying) {
+    setWasPaying(funding.walletPaying);
+    setWalletFail(!funding.walletPaying && funding.status === "waiting");
+  }
 
   // a quote runs out at the mint's deadline
-  const [expired, setExpired] = useState(false);
+  const [ranOut, setRanOut] = useState<number | null>(null);
   useEffect(() => {
-    setExpired(false);
     const at = funding.expiresAt;
     if (!at || funding.status !== "waiting") return;
-    const t = window.setTimeout(() => setExpired(true), Math.max(0, at - Date.now()));
+    const t = window.setTimeout(() => setRanOut(at), Math.max(0, at - Date.now()));
     return () => window.clearTimeout(t);
   }, [funding.expiresAt, funding.status]);
+  const expired = !!funding.expiresAt && ranOut === funding.expiresAt;
+
+  /* ── a Cashu token ─────────────────────────────────────────────────────── */
+  const [tok, setTok] = useState<{ text: string; state: "idle" | "busy" | "failed" | "done"; got?: number }>({ text: "", state: "idle" });
 
   // paid: the ring shows, then the card pans home and the digits roll
   const paidT = useRef(0);
@@ -110,7 +116,6 @@ export default function Add({
   };
   useEffect(() => {
     if (funding.status === "paid" && tab === 0 && !tok.got) settle(funding.amount);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [funding.status]);
   useEffect(() => () => window.clearTimeout(paidT.current), []);
   const addMore = () => {
@@ -124,30 +129,33 @@ export default function Add({
   };
 
   /* ── a reopened invoice from Waiting ───────────────────────────────────── */
+  // it runs out at its deadline: already when it was opened, or while it shows
+  const [reopenRanOut, setReopenRanOut] = useState<number | null>(null);
+  useEffect(() => {
+    const at = reopen?.exp;
+    if (!at) return;
+    const t = window.setTimeout(() => setReopenRanOut(at), Math.max(0, at - Date.now()));
+    return () => window.clearTimeout(t);
+  }, [reopen?.exp]);
+  const reopenExpired = !!reopen && (reopen.openedAt > reopen.exp || reopenRanOut === reopen.exp);
+  // it left the waiting list before its deadline: paid
   const stillWaiting = reopen ? pending.some((p) => p.id === reopen.id) : false;
-  const reopenPaid = useRef(false);
+  const [paidId, setPaidId] = useState<string | null>(null);
+  const reopenPaid = !!reopen && paidId === reopen.id;
+  if (reopen && !stillWaiting && !reopenPaid && !reopenExpired) setPaidId(reopen.id);
   useEffect(() => {
-    if (!reopen) return;
-    if (!stillWaiting && !reopenPaid.current && Date.now() < reopen.exp) {
-      reopenPaid.current = true;
-      before.current = money.total - reopen.amount;
-      settle(reopen.amount);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stillWaiting]);
-  useEffect(() => {
-    reopenPaid.current = false;
-  }, [reopen?.id]);
+    if (!reopenPaid || !reopen) return;
+    before.current = money.total - reopen.amount;
+    settle(reopen.amount);
+  }, [reopenPaid]);
 
-  /* ── a Cashu token ─────────────────────────────────────────────────────── */
-  const [tok, setTok] = useState<{ text: string; state: "idle" | "busy" | "failed" | "done"; got?: number }>({ text: "", state: "idle" });
   const read = useMemo(() => {
     const t = tok.text.trim();
     if (!t) return null;
     if (isLn(t)) return { kind: "ln" as const };
     try {
-      const d = getTokenMetadata(t);
-      return { kind: "token" as const, sats: d.unit === "msat" ? Math.floor(d.amount / 1000) : d.amount, mint: d.mint };
+      const { sats, mint } = peek(t);
+      return { kind: "token" as const, sats, mint };
     } catch {
       return t.length >= 12 ? { kind: "junk" as const } : null;
     }
@@ -175,7 +183,6 @@ export default function Add({
   useEffect(() => {
     if (tok.state !== "failed") return;
     say(spent ? "Someone already claimed it, so nothing was added." : "The token could not be received. Nothing changed in your wallet.");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tok.state]);
 
   const pick = (i: 0 | 1) => {
@@ -208,9 +215,8 @@ export default function Add({
   let done = false;
   if (tab === 0) {
     const s = funding.status;
-    if (reopen && !(reopenPaid.current && s === "idle")) {
-      const exp = Date.now() > reopen.exp;
-      body = reopenPaid.current ? (
+    if (reopen && !(reopenPaid && s === "idle")) {
+      body = reopenPaid ? (
         <Pane dir="u" fill={<Done title={`${fmt(reopen.amount)} sats received`} line="Added to your wallet" />} main={<AddMore onClick={addMore} />} />
       ) : (
         <Pane
@@ -219,7 +225,7 @@ export default function Add({
           fill={
             <div className="wl-inv">
               <NumT n={reopen.amount} />
-              {exp ? (
+              {reopenExpired ? (
                 <div className="wl-qr fail quiet" role="status">
                   <Clock />
                   <p>This invoice expired.</p>
@@ -232,7 +238,7 @@ export default function Add({
                 </>
               )}
               <div className="wl-inv-slot">
-                {!exp && (
+                {!reopenExpired && (
                   <p className="wl-status" role="status">
                     <span className="wl-live" />
                     Waiting for payment
@@ -242,7 +248,7 @@ export default function Add({
             </div>
           }
           main={
-            exp ? (
+            reopenExpired ? (
               <button
                 type="button"
                 className="wl-go"

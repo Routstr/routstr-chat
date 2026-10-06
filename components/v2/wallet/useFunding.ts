@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getTokenMetadata } from "@cashu/cashu-ts";
 import { useChat } from "@/context/ChatProvider";
-import { useCashuStore, useCashuToken } from "@/features/wallet";
+import { useCashuHistory, useCashuStore } from "@/features/wallet";
+import { peek, usePurse } from "@/features/wallet/view";
 import { useWalletReceive } from "@/features/wallet/hooks/useWalletReceive";
 import { DEFAULT_MINT_URL } from "@/lib/utils";
 import { useEnsureAccount } from "../useEnsureAccount";
@@ -11,12 +11,13 @@ export type FundStatus = "idle" | "creating" | "waiting" | "paid" | "error";
 /* Adding money, for every surface that asks for it. It never handles proofs
    itself: invoices go through useWalletReceive (registered with the invoice
    store before they are shown, minted and saved by that hook, recovered by
-   the background checker if this surface closes), tokens through
-   useCashuToken().receiveToken. This file only sequences and describes. */
-export function useFunding(onPaid?: (sats: number) => void) {
+   the background checker if this surface closes), tokens through the
+   account's purse. This file only sequences and describes. */
+export function useFunding() {
   const { balance } = useChat();
   const cashuStore = useCashuStore();
-  const { receiveToken } = useCashuToken();
+  const purse = usePurse();
+  const { createHistory } = useCashuHistory();
   const ensureAccount = useEnsureAccount();
   const [status, setStatus] = useState<FundStatus>("idle");
   const [amount, setAmount] = useState(0);
@@ -24,15 +25,12 @@ export function useFunding(onPaid?: (sats: number) => void) {
   const [message, setMessage] = useState("");
   const baseline = useRef<number | null>(null);
   const amountRef = useRef(0);
-  const paidRef = useRef(onPaid);
-  paidRef.current = onPaid;
 
   const done = useCallback((sats: number) => {
     baseline.current = null;
     // what actually landed is what the surfaces show and say
     setAmount(sats);
     setStatus("paid");
-    paidRef.current?.(sats);
   }, []);
 
   const receive = useWalletReceive((tab) => {
@@ -52,13 +50,15 @@ export function useFunding(onPaid?: (sats: number) => void) {
     else if (rise < 0 || rise > want * 1.02 + 2) baseline.current = balance;
   }, [balance, status, done]);
 
-  useEffect(() => {
+  const [seenError, setSeenError] = useState("");
+  if (receive.error !== seenError) {
+    setSeenError(receive.error);
     if (receive.error) {
       setMessage(receive.error);
       // an invoice that already exists stays payable; the UI keeps showing it
       setStatus((s) => (s === "paid" ? s : "error"));
     }
-  }, [receive.error]);
+  }
 
   const ensureMint = useCallback(() => {
     if (cashuStore.activeMintUrl) return;
@@ -68,8 +68,9 @@ export function useFunding(onPaid?: (sats: number) => void) {
   }, [cashuStore]);
 
   // The invoice is created on the render after the mint is set, so the
-  // receive hook sees the active mint it needs.
-  const [queued, setQueued] = useState<number | null>(null);
+  // receive hook sees the active mint it needs. Each request is made once.
+  const [queued, setQueued] = useState<{ sats: number } | null>(null);
+  const made = useRef<{ sats: number } | null>(null);
   const createInvoice = useCallback(
     (sats: number) => {
       if (!Number.isFinite(sats) || sats <= 0) return;
@@ -81,20 +82,18 @@ export function useFunding(onPaid?: (sats: number) => void) {
       setAmount(sats);
       receive.setMintAmount(String(sats));
       setStatus("creating");
-      setQueued(sats);
+      setQueued({ sats });
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [ensureAccount, ensureMint]
   );
 
   useEffect(() => {
-    if (queued === null || !cashuStore.activeMintUrl) return;
-    setQueued(null);
+    if (!queued || made.current === queued || !cashuStore.activeMintUrl) return;
+    made.current = queued;
     baseline.current = balance;
-    void receive.createNip60Invoice(queued).then(() =>
+    void receive.createNip60Invoice(queued.sats).then(() =>
       setStatus((s) => (s === "creating" ? "waiting" : s))
     );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [queued, cashuStore.activeMintUrl]);
 
   const reset = useCallback(() => {
@@ -102,7 +101,6 @@ export function useFunding(onPaid?: (sats: number) => void) {
     setMessage("");
     baseline.current = null;
     receive.reset();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [receive.reset]);
 
   // one swap at a time: a second press while one runs is not a second receive (-1)
@@ -113,10 +111,8 @@ export function useFunding(onPaid?: (sats: number) => void) {
       if (!token) return 0;
       if (redeeming.current) return -1;
       setMessage("");
-      let sats = 0;
       try {
-        const { unit, amount } = getTokenMetadata(token);
-        sats = unit === "msat" ? Math.floor(amount / 1000) : amount;
+        peek(token);
       } catch {
         setMessage("That does not look like a Cashu token.");
         return 0;
@@ -125,12 +121,12 @@ export function useFunding(onPaid?: (sats: number) => void) {
       redeeming.current = true;
       try {
         ensureAccount();
+        const into = purse();
+        if (!into) throw new Error("There is no account to receive into.");
         // what the mint gave back, after any input fee; the token's face
         // value is only a promise until the swap
-        const got = await receiveToken(token);
-        const back = got.reduce((s, p) => s + p.amount, 0);
-        const { unit } = getTokenMetadata(token);
-        const landed = got.length ? (unit === "msat" ? Math.floor(back / 1000) : back) : sats;
+        const landed = await into.receive(token);
+        createHistory({ direction: "in", amount: String(landed) });
         done(landed);
         return landed;
       } catch (e) {
@@ -141,7 +137,7 @@ export function useFunding(onPaid?: (sats: number) => void) {
         setTokenBusy(false);
       }
     },
-    [ensureAccount, receiveToken, done]
+    [ensureAccount, purse, createHistory, done]
   );
 
   const payFromWallet = useCallback(async () => {

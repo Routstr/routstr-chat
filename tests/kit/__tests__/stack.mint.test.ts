@@ -39,6 +39,26 @@ describe("mints", () => {
     expect(kit.tokenSats(forged)).toBe(512); // what the token claims
     await expect(kit.redeem(forged)).rejects.toThrow(); // what the mint says
   });
+
+  it("has a third mint that offers msat too, and quotes in msat", async () => {
+    const info = (await (
+      await fetch(`${kit.env.msatMintUrl}/v1/info`)
+    ).json()) as {
+      nuts: { "4": { methods: { unit: string }[] } };
+    };
+    expect(info.nuts["4"].methods.map((m) => m.unit).sort()).toEqual([
+      "msat",
+      "sat",
+    ]);
+    const res = await fetch(`${kit.env.msatMintUrl}/v1/mint/quote/bolt11`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ amount: 1500, unit: "msat" }),
+    });
+    expect(res.ok).toBe(true);
+    const quote = (await res.json()) as { amount: number; unit: string };
+    expect([quote.amount, quote.unit]).toEqual([1500, "msat"]);
+  });
 });
 
 describe("relay", () => {

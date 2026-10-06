@@ -14,6 +14,7 @@ export interface KitEnv {
   dir: string; // logs and databases of this run (kept until a later run finds its process gone)
   mintUrl: string; // the wallet's mint; core accepts it; melts settle; v1 keyset ids by default
   invoiceMintUrl: string; // a second mint with v2 keyset ids ("01…"): invoices to pay, tokens from another mint
+  msatMintUrl: string; // a third mint that offers msat as well as sat
   relayUrl: string;
   upstreamUrl: string;
   coreUrl: string | null; // routstr-core, with a trailing slash like the app stores it; null if not started
@@ -85,14 +86,18 @@ export async function startStack(opts: StackOptions = {}): Promise<Stack> {
         pidFile,
         keysets: "v2",
       }).then((s) => (stops.push(s.stop), s)),
+      startMint({ dir: path.join(dir, "msat-mint"), pidFile, msat: true }).then(
+        (s) => (stops.push(s.stop), s)
+      ),
     ]);
     const failed = started.find((r) => r.status === "rejected");
     if (failed) throw (failed as PromiseRejectedResult).reason;
-    const [relay, upstream, mint, invoiceMint] = started.map(
+    const [relay, upstream, mint, invoiceMint, msatMint] = started.map(
       (r) => (r as PromiseFulfilledResult<unknown>).value
     ) as [
       Awaited<ReturnType<typeof startRelay>>,
       Awaited<ReturnType<typeof startUpstream>>,
+      Awaited<ReturnType<typeof startMint>>,
       Awaited<ReturnType<typeof startMint>>,
       Awaited<ReturnType<typeof startMint>>,
     ];
@@ -124,6 +129,7 @@ export async function startStack(opts: StackOptions = {}): Promise<Stack> {
         dir,
         mintUrl: mint.url,
         invoiceMintUrl: invoiceMint.url,
+        msatMintUrl: msatMint.url,
         relayUrl: relay.url,
         upstreamUrl: upstream.url,
         coreUrl,
@@ -140,6 +146,7 @@ const VARS = {
   dir: "KIT_DIR",
   mintUrl: "KIT_MINT_URL",
   invoiceMintUrl: "KIT_INVOICE_MINT_URL",
+  msatMintUrl: "KIT_MSAT_MINT_URL",
   relayUrl: "KIT_RELAY_URL",
   upstreamUrl: "KIT_UPSTREAM_URL",
   coreUrl: "KIT_CORE_URL",
@@ -158,6 +165,7 @@ export function envFromProcess(): KitEnv | undefined {
     dir: get("dir"),
     mintUrl: get("mintUrl"),
     invoiceMintUrl: get("invoiceMintUrl"),
+    msatMintUrl: get("msatMintUrl"),
     relayUrl: get("relayUrl"),
     upstreamUrl: get("upstreamUrl"),
     coreUrl: get("coreUrl") || null,

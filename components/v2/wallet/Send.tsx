@@ -1,17 +1,19 @@
 "use client";
 
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCashuHistory } from "@/features/wallet";
 import { useWalletSend } from "@/features/wallet/hooks/useWalletSend";
+import { usePurse } from "@/features/wallet/view";
 import { useUnclaimedTokensStore, type UnclaimedToken } from "@/features/wallet/state/unclaimedTokensStore";
 import { Icon } from "../icons";
 import { tokenMs } from "../motion";
 import { satsOf, useActiveMint } from "./Wallet";
 import { Amount, Code, CopyLine, Done, Note, NumT, Pane, Pasted, Picks, Seg, Share, Spin, Two, ago, fmt, flipFrom, useCopy } from "./bits";
 
-/* Sending is useWalletSend: a made token is written to the wallet book the
-   moment it exists, and it stays listed until
-   it is taken back or you let it go. A Lightning payment shows the worst case
-   (amount plus the most the network may take) before anything is paid. */
+/* A token is made by the account's purse: it is written to the wallet book the
+   moment it exists, and it stays listed until it is taken back or you let it
+   go. Lightning is useWalletSend: a payment shows the worst case (amount plus
+   the most the network may take) before anything is paid. */
 
 type Kind = "ok" | "info" | "warn";
 const noAmount = (inv: string) => {
@@ -30,7 +32,6 @@ function useTakeBack(s: ReturnType<typeof useWalletSend>, onDone: (id: string, k
     if (/already redeemed/i.test(s.warningMessage)) onDone(w.id, "info", "That token was already claimed, so it has left this list.");
     else if (s.error) onDone(w.id, "warn", "It could not be taken back just now. Nothing changed. Try again in a moment.");
     else onDone(w.id, "ok", `Took back ${fmt(w.amount)} sats.`);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [s.reclaimingTokenId]);
   return (t: UnclaimedToken) => {
     was.current = { id: t.id, amount: satsOf(t.amount, t.unit) };
@@ -52,6 +53,8 @@ export default function Send({
   clearPrefill: () => void;
 }) {
   const s = useWalletSend();
+  const purse = usePurse();
+  const { createHistory } = useCashuHistory();
   const tokens = useUnclaimedTokensStore((x) => x.unclaimedTokens);
   const mint = useActiveMint();
   const { copied, copy } = useCopy(say);
@@ -75,11 +78,24 @@ export default function Send({
   /* ── a token ───────────────────────────────────────────────────────────── */
   const have = mint.bal;
   const n = +s.sendAmount || 0;
+  const [making, setMaking] = useState(false);
   const make = async () => {
-    if (!(n > 0 && n <= have) || s.isGeneratingSendToken) return;
+    const from = purse();
+    if (!from || !mint.active || !(n > 0 && n <= have) || making) return;
     const before = new Set(tokens.map((t) => t.id));
     flip.current = field.current?.getBoundingClientRect() ?? null;
-    await s.generateSendToken();
+    setMaking(true);
+    s.setError("");
+    try {
+      // no handoff: the token stays listed until it is taken back or let go
+      await from.send(mint.active.url, n);
+      createHistory({ direction: "out", amount: String(n) });
+      s.setSendAmount("");
+    } catch (e) {
+      s.setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setMaking(false);
+    }
     const fresh = useUnclaimedTokensStore.getState().unclaimedTokens.find((t) => !before.has(t.id));
     if (!fresh) return;
     setNote(null);
@@ -109,20 +125,32 @@ export default function Send({
   // paid, or sent and still settling on a slow route
   const [lnPaid, setLnPaid] = useState<{ n: number; pending: boolean } | null>(null);
   const lnAmt = useRef(0);
-  const read = (v: string) => {
-    const t = v.trim().replace(/^lightning:/i, "");
-    setLn(t);
+  const bare = (v: string) => v.trim().replace(/^lightning:/i, "");
+  const lookUp = (t: string) => {
     s.setError("");
     if (!/^ln(bc|tb|bcrt)/i.test(t) || noAmount(t)) return;
     void s.handleNip60InvoiceInput(t);
   };
+  const read = (v: string) => {
+    const t = bare(v);
+    setLn(t);
+    lookUp(t);
+  };
+  // an invoice handed over from elsewhere opens on the Lightning tab, read at once
+  const [handed, setHanded] = useState<string | null>(null);
+  if (prefill !== handed) {
+    setHanded(prefill);
+    if (prefill) {
+      setTab(0);
+      setDir("l");
+      setLn(bare(prefill));
+      setLnPaid(null);
+    }
+  }
   useEffect(() => {
     if (!prefill) return;
-    setTab(0);
-    setDir("l");
-    read(prefill);
+    lookUp(bare(prefill));
     clearPrefill();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefill]);
   const cancel = (refocus = true) => {
     s.handleNip60PaymentCancel();
@@ -140,7 +168,6 @@ export default function Send({
       say(pending ? `Sending ${fmt(lnAmt.current)} sats. Waiting for the network.` : `Paid ${fmt(lnAmt.current)} sats`);
     }
     wasPaying.current = s.isNip60Processing;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [s.isNip60Processing, s.successMessage]);
   const pay = () => {
     lnAmt.current = s.invoiceAmount ?? 0;
@@ -281,11 +308,11 @@ export default function Send({
             <button
               type="button"
               className="wl-go"
-              data-busy={s.isGeneratingSendToken ? "" : undefined}
-              disabled={s.isGeneratingSendToken || !(n > 0 && n <= have)}
+              data-busy={making ? "" : undefined}
+              disabled={making || !(n > 0 && n <= have)}
               onClick={() => void make()}
             >
-              {s.isGeneratingSendToken ? (
+              {making ? (
                 <>
                   <Spin />
                   Making the token
@@ -298,7 +325,7 @@ export default function Send({
           after={
             note ? (
               <Note kind={note.kind} text={note.text} center />
-            ) : s.error && !s.isGeneratingSendToken && !ln ? (
+            ) : s.error && !making && !ln ? (
               <Note kind="warn" text="The token could not be made. Nothing left your wallet." center />
             ) : (
               <p className="wl-hint">A token is sats written as text. Send it in any chat.</p>
