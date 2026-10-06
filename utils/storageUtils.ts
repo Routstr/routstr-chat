@@ -1,5 +1,6 @@
 import { TransactionHistory } from "@/types/chat";
 import { useCashuStore } from "@/features/wallet/state/cashuStore";
+import { clearAllButShelf } from "@/lib/coinShelf";
 
 /**
  * SSR-safe check for localStorage availability
@@ -143,12 +144,13 @@ export const hasStorageItem = (key: string): boolean => {
 };
 
 /**
- * Clear all localStorage items and Cashu store (use with caution)
+ * Clear all localStorage items and Cashu store (use with caution).
+ * Coins shelved for an account at sign out stay until it signs in again.
  */
 export const clearAllStorage = (): void => {
   if (!canUseLocalStorage()) return;
   try {
-    localStorage.clear();
+    clearAllButShelf();
     // Also clear the Cashu store
     useCashuStore.getState().clearStore();
   } catch (error) {

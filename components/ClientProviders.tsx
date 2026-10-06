@@ -15,6 +15,7 @@ import Kind1018ThemeBootstrap from "@/components/Kind1018ThemeBootstrap";
 import dynamic from "next/dynamic";
 import { migrateStorageItems, saveRelays } from "@/utils/storageUtils";
 import { InvoiceRecoveryProvider } from "@/components/InvoiceRecoveryProvider";
+import { unshelve } from "@/lib/coinShelf";
 import { AccountManager } from "applesauce-accounts";
 import { registerCommonAccountTypes } from "applesauce-accounts/accounts";
 import { merge, Subject } from "rxjs";
@@ -113,8 +114,11 @@ export default function ClientProviders({ children }: { children: ReactNode }) {
 
     // Save active account whenever it changes
     const sub2 = manager.active$.subscribe((account) => {
-      if (account) localStorage.setItem("activeAccount", account.id);
-      else localStorage.removeItem("activeAccount");
+      if (account) {
+        localStorage.setItem("activeAccount", account.id);
+        // coins this account left settling when it signed out go back to its wallet
+        unshelve(account.pubkey);
+      } else localStorage.removeItem("activeAccount");
     });
 
     return () => {

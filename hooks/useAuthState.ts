@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { clearAllStorage } from "@/utils/storageUtils";
+import { shelve } from "@/lib/coinShelf";
 import { useAccountManager } from "@/components/ClientProviders";
 import { useObservableState } from "applesauce-react/hooks";
 
@@ -25,6 +26,8 @@ export const useAuthState = (): UseAuthStateReturn => {
     // Logout from applesauce-accounts
     const activeAccount = manager.active$.value;
     if (activeAccount) {
+      // coins still settling are kept for this account (throws, still signed in, if they cannot be)
+      shelve(activeAccount.pubkey);
       // @ts-ignore
       manager.removeAccount(activeAccount);
     }
