@@ -48,8 +48,6 @@ function useProviders() {
   useEffect(() => {
     const tor = isTorContext();
     let dead = false;
-    setLoading(true);
-    setFailed(false);
     (async () => {
       try {
         const res = await fetch("https://api.routstr.com/v1/providers/");
@@ -95,7 +93,12 @@ function useProviders() {
       dead = true;
     };
   }, [tries]);
-  return { all, loading, failed, retry: () => setTries((t) => t + 1) };
+  const retry = () => {
+    setTries((t) => t + 1);
+    setLoading(true);
+    setFailed(false);
+  };
+  return { all, loading, failed, retry };
 }
 
 export default function Models() {

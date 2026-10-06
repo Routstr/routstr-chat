@@ -92,10 +92,14 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
   // stable handlers, so memoised messages do not re-render on every token
   const slotsRef = useRef(slots);
   slotsRef.current = slots;
+  // another version is another message, so the turn remounts: the arrow you pressed keeps the keyboard
+  const refocus = useRef<{ depth: number; label: string } | null>(null);
   const onVersion = useCallback<Go>((depth, d) => {
     const slot = slotsRef.current[depth];
     if (!slot) return;
     const next = Math.min(slot.keys.length - 1, Math.max(0, slot.displayedIndex + d));
+    const a = document.activeElement;
+    if (a?.closest(".rd-vers")) refocus.current = { depth, label: a.getAttribute("aria-label") ?? "" };
     setSelected((p) => new Map(p).set(depth, slot.keys[next]));
   }, []);
   const actions = useActions();
@@ -108,6 +112,13 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
         and any scroll by you wins ─────────────────────────────────────────── */
   const scroller = useRef<HTMLDivElement>(null);
   const inner = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const r = refocus.current;
+    if (!r) return;
+    refocus.current = null;
+    const at = messages.indexOf(slots[r.depth]?.displayed);
+    scroller.current?.querySelector<HTMLElement>(`[data-index="${at}"] .rd-vers [aria-label="${r.label}"]`)?.focus({ preventScroll: true });
+  });
   const [reserve, setReserve] = useState(0);
   const follow = useRef(false);
   const userScrolled = useRef(false);
@@ -188,6 +199,8 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
         follow.current = true;
         el.scrollTop += tailBelow + 8;
       }
+      // the answer grows below someone reading further up: the way back appears without a scroll
+      else setAway(el.scrollHeight - reserve - (el.scrollTop + el.clientHeight) > 240);
     });
     ro.observe(box);
     return () => ro.disconnect();

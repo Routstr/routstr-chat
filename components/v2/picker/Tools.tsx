@@ -35,7 +35,6 @@ export default function Tools({
     const ro = new ResizeObserver(() => check());
     ro.observe(t);
     return () => ro.disconnect();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   return (
     <div className="mp-tools" role="group" aria-label="Filters" ref={tools} onScroll={check} data-end={end ? "" : undefined} inert={inert}>

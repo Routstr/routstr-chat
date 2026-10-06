@@ -1,8 +1,10 @@
 // An in-memory Nostr relay for tests: NIP-01 (signed events only), NIP-09 deletions,
-// replaceable and addressable kinds. Each URL path is its own relay, so
-// ws://host/nos.lol and ws://host/relay.primal.net keep separate stores, the way the
-// sealed browser maps public relays (see ../net.ts).
+// replaceable and addressable kinds, NIP-11 info and NIP-77 negentropy sync (chat history
+// sync needs it, as the public relays have it). Each URL path is its own store.
 import http from "node:http";
+import { createRequire } from "node:module";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { WebSocketServer, type WebSocket } from "ws";
 import {
   verifyEvent,
@@ -11,6 +13,35 @@ import {
 } from "nostr-tools";
 
 type Sub = { id: string; filters: Filter[]; ws: WebSocket };
+
+const INFO = {
+  name: "kit relay",
+  software: "routstr-chat test kit",
+  supported_nips: [1, 9, 11, 77],
+};
+
+// The negentropy code applesauce-relay ships (the app syncs with its client half). The
+// package only exports the client, so the shared class is loaded from the file beside it.
+interface NegentropyLib {
+  NegentropyStorageVector: new () => {
+    insert(ts: number, id: string): void;
+    seal(): void;
+  };
+  Negentropy: new (
+    storage: unknown,
+    frameSizeLimit?: number
+  ) => {
+    reconcile(msg: string): Promise<[string | null, string[], string[]]>;
+  };
+}
+const negentropy = (async () => {
+  const dir = path.dirname(
+    createRequire(__filename).resolve("applesauce-relay/negentropy")
+  );
+  return (await import(
+    pathToFileURL(path.join(dir, "lib", "negentropy.js")).href
+  )) as NegentropyLib;
+})();
 
 interface Store {
   events: Map<string, NostrEvent>;
@@ -128,6 +159,13 @@ export async function startRelay(): Promise<Relay> {
   // Control routes for tests in other processes (see ../client.ts). Anything else gets a
   // 404, like a relay without NIP-11 info, so clients do not hang on it.
   const server = http.createServer((req, res) => {
+    if (req.headers.accept?.includes("application/nostr+json"))
+      return void res
+        .writeHead(200, {
+          "content-type": "application/nostr+json",
+          "access-control-allow-origin": "*",
+        })
+        .end(JSON.stringify(INFO));
     const url = new URL(req.url ?? "/", "http://relay");
     const store = storeOf(url.searchParams.get("store") || "default");
     let body = "";
@@ -162,6 +200,7 @@ export async function startRelay(): Promise<Relay> {
     if (store.down) return ws.terminate();
     store.sockets.add(ws);
     const mine = new Map<string, Sub>();
+    const syncs = new Map<string, InstanceType<NegentropyLib["Negentropy"]>>();
     const send = (msg: unknown[]) =>
       ws.readyState === ws.OPEN && ws.send(JSON.stringify(msg));
     ws.on("message", (raw) => {
@@ -216,6 +255,29 @@ export async function startRelay(): Promise<Relay> {
           store.subs.delete(sub);
           mine.delete(sub.id);
         }
+      } else if (type === "NEG-OPEN" || type === "NEG-MSG") {
+        const [id, ...args] = rest as [string, ...unknown[]];
+        void (async () => {
+          try {
+            if (type === "NEG-OPEN") {
+              const { Negentropy, NegentropyStorageVector } = await negentropy;
+              const storage = new NegentropyStorageVector();
+              for (const e of store.events.values())
+                if (matches(e, args[0] as Filter))
+                  storage.insert(e.created_at, e.id);
+              storage.seal();
+              syncs.set(id, new Negentropy(storage, 0));
+            }
+            const sync = syncs.get(id);
+            if (!sync) return send(["NEG-ERR", id, "closed: no such sync"]);
+            const [out] = await sync.reconcile(args[args.length - 1] as string);
+            send(["NEG-MSG", id, out ?? ""]);
+          } catch (e) {
+            send(["NEG-ERR", id, `error: ${(e as Error).message}`]);
+          }
+        })();
+      } else if (type === "NEG-CLOSE") {
+        syncs.delete(rest[0] as string);
       } else if (type === "AUTH" || type === "COUNT") {
         send(["NOTICE", `unsupported: ${type}`]);
       }

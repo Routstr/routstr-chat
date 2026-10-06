@@ -35,14 +35,14 @@ export function usePay(say: (t: string) => void) {
   const need = selectedModel ? Math.ceil(getRequiredSatsForModel(selectedModel) || 0) : 0;
   const minOther = Math.max(1, need - balance);
   // an invoice runs out at the mint's deadline; after that nobody should pay it
-  const [expired, setExpired] = useState(false);
+  const [ranOut, setRanOut] = useState<number | null>(null);
   useEffect(() => {
-    setExpired(false);
     const at = funding.expiresAt;
     if (!at || funding.status !== "waiting") return;
-    const t = window.setTimeout(() => setExpired(true), Math.max(0, at - Date.now()));
+    const t = window.setTimeout(() => setRanOut(at), Math.max(0, at - Date.now()));
     return () => window.clearTimeout(t);
   }, [funding.expiresAt, funding.status]);
+  const expired = !!funding.expiresAt && ranOut === funding.expiresAt;
   const ln =
     funding.status === "creating"
       ? "making"
@@ -108,7 +108,9 @@ export function usePay(say: (t: string) => void) {
   // a token that covered only part of what the held message needs: after the
   // seal the card goes back to the amounts, whose head says what is still short
   const short = useRef(false);
-  short.current = need > 0 && balance < need;
+  useEffect(() => {
+    short.current = need > 0 && balance < need;
+  });
   useEffect(() => {
     if (!landed || !holding) return;
     const t = window.setTimeout(() => {
@@ -119,7 +121,6 @@ export function usePay(say: (t: string) => void) {
       say(`That covered part of it. Add about ${fmt(Math.max(1, need - balance))} more sats to send.`);
     }, 1700);
     return () => window.clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [landed, holding]);
 
   /* ── actions ────────────────────────────────────────────────────────── */
@@ -180,7 +181,6 @@ export function usePay(say: (t: string) => void) {
   // errors are spoken as well as shown
   useEffect(() => {
     if (tok === "error") say(/spent/i.test(funding.message) ? "Someone already spent this token. Nothing changed in your wallet." : "The token could not be received. Nothing changed in your wallet.");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tok]);
   useEffect(() => {
     if (ln === "error") say("The mint did not answer. Nothing was charged.");

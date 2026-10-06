@@ -4,7 +4,8 @@ import { useState, useEffect } from "react";
 import { Icon } from "../../icons";
 import { CopyTool } from "../atoms/CopyTool";
 import { Vers } from "../atoms/Vers";
-import { costLabel, reduced } from "../atoms/helpers";
+import { useReducedMotion } from "../../motion";
+import { costLabel } from "../atoms/helpers";
 
 export function Strip({
   text,
@@ -66,9 +67,10 @@ export function Strip({
 
 /** A just-finished reply's cost counts up once, instead of appearing. */
 function RollingCost({ value }: { value: number }) {
+  const reduce = useReducedMotion();
   const [v, setV] = useState(0);
   useEffect(() => {
-    if (reduced()) return setV(value);
+    if (reduce) return;
     let raf = 0;
     const start = performance.now();
     const step = (now: number) => {
@@ -78,6 +80,6 @@ function RollingCost({ value }: { value: number }) {
     };
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
-  }, [value]);
-  return <>{costLabel(Math.max(v, 0.001))}</>;
+  }, [value, reduce]);
+  return <>{costLabel(Math.max(reduce ? value : v, 0.001))}</>;
 }

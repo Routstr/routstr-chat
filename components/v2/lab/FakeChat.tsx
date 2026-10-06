@@ -5,7 +5,7 @@
    pictures) without spending sats. Nothing here ships: app/lab renders only
    in development. */
 
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ChatContext } from "@/context/ChatProvider";
 import type { Conversation, Message, MessageAttachment } from "@/types/chat";
 import type { Model } from "@/types/models";
@@ -114,6 +114,9 @@ function seed(): Conversation[] {
   ];
 }
 
+// anything the lab does not fake reads as a no-op
+const UNFAKED = new Proxy({}, { get: (t, k) => (k in t ? (t as Record<PropertyKey, unknown>)[k] : () => undefined) });
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export function FakeChatProvider({ children }: { children: React.ReactNode }) {
@@ -155,13 +158,28 @@ export function FakeChatProvider({ children }: { children: React.ReactNode }) {
   const loadingModels = !!params.get("loading");
   const [configuredModels, setConfiguredModels] = useState<string[]>(["anthropic/claude-sonnet-5", "openai/gpt-5", "deepseek/deepseek-v3.2@@https://api.nonkycai.com/"]);
   const [balance, setBalance] = useState(() => Number(params.get("balance") ?? 2140));
+  // ?late=<ms>: the balance arrives a moment after the page, as a wallet loading from its mint and relays does
+  const [late, setLate] = useState(() => params.has("late"));
+  useEffect(() => {
+    if (!late) return;
+    const t = window.setTimeout(() => setLate(false), Number(params.get("late")) || 2500);
+    return () => window.clearTimeout(t);
+  }, [late]);
+  // ?bump=<ms>: 1,000 sats land that long after the page, as a paid invoice does
+  useEffect(() => {
+    if (!params.has("bump")) return;
+    const t = window.setTimeout(() => setBalance((b) => b + 1000), Number(params.get("bump")) || 4000);
+    return () => window.clearTimeout(t);
+  }, []);
   const [collapsed, setCollapsed] = useState(false);
   const [editingMessageIndex, setEditingMessageIndex] = useState<number | null>(null);
   const [editingContent, setEditingContent] = useState("");
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const abort = useRef(false);
   const convRef = useRef(activeId);
-  convRef.current = activeId;
+  useLayoutEffect(() => {
+    convRef.current = activeId;
+  });
 
   const setMessages = useCallback((m: Message[]) => {
     setMessagesState(m);
@@ -221,12 +239,12 @@ export function FakeChatProvider({ children }: { children: React.ReactNode }) {
       setThinking("");
       setStreamingConversationId(null);
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [setMessages, selectedModel]
   );
 
   const value = useMemo(() => {
     const base = {
+      __proto__: UNFAKED,
       conversations,
       conversationsLoaded: true,
       activeConversationId: activeId,
@@ -302,13 +320,13 @@ export function FakeChatProvider({ children }: { children: React.ReactNode }) {
       getThinkingContentFor: (id: string | null) => (id === streamingConversationId ? thinking : ""),
       streamingContent: stream,
       thinkingContent: thinking,
-      balance,
+      balance: late ? 0 : balance,
       setBalance,
-      isBalanceLoading: false,
+      isBalanceLoading: late,
       isWalletLoading: false,
       currentMintUnit: "sat",
       // the lab's sats sit on the default mint, so Send has something to spend
-      mintBalances: { [DEFAULT_MINT_URL]: balance },
+      mintBalances: { [DEFAULT_MINT_URL]: late ? 0 : balance },
       mintUnits: { [DEFAULT_MINT_URL]: "sat" },
       transactionHistory: [],
       setTransactionHistory: () => {},
@@ -353,13 +371,8 @@ export function FakeChatProvider({ children }: { children: React.ReactNode }) {
         void run(base, activeId ?? "c1", edited._eventId);
       },
     };
-    return new Proxy(base, {
-      get(t, k: string) {
-        if (k in t) return (t as Record<string, unknown>)[k];
-        return () => undefined;
-      },
-    });
-  }, [conversations, activeId, messages, setMessages, editingMessageIndex, editingContent, selectedModel, balance, isLoginModalOpen, collapsed, configuredModels, inputMessage, uploadedAttachments, isLoading, isPaymentProcessing, streamingConversationId, stream, thinking, run, syncing, syncNow]);
+    return base;
+  }, [conversations, activeId, messages, setMessages, editingMessageIndex, editingContent, selectedModel, balance, late, isLoginModalOpen, collapsed, configuredModels, inputMessage, uploadedAttachments, isLoading, isPaymentProcessing, streamingConversationId, stream, thinking, run, syncing, syncNow]);
 
   const standIn = useMemo(() => ({ routes: labRoutes, picks: PICKS, currentKey }), [currentKey]);
   return (

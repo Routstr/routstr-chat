@@ -13,7 +13,7 @@ import type { Model } from "@/types/models";
 import { normalizeBaseUrl, parseModelKey } from "@/utils/modelUtils";
 import { loadLastUsedModel } from "@/utils/storageUtils";
 import { Icon } from "../icons";
-import { useUi } from "../ui";
+import { useChipRef, useUi } from "../ui";
 import { useActions } from "../useActions";
 import { useMoney } from "../useMoney";
 import { sats, satUnit, shortModelName, textOf } from "../format";
@@ -24,7 +24,6 @@ import { tokenMs } from "../motion";
 import Back from "./back/Back";
 
 /** The model chip, so the picker can hang from it. */
-export const chipAnchor: { el: HTMLElement | null } = { el: null };
 
 const isTouch = () => typeof window !== "undefined" && window.matchMedia("(hover: none)").matches;
 const isPhone = () => typeof window !== "undefined" && window.innerWidth <= 760;
@@ -165,7 +164,7 @@ export default function Composer({ centred }: { centred: boolean }) {
   const field = useRef<HTMLTextAreaElement>(null);
   const island = useRef<HTMLDivElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
-  const chip = useRef<HTMLButtonElement>(null);
+  const chip = useChipRef();
   const tray = useRef<HTMLDivElement>(null);
   const band = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState(false);
@@ -253,11 +252,6 @@ export default function Composer({ centred }: { centred: boolean }) {
   );
   // "loading" lasts until the app has made its own pick, not just until models arrive
   const modelState = selectedModel ? "ready" : isAuthenticated && (busy || !hasPickedModel) ? "loading" : "none";
-
-  // the chip is where the picker hangs from
-  useEffect(() => {
-    chipAnchor.el = chip.current;
-  });
 
   // something in the logic asked for a sign in: the composer answers it
   useEffect(() => {
@@ -559,8 +553,6 @@ export default function Composer({ centred }: { centred: boolean }) {
         </div>
 
         <div className="fw" data-cut={cut || undefined} ref={band}>
-          {/* an idea pointed at on the first page shows here first (Greeting) */}
-          <span className="pf-ph" aria-hidden="true" />
           <textarea
             ref={field}
             className="field"

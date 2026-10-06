@@ -13,7 +13,7 @@ import { land } from "./composer/landing";
 import ModelPicker from "./picker/ModelPicker";
 import Palette from "./palette/Palette";
 import Settings from "./settings/Settings";
-import Greeting, { Ideas, Resume } from "./Greeting";
+import Greeting, { Resume } from "./Greeting";
 import { useCountUp, useMoney } from "./useMoney";
 import { useAuth } from "@/context/AuthProvider";
 import { sats } from "./format";
@@ -50,10 +50,8 @@ function Panel() {
   // kept for the page: chats that arrive later (a sync) fade the first-run extras, they do not
   // reshape the page under the reader
   const [firstPage, setFirstPage] = useState<boolean | null>(null);
-  useEffect(() => {
-    if (!empty) return setFirstPage(null);
-    if (firstPage === null && conversationsLoaded) setFirstPage(conversations.length === 0);
-  }, [empty, conversationsLoaded, conversations.length, firstPage]);
+  if (!empty && firstPage !== null) setFirstPage(null);
+  if (empty && firstPage === null && conversationsLoaded) setFirstPage(conversations.length === 0);
   const firstGone = !!firstPage && conversations.length > 0;
 
   const title = useMemo(
@@ -189,7 +187,6 @@ function Panel() {
 
       {empty && (
         <div className="stage-tail">
-          {firstPage && <Ideas gone={firstGone} />}
           {firstPage === false && <Resume />}
         </div>
       )}

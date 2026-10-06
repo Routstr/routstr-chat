@@ -1,6 +1,6 @@
 import React, { useCallback, useLayoutEffect, useState } from "react";
-import { chipAnchor } from "../composer/Composer";
 import { panelBox } from "../furniture";
+import { useChipRef } from "../ui";
 import type { Lay } from "./Details";
 
 const layFor = (w: number, phone: boolean): Lay => (phone || w < 640 ? "one" : w < 800 ? "two" : w < 940 ? "mid" : "wide");
@@ -16,6 +16,7 @@ export function usePlacement({
   setLay: React.Dispatch<React.SetStateAction<Lay>>;
   setView: (v: "list" | "detail") => void;
 }) {
+  const chipRef = useChipRef();
   const [box, setBox] = useState<React.CSSProperties>({});
   const [veilTop, setVeilTop] = useState(0);
   const [veilOff, setVeilOff] = useState(false);
@@ -26,9 +27,9 @@ export function usePlacement({
     }
     const panelEl = document.querySelector<HTMLElement>("[data-furniture='panel']");
     const dock = panelEl?.querySelector<HTMLElement>(".dock");
-    const r = chipAnchor.el?.closest(".island")?.getBoundingClientRect();
+    const r = chipRef.current?.closest(".island")?.getBoundingClientRect();
     const panel = panelEl ? panelBox(panelEl) : null;
-    const chip = chipAnchor.el?.getBoundingClientRect();
+    const chip = chipRef.current?.getBoundingClientRect();
     if (!r || !panel || !chip || !panelEl || !dock) return;
     // a new chat's composer sits mid-screen: it rises toward the top while you
     // choose, and the card hangs below it at its full height
