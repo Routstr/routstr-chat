@@ -362,7 +362,8 @@ export default function Composer({ centred }: { centred: boolean }) {
 
   // money arrived for a held message: turn back, then send it by itself
   useEffect(() => {
-    if (!ui.sendWhenFunded || !isAuthenticated || money.total <= 0 || busy) return;
+    // credit a provider still holds counts as money too
+    if (!ui.sendWhenFunded || !isAuthenticated || money.total + held <= 0 || busy) return;
     if (!selectedModel) {
       // funded, but nothing chosen to answer: pick one and it sends
       if (ui.face !== "write") {
@@ -379,7 +380,7 @@ export default function Composer({ centred }: { centred: boolean }) {
       window.setTimeout(launch, 420);
     }, 1500);
     return () => window.clearTimeout(t);
-  }, [ui, needsMoney, isAuthenticated, money.total, selectedModel, busy, launch]);
+  }, [ui, needsMoney, isAuthenticated, money.total, held, selectedModel, busy, launch]);
 
   const onKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && !isTouch()) {
