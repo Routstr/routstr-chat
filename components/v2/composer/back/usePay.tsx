@@ -8,7 +8,7 @@ import { useUi } from "../../ui";
 import { useMoney } from "../../useMoney";
 import { useChatModel } from "../../useChatModel";
 import { useFunding } from "../../wallet/useFunding";
-import { fmt, reduced } from "./bits";
+import { PRESETS, fmt, reduced } from "./bits";
 
 /* Adding sats on the back of the composer: which amount, the invoice it made,
    or a pasted token, and what each of them says. Money only moves through
@@ -16,12 +16,19 @@ import { fmt, reduced } from "./bits";
 
 export type Pay = ReturnType<typeof usePay>;
 
+const TRY = 100;
+
 export function usePay(say: (t: string) => void) {
   const { model: selectedModel } = useChatModel();
   const isAuthenticated = useSession().pubkey !== null;
   const ui = useUi();
   const money = useMoney();
   const funding = useFunding();
+
+  const balance = money.total;
+  const need = selectedModel ? Math.ceil(getRequiredSatsForModel(selectedModel) || 0) : 0;
+  // an account's first sats: a small try, picked for you
+  const trying = !money.loading && balance <= 0 && TRY >= need;
 
   const [method, setMethod] = useState<"ln" | "token">("ln");
   const [picked, setPicked] = useState(0);
@@ -31,8 +38,6 @@ export function usePay(say: (t: string) => void) {
   const [tokFail, setTokFail] = useState(false);
   const [landed, setLanded] = useState(0);
 
-  const balance = money.total;
-  const need = selectedModel ? Math.ceil(getRequiredSatsForModel(selectedModel) || 0) : 0;
   const minOther = Math.max(1, need - balance);
   // an invoice runs out at the mint's deadline; after that nobody should pay it
   const [ranOut, setRanOut] = useState<number | null>(null);
@@ -187,8 +192,9 @@ export function usePay(say: (t: string) => void) {
     if (ln === "stale") say("This invoice ran out. Nothing was charged.");
   }, [ln, say]);
 
-  const head =
-    isAuthenticated && balance > 0
+  const head = trying
+    ? { t: `Try ${fmt(TRY)} sats`, s: null }
+    : isAuthenticated && balance > 0
       ? {
           t: "Top up to send",
           s: (
@@ -207,13 +213,14 @@ export function usePay(say: (t: string) => void) {
   return {
     isAuthenticated,
     head,
+    presets: trying ? [TRY, ...PRESETS.slice(0, 2)] : PRESETS,
     funding,
     balance,
     need,
     minOther,
     method,
     setMethod,
-    picked,
+    picked: picked || (trying ? TRY : 0),
     other,
     setOther,
     copied,

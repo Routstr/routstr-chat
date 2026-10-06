@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { PrivateKeyAccount } from "applesauce-accounts/accounts";
+import type { AccountMetadata } from "@/features/session/view";
 import { useUi } from "../../ui";
 import { phoneNow } from "./bits";
 import { usePay } from "./usePay";
@@ -13,22 +15,23 @@ import PayToken from "./PayToken";
 import PayLanded from "./PayLanded";
 import SignInWays from "./SignInWays";
 import SignInDone from "./SignInDone";
+import WhoIsWriting from "./WhoIsWriting";
 import MethodSwitch from "./MethodSwitch";
 
-/* The back of the composer: add a few sats, or sign in. The words stay on the
-   band above; this card beneath is a tone deeper and shows one thing at a
-   time. */
+/* The back of the composer: who is writing, add a few sats, or sign in. The
+   words stay on the band above; this card beneath is a tone deeper and shows
+   one thing at a time. */
 
 export default function Back({
   face,
   island,
 }: {
-  face: "pay" | "auth";
+  face: "pay" | "auth" | "who";
   island: React.RefObject<HTMLDivElement | null>;
 }) {
   const ui = useUi();
   const phone = phoneNow();
-  const [from] = useState<"pay" | "write">(() => (ui.sendWhenFunded ? "pay" : face === "auth" ? "write" : "pay"));
+  const [from] = useState<"pay" | "write" | "who">(() => (face === "who" ? "who" : ui.sendWhenFunded ? "pay" : face === "auth" ? "write" : "pay"));
   const live = useRef<HTMLParagraphElement>(null);
   const say = useCallback((t: string) => {
     const el = live.current;
@@ -37,9 +40,11 @@ export default function Back({
     requestAnimationFrame(() => (el.textContent = t));
   }, []);
   const pay = usePay(say);
-  const signIn = useSignIn(say, from);
+  // the new account offered on "Who's writing?": one key for as long as the card is up
+  const [fresh] = useState(() => PrivateKeyAccount.generateNew<AccountMetadata>());
+  const signIn = useSignIn(say, from === "who" ? "pay" : from);
   const { way, setWay, stopScan } = signIn;
-  const view = face === "auth" ? (signIn.done ? "done" : "auth") : pay.view;
+  const view = face === "who" ? "who" : face === "auth" ? (signIn.done ? "done" : "auth") : pay.view;
 
   // back goes up one level: an open way, then out of sign in
   const back = useCallback(() => {
@@ -48,7 +53,7 @@ export default function Back({
       setWay(null);
       return;
     }
-    if (face === "auth" && from === "pay") return ui.setFace("pay");
+    if (face === "auth" && from !== "write") return ui.setFace(from);
     ui.setSendWhenFunded(false);
     ui.setFace("write");
   }, [face, way, from, ui]);
@@ -76,13 +81,15 @@ export default function Back({
       <PayLanded key="landed" landed={pay.landed} />
     ) : view === "done" ? (
       <SignInDone key="done" done={signIn.done} />
+    ) : view === "who" ? (
+      <WhoIsWriting key="who" fresh={fresh} signIn={() => ui.setFace("auth")} />
     ) : (
       <SignInWays key="auth" signIn={signIn} back={back} from={from} phone={phone} />
     );
 
   const { lead, corner } = payFoot(pay, view, ui, phone);
   const showSwitch = view === "pick" || view === "tok";
-  const footHidden = face === "auth" || view === "landed" || (view === "inv" && !lead && !corner);
+  const footHidden = face !== "pay" || view === "landed" || (view === "inv" && !lead && !corner);
   const pair = view === "inv" && phone && pay.ln === "waiting";
   const solo = showSwitch && !lead && !corner;
 

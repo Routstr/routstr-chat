@@ -1,12 +1,12 @@
 "use client";
 
 import React from "react";
-import { PRESETS, fmt } from "./bits";
+import { fmt } from "./bits";
 import type { Pay } from "./usePay";
 
 export default function PayPick({ pay }: { pay: Pay }) {
-  const { head, balance, need, minOther, picked, other, setOther, makeInvoice } = pay;
-  const firstOk = PRESETS.find((n) => n + balance >= need);
+  const { head, presets, balance, need, minOther, picked, other, setOther, makeInvoice } = pay;
+  const firstOk = presets.find((n) => n + balance >= need);
   const otherN = Number(other || 0);
   const amtKey = (e: React.KeyboardEvent<HTMLElement>) => {
     if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
@@ -20,13 +20,13 @@ export default function PayPick({ pay }: { pay: Pay }) {
     <div className="pa-view" data-view="pick">
       <header className="pa-head">
         <h2 className="pa-t" id="paTitle">{head.t}</h2>
-        <p className="pa-sub">{head.s}</p>
+        {head.s && <p className="pa-sub">{head.s}</p>}
       </header>
       <div className="pa-pickbody">
         <div className="pa-amts" role="group" aria-labelledby="paTitle">
-          {PRESETS.map((n) => {
+          {presets.map((n) => {
             const low = n + balance < need;
-            const stop = PRESETS.includes(picked) ? n === picked : n === firstOk;
+            const stop = presets.includes(picked) ? n === picked : n === firstOk;
             return (
               <button
                 key={n}

@@ -23,6 +23,7 @@ import { estimateSats, promptTokens } from "../price";
 import { settle, takeFlight } from "./landing";
 import { tokenMs } from "../motion";
 import Back from "./back/Back";
+import { useFirstSend } from "./back/useFirstSend";
 
 /** The model chip, so the picker can hang from it. */
 
@@ -197,7 +198,7 @@ export default function Composer({ centred }: { centred: boolean }) {
 
   const face = ui.face;
   // the back of the card stays drawn while it turns away
-  const [back, setBack] = useState<"pay" | "auth" | null>(null);
+  const [back, setBack] = useState<"pay" | "auth" | "who" | null>(null);
   if (face !== "write" && back !== face) setBack(face);
   useEffect(() => {
     if (face !== "write") return;
@@ -306,10 +307,7 @@ export default function Composer({ centred }: { centred: boolean }) {
 
   const needsMoney = !money.node && (!isAuthenticated || lowBalanceWarningForModel);
 
-  const hold = useCallback(() => {
-    ui.setSendWhenFunded(true);
-    ui.setFace("pay");
-  }, [ui]);
+  const first = useFirstSend(needsMoney);
 
   // leave for the thread: from the centre the whole island travels (see
   // landing.ts); from the dock the words lift away and the card settles
@@ -337,8 +335,8 @@ export default function Composer({ centred }: { centred: boolean }) {
 
   const go = useCallback(() => {
     if (isLoading || !hasContent) return;
-    // no key on this device yet: models and money both start at the pay face
-    if (!isAuthenticated && !money.node) return hold();
+    // nobody to write as yet: that comes before models and money
+    if (first.need === "who") return first.hold();
     if (busy) {
       // the disc says no, and the chip that is loading answers
       setRefused(Date.now());
@@ -350,10 +348,10 @@ export default function Composer({ centred }: { centred: boolean }) {
       return;
     }
     if (!selectedModel) return ui.setPicker(true);
-    if (needsMoney) return hold();
+    if (first.need || needsMoney) return first.hold();
     if (ui.sendWhenFunded) ui.setSendWhenFunded(false);
     launch();
-  }, [isLoading, hasContent, isAuthenticated, money.node, hold, busy, selectedModel, needsMoney, launch, ui]);
+  }, [isLoading, hasContent, first, busy, isWalletLoading, isAuthenticated, selectedModel, needsMoney, launch, ui]);
 
   useEffect(() => {
     if (!refused) return;

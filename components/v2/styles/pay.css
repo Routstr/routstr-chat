@@ -454,6 +454,17 @@ a.prime[aria-disabled="true"] { opacity: .45; pointer-events: none; }
 .pa-done .pa-sub { max-width: 40ch; }
 .pa-view[data-view="auth"] .pa-sub { max-width: none; }
 
+/* who's writing: one light per account, the new one first */
+.pa-who { display: flex; flex-wrap: wrap; gap: var(--s3); }
+.pa-who-me {
+  display: grid; justify-items: center; gap: var(--s2); min-width: 104px; padding: var(--s3) var(--s3) var(--s2);
+  border-radius: var(--r-md); color: var(--ink-2); transition: background var(--d-quick), color var(--d-quick);
+}
+.pa-who-me:hover { background: var(--fill-1); color: var(--ink); }
+.pa-who-me:first-child { color: var(--ink); }
+.pa-who-me b { font-size: 13.5px; font-weight: var(--w-strong); letter-spacing: -.003em; }
+.pa-who-in { justify-self: start; }
+
 /* focus rings: the room's own ring, on everything here */
 .pa-card :is(button, [role="radio"], a):focus-visible { box-shadow: var(--focus); outline: 0; }
 .pa-seg:focus-visible { box-shadow: var(--focus); }

@@ -8,7 +8,7 @@ import KeyForm from "./KeyForm";
 import BunkerForm from "./BunkerForm";
 import ScanCode from "./ScanCode";
 
-export default function SignInWays({ signIn, back, from, phone }: { signIn: SignIn; back: () => void; from: "pay" | "write"; phone: boolean }) {
+export default function SignInWays({ signIn, back, from, phone }: { signIn: SignIn; back: () => void; from: "pay" | "write" | "who"; phone: boolean }) {
   const { way, wayState, scan, hasExt, extension, openWay, fresh } = signIn;
   const anyOpen = !!way && way !== "ext";
   const scanning = way === "bunker" && !!scan;
@@ -21,7 +21,7 @@ export default function SignInWays({ signIn, back, from, phone }: { signIn: Sign
     <div className="pa-view" data-view="auth" data-open={anyOpen ? "" : undefined} data-scan={scanning ? "" : undefined}>
       <header className="pa-head">
         <div className="pa-head-row">
-          <button className="ghost pa-back" type="button" onClick={back} aria-label={anyOpen ? "Back to every way in" : from === "pay" ? "Back to adding sats" : "Back to your message"}>
+          <button className="ghost pa-back" type="button" onClick={back} aria-label={anyOpen ? "Back to every way in" : from === "pay" ? "Back to adding sats" : from === "who" ? "Back to who's writing" : "Back to your message"}>
             <Icon name="back" size={18} />
           </button>
           <h2 className="pa-t" id="paAuthT">Sign in</h2>
