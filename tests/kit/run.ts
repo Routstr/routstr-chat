@@ -6,6 +6,7 @@
 //   pnpm kit up             start the stack and print its env, until Ctrl-C
 //   pnpm kit locks          who holds and who waits for the locks: pid, worktree, command, age
 //   pnpm kit build [dir]    build a checkout's out/ (with the kit's provider address)
+//   pnpm kit parity --main-out <dir>   the parity checks on main's build and on v2
 //
 // Shared machine rules, built in: before a step it waits until enough memory is free
 // (KIT_MIN_FREE_MB, default 1536), then takes the light lock (vitest) or the heavy lock (app
@@ -183,6 +184,12 @@ function run(
   );
 }
 
+/** Removes `--name value` from args and returns the value. */
+function take(args: string[], name: string): string | undefined {
+  const i = args.indexOf(`--${name}`);
+  return i < 0 ? undefined : args.splice(i, 2)[1];
+}
+
 const tsx = (script: string, args: string[]): [string, string[]] => [
   path.join(BIN, "tsx"),
   [script, ...args],
@@ -267,27 +274,63 @@ async function app(args: string[]): Promise<number> {
   );
 }
 
-/** Inside the (sealed) step: stack + app server + playwright. */
+/**
+ * Inside the (sealed) step: stack + app server(s) + playwright. KIT_PW_CONFIG picks the
+ * Playwright config (default: the in-app tests); KIT_MAIN_OUT also serves main's build as
+ * KIT_MAIN_URL (parity).
+ */
 async function appInside(args: string[]): Promise<number> {
   const stack = await startStack({ log: say });
   const server = process.env.KIT_APP_URL
     ? undefined
     : await serveStatic(process.env.KIT_APP_OUT ?? path.join(ROOT, "out"));
+  const mainServer = process.env.KIT_MAIN_OUT
+    ? await serveStatic(process.env.KIT_MAIN_OUT)
+    : undefined;
+  const config = process.env.KIT_PW_CONFIG ?? "tests/app/playwright.config.ts";
   try {
     return await run(
       path.join(BIN, "playwright"),
-      ["test", "-c", "tests/app/playwright.config.ts", ...args],
+      ["test", "-c", config, ...args],
       {
         env: {
           ...envVars(stack.env),
           KIT_APP_URL: process.env.KIT_APP_URL ?? server!.url,
+          ...(mainServer ? { KIT_MAIN_URL: mainServer.url } : {}),
         },
       }
     );
   } finally {
     await server?.close();
+    await mainServer?.close();
     await stack.stop();
   }
+}
+
+/** The same checks on main's build and on v2 (this checkout's build, or --v2-out). */
+async function parity(args: string[]): Promise<number> {
+  const mainOut = take(args, "main-out");
+  if (!mainOut)
+    throw new Error("parity needs main's static build: --main-out <dir>");
+  const v2Out =
+    take(args, "v2-out") ?? (await withLock("heavy", () => build()));
+  const env = {
+    KIT_PW_CONFIG: "tests/parity/playwright.config.ts",
+    KIT_MAIN_OUT: path.resolve(mainOut),
+    KIT_APP_OUT: path.resolve(v2Out),
+  };
+  // one hold per app, so no hold runs long; v2 runs even when main fails a check
+  let code = 0;
+  for (const project of ["main", "v2"]) {
+    const projectCode = await withLock("heavy", () =>
+      run(...tsx(__filename, ["__app", "--project", project, ...args]), {
+        env,
+        sealed: true,
+      })
+    );
+    code ||= projectCode;
+  }
+  return code;
 }
 
 /** Who holds and who waits for each lock, from /proc/locks (a waiter's line starts with ->). */
@@ -378,6 +421,7 @@ async function main(argv: string[]): Promise<number> {
     return withLock("heavy", () => build(path.resolve(rest[0] ?? ROOT))).then(
       () => 0
     );
+  if (command === "parity") return parity(rest);
   if (command !== "test") throw new Error(`unknown command ${command}`);
   const [step, ...args] = rest;
   if (step === "unit") return unit(args);
