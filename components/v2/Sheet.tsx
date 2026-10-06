@@ -24,21 +24,24 @@ interface SheetProps {
 }
 
 const MID = 0.62; // the middle detent shows this much of the screen
+const BOTH: Detent[] = ["mid", "full"];
 
 export default function Sheet(props: SheetProps) {
   const [mounted, setMounted] = useState(props.open);
   useEffect(() => {
     if (props.open) setMounted(true);
   }, [props.open]);
+  // stable, so a parent that re-renders (a reply streaming) never restarts the close timer
+  const gone = useCallback(() => setMounted(false), []);
   if (!mounted) return null;
-  return <SheetBody {...props} onGone={() => setMounted(false)} />;
+  return <SheetBody {...props} onGone={gone} />;
 }
 
 function SheetBody({
   open,
   onClose,
   label,
-  detents = ["mid", "full"],
+  detents = BOTH,
   detent,
   onDetent,
   className,
@@ -50,6 +53,8 @@ function SheetBody({
   const veil = useRef<HTMLDivElement>(null);
   const [rest, setRest] = useState<Detent>(detent ?? detents[0]);
   const moved = useRef(false);
+  // what had the focus before the sheet took it, given back when it closes
+  const opener = useRef<HTMLElement | null>(null);
   const drag = useRef<{ id: number; y0: number; from: number; t: number; v: number; last: number } | null>(null);
 
   const H = () => el.current?.offsetHeight ?? window.innerHeight;
@@ -78,6 +83,7 @@ function SheetBody({
   // rise on open, fall on close
   useLayoutEffect(() => {
     if (!open) return;
+    opener.current = document.activeElement as HTMLElement | null;
     put(yOf("closed"), "drag");
     el.current?.getBoundingClientRect();
     requestAnimationFrame(() => put(yOf(rest), "in"));
@@ -88,6 +94,9 @@ function SheetBody({
   useEffect(() => {
     if (open) return;
     put(yOf("closed"), "out");
+    // unless the content already sent it somewhere on purpose
+    const a = document.activeElement;
+    if (!a || a === document.body || el.current?.contains(a)) opener.current?.focus({ preventScroll: true });
     const t = window.setTimeout(onGone, 260);
     return () => window.clearTimeout(t);
   }, [open, put, yOf, onGone]);
@@ -153,8 +162,13 @@ function SheetBody({
     setRest(best);
     put(yOf(best), "in");
   };
+  // Esc closes from anywhere inside (content that handles its own Esc prevents it);
   // modal: Tab and Shift+Tab stay inside the sheet
-  const trap = (e: React.KeyboardEvent) => {
+  const keys = (e: React.KeyboardEvent) => {
+    if (e.key === "Escape" && !e.defaultPrevented) {
+      e.preventDefault();
+      return onClose();
+    }
     if (e.key !== "Tab" || !el.current) return;
     const all = Array.from(
       el.current.querySelectorAll<HTMLElement>('button, [href], input, textarea, select, [tabindex]:not([tabindex="-1"])')
@@ -198,7 +212,7 @@ function SheetBody({
         onPointerMove={move}
         onPointerUp={up}
         onPointerCancel={up}
-        onKeyDown={trap}
+        onKeyDown={keys}
       >
         <button className="sh-grab" type="button" aria-label={rest === "full" ? "Make smaller" : "Make taller"} onClick={tapGrab}>
           <span />
