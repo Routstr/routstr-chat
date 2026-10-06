@@ -475,7 +475,7 @@ export function useCashuWallet() {
 
       // and filter out those that we want to keep to roll them over to a new event
       const proofsToKeepWithEventIds = allProofsWithEventIds.filter(
-        (proof) => !proofsToRemove.includes(proof)
+        (proof) => !proofsToRemove.some((p) => p.secret === proof.secret)
       );
 
       // combine proofsToAdd and proofsToKeepWithEventIds
@@ -568,6 +568,7 @@ export function useCashuWallet() {
       localStorage.getItem("cashu_relays_timeout") === "true");
 
   return {
+    owner: activeAccount?.pubkey,
     wallet: walletQuery.data?.wallet,
     walletId: walletQuery.data?.id,
     tokens: getNip60TokensQuery.data || [],

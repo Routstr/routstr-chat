@@ -37,11 +37,13 @@ function useEstimate(model: Model | null, draft: string, history: string, files:
   const [value, setValue] = useState<number | null>(null);
   const [settling, setSettling] = useState(false);
   const lastDraft = useRef<string | null>(null);
+  // no model, no price
+  if (!model && (value !== null || settling)) {
+    setValue(null);
+    setSettling(false);
+  }
   useEffect(() => {
-    if (!model) {
-      setSettling(false);
-      return setValue(null);
-    }
+    if (!model) return;
     const typed = lastDraft.current !== null && lastDraft.current !== draft && !!draft;
     lastDraft.current = draft;
     if (typed) setSettling(true);
@@ -69,7 +71,6 @@ function Voice({ id, children, settling, tone }: { id: string; children: React.R
     setItems((xs) => [...xs.filter((x) => !x.out).map((x) => ({ ...x, out: true })), { id, node: children, tone, out: false }]);
     const t = window.setTimeout(() => setItems((xs) => xs.filter((x) => !x.out)), tokenMs("--d-fast") + 20);
     return () => window.clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
   return (
     <span className="voice" data-settling={settling ? "" : undefined}>
@@ -113,7 +114,6 @@ function Tile({ a, reading, onRemove, onTip }: { a: MessageAttachment; reading: 
       onBlur={() => onTip(null)}
     >
       {image ? (
-        // eslint-disable-next-line @next/next/no-img-element
         <img className="thumb" src={a.dataUrl} alt={a.name} />
       ) : (
         <>
@@ -200,8 +200,9 @@ export default function Composer({ centred }: { centred: boolean }) {
   const face = ui.face;
   // the back of the card stays drawn while it turns away
   const [back, setBack] = useState<"pay" | "auth" | null>(null);
+  if (face !== "write" && back !== face) setBack(face);
   useEffect(() => {
-    if (face !== "write") return setBack(face);
+    if (face !== "write") return;
     const t = window.setTimeout(() => setBack(null), 600);
     return () => window.clearTimeout(t);
   }, [face]);
@@ -483,13 +484,9 @@ export default function Composer({ centred }: { centred: boolean }) {
   // the chip's mark and name arrive when the model changes, not on first draw.
   // The spans are keyed by model; the flag stays on for that model, so a later
   // render never takes it off and cuts the arrival short
-  const lastModel = useRef(selectedModel?.id);
-  const arrivedModel = useRef<string | undefined>(undefined);
-  if (lastModel.current !== selectedModel?.id) {
-    lastModel.current = selectedModel?.id;
-    arrivedModel.current = selectedModel?.id;
-  }
-  const arrive = !!selectedModel && arrivedModel.current === selectedModel.id;
+  const [chipModel, setChipModel] = useState<{ model?: string; arrived?: string }>({ model: selectedModel?.id });
+  if (chipModel.model !== selectedModel?.id) setChipModel({ model: selectedModel?.id, arrived: selectedModel?.id });
+  const arrive = !!selectedModel && chipModel.arrived === selectedModel.id;
 
   const placeholder = centred ? "Ask anything" : "Reply";
   const live = hasContent && face === "write" && !isLoading && ((modelState === "ready" && !busy) || (!isAuthenticated && !money.node));

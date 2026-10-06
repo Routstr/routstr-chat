@@ -8,8 +8,8 @@ import { tokenMs } from "../motion";
 import { satsOf, useActiveMint } from "./Wallet";
 import { Amount, Code, CopyLine, Done, Note, NumT, Pane, Pasted, Picks, Seg, Share, Spin, Two, ago, fmt, flipFrom, useCopy } from "./bits";
 
-/* Sending is useWalletSend, untouched: a made token is written to the
-   persisted unclaimed store the moment it exists, and it stays listed until
+/* Sending is useWalletSend: a made token is written to the wallet book the
+   moment it exists, and it stays listed until
    it is taken back or you let it go. A Lightning payment shows the worst case
    (amount plus the most the network may take) before anything is paid. */
 

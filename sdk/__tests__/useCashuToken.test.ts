@@ -4,21 +4,29 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({
   mint: {} as any,
   updateProofs: vi.fn(),
-  effects: false,
 }));
 
 vi.mock("react", () => ({
   useState: () => [null, vi.fn()],
-  useEffect: (effect: () => void) => void (state.effects && effect()),
+  useEffect: (effect: () => void) => effect(),
+  useCallback: (fn: unknown) => fn,
+  useRef: (current: unknown) => ({ current }),
 }));
+vi.mock("@/features/session/owned", () => ({ currentOwner: () => "alice" }));
 vi.mock("@/features/wallet/state/cashuStore", () => ({
-  useCashuStore: () => ({
-    mints: [state.mint],
-    getMint: () => state.mint,
-  }),
+  useCashuStore: Object.assign(
+    () => ({ mints: [state.mint], getMint: () => state.mint }),
+    {
+      // nothing saved yet: every received coin is new
+      of: () => ({
+        persist: { getOptions: () => ({ name: "cashu", storage: null }) },
+      }),
+    }
+  ),
 }));
 vi.mock("@/features/wallet/hooks/useCashuWallet", () => ({
   useCashuWallet: () => ({
+    owner: "alice",
     wallet: { mints: [state.mint.url] },
     updateProofs: state.updateProofs,
   }),
@@ -28,7 +36,7 @@ vi.mock("@/features/wallet/hooks/useCashuHistory", () => ({
 }));
 
 import { useCashuToken } from "@/features/wallet/hooks/useCashuToken";
-import { setOwner } from "@/features/session/owned";
+import { journal } from "@/runtime/book";
 
 const mintUrl = "https://mint.example.com";
 const publicKey =
@@ -38,6 +46,7 @@ const keys = { 1: publicKey, 2: publicKey, 4: publicKey };
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.clearAllMocks();
+  journal.list("alice").forEach((record) => journal.remove(record.id));
 });
 
 describe("useCashuToken receive", () => {
@@ -88,16 +97,14 @@ describe("useCashuToken receive", () => {
         keysets: [{ ...keyset, _active: true, _unit: unit }],
         keys: [{ [id]: keys }],
       };
-      const storage = new Map<string, string>();
-      vi.stubGlobal("localStorage", {
-        setItem: (key: string, value: string) => storage.set(key, value),
-        removeItem: (key: string) => storage.delete(key),
-      });
       const swaps: any[] = [];
       vi.stubGlobal(
         "fetch",
         vi.fn(async (url: string, options?: RequestInit) => {
-          if (url.endsWith("/v1/info")) return Response.json({ nuts: {} });
+          if (url.endsWith("/v1/info"))
+            return Response.json({
+              nuts: { 7: { supported: true }, 9: { supported: true } },
+            });
           if (url.endsWith("/v1/keysets"))
             return Response.json({ keysets: [keyset] });
           if (url.includes("/v1/keys")) {
@@ -120,9 +127,12 @@ describe("useCashuToken receive", () => {
       );
       state.updateProofs.mockImplementation(
         async ({ proofsToAdd, proofsToRemove }) => {
-          expect(storage.size).toBe(1);
-          const backup = JSON.parse([...storage.values()][0]);
-          expect(backup.proofsToSend).toEqual(proofsToAdd);
+          // until the wallet has stored them, the new proofs are held in the book
+          const [held] = journal.list("alice");
+          expect(held.kind).toBe("landed");
+          expect(
+            held.kind === "landed" && held.proofs.map((p) => p.secret)
+          ).toEqual(proofsToAdd.map((p: { secret: string }) => p.secret));
           expect(proofsToRemove).toEqual([]);
         }
       );
@@ -139,47 +149,7 @@ describe("useCashuToken receive", () => {
       expect(proofs.reduce((sum, proof) => sum + proof.amount, 0)).toBe(4);
       expect(proofs.every((proof) => proof.id === id)).toBe(true);
       expect(state.updateProofs).toHaveBeenCalledOnce();
-      expect(storage.size).toBe(0);
+      expect(journal.list("alice")).toEqual([]);
     }
   );
-});
-
-describe("useCashuToken recovery", () => {
-  it("restores only the active account's interrupted sends and receives", async () => {
-    const now = Date.now();
-    const backup = (secret: string) =>
-      JSON.stringify({
-        mintUrl,
-        proofsToSend: [{ id: "k", amount: 1, secret, C: publicKey }],
-        timestamp: now,
-      });
-    const data: Record<string, string> = {
-      [`pending_send_proofs:alice_${now}`]: backup("alice"),
-      [`pending_send_proofs:bob_${now}`]: backup("bob"),
-      [`pending_send_proofs_${now}`]: backup("guest"),
-      [`pending_receive_proofs:alice_${now}`]: backup("alice-in"),
-      [`pending_receive_proofs:bob_${now}`]: backup("bob-in"),
-    };
-    // the entries are the object's own keys, as in a browser's localStorage
-    const storage = (entries: Record<string, string>) =>
-      Object.defineProperties(entries, {
-        getItem: { value: (k: string) => entries[k] ?? null },
-        setItem: { value: (k: string, v: string) => (entries[k] = v) },
-        removeItem: { value: (k: string) => delete entries[k] },
-      });
-    vi.stubGlobal("localStorage", storage(data));
-    vi.stubGlobal("sessionStorage", storage({}));
-    state.updateProofs.mockResolvedValue(undefined);
-    setOwner("alice");
-    state.effects = true;
-
-    useCashuToken();
-    await vi.waitFor(() => expect(Object.keys(data)).toHaveLength(3));
-
-    expect(
-      state.updateProofs.mock.calls.map((c) => c[0].proofsToAdd[0].secret)
-    ).toEqual(["alice", "alice-in"]);
-    state.effects = false;
-    setOwner(null);
-  });
 });

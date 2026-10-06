@@ -5,6 +5,8 @@ import { useInvoiceChecker } from "@/hooks/useInvoiceChecker";
 import { useInvoiceSync, StoredInvoice } from "@/hooks/useInvoiceSync";
 import { toast } from "sonner";
 import { formatBalance } from "@/features/wallet";
+import { MeltQuoteState } from "@cashu/cashu-ts";
+import { useRecovery } from "@/features/wallet/hooks/useRecovery";
 
 interface InvoiceRecoveryProviderProps {
   children: React.ReactNode;
@@ -13,8 +15,26 @@ interface InvoiceRecoveryProviderProps {
 export const InvoiceRecoveryProvider: React.FC<
   InvoiceRecoveryProviderProps
 > = ({ children }) => {
-  const { invoices, getPendingInvoices } = useInvoiceSync();
+  const { invoices, getPendingInvoices, updateInvoice } = useInvoiceSync();
   const { triggerCheck } = useInvoiceChecker();
+
+  // a payment the wallet book settled later shows its outcome on its invoice
+  useRecovery((quoteId, outcome) => {
+    if (outcome === "pending") return;
+    const invoice = invoices.find((i) => i.quoteId === quoteId);
+    if (!invoice) return;
+    void updateInvoice(
+      invoice.id,
+      outcome === "paid"
+        ? { state: MeltQuoteState.PAID, paidAt: invoice.paidAt || Date.now() }
+        : { state: MeltQuoteState.UNPAID }
+    ).catch((error) => console.error("Could not update the invoice:", error));
+    if (outcome === "failed") {
+      toast.info(
+        "A payment did not go through. The sats are back in your wallet."
+      );
+    }
+  });
   const hasCheckedOnMount = useRef(false);
   const hasShownRecoveryToast = useRef(false);
   const [trackingInvoices, setTrackingInvoices] = useState<Set<string>>(

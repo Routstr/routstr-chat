@@ -3,6 +3,7 @@ import { savedInIndexedDB } from "@/features/session/saved";
 import { bindOwner } from "./owner";
 import { bindHistory, relays } from "./nostr";
 import { startKeys } from "./keys";
+import { bindBook } from "./book";
 
 /* The composition root: built once per tab, before the first render. */
 
@@ -24,8 +25,10 @@ if (typeof window !== "undefined") {
   });
   // the first listener, so stores follow the owner before anything reads them
   const bind = () => {
-    bindOwner(session.getSnapshot().pubkey, window.localStorage);
+    const { pubkey } = session.getSnapshot();
+    bindOwner(pubkey, window.localStorage);
     bindHistory(session.accounts.active$.value);
+    bindBook(pubkey);
   };
   bind();
   session.subscribe(bind);

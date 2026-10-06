@@ -46,48 +46,6 @@ export function calculateBalanceByMint(
 }
 
 /**
- * Calculate inactive keyset balances per mint from proofs
- * Returns a map of mint URL to keyset balances for inactive keysets only
- */
-export function calculateInactiveKeysetBalances(
-  proofs: Proof[],
-  mints: Array<{ url: string; keysets?: Keyset[] }>
-): Record<string, Record<string, number>> {
-  const balances: Record<string, Record<string, number>> = {};
-
-  for (const mint of mints) {
-    balances[mint.url] = {};
-
-    const keysets = mint.keysets;
-    if (!keysets) {
-      continue;
-    }
-
-    for (const keyset of keysets) {
-      // Check if keyset is inactive
-      const isActive = keyset.active ?? (keyset as any)._active;
-      if (isActive !== false) {
-        continue;
-      }
-
-      // Select all proofs with id == keyset.id or keyset._id
-      const keysetId = keyset.id ?? (keyset as any)._id;
-      const proofsForKeyset = proofs.filter((proof) => proof.id === keysetId);
-
-      if (proofsForKeyset.length) {
-        const balanceForKeyset = proofsForKeyset.reduce(
-          (acc, proof) => acc + proof.amount,
-          0
-        );
-        balances[mint.url][keysetId] = balanceForKeyset;
-      }
-    }
-  }
-
-  return balances;
-}
-
-/**
  * Compute total balance across mints in sats, converting msats -> sats
  */
 export function computeTotalBalanceSats(

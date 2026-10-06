@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { getDecodedToken } from "@cashu/cashu-ts";
+import { getTokenMetadata } from "@cashu/cashu-ts";
 import { toast } from "sonner";
 import { AuthProvider, useAuth } from "@/context/AuthProvider";
 import { ChatProvider, useChat } from "@/context/ChatProvider";
@@ -86,9 +86,8 @@ function Behaviour() {
     const token = cashuParam.trim();
     (async () => {
       try {
-        const decoded = getDecodedToken(token);
-        const total = decoded.proofs.reduce((s, p) => s + p.amount, 0);
-        const sats = decoded.unit === "msat" ? Math.floor(total / 1000) : total;
+        const { unit, amount } = getTokenMetadata(token);
+        const sats = unit === "msat" ? Math.floor(amount / 1000) : amount;
         ensureAccount();
         await receiveToken(token);
         toast.success(`${sats.toLocaleString()} sats received`);

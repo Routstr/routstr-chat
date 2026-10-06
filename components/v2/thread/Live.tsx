@@ -7,7 +7,7 @@ import { useUi } from "../ui";
 import Prose from "./Prose";
 import { cleanThinking, thinkingTopic } from "./content";
 import { rememberOpen, rememberThinking, useSmoothText } from "./smooth";
-import { tokenMs } from "../motion";
+import { tokenMs, useReducedMotion } from "../motion";
 
 /* The answer on its way. One caret is born at send and breathes in the
    gutter, slower the longer it waits; the status line rolls to each new
@@ -51,7 +51,6 @@ function RollWords({ text, className }: { text: string; className?: string }) {
       cancelAnimationFrame(raf);
       window.clearTimeout(t);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [text]);
   return (
     <span className={`la-slot${className ? ` ${className}` : ""}`}>
@@ -95,39 +94,45 @@ export default function Live({ label, prompt, onFold }: { label: string; prompt:
   const makesImages = (selectedModel?.architecture?.output_modalities ?? []).includes("image");
 
   // the clock only chooses the words; nothing on screen counts
-  const t0 = useRef(performance.now());
-  const [, tick] = useState(0);
+  const [t0] = useState(() => performance.now());
+  const [now, setNow] = useState(t0);
   useEffect(() => {
     if (raw || thinking) return;
-    const id = window.setInterval(() => tick((n) => n + 1), 1000);
+    const id = window.setInterval(() => setNow(performance.now()), 1000);
     return () => window.clearInterval(id);
   }, [raw, thinking]);
-  const elapsed = (performance.now() - t0.current) / 1000;
+  const elapsed = (now - t0) / 1000;
 
   // the fold: at the first answer word after reasoning, the window closes
-  // under its line while the reasoning is drawn up into it; words wait for it
-  const [fold, setFold] = useState<"none" | "folding" | "folded">("none");
+  // under its line while the reasoning is drawn up into it; words wait for it.
+  // It starts from the open window's height, measured before it closes.
+  const reduce = useReducedMotion();
+  const [foldFrom, setFoldFrom] = useState<number | null>(null);
+  const [foldDone, setFoldDone] = useState(false);
+  const fold = foldFrom === null ? "none" : reduce || foldDone ? "folded" : "folding";
   const think = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
-    if (!raw || !thinking || fold !== "none") return;
-    const ms = reduced() ? 0 : tokenMs("--d-move");
-    onFold(think.current?.getBoundingClientRect().height ?? 0, ms);
-    if (!ms) return setFold("folded");
-    setFold("folding");
-    const t = window.setTimeout(() => setFold("folded"), ms + 40);
-    return () => window.clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (!raw || !thinking || foldFrom !== null) return;
+    setFoldFrom(think.current?.getBoundingClientRect().height ?? 0);
   }, [!!raw, !!thinking]);
+  useLayoutEffect(() => {
+    if (foldFrom === null) return;
+    const ms = reduce ? 0 : tokenMs("--d-move");
+    onFold(foldFrom, ms);
+    if (!ms) return;
+    const t = window.setTimeout(() => setFoldDone(true), ms + 40);
+    return () => window.clearTimeout(t);
+  }, [foldFrom]);
   // words wait for the fold from the very first render that has them
   const held = !!raw && !!thinking && fold !== "folded";
   const content = useSmoothText(held ? "" : raw, true);
 
   // the tail caret breathes when the words pause
-  const [idle, setIdle] = useState(false);
+  const [restedOn, setRestedOn] = useState<string | null>(null);
+  const idle = !!content && restedOn === content;
   useEffect(() => {
-    setIdle(false);
     if (!content) return;
-    const t = window.setTimeout(() => setIdle(true), 420);
+    const t = window.setTimeout(() => setRestedOn(content), 420);
     return () => window.clearTimeout(t);
   }, [content]);
 
@@ -153,7 +158,6 @@ export default function Live({ label, prompt, onFold }: { label: string; prompt:
   useEffect(() => {
     room.setPhase(phase);
     if (phase === "stream") room.exhale();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
   useEffect(() => () => room.release(), [room]);
 
@@ -203,7 +207,9 @@ export default function Live({ label, prompt, onFold }: { label: string; prompt:
   // and takes the focus if this toggle had it (read before the DOM goes)
   const toggle = useRef<HTMLButtonElement>(null);
   const handover = useRef({ raw, reopen });
-  handover.current = { raw, reopen };
+  useLayoutEffect(() => {
+    handover.current = { raw, reopen };
+  });
   useLayoutEffect(
     () => () => {
       const h = handover.current;

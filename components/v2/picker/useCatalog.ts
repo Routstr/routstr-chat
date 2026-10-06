@@ -111,7 +111,6 @@ export function useCatalog() {
   const picks = useMemo(
     () => new Set(standIn ? standIn.picks : discoveryAdapter.getRoutstr21Models()),
     // the discovery store hydrates late; re-read it whenever models change
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [standIn, chat.models]
   );
   const web = useMemo(() => new Set(webSearchModels), []);

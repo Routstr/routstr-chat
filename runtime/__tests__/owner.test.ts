@@ -23,15 +23,12 @@ const load = async () => {
   vi.stubGlobal("window", { localStorage: storage });
   const { bindOwner } = await import("../owner");
   const { useCashuStore } = await import("@/features/wallet/state/cashuStore");
-  const { useUnclaimedTokensStore } =
-    await import("@/features/wallet/state/unclaimedTokensStore");
   const { owned } = await import("@/features/session/owned");
   const bind = (pubkey: string | null) => bindOwner(pubkey, storage);
   const secrets = () => useCashuStore.getState().proofs.map((p) => p.secret);
   return {
     bind,
     useCashuStore,
-    useUnclaimedTokensStore,
     owned,
     secrets,
   };
@@ -93,7 +90,6 @@ describe("per-person local stores", () => {
 
     m.bind("bob");
     expect(m.secrets()).toEqual([]);
-    expect(m.useUnclaimedTokensStore.getState().unclaimedTokens).toEqual([]);
     m.useCashuStore.getState().addProofs([proof("b")], "e2");
     begunForAlice.addProofs([proof("late")], "e3");
 

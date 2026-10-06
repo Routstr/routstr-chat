@@ -1,6 +1,5 @@
 const MAX_PDF_TEXT_LENGTH = 20000;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PdfJsLib = any;
 
 let pdfjsLibPromise: Promise<PdfJsLib> | null = null;

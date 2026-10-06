@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthProvider";
+import { holdsRecords } from "@/features/wallet";
 import { useUnclaimedTokensStore } from "@/features/wallet/state/unclaimedTokensStore";
 import { useUi } from "../ui";
 import { useMoney } from "../useMoney";
@@ -16,7 +17,8 @@ export default function SignOut() {
   const money = useMoney();
   const unclaimed = useUnclaimedTokensStore((s) => s.unclaimedTokens);
   const [signout, setSignout] = useState(false);
-  const risk = money.total > 0 || unclaimed.length > 0;
+  // a payment still settling is money too
+  const risk = money.total > 0 || unclaimed.length > 0 || holdsRecords();
   return (
     <Grp id="g-signout" k="Sign out">
       <Row
@@ -62,7 +64,13 @@ export default function SignOut() {
             </>
           }
         >
-          {risk ? (
+          {risk && !money.total && !unclaimed.length ? (
+            <p>
+              A payment from this key is still settling. What comes back stays
+              here for this key, and only this key opens it again. Back up your
+              key first.
+            </p>
+          ) : risk ? (
             <p>
               This device holds{" "}
               <b>

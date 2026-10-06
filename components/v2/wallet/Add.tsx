@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { getDecodedToken } from "@cashu/cashu-ts";
+import { getTokenMetadata } from "@cashu/cashu-ts";
 import { Icon } from "../icons";
 import { useMoney } from "../useMoney";
 import { useFunding } from "./useFunding";
@@ -146,9 +146,8 @@ export default function Add({
     if (!t) return null;
     if (isLn(t)) return { kind: "ln" as const };
     try {
-      const d = getDecodedToken(t);
-      const total = d.proofs.reduce((s, p) => s + p.amount, 0);
-      return { kind: "token" as const, sats: d.unit === "msat" ? Math.floor(total / 1000) : total, mint: d.mint };
+      const d = getTokenMetadata(t);
+      return { kind: "token" as const, sats: d.unit === "msat" ? Math.floor(d.amount / 1000) : d.amount, mint: d.mint };
     } catch {
       return t.length >= 12 ? { kind: "junk" as const } : null;
     }
