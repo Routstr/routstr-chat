@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useChat } from "@/context/ChatProvider";
 import { useConversations, useHistoryLoaded } from "@/features/history/view";
-import { useAuth } from "@/context/AuthProvider";
+import { useSession } from "@/features/session/view";
 import { Icon } from "../icons";
 import { useUi } from "../ui";
 import { groupByDay } from "../format";
@@ -49,7 +49,7 @@ export default function Rail() {
   } = useChat();
   const conversations = useConversations();
   const conversationsLoaded = useHistoryLoaded();
-  const { isAuthenticated } = useAuth();
+  const isAuthenticated = useSession().pubkey !== null;
   const ui = useUi();
   const { isSidebarCollapsed, setIsSidebarCollapsed } = ui;
   const money = useMoney();

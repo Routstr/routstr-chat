@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/context/AuthProvider";
+import { useSession } from "@/features/session/view";
 import { holdsRecords } from "@/features/wallet";
 import { useUnclaimedTokensStore } from "@/features/wallet/state/unclaimedTokensStore";
 import { useUi } from "../ui";
@@ -11,7 +11,7 @@ import { satUnit } from "../format";
 import { Btn, Fold, Grp, Row, Say, n0, plural } from "./parts";
 
 export default function SignOut() {
-  const { logout } = useAuth();
+  const { signOut } = useSession();
   const router = useRouter();
   const ui = useUi();
   const money = useMoney();
@@ -54,7 +54,7 @@ export default function SignOut() {
               <Btn
                 kind="warn"
                 onClick={async () => {
-                  await logout();
+                  await signOut();
                   ui.closeSettings();
                   router.push("/");
                 }}

@@ -1,7 +1,8 @@
 "use client";
 
-import { Suspense, useEffect, useState, useSyncExternalStore } from "react";
-import { AuthContext } from "@/context/AuthProvider";
+import { Suspense, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { AccountContext, useAccountManager } from "@/features/session/view";
+import type { SessionService } from "@/features/session/service";
 import { RoomProvider } from "@/components/v2/room/RoomProvider";
 import { UiProvider } from "@/components/v2/ui";
 import { FakeChatProvider } from "@/components/v2/lab/FakeChat";
@@ -14,6 +15,9 @@ import "@/components/v2/styles/index.css";
    state can be seen without spending sats. ?fresh=1 ?chat=c2 ?balance=0
    ?fail=1 ?nothink=1 ?still=1 ?signedout=1 ?loading=1, and ?boot=<ms> (the boot
    mark, then first light after that long; add ?firstlight=1 for the first visit). Renders nothing in a production build. */
+// a made-up key, so the lab draws signed-in views without touching this device's accounts
+const LAB_PUBKEY = "1ab".padEnd(64, "0");
+
 export default function Lab() {
   // client only, like the real app (it waits for auth before drawing)
   const ready = useSyncExternalStore(
@@ -22,18 +26,24 @@ export default function Lab() {
     () => false
   );
   const signedOut = ready && new URLSearchParams(window.location.search).has("signedout");
+  const { manager } = useAccountManager();
+  const account = useMemo(() => {
+    const now = { accountId: signedOut ? null : "lab", pubkey: signedOut ? null : LAB_PUBKEY, generation: 1 };
+    const session = { subscribe: () => () => {}, getSnapshot: () => now, remove: () => {} };
+    return { manager, session: session as unknown as SessionService };
+  }, [manager, signedOut]);
   if (process.env.NODE_ENV !== "development" || !ready) return null;
   return (
     <Suspense>
       <RoomProvider>
-        <AuthContext.Provider value={{ isAuthenticated: !signedOut, authChecked: true, logout: async () => {} }}>
+        <AccountContext.Provider value={account}>
           <FakeChatProvider history={labHistory}>
             <UiProvider>
               <Shell />
               <LabBoot />
             </UiProvider>
           </FakeChatProvider>
-        </AuthContext.Provider>
+        </AccountContext.Provider>
       </RoomProvider>
     </Suspense>
   );

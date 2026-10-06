@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { getTokenMetadata } from "@cashu/cashu-ts";
 import { useChat } from "@/context/ChatProvider";
-import { useAuth } from "@/context/AuthProvider";
+import { useSession } from "@/features/session/view";
 import { getRequiredSatsForModel } from "@/utils/modelUtils";
 import { useUi } from "../../ui";
 import { useMoney } from "../../useMoney";
@@ -18,7 +18,7 @@ export type Pay = ReturnType<typeof usePay>;
 
 export function usePay(say: (t: string) => void) {
   const { selectedModel } = useChat();
-  const { isAuthenticated } = useAuth();
+  const isAuthenticated = useSession().pubkey !== null;
   const ui = useUi();
   const money = useMoney();
   const funding = useFunding();

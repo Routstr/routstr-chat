@@ -4,7 +4,8 @@ import React, { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { getTokenMetadata } from "@cashu/cashu-ts";
 import { toast } from "sonner";
-import { AuthProvider, useAuth } from "@/context/AuthProvider";
+import { AuthProvider } from "@/context/AuthProvider";
+import { useSession } from "@/features/session/view";
 import { ChatProvider, useChat } from "@/context/ChatProvider";
 import { useConversations, useHistoryLoaded } from "@/features/history/view";
 import { KeepAliveProvider, useKeepAliveContext } from "@/components/pwa/KeepAliveProvider";
@@ -26,7 +27,8 @@ function Behaviour() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { isAuthenticated, authChecked } = useAuth();
+  const { pubkey, ready: authChecked } = useSession();
+  const isAuthenticated = pubkey !== null;
   const {
     balance,
     isLoading: isStreaming,
@@ -148,7 +150,7 @@ function Behaviour() {
 }
 
 function Content() {
-  const { authChecked } = useAuth();
+  const { ready: authChecked } = useSession();
   // the boot mark stays over the app as it mounts, then becomes its logo
   const [booted, setBooted] = useState(false);
   return (

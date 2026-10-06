@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { useChat } from "@/context/ChatProvider";
 import { useUi } from "./ui";
-import { useAuth } from "@/context/AuthProvider";
+import { useSession } from "@/features/session/view";
 import { normalizeBaseUrl, parseModelKey } from "@/utils/modelUtils";
 import { loadLastUsedModel } from "@/utils/storageUtils";
 import { providerManager } from "@/sdk/sharedStore";
@@ -12,7 +12,7 @@ import { isTorContext } from "@/utils/torUtils";
    otherwise "" lets the SDK rank providers itself. */
 export function useActions() {
   const chat = useChat();
-  const { isAuthenticated } = useAuth();
+  const isAuthenticated = useSession().pubkey !== null;
   const { setFace } = useUi();
   const { messages, setMessages, activeConversationId, getActiveConversationId, selectedModel } = chat;
   // the logic asks for a sign in when there is no key yet: the composer turns to it

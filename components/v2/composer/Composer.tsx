@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useChat } from "@/context/ChatProvider";
-import { useAuth } from "@/context/AuthProvider";
+import { useSession } from "@/features/session/view";
 import { getModelCompanyId } from "@/components/v2/picker/modelCompanies";
 import { renderCompanyIcon } from "@/components/v2/picker/display";
 import { normalizeModality } from "@/components/v2/picker/modality";
@@ -155,7 +155,7 @@ export default function Composer({ centred }: { centred: boolean }) {
     lowBalanceWarningForModel,
     messages,
   } = chat;
-  const { isAuthenticated } = useAuth();
+  const isAuthenticated = useSession().pubkey !== null;
   const ui = useUi();
   const money = useMoney();
   const { send } = useActions();
