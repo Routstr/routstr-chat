@@ -8,22 +8,21 @@ import { hostOf } from "./links";
 
 /** An enclosure under your words: the picture at its own shape, 76px tall. */
 export function Thumb({ src, alt }: { src: string; alt: string }) {
-  const [open, setOpen] = useState(false);
+  const [from, setFrom] = useState<HTMLImageElement | null>(null);
   const img = useRef<HTMLImageElement>(null);
   const btn = useRef<HTMLButtonElement>(null);
   return (
     <>
-      <button type="button" className="rd-thumb" ref={btn} aria-label={`Open ${alt || "the picture"}`} onClick={() => setOpen(true)}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
+      <button type="button" className="rd-thumb" ref={btn} aria-label={`Open ${alt || "the picture"}`} onClick={() => setFrom(img.current)}>
         <img ref={img} src={src} alt={alt} />
       </button>
-      {open && img.current && (
+      {from && (
         <Viewer
           src={src}
           alt={alt}
-          from={img.current}
+          from={from}
           onClose={() => {
-            setOpen(false);
+            setFrom(null);
             btn.current?.focus({ preventScroll: true });
           }}
         />
@@ -37,13 +36,12 @@ export function Thumb({ src, alt }: { src: string; alt: string }) {
    screen). Save sits on the picture; a click opens it larger in the viewer. */
 export default function Picture({ src, alt, className = "" }: { src: string; alt: string; className?: string }) {
   const [ar, setAr] = useState(1);
-  const [open, setOpen] = useState(false);
+  const [from, setFrom] = useState<HTMLImageElement | null>(null);
   const img = useRef<HTMLImageElement>(null);
   const opener = useRef<HTMLButtonElement>(null);
   return (
     <figure className={`rd-img${className ? ` ${className}` : ""}`} style={{ "--ar": ar } as React.CSSProperties}>
-      <button type="button" className="rd-img-open" aria-label="Open the picture larger" ref={opener} onClick={() => setOpen(true)}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
+      <button type="button" className="rd-img-open" aria-label="Open the picture larger" ref={opener} onClick={() => setFrom(img.current)}>
         <img
           ref={img}
           src={src}
@@ -57,13 +55,13 @@ export default function Picture({ src, alt, className = "" }: { src: string; alt
       <button type="button" className="rd-img-save" aria-label="Save picture" title="Save" onClick={() => downloadImageFromSrc(src)}>
         <Icon name="download" size={16} />
       </button>
-      {open && img.current && (
+      {from && (
         <Viewer
           src={src}
           alt={alt}
-          from={img.current}
+          from={from}
           onClose={() => {
-            setOpen(false);
+            setFrom(null);
             opener.current?.focus({ preventScroll: true });
           }}
         />
@@ -100,7 +98,6 @@ export function Viewer({ src, alt, from, onClose }: { src: string; alt: string; 
   const root = useRef<HTMLDivElement>(null);
   const pic = useRef<HTMLImageElement>(null);
   const [on, setOn] = useState(false);
-  const [box, setBox] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
   const closing = useRef(false);
 
   // where the picture lands: the middle of the window, clear of the bar
@@ -118,6 +115,7 @@ export function Viewer({ src, alt, from, onClose }: { src: string; alt: string; 
     const top = phone ? (window.innerHeight - height) / 2 : 32 + (maxH - height) / 2;
     return { left: (window.innerWidth - width) / 2, top, width, height };
   }, [from]);
+  const [box, setBox] = useState(fit);
 
   // fly out from the page: start drawn over the thumbnail, then let go
   const flight = (to: { left: number; top: number; width: number }) => {
@@ -126,13 +124,11 @@ export function Viewer({ src, alt, from, onClose }: { src: string; alt: string; 
     return `translate(${r.left - to.left}px, ${r.top - to.top}px) scale(${s})`;
   };
   useLayoutEffect(() => {
-    const to = fit();
-    setBox(to);
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     requestAnimationFrame(() => {
       if (pic.current && !reduce) {
         pic.current.style.transition = "none";
-        pic.current.style.transform = flight(to);
+        pic.current.style.transform = flight(box);
         void pic.current.offsetWidth;
         pic.current.style.transition = "";
       }
@@ -145,7 +141,6 @@ export function Viewer({ src, alt, from, onClose }: { src: string; alt: string; 
     const onResize = () => setBox(fit());
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const close = useCallback(() => {
@@ -153,10 +148,9 @@ export function Viewer({ src, alt, from, onClose }: { src: string; alt: string; 
     closing.current = true;
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     setOn(false);
-    if (reduce || !box || !pic.current) return onClose();
+    if (reduce || !pic.current) return onClose();
     pic.current.style.transform = flight(box);
     window.setTimeout(onClose, 330);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [box, onClose]);
 
   // Esc closes; Tab stays between Save and Close
@@ -184,10 +178,7 @@ export function Viewer({ src, alt, from, onClose }: { src: string; alt: string; 
   return createPortal(
     <div className="rd-viewer" role="dialog" aria-modal="true" aria-label="Picture" tabIndex={-1} ref={root} data-on={on ? "" : undefined} onKeyDown={onKey}>
       <div className="rd-viewer-scrim" onClick={close} />
-      {box && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img className="rd-viewer-img" ref={pic} src={src} alt={alt} style={box} onClick={close} />
-      )}
+      <img className="rd-viewer-img" ref={pic} src={src} alt={alt} style={box} onClick={close} />
       <div className="rd-viewer-bar">
         <button type="button" className="rd-vbtn" data-save="" onClick={() => downloadImageFromSrc(src)} aria-label="Save picture">
           <Icon name="download" size={16} />

@@ -124,16 +124,30 @@ export default function Usage({ view: asked }: { view?: "wallet" } = {}) {
   const toast = useToast();
   const [view, setView] = useState<"requests" | "wallet">(asked ?? "requests");
   // a find jump to wallet activity opens that view, so the jump has somewhere to land
-  useEffect(() => {
+  const [wasAsked, setWasAsked] = useState(asked);
+  if (asked !== wasAsked) {
+    setWasAsked(asked);
     if (asked) setView(asked);
-  }, [asked]);
+  }
   const [period, setPeriod] = useState<Period>("7d");
+  // the period runs back from when it was picked
+  const [pickedAt, setPickedAt] = useState(() => Date.now());
   const [model, setModel] = useState("");
   const [provider, setProvider] = useState("");
   const [reqPage, setReqPage] = useState(0);
+  const [read, setRead] = useState<number | null>(null);
   // a new period or filter starts from the newest again
-  useEffect(() => setReqPage(0), [period, model, provider]);
-  const after = useMemo(() => (period === "all" ? undefined : Date.now() - (period === "1d" ? D : period === "7d" ? 7 * D : 30 * D)), [period]);
+  const refilter = () => {
+    setReqPage(0);
+    setRead(null);
+  };
+  const pickPeriod = (p: Period) => {
+    if (p === period) return;
+    setPeriod(p);
+    setPickedAt(Date.now());
+    refilter();
+  };
+  const after = period === "all" ? undefined : pickedAt - (period === "1d" ? D : period === "7d" ? 7 * D : 30 * D);
   const u = useSdkUsageHistory({ after, modelId: model || undefined, baseUrl: provider || undefined });
   const modelName = (id: string) => {
     const m = chat.models.find((x) => x.id === id || x.id.endsWith(`/${id}`));
@@ -147,7 +161,7 @@ export default function Usage({ view: asked }: { view?: "wallet" } = {}) {
   /* ── bars: one per hour, day or month, and each one readable ───────────── */
   const filtered = !!(model || provider);
   const bars = useMemo(() => {
-    const oldest = u.entries.length ? Math.min(...u.entries.map((e) => e.timestamp)) : Date.now();
+    const oldest = u.entries.length ? Math.min(...u.entries.map((e) => e.timestamp)) : 0;
     const starts = buckets(period, oldest);
     const acc = starts.map((s) => ({ s, sats: 0, req: 0, tok: 0 }));
     for (const e of u.entries) {
@@ -165,13 +179,11 @@ export default function Usage({ view: asked }: { view?: "wallet" } = {}) {
     return acc;
   }, [u.entries, period]);
   const mx = Math.max(1, ...bars.map((b) => b.sats));
-  const [read, setRead] = useState<number | null>(null);
   const readT = useRef(0);
   const unread = () => {
     window.clearTimeout(readT.current);
     readT.current = window.setTimeout(() => setRead(null), tokenMs("--d-quick"));
   };
-  useEffect(() => setRead(null), [period, model, provider]);
   const shown = read !== null ? bars[read] : { sats: u.totals.satsCost, req: u.totals.requests, tok: u.totals.totalTokens };
   const said = read !== null ? `spent ${phrase(period, bars[read].s, read === bars.length - 1, narrow())}` : "spent";
   const barKey = (e: React.KeyboardEvent, i: number) => {
@@ -190,7 +202,6 @@ export default function Usage({ view: asked }: { view?: "wallet" } = {}) {
   const clearHistory = useTransactionHistoryStore((s) => s.clearHistory);
   const [apart, setApart] = useState(false);
   const [actPage, setActPage] = useState(0);
-  useEffect(() => setActPage(0), [apart]);
   const reqList = useFullPageHeight(u.entries.length > PAGE);
   const [pending, setPending] = useState(0);
   const [dist, setDist] = useState<{ baseUrl: string; amount: number }[]>([]);
@@ -222,7 +233,6 @@ export default function Usage({ view: asked }: { view?: "wallet" } = {}) {
       }
     }
     return { rows: out.sort((a, b) => b.t - a.t).slice(0, 60), paired: changeOf.size };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entries, apart]);
   const actList = useFullPageHeight(ledger.length > PAGE);
 
@@ -268,14 +278,20 @@ export default function Usage({ view: asked }: { view?: "wallet" } = {}) {
                   ["all", "All"],
                 ]}
                 value={period}
-                onChange={setPeriod}
+                onChange={pickPeriod}
               />
               <span className="grow" />
               {/* a menu with nothing in it is not shown */}
               {u.models.length > 0 && (
               <label className="st-sel">
                 <span className="sr">Model</span>
-                <select value={model} onChange={(e) => setModel(e.target.value)}>
+                <select
+                  value={model}
+                  onChange={(e) => {
+                    setModel(e.target.value);
+                    refilter();
+                  }}
+                >
                   <option value="">All models</option>
                   {u.models.map((m) => (
                     <option key={m} value={m}>
@@ -290,7 +306,13 @@ export default function Usage({ view: asked }: { view?: "wallet" } = {}) {
               {u.providers.length > 0 && (
               <label className="st-sel">
                 <span className="sr">Provider</span>
-                <select value={provider} onChange={(e) => setProvider(e.target.value)}>
+                <select
+                  value={provider}
+                  onChange={(e) => {
+                    setProvider(e.target.value);
+                    refilter();
+                  }}
+                >
                   <option value="">All providers</option>
                   {u.providers.map((p) => (
                     <option key={p} value={p}>
@@ -488,7 +510,14 @@ export default function Usage({ view: asked }: { view?: "wallet" } = {}) {
                 <p className="st-rt">Show payment and change apart</p>
               </div>
               <div className="st-ctl">
-                <Sw on={apart} label="Show payment and change apart" onChange={setApart} />
+                <Sw
+                  on={apart}
+                  label="Show payment and change apart"
+                  onChange={(v) => {
+                    setApart(v);
+                    setActPage(0);
+                  }}
+                />
               </div>
             </div>
             )}

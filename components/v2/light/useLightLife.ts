@@ -40,7 +40,6 @@ export function useLightLife(): { state: LightState; pulse: LightPulse } {
       return () => window.clearTimeout(t);
     }
     wasLoading.current = isLoading;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoading]);
 
   // words arriving ring softly, at most one every 600 ms
@@ -51,7 +50,6 @@ export function useLightLife(): { state: LightState; pulse: LightPulse } {
     if (now - lastWord.current < 600) return;
     lastWord.current = now;
     ring("word");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [streaming.length]);
 
   // money landing rings gold; a reply's change coming back right after it ends does not, and
@@ -69,7 +67,6 @@ export function useLightLife(): { state: LightState; pulse: LightPulse } {
     lastTotal.current = money.total;
     if (!settled.current || d < 1 || isLoading || Date.now() - endedAt.current < 15000) return;
     ring("gold");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [money.total]);
 
   const state: LightState = !online

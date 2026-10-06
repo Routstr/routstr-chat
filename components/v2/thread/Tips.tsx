@@ -1,15 +1,18 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 
 /* ══ one tooltip for the whole thread: a rest delay, warm for half a second ══ */
 export function Tips({ scope }: { scope: React.RefObject<HTMLElement | null> }) {
   const el = useRef<HTMLDivElement>(null);
-  // the host is found after the first commit: a chat open at load mounts in
-  // the same commit as .v2, so looking during render finds nothing
-  const [host, setHost] = useState<Element | null>(null);
-  useEffect(() => setHost(document.querySelector(".v2")), []);
+  // a chat open at load mounts in the same commit as .v2, so the first look
+  // finds nothing: the store looks again once that commit is in
+  const host = useSyncExternalStore(
+    () => () => {},
+    () => document.querySelector(".v2"),
+    () => null
+  );
   useEffect(() => {
     const root = scope.current;
     const tip = el.current;

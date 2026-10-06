@@ -263,7 +263,6 @@ export function Roll({ text, className = "st-v" }: { text: string; className?: s
       window.clearTimeout(t1);
       window.clearTimeout(t2);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [text]);
   return (
     <span className={className} aria-live="off">

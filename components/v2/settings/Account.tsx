@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useState, useSyncExternalStore } from "react";
 import { nip19 } from "nostr-tools";
 import { useObservableState } from "applesauce-react/hooks";
 import { useAccountManager } from "@/components/ClientProviders";
@@ -16,12 +16,12 @@ export default function Account() {
   const accounts = useObservableState(manager.accounts$) || [];
   const active = useObservableState(manager.active$);
   const { done, copy } = useCopied();
-  const [skipped, setSkipped] = useState(false);
-  const [copiedKey, setCopiedKey] = useState(false);
-  useEffect(
-    () => setSkipped(localStorage.getItem("nsec_storing_skipped") === "true"),
-    []
+  const skipped = useSyncExternalStore(
+    () => () => {},
+    () => localStorage.getItem("nsec_storing_skipped") === "true",
+    () => false
   );
+  const [copiedKey, setCopiedKey] = useState(false);
 
   if (!active) return <SignedOut />;
 

@@ -5,7 +5,7 @@
    pictures) without spending sats. Nothing here ships: app/lab renders only
    in development. */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ChatContext } from "@/context/ChatProvider";
 import type { Conversation, Message, MessageAttachment } from "@/types/chat";
 import type { Model } from "@/types/models";
@@ -114,6 +114,9 @@ function seed(): Conversation[] {
   ];
 }
 
+// anything the lab does not fake reads as a no-op
+const UNFAKED = new Proxy({}, { get: (t, k) => (k in t ? (t as Record<PropertyKey, unknown>)[k] : () => undefined) });
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export function FakeChatProvider({ children }: { children: React.ReactNode }) {
@@ -174,7 +177,9 @@ export function FakeChatProvider({ children }: { children: React.ReactNode }) {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const abort = useRef(false);
   const convRef = useRef(activeId);
-  convRef.current = activeId;
+  useLayoutEffect(() => {
+    convRef.current = activeId;
+  });
 
   const setMessages = useCallback((m: Message[]) => {
     setMessagesState(m);
@@ -234,12 +239,12 @@ export function FakeChatProvider({ children }: { children: React.ReactNode }) {
       setThinking("");
       setStreamingConversationId(null);
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [setMessages, selectedModel]
   );
 
   const value = useMemo(() => {
     const base = {
+      __proto__: UNFAKED,
       conversations,
       conversationsLoaded: true,
       activeConversationId: activeId,
@@ -366,12 +371,7 @@ export function FakeChatProvider({ children }: { children: React.ReactNode }) {
         void run(base, activeId ?? "c1", edited._eventId);
       },
     };
-    return new Proxy(base, {
-      get(t, k: string) {
-        if (k in t) return (t as Record<string, unknown>)[k];
-        return () => undefined;
-      },
-    });
+    return base;
   }, [conversations, activeId, messages, setMessages, editingMessageIndex, editingContent, selectedModel, balance, late, isLoginModalOpen, collapsed, configuredModels, inputMessage, uploadedAttachments, isLoading, isPaymentProcessing, streamingConversationId, stream, thinking, run, syncing, syncNow]);
 
   const standIn = useMemo(() => ({ routes: labRoutes, picks: PICKS, currentKey }), [currentKey]);

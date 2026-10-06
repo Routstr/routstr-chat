@@ -32,20 +32,18 @@ export default function Boot({ ready, onDone, first: forceFirst }: { ready: bool
   const bloom = useRef<HTMLDivElement>(null);
   const dim = useRef<HTMLDivElement>(null);
   const done = useRef(onDone);
-  done.current = onDone;
-  const convN = useRef(conversations.length);
-  convN.current = conversations.length;
+  useEffect(() => {
+    done.current = onDone;
+  });
   // first light waits for the chats to load (a returning reader must not get
   // the first visit), but never long: after a moment it goes as it is
   const [settled, setSettled] = useState(false);
+  if (ready && conversationsLoaded && !settled) setSettled(true);
   useEffect(() => {
-    if (!ready) return;
-    if (conversationsLoaded) return setSettled(true);
+    if (!ready || conversationsLoaded) return;
     const t = window.setTimeout(() => setSettled(true), 1500);
     return () => window.clearTimeout(t);
   }, [ready, conversationsLoaded]);
-  const loaded = useRef(conversationsLoaded);
-  loaded.current = conversationsLoaded;
 
   // the furniture waits hidden until first light sets it down
   useEffect(() => {
@@ -89,7 +87,7 @@ export default function Boot({ ready, onDone, first: forceFirst }: { ready: bool
       done.current();
     };
     const reduced = reducedNow();
-    const full = !!first.current && loaded.current && convN.current === 0 && !reduced;
+    const full = !!first.current && conversationsLoaded && conversations.length === 0 && !reduced;
 
     // wait two frames: the app has mounted and laid out behind the veil
     raf = requestAnimationFrame(() =>

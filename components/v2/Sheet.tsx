@@ -28,9 +28,7 @@ const BOTH: Detent[] = ["mid", "full"];
 
 export default function Sheet(props: SheetProps) {
   const [mounted, setMounted] = useState(props.open);
-  useEffect(() => {
-    if (props.open) setMounted(true);
-  }, [props.open]);
+  if (props.open && !mounted) setMounted(true);
   // stable, so a parent that re-renders (a reply streaming) never restarts the close timer
   const gone = useCallback(() => setMounted(false), []);
   if (!mounted) return null;
@@ -88,7 +86,6 @@ function SheetBody({
     el.current?.getBoundingClientRect();
     requestAnimationFrame(() => put(yOf(rest), "in"));
     requestAnimationFrame(() => (initialFocus?.current ?? el.current)?.focus({ preventScroll: true }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   useEffect(() => {
@@ -102,12 +99,15 @@ function SheetBody({
   }, [open, put, yOf, onGone]);
 
   // a detent asked for from outside
+  const [ask, setAsk] = useState({ detent, move: false });
+  if (detent !== ask.detent) {
+    const move = open && !!detent && detent !== rest;
+    setAsk({ detent, move });
+    if (move) setRest(detent);
+  }
   useEffect(() => {
-    if (!open || !detent || detent === rest) return;
-    setRest(detent);
-    put(yOf(detent), "in");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [detent]);
+    if (ask.move) put(yOf(rest), "in");
+  }, [ask]);
 
   useEffect(() => {
     onDetent?.(rest);

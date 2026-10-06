@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { useChat } from "@/context/ChatProvider";
 import { commitLine, peekLine } from "./palette/greet";
@@ -15,12 +15,10 @@ export default function Greeting({ first, gone }: { first: boolean | null; gone:
   // chosen once for this page, when it is known which page this is, so the
   // palette's preview drew the same line
   const [line, setLine] = useState<string | null>(null);
+  if (!line && first !== null) setLine(peekLine(first));
   useEffect(() => {
-    if (line || first === null) return;
-    const l = peekLine(first);
-    setLine(l);
-    commitLine(l);
-  }, [line, first]);
+    if (line) commitLine(line);
+  }, [line]);
   const words = line ? line.split(" ") : [];
 
   return (
@@ -44,9 +42,12 @@ export default function Greeting({ first, gone }: { first: boolean | null; gone:
    composer's axis, halfway between the greeting's top and the composer's foot.
    It lives in the room itself, under the furniture. */
 function Pool({ gone }: { gone: boolean }) {
-  const [host, setHost] = useState<Element | null>(null);
+  const host = useSyncExternalStore(
+    () => () => {},
+    () => document.querySelector(".v2"),
+    () => null
+  );
   const el = useRef<HTMLDivElement>(null);
-  useEffect(() => setHost(document.querySelector(".v2")), []);
   useLayoutEffect(() => {
     const p = el.current;
     if (!p) return;

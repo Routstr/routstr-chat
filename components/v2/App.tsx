@@ -72,7 +72,6 @@ function Behaviour() {
     if (tab !== "apikeys" || !isAuthenticated) return;
     ui.openSettings("keys");
     replaceQuery((p) => p.delete("tab"));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, isAuthenticated]);
 
   // ?cashu=<token>: redeem it once, on arrival, then take it out of the address
@@ -97,7 +96,6 @@ function Behaviour() {
         toast.error(e instanceof Error ? e.message : "That token could not be received");
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authChecked, cashuParam, isAuthenticated, isWalletLoading]);
 
   // the open chat lives in the address bar, both ways
@@ -116,7 +114,6 @@ function Behaviour() {
     if (chatIdFromUrl === activeConversationId) return;
     pendingUrlSync.current = true;
     replaceQuery((p) => p.set("chatId", activeConversationId));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeConversationId, chatIdFromUrl]);
 
   useEffect(() => {

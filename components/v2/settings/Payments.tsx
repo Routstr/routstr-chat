@@ -1,12 +1,12 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { useChat } from "@/context/ChatProvider";
 import { useBitcoinConnectStatus } from "@/hooks/useBitcoinConnect";
 import { useCashuStore } from "@/features/wallet";
 import { useCashuWallet } from "@/features/wallet/hooks/useCashuWallet";
 import { useCashuToken } from "@/features/wallet/hooks/useCashuToken";
-import { loadAutoRefillNWCSettings, saveAutoRefillNWCSettings, type AutoRefillNWCSettings, DEFAULT_AUTO_REFILL_NWC_SETTINGS } from "@/utils/storageUtils";
+import { loadAutoRefillNWCSettings, saveAutoRefillNWCSettings, type AutoRefillNWCSettings } from "@/utils/storageUtils";
 import { Icon } from "../icons";
 import { useUi } from "../ui";
 import { useMoney } from "../useMoney";
@@ -28,9 +28,8 @@ export default function Payments() {
 
   /* ── Lightning: a connected wallet, and topping up by itself ───────────── */
   const nwc = useBitcoinConnectStatus();
-  const [refill, setRefill] = useState<AutoRefillNWCSettings>(DEFAULT_AUTO_REFILL_NWC_SETTINGS);
+  const [refill, setRefill] = useState<AutoRefillNWCSettings>(loadAutoRefillNWCSettings);
   const [nwcOff, setNwcOff] = useState(false);
-  useEffect(() => setRefill(loadAutoRefillNWCSettings()), []);
   const updateRefill = (u: Partial<AutoRefillNWCSettings>) => {
     const next = { ...refill, ...u };
     setRefill(next);
