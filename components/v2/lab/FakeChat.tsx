@@ -155,13 +155,19 @@ export function FakeChatProvider({ children }: { children: React.ReactNode }) {
   const loadingModels = !!params.get("loading");
   const [configuredModels, setConfiguredModels] = useState<string[]>(["anthropic/claude-sonnet-5", "openai/gpt-5", "deepseek/deepseek-v3.2@@https://api.nonkycai.com/"]);
   const [balance, setBalance] = useState(() => Number(params.get("balance") ?? 2140));
-  // ?late=1: the balance arrives a moment after the page, as a wallet loading from its mint and relays does
+  // ?late=<ms>: the balance arrives a moment after the page, as a wallet loading from its mint and relays does
   const [late, setLate] = useState(() => params.has("late"));
   useEffect(() => {
     if (!late) return;
-    const t = window.setTimeout(() => setLate(false), 2500);
+    const t = window.setTimeout(() => setLate(false), Number(params.get("late")) || 2500);
     return () => window.clearTimeout(t);
   }, [late]);
+  // ?bump=<ms>: 1,000 sats land that long after the page, as a paid invoice does
+  useEffect(() => {
+    if (!params.has("bump")) return;
+    const t = window.setTimeout(() => setBalance((b) => b + 1000), Number(params.get("bump")) || 4000);
+    return () => window.clearTimeout(t);
+  }, []);
   const [collapsed, setCollapsed] = useState(false);
   const [editingMessageIndex, setEditingMessageIndex] = useState<number | null>(null);
   const [editingContent, setEditingContent] = useState("");
