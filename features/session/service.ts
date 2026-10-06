@@ -70,7 +70,13 @@ export class SessionService {
     this.manager.setActive(id);
   }
 
+  /** Removing the active account moves to the next one first, so a removal
+   *  never leaves accounts with none in use. */
   remove(id: string): void {
+    const next = this.manager.accounts$.value.find((a) => a.id !== id);
+    if (this.manager.active$.value?.id === id && next) {
+      this.manager.setActive(next);
+    }
     this.manager.removeAccount(id);
   }
 

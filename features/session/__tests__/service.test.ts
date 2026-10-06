@@ -62,6 +62,18 @@ describe("SessionService", () => {
       pubkey: alice.pubkey,
       generation: 2,
     });
+
+    session.remove(aliceAgain.id);
+    expect(session.getSnapshot()).toMatchObject({
+      accountId: alice.id,
+      generation: 3,
+    });
+    session.remove(alice.id);
+    session.remove(bob.id);
+    expect(session.getSnapshot()).toMatchObject({
+      pubkey: null,
+      generation: 5,
+    });
   });
 
   it("tells its listeners before anything else that watches the active account", () => {

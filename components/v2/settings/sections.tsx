@@ -177,6 +177,12 @@ export function Look() {
 }
 
 /* ── Account ─────────────────────────────────────────────────────────────── */
+// Another key's coins stay on this device when it is removed, but only that
+// key opens them again
+const holdsMoney = (pubkey: string) =>
+  useCashuStore.of(pubkey).getState().proofs.length > 0 ||
+  useUnclaimedTokensStore.of(pubkey).getState().unclaimedTokens.length > 0;
+
 export function Account({ go }: { go: (id: SettingsSection) => void }) {
   const { manager, session } = useAccountManager();
   const switchTo = useSwitchAccount();
@@ -412,8 +418,10 @@ export function Account({ go }: { go: (id: SettingsSection) => void }) {
                       }
                     >
                       <p>
-                        Remove <b>{short(n, 12, 6)}</b> from this device? You
-                        can add it again with its secret key.
+                        Remove <b>{short(n, 12, 6)}</b> from this device?{" "}
+                        {rm === o.id && holdsMoney(o.pubkey)
+                          ? "It still holds sats here. They stay here for this key, and only this key opens them again. Back up its key, or switch to it and send the sats out first."
+                          : "You can add it again with its secret key."}
                       </p>
                     </Say>
                   </Fold>
@@ -427,7 +435,7 @@ export function Account({ go }: { go: (id: SettingsSection) => void }) {
         <Row
           wrap
           title="Sign out of this device"
-          note="Clears chats, settings and the wallet stored here."
+          note="Your sats stay here for this key and come back when you sign in with it again. A connected Lightning wallet is disconnected."
         >
           <Btn
             controls="f-signout"
@@ -456,14 +464,13 @@ export function Account({ go }: { go: (id: SettingsSection) => void }) {
                 )}
                 <Btn
                   kind="warn"
-                  icon="trash"
                   onClick={async () => {
                     await logout();
                     ui.closeSettings();
                     router.push("/");
                   }}
                 >
-                  Sign out and clear
+                  Sign out
                 </Btn>
               </>
             }
@@ -477,13 +484,12 @@ export function Account({ go }: { go: (id: SettingsSection) => void }) {
                     ? ` and ${plural(unclaimed.length, "unclaimed token")}`
                     : ""}
                 </b>
-                . Signing out erases them here. Back up your key or send the
-                sats out first.
+                . They stay here for this key, and only this key opens them
+                again. Back up your key or send the sats out first.
               </p>
             ) : (
               <p>
-                Everything stored on this device is cleared. With your key you
-                can sign back in and sync your chats again.
+                With your key you can sign back in and sync your chats again.
               </p>
             )}
           </Say>

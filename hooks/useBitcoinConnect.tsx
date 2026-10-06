@@ -1,6 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import {
+  loadAutoRefillNWCSettings,
+  saveAutoRefillNWCSettings,
+} from "@/utils/storageUtils";
 
 export type BitcoinConnectStatus = "disconnected" | "connecting" | "connected";
 
@@ -60,6 +64,13 @@ const launchBitcoinConnectModal = async () => {
 const disconnectBitcoinConnect = async () => {
   const mod = await getBitcoinConnectModule();
   return mod.disconnect();
+};
+
+/** At sign out: the Lightning wallet on this device belongs to no account,
+ *  so it is disconnected and auto-refill from it is turned off. */
+export const leaveDeviceWallet = async () => {
+  saveAutoRefillNWCSettings({ ...loadAutoRefillNWCSettings(), enabled: false });
+  await disconnectBitcoinConnect();
 };
 
 export const useBitcoinConnectStatus = () => {

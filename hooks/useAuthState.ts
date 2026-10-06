@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
-import { clearAllStorage } from "@/utils/storageUtils";
 import { useAccountManager } from "@/components/ClientProviders";
+import { leaveDeviceWallet } from "@/hooks/useBitcoinConnect";
 import { useObservableState } from "applesauce-react/hooks";
 
 export interface UseAuthStateReturn {
@@ -21,14 +21,14 @@ export const useAuthState = (): UseAuthStateReturn => {
 
   const isAuthenticated = accounts.length > 0;
 
+  /** Signs the active account out. Nothing it owns is deleted: its coins,
+   *  tokens and unfinished payments stay under its own name on this device
+   *  and come back when it signs in again. The next account takes over, and
+   *  nobody after this one may pay from this device's Lightning wallet. */
   const logout = useCallback(async () => {
-    // Logout from applesauce-accounts
     const activeAccount = manager.active$.value;
     if (activeAccount) session.remove(activeAccount.id);
-    // Optionally remove all accounts if that's what logout should do
-    // For now, just clearing active account and storage seems consistent with existing logic
-
-    clearAllStorage();
+    await leaveDeviceWallet();
   }, [manager, session]);
 
   // Set authChecked to true on initial render

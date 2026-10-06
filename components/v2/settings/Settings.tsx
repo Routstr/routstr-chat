@@ -70,7 +70,7 @@ export const INDEX: [string, SettingsSection, string, string, string, string?][]
   ["Public key", "account", "g-you", "npub identity profile copy", "Your key is your account."],
   ["Back up secret key", "account", "g-backup", "nsec private key backup export save", "Anyone with it can read your chats and spend your sats."],
   ["Other keys on this device", "account", "g-others", "switch account accounts", ""],
-  ["Sign out", "account", "g-signout", "log out logout clear device", "Clears chats, settings and the wallet stored here."],
+  ["Sign out", "account", "g-signout", "log out logout", "Your sats stay here for this key."],
   ["Balance", "wallet", "g-balance", "sats wallet money funds", "On this device."],
   ["How replies are paid", "wallet", "g-paying", "spend mode per request ecash change x-cashu", "Each message carries its own ecash and the change comes back to your wallet."],
   ["Lightning wallet", "wallet", "g-lightning", "nwc nostr wallet connect alby invoice", "Connect one with Nostr Wallet Connect to pay invoices without leaving the chat."],

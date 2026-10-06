@@ -1,5 +1,4 @@
 import { TransactionHistory } from "@/types/chat";
-import { useCashuStore } from "@/features/wallet/state/cashuStore";
 import { owned } from "@/features/session/owned";
 
 /**
@@ -140,20 +139,6 @@ export const hasStorageItem = (key: string): boolean => {
   } catch (error) {
     console.error(`Error checking existence of key "${key}":`, error);
     return false;
-  }
-};
-
-/**
- * Clear all localStorage items and Cashu store (use with caution)
- */
-export const clearAllStorage = (): void => {
-  if (!canUseLocalStorage()) return;
-  try {
-    localStorage.clear();
-    // Also clear the Cashu store
-    useCashuStore.getState().clearStore();
-  } catch (error) {
-    console.error("Error clearing storage:", error);
   }
 };
 

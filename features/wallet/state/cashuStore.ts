@@ -88,7 +88,6 @@ export interface CashuStore {
   getActiveMintUrl: () => string | undefined;
   setPendingOnboardingToken: (token: string | undefined) => void;
   getPendingOnboardingToken: () => string | undefined;
-  clearStore: () => void;
 }
 
 // Usage:
@@ -369,16 +368,6 @@ export const useCashuStore = ownedStore<CashuStore>()(
 
       getPendingOnboardingToken() {
         return get().pendingOnboardingToken;
-      },
-
-      clearStore() {
-        set({
-          mints: [],
-          proofs: [],
-          privkey: undefined,
-          activeMintUrl: undefined,
-          pendingOnboardingToken: undefined,
-        });
       },
     }),
     { name: "cashu" }
