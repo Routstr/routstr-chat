@@ -18,8 +18,9 @@ import { useTransactionHistoryStore } from "./state/transactionHistoryStore";
 
 export { peek } from "./purse";
 
-/** Each account's purse, filled by the composition root (runtime/wallet's
- *  purseFor). Without it screens have no purse and money buttons do nothing. */
+/** Each account's purse for the person's own moves, filled by the composition
+ *  root (runtime/wallet's walletPurseFor). Without it screens have no purse and
+ *  money buttons do nothing. */
 export const PurseContext = createContext<((owner: string) => Purse) | null>(
   null
 );

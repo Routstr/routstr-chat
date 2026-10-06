@@ -129,21 +129,29 @@ export function registerRecorder(owner: string, record: Recorder): () => void {
   return () => recorders.delete(owner);
 }
 
-export const legacyActivity: ActivityLog = {
+/** Activity kept on this device only: chat's per-reply payments and refunds,
+ *  so a reply never asks the signer for anything. */
+export const localActivity: ActivityLog = {
   record(owner, { direction, sats }) {
-    const amount = String(sats);
-    const record = recorders.get(owner);
-    if (record) return record({ direction, amount });
-    // an account whose wallet is not open has no signer here: this device only
     useTransactionHistoryStore
       .of(owner)
       .getState()
       .addHistoryEntry({
         id: crypto.randomUUID(),
         direction,
-        amount,
+        amount: String(sats),
         timestamp: Math.floor(Date.now() / 1000),
       });
+  },
+};
+
+/** Activity of moves the person makes on the wallet screens: published
+ *  (NIP-60) through the open wallet, else kept on this device. */
+export const legacyActivity: ActivityLog = {
+  record(owner, entry) {
+    const record = recorders.get(owner);
+    if (!record) return localActivity.record(owner, entry);
+    record({ direction: entry.direction, amount: String(entry.sats) });
   },
 };
 

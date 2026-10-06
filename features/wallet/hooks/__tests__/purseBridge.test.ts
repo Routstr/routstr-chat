@@ -53,6 +53,7 @@ import {
   legacyActivity,
   legacyCoins,
   listMint,
+  localActivity,
   registerCommitter,
   registerRecorder,
 } from "../purseBridge";
@@ -141,4 +142,15 @@ it("lists a mint about to be paid into, before any coin is there", async () => {
   // a listed mint with its keysets is left alone
   await listMint(useCashuStore.of("alice").getState(), "m1");
   expect(state.activateMint).toHaveBeenCalledTimes(1);
+});
+
+it("keeps a reply's activity on this device, even for the open account", () => {
+  const record = vi.fn();
+  const close = registerRecorder("carol", record);
+  localActivity.record("carol", { direction: "out", sats: 21 });
+  expect(record).not.toHaveBeenCalled();
+  expect(state.local).toContainEqual(
+    expect.objectContaining({ owner: "carol", direction: "out", amount: "21" })
+  );
+  close();
 });
