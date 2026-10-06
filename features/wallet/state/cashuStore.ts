@@ -219,9 +219,11 @@ export const useCashuStore = ownedStore<CashuStore>()(
         // filter only active keysets
         // const activeKeysets = keysets.filter((keyset) => keyset.active);
         // get all proofs for the keysets from store
-        const proofs = get().proofs.filter((proof) =>
-          keysets.some((keyset) => keyset.id === proof.id)
+        // a reload brings cashu-ts keysets back with their fields as _id
+        const ids = new Set(
+          keysets.map((k) => k.id ?? (k as unknown as { _id?: string })._id)
         );
+        const proofs = get().proofs.filter((proof) => ids.has(proof.id));
         return proofs;
       },
 
