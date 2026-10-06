@@ -7,7 +7,7 @@ import { useExportedKeys } from "@/features/keys/view";
 import { useAccountManager } from "@/features/session/view";
 import { useSyncSetting } from "@/features/history/view";
 import { useSdkUsageHistory } from "@/features/wallet/hooks/useSdkUsageHistory";
-import { loadRemoteNode } from "@/utils/storageUtils";
+import { useNode } from "@/features/node/view";
 import { useBitcoinConnectStatus } from "@/hooks/useBitcoinConnect";
 import { Icon, type IconName } from "../icons";
 import { useUi, type SettingsSection } from "../ui";
@@ -128,6 +128,7 @@ function Layer({ leaving }: { leaving: boolean }) {
   const ui = useUi();
   const room = useRoom();
   const money = useMoney();
+  const { node: savedNode } = useNode();
   const [chatSyncEnabled] = useSyncSetting();
   const { manager } = useAccountManager();
   const active = useObservableState(manager.active$);
@@ -186,7 +187,7 @@ function Layer({ leaving }: { leaving: boolean }) {
 
   /* ── every section's live value; a change rolls in (the signature) ──── */
   const nodeState = (() => {
-    const n = loadRemoteNode();
+    const n = savedNode;
     // saved but not paying, the node carries nothing; saved for another key, it waits for that key
     if (!n) return "Off";
     if (money.node) return "Paying";

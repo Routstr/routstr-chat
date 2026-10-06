@@ -4,9 +4,7 @@ import React, { useState } from "react";
 import { nip19 } from "nostr-tools";
 import { useObservableState } from "applesauce-react/hooks";
 import { useAccountManager } from "@/features/session/view";
-import { connectRemoteNode, RemoteNodeError } from "@/lib/remoteNode";
-import { normalizeProviderUrl } from "@/utils/torUtils";
-import { loadRemoteNode, saveRemoteNode, type RemoteNode } from "@/utils/storageUtils";
+import { NodeError, nodeUrl, useNode } from "@/features/node/view";
 import { useUi } from "../ui";
 import { Btn, Grp, Head, Row } from "./parts";
 import NodePath from "./NodePath";
@@ -17,18 +15,14 @@ export default function Node() {
   const { manager } = useAccountManager();
   const active = useObservableState(manager.active$);
   const ui = useUi();
-  const [node, setNode] = useState<RemoteNode | null>(() => loadRemoteNode());
+  const { node, save: persist, connect: link } = useNode();
   const [url, setUrl] = useState(node?.url ?? "");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<NodeErr>(null);
-  const persist = (n: RemoteNode | null) => {
-    saveRemoteNode(n);
-    setNode(n);
-  };
   const npub = active ? nip19.npubEncode(active.pubkey) : "";
   const connect = async () => {
     setErr(null);
-    const normalized = normalizeProviderUrl(url);
+    const normalized = nodeUrl(url);
     if (!normalized)
       return setErr({
         text: "Enter the address of a routstrd node, like https://node.example",
@@ -36,24 +30,18 @@ export default function Node() {
     if (!active) return;
     setBusy(true);
     try {
-      const apiKey = await connectRemoteNode(normalized, active);
-      persist({
-        url: normalized,
-        apiKey,
-        pubkey: active.pubkey,
-        enabled: true,
-      });
+      await link(normalized, active.pubkey, active);
       setUrl(normalized);
     } catch (e) {
       setErr(
-        e instanceof RemoteNodeError && e.unauthorized
+        e instanceof NodeError && e.unauthorized
           ? {
               text: "The node answered, but it does not know your key yet.",
               unauth: true,
             }
           : {
-              // remoteNode.ts words its errors for the person
-              text: e instanceof RemoteNodeError ? e.message : "Could not reach a routstrd node at that address. Check it, and that the node is running.",
+              // the node link words its errors for the person
+              text: e instanceof NodeError ? e.message : "Could not reach a routstrd node at that address. Check it, and that the node is running.",
             }
       );
     } finally {

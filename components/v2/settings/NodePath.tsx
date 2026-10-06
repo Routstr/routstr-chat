@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import type { RemoteNode } from "@/utils/storageUtils";
+import type { RemoteNode } from "@/features/node/view";
 import { hostOf } from "./parts";
 
 export default function NodePath({ node, on, mismatch, pays }: { node: RemoteNode | null; on: boolean; mismatch: boolean; pays: boolean }) {

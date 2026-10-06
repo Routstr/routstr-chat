@@ -1,6 +1,6 @@
 import type { StorageAdapter, WalletAdapter } from "@routstr/sdk/wallet";
 import type { Pay } from "@/features/chat/ports";
-import { withNodeModeError } from "@/lib/remoteNode";
+import { withNodeModeError } from "./nodeErrors";
 import { lockedAfter } from "./lateWrites";
 import type { Keys, Purse, Sdk, Spending } from "./ports";
 

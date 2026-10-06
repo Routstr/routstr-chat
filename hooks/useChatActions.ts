@@ -27,7 +27,7 @@ import {
 import { fetchAIResponse, consoleLogger, isTorContext } from "@routstr/sdk";
 import { toast } from "sonner";
 import { useNodePays } from "@/hooks/useRemoteNode";
-import { withNodeModeError } from "@/lib/remoteNode";
+import { withNodeModeError } from "@/features/payments/nodeErrors";
 
 export interface UseChatActionsReturn {
   inputMessage: string;

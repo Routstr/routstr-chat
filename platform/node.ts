@@ -2,23 +2,12 @@
 // get-or-create so a reconnect or a second device recovers the same key.
 
 import { nip98 } from "nostr-tools";
-import type { EventTemplate, NostrEvent } from "nostr-tools";
+import { NodeError, type NodeLink, type NodeSigner } from "@/features/node/ports";
 
 const CLIENT_ID = "routstr-chat";
 
-type Signer = { signEvent: (template: EventTemplate) => Promise<NostrEvent> };
-
-export class RemoteNodeError extends Error {
-  constructor(
-    message: string,
-    readonly unauthorized = false
-  ) {
-    super(message);
-  }
-}
-
 async function signedFetch(
-  signer: Signer,
+  signer: NodeSigner,
   url: string,
   method: "GET" | "POST",
   body?: Record<string, unknown>
@@ -40,62 +29,28 @@ async function signedFetch(
   });
 }
 
-/**
- * The SDK words failures as if the reader's own wallet were paying, which sends
- * them to top up sats they do not need to spend. The "Uncaught Error" prefix is
- * what keeps a system message visible in the transcript.
- */
-export function withNodeModeError<T extends { role: string; content: unknown }>(
-  message: T
-): T {
-  if (message.role !== "system" || typeof message.content !== "string") {
-    return message;
-  }
-  const say = (text: string) => ({ ...message, content: `Uncaught Error: ${text}` });
-
-  if (/insufficient balance/i.test(message.content)) {
-    return say(
-      "The node is out of credit. Ask whoever runs it to top it up, or turn off node mode in Settings to pay from your wallet."
-    );
-  }
-  if (/all providers failed|failed to fetch/i.test(message.content)) {
-    return say(
-      "Could not reach the node. Check it is running, or turn off node mode in Settings to pay from your wallet."
-    );
-  }
-  if (/does not offer model/i.test(message.content)) {
-    return say(
-      "The node does not offer this model. Pick one of the node's models from the selector."
-    );
-  }
-  return message;
-}
-
-/** Throws RemoteNodeError, whose message is meant to be shown to the user. */
-export async function connectRemoteNode(
-  url: string,
-  signer: Signer
-): Promise<string> {
+/** Throws NodeError, whose message is meant to be shown to the user. */
+async function connect(url: string, signer: NodeSigner): Promise<string> {
   // a Routstr provider answers /v1/info but has no /clients (in a browser the call fails outright,
   // as its 404 carries no CORS headers): it is not a node to pay through
   const provider = () => fetch(`${url}v1/info`).then((r) => r.ok).catch(() => false);
   const notNode =
     "That address is a Routstr provider, not a routstrd node. Providers are found on their own: pick one of its models in the model picker.";
   const listed = await signedFetch(signer, `${url}clients`, "GET").catch(async () => {
-    throw new RemoteNodeError(
+    throw new NodeError(
       (await provider())
         ? notNode
         : "Could not reach that node. Check the address, and note that a browser on https cannot call an http node."
     );
   });
   if (listed.status === 403) {
-    throw new RemoteNodeError(
+    throw new NodeError(
       "This node has not authorized your npub yet. Ask its operator to add it, then try again.",
       true
     );
   }
   if (!listed.ok) {
-    throw new RemoteNodeError(
+    throw new NodeError(
       listed.status === 404 && (await provider()) ? notNode : `The node rejected the request (HTTP ${listed.status}).`
     );
   }
@@ -110,13 +65,15 @@ export async function connectRemoteNode(
     id: CLIENT_ID,
   });
   if (!created.ok) {
-    throw new RemoteNodeError(
+    throw new NodeError(
       `The node would not issue a key (HTTP ${created.status}).`
     );
   }
   const apiKey = (await created.json())?.output?.client?.apiKey;
   if (!apiKey) {
-    throw new RemoteNodeError("The node did not return an API key.");
+    throw new NodeError("The node did not return an API key.");
   }
   return apiKey;
 }
+
+export const nodeLink: NodeLink = { connect };
