@@ -93,10 +93,13 @@
     "@types/react": "19.2.2",
     "@types/react-dom": "19.2.2",
     "@types/react-syntax-highlighter": "^15.5.13",
+    "@types/ws": "^8.18.1",
     "baseline-browser-mapping": "^2.9.12",
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
     "eslint-config-prettier": "^10.1.8",
+    "fake-indexeddb": "^6.2.5",
+    "fast-check": "^4.10.2",
     "msw": "^2.11.3",
     "null-loader": "^4.0.1",
     "playwright": "^1.56.1",
@@ -104,7 +107,8 @@
     "tailwindcss": "^4",
     "tsx": "^4.21.0",
     "typescript": "^5",
-    "vitest": "^2.1.8"
+    "vitest": "^2.1.8",
+    "ws": "^8.21.0"
   },
   "msw": {
     "workerDirectory": [
