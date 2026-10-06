@@ -85,7 +85,7 @@ describe("the app's relay pool", () => {
 
       const got = await new Relays(poolPort(pool), memoryStorage(), `?relays=${kit.url}`)
         .of(owner)
-        .fetch(filter, async () => [both, ours]);
+        .fetch(filter, [both, ours]);
 
       // read page by page, the relay would have sent `both` as well
       expect(ids(got.events)).toEqual([theirs.id]);

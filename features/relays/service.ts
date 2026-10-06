@@ -120,13 +120,12 @@ export class Relays {
   async fetch(
     urls: string[],
     filter: Filter,
-    ours?: () => Promise<NostrEvent[]>
+    ours: NostrEvent[] = []
   ): Promise<Fetched> {
-    const held = ours ? await ours() : [];
     const results = await Promise.all(
       urls.map(async (url) => ({
         url,
-        ...(await this.syncOne(url, filter, held)),
+        ...(await this.syncOne(url, filter, ours)),
       }))
     );
     const events = new Map<string, NostrEvent>();
@@ -268,7 +267,7 @@ export class AccountRelays {
     return accepted;
   }
 
-  fetch(filter: Filter, ours?: () => Promise<NostrEvent[]>): Promise<Fetched> {
+  fetch(filter: Filter, ours?: NostrEvent[]): Promise<Fetched> {
     return this.hub.fetch(this.urls(), filter, ours);
   }
 

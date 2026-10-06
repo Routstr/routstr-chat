@@ -151,7 +151,7 @@ describe("AccountRelays", () => {
     net.relay(R1).events.set(mine[0].id, mine[0]);
     const account = new Relays(net.port, memoryStorage()).of(OWNER);
 
-    await account.fetch({ kinds: [1080], authors: [OWNER] }, async () => mine);
+    await account.fetch({ kinds: [1080], authors: [OWNER] }, mine);
 
     expect(net.relay(R1).received.map((e) => e.id)).toEqual([mine[1].id]);
     expect(
@@ -171,7 +171,7 @@ describe("AccountRelays", () => {
 
     const { events, answered } = await account.fetch(
       { kinds: [1080], authors: [OWNER] },
-      async () => [both, ours]
+      [both, ours]
     );
 
     expect(events.map((e) => e.id)).toEqual([theirs.id]);
@@ -190,9 +190,7 @@ describe("AccountRelays", () => {
         net.relay(R1).events.set(theirs.id, theirs);
         const account = new Relays(net.port, memoryStorage(), `?relays=${R1}`).of(OWNER);
 
-        const fetching = account.fetch({ kinds: [1080], authors: [OWNER] }, async () =>
-          setup === "empty" ? [] : [ours]
-        );
+        const fetching = account.fetch({ kinds: [1080], authors: [OWNER] }, setup === "empty" ? [] : [ours]);
         await vi.advanceTimersByTimeAsync(20_000);
         const { events, answered } = await fetching;
 

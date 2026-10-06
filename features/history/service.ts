@@ -263,8 +263,9 @@ export class HistoryService {
         .filter((keyring) => !keyring.keys)
         .map((keyring) => this.openOne(keyring.event))
     );
-    const found = await this.deps.relays.fetch(this.keyringFilter(), () =>
-      this.deps.log.query(this.keyringFilter())
+    const found = await this.deps.relays.fetch(
+      this.keyringFilter(),
+      await this.deps.log.query(this.keyringFilter())
     );
     await Promise.all(
       found.events.map((event) => this.addKeyring(event, true))
@@ -301,7 +302,7 @@ export class HistoryService {
     }
     const { events, answered } = await this.deps.relays.fetch(
       this.historyFilter(author),
-      () => this.deps.log.query(this.historyFilter(author))
+      await this.deps.log.query(this.historyFilter(author))
     );
     this.receive(events, keys);
     return answered.length > 0;
