@@ -1,6 +1,6 @@
-// Receiving a token however it carries its keyset ids, from a mint with the old-style ids and from
-// one with the new-style "01…" ids (nutshell 0.20, Minibits): what the token says, and what the
-// mint itself then holds.
+// Receiving a token however it carries its keyset ids, from mints with the old-style ids and the
+// new-style "01…" ids (nutshell 0.20, Minibits): what the token says, and what the mint itself
+// then holds.
 import {
   getEncodedToken,
   getEncodedTokenBinary,
@@ -37,14 +37,15 @@ const styles: Record<string, (mint: string, proofs: Proof[]) => string> = {
     ),
 };
 
+// the kit's main mint has old-style ids, or new-style ones under KIT_KEYSETS=v2;
+// its second mint always has new-style ones
 describe.each([
-  ["a mint with old-style keyset ids", () => kit.env.mintUrl, "00"],
-  ["a mint with new-style keyset ids", () => kit.env.invoiceMintUrl, "01"],
-])("receiving from %s", (_, mintUrl, idStyle) => {
+  ["the kit's main mint", () => kit.env.mintUrl],
+  ["the kit's second mint", () => kit.env.invoiceMintUrl],
+])("receiving from %s", (_, mintUrl) => {
   it.each(Object.keys(styles))("reads and receives %s", async (style) => {
     const mint = mintUrl();
     const sent = bare(await kit.mintProofs(16, mint));
-    expect(sent[0].id.slice(0, 2)).toBe(idStyle);
     const token = styles[style](mint, sent);
 
     // the amount and mint are read without the mint's keysets
@@ -60,6 +61,9 @@ describe.each([
     const received = await executor.receive(token);
 
     expect(sum(received)).toBe(16);
+    // fresh coins, signed with the mint's active keyset
+    const active = (await kit.walletAt(mint)).keysetId;
+    expect(new Set(received.map((p) => p.id))).toEqual(new Set([active]));
     expect(stored).toEqual(received);
     expect(await kit.coinStates(received, mint)).toEqual(
       received.map(() => "UNSPENT")

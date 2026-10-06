@@ -52,3 +52,12 @@ test("switches between two keys on one device, each with its own money", async (
   await v2.switchAccount(page); // to the other key (0 sats) and back (40)
   expect(await v2.balance(page)).toBe(40);
 });
+
+// the second mint always serves new-style keyset ids ("01…"), which a token carries short
+test("receives a token from the second mint", async ({ page, kit, appUrl }) => {
+  await v2.open(page, appUrl);
+  const token = await kit.mintToken(30, { otherMint: true });
+  await v2.receive(page, token);
+  expect(await v2.balance(page)).toBe(30);
+  expect(new Set(await kit.tokenStates(token))).toEqual(new Set(["SPENT"]));
+});
