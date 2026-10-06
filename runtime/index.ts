@@ -10,11 +10,12 @@ export const session = new SessionService();
 
 if (typeof window !== "undefined") {
   session.boot(window.localStorage, savedInIndexedDB());
-  // a main tab from before the update cleared localStorage when someone
-  // signed out there: the accounts go back into it from this tab
+  // another tab added or removed an account, or a main tab from before the
+  // update cleared localStorage when someone signed out there
   window.addEventListener("storage", (event) => {
-    if (event.key === null || (event.key === "accounts" && !event.newValue)) {
-      session.repair();
+    const wiped = event.key === "activeAccount" && !event.newValue;
+    if (event.key === null || event.key === "accounts" || wiped) {
+      session.refresh();
     }
   });
   // the first listener, so stores follow the owner before anything reads them

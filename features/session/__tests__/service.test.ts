@@ -129,8 +129,10 @@ describe("SessionService", () => {
 
     // open: the tab writes its mirror again
     mainSignOut(storage);
-    first.repair();
+    first.refresh();
     expect(storage.getItem("activeAccount")).toBe(alice.id);
+    await settle();
+    expect(JSON.parse(storage.getItem("accounts")!)).toHaveLength(2);
 
     // closed: the next start reads the saved copy
     mainSignOut(storage);
@@ -201,5 +203,140 @@ describe("SessionService", () => {
       carol.pubkey,
     ]);
     expect(JSON.parse(data.get("accounts")!)).toHaveLength(2);
+  });
+
+  it("keeps a key another tab made, when this tab adds one before it heard", async () => {
+    // two tabs share localStorage and IndexedDB
+    const storage = memory();
+    const { saved, data } = savedCopy();
+    const guest = new SessionService();
+    guest.boot(storage, saved);
+    const other = new SessionService();
+    other.boot(storage, saved);
+    await settle();
+
+    // a ?cashu= link opens in the other tab, which makes a key for its coins
+    const k1 = key();
+    other.add(k1);
+    await settle();
+    // the guest tab's top-up makes a second key
+    const k2 = key();
+    guest.add(k2);
+    await settle();
+
+    const ids = (json: string | null | undefined) =>
+      JSON.parse(json ?? "[]").map((a: { id: string }) => a.id);
+    expect(ids(data.get("accounts"))).toEqual([k1.id, k2.id]);
+    expect(ids(storage.getItem("accounts"))).toEqual([k1.id, k2.id]);
+  });
+
+  it("follows the other tabs: takes in what they added, lets go of what they removed", async () => {
+    const storage = memory();
+    const { saved, data } = savedCopy();
+    const one = new SessionService();
+    one.boot(storage, saved);
+    const two = new SessionService();
+    two.boot(storage, saved);
+    await settle();
+    const alice = key();
+    const bob = key();
+    two.add(alice);
+    two.add(bob);
+    await settle();
+
+    // the storage event from tab two's write
+    one.refresh();
+    await settle();
+    expect(one.accounts.accounts$.value.map((a) => a.id)).toEqual([
+      alice.id,
+      bob.id,
+    ]);
+    expect(one.getSnapshot().pubkey).toBe(bob.pubkey);
+
+    // tab two removes bob; tab one adds carol before it heard
+    two.remove(bob.id);
+    const carol = key();
+    one.add(carol);
+    await settle();
+    one.refresh();
+    await settle();
+    const ids = [alice.id, carol.id];
+    expect(
+      JSON.parse(data.get("accounts")!).map((a: { id: string }) => a.id)
+    ).toEqual(ids);
+    expect(one.accounts.accounts$.value.map((a) => a.id)).toEqual(ids);
+  });
+
+  it("never signs back in to the last key signed out of, even from a main tab's stale list", async () => {
+    const storage = memory();
+    const { saved } = savedCopy();
+    const first = new SessionService();
+    first.boot(storage, saved);
+    await settle();
+    const alice = key();
+    first.add(alice);
+    await settle();
+    first.remove(alice.id);
+    await settle();
+
+    // a main tab that still had alice writes its list
+    storage.setItem("accounts", JSON.stringify([alice.toJSON()]));
+    const next = new SessionService();
+    next.boot(storage, saved);
+    await settle();
+    expect(next.getSnapshot().pubkey).toBeNull();
+  });
+
+  it("keeps a new key when a main tab wipes localStorage before it was written", async () => {
+    const storage = memory();
+    const { saved, data } = savedCopy();
+    const session = new SessionService();
+    session.boot(storage, saved);
+    await settle();
+
+    const alice = key();
+    session.add(alice);
+    mainSignOut(storage);
+    await settle();
+
+    expect(session.getSnapshot().pubkey).toBe(alice.pubkey);
+    expect(
+      JSON.parse(data.get("accounts")!).map((a: { id: string }) => a.id)
+    ).toEqual([alice.id]);
+  });
+
+  it("never writes an older list over a newer one, however slow IndexedDB is", async () => {
+    const storage = memory();
+    const { saved, data } = savedCopy();
+    const one = new SessionService();
+    one.boot(storage, saved);
+    const two = new SessionService();
+    two.boot(storage, saved);
+    await settle();
+
+    // the next write to IndexedDB hangs until let go
+    let letGo: () => void = () => {};
+    const hang = new Promise<void>((r) => (letGo = r));
+    const put = saved.put;
+    saved.put = async (k, v) => {
+      if (k === "accounts") {
+        saved.put = put;
+        await hang;
+      }
+      return put(k, v);
+    };
+    const alice = key();
+    one.add(alice);
+    await settle();
+    const bob = key();
+    two.add(bob);
+    await settle();
+    letGo();
+    await settle();
+    await settle();
+
+    expect(
+      JSON.parse(data.get("accounts")!).map((a: { id: string }) => a.id)
+    ).toEqual([alice.id, bob.id]);
   });
 });
