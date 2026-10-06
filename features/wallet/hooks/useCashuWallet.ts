@@ -475,7 +475,7 @@ export function useCashuWallet() {
 
       // and filter out those that we want to keep to roll them over to a new event
       const proofsToKeepWithEventIds = allProofsWithEventIds.filter(
-        (proof) => !proofsToRemove.includes(proof)
+        (proof) => !proofsToRemove.some((p) => p.secret === proof.secret)
       );
 
       // combine proofsToAdd and proofsToKeepWithEventIds
