@@ -12,6 +12,8 @@ export interface MintOptions {
   dir: string; // fresh database and log live here
   pidFile: string; // the run's list of processes to end if it dies
   payState?: PayState; // what a melt (paying an invoice) ends as
+  /** "v2" (default): keyset ids "01…" as nutshell 0.20 makes them; "v1": "00…", as most mints still have */
+  keysets?: "v1" | "v2";
 }
 
 export interface MintProcess {
@@ -67,6 +69,8 @@ async function launch(
         FAKEWALLET_DELAY_OUTGOING_PAYMENT: "0",
         FAKEWALLET_PAY_INVOICE_STATE: payState,
         FAKEWALLET_PAYMENT_STATE: payState,
+        // nutshell makes v2 keyset ids from version 0.20 on
+        ...(opts.keysets === "v1" ? { VERSION: "0.19.0" } : {}),
       },
     },
     opts.pidFile

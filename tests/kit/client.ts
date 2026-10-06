@@ -45,8 +45,11 @@ export function kitClient(env: KitEnv) {
   };
 
   /** Fresh coins worth `sats`, minted by paying a fake invoice (paid at once). */
-  async function mintProofs(sats: number): Promise<Proof[]> {
-    const wallet = await walletAt(env.mintUrl);
+  async function mintProofs(
+    sats: number,
+    mintUrl = env.mintUrl
+  ): Promise<Proof[]> {
+    const wallet = await walletAt(mintUrl);
     const quote = await wallet.createMintQuote(sats);
     for (
       let i = 0;
@@ -66,20 +69,19 @@ export function kitClient(env: KitEnv) {
     },
     mintProofs,
     /**
-     * A token worth `sats` from the kit mint, written the way cashu-ts writes it: cashuB with
-     * the short keyset id. `v3` writes cashuA with full ids, for a test about something other
-     * than reading tokens.
+     * A cashuB token worth `sats`, from the kit mint, or with `otherMint` from the second mint,
+     * whose keysets have the new-style ids (as Minibits has now): a token from somewhere else.
      */
     async mintToken(
       sats: number,
-      opts: { v3?: boolean } = {}
+      opts: { otherMint?: boolean } = {}
     ): Promise<string> {
-      const token = {
-        mint: env.mintUrl,
-        proofs: await mintProofs(sats),
+      const mint = opts.otherMint ? env.invoiceMintUrl : env.mintUrl;
+      return getEncodedToken({
+        mint,
+        proofs: await mintProofs(sats, mint),
         unit: "sat",
-      };
-      return getEncodedToken(token, { version: opts.v3 ? 3 : 4 });
+      });
     },
     /**
      * Swaps a token at its mint for fresh coins and returns what they are worth. This is
