@@ -17,6 +17,12 @@ import "@/components/v2/styles/index.css";
    state can be seen without spending sats. ?fresh=1 ?chat=c2 ?balance=0
    ?fail=1 ?nothink=1 ?still=1 ?signedout=1 ?loading=1, and ?boot=<ms> (the boot
    mark, then first light after that long; add ?firstlight=1 for the first visit). Renders nothing in a production build. */
+// the lab's open chat: ?chat=, the first chat by default, or none with ?fresh=1
+const labOpen = () => {
+  const p = new URLSearchParams(window.location.search);
+  return p.get("fresh") ? null : p.get("chat") ?? "c1";
+};
+
 // a made-up key, so the lab draws signed-in views without touching this device's accounts
 const LAB_PUBKEY = "1ab".padEnd(64, "0");
 
@@ -52,7 +58,7 @@ export default function Lab() {
           <FakeChatProvider history={labHistory} chat={(history) => labChat(history, params)} catalog={catalog}>
             <UiProvider>
               {/* the lab names its chat with ?chat= and leaves the address alone */}
-              <OpenChatProvider initial={new URLSearchParams(window.location.search).get("chat")}>
+              <OpenChatProvider initial={labOpen()}>
                 <Shell />
                 <LabBoot />
               </OpenChatProvider>
