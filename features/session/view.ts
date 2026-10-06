@@ -9,6 +9,8 @@ import type { Accounts, Session, SessionService } from "./service";
 
 export type { Account, AccountMetadata } from "./service";
 
+export { fromBunkerLink, readSecret, secretOf, signerByCode } from "./signIn";
+
 /** The session the composition root built, for the screens. */
 export const AccountContext = createContext<{
   manager: Accounts;

@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ExtensionAccount, NostrConnectAccount, PrivateKeyAccount } from "applesauce-accounts/accounts";
-import { NostrConnectSigner } from "applesauce-signers";
+import { ExtensionAccount, PrivateKeyAccount } from "applesauce-accounts/accounts";
 import {
+  fromBunkerLink,
+  readSecret,
+  signerByCode,
   useAccountManager,
   type Account,
   type AccountMetadata,
@@ -53,18 +55,15 @@ export function useSignIn(say: (t: string) => void, from: "pay" | "write") {
       setWayState("bad");
     }
   };
-  const nsecOk = (v: string) => /^nsec1[02-9ac-hj-np-z]{58}$/.test(v) || /^[0-9a-f]{64}$/i.test(v);
   const withKey = () => {
-    const v = keyText.trim();
-    if (!v) return;
-    if (!nsecOk(v)) {
-      setWayState("bad");
-      return;
-    }
+    if (!keyText) return;
+    const secret = readSecret(keyText);
+    if (!("key" in secret)) return setWayState("bad");
     try {
-      adopt(PrivateKeyAccount.fromKey<AccountMetadata>(v), "in", `Account ${count()}`);
+      adopt(PrivateKeyAccount.fromKey<AccountMetadata>(secret.key), "in", `Account ${count()}`);
       setKeyText("");
     } catch {
+      // 64 hex characters that are not a valid key
       setWayState("bad");
     }
   };
@@ -73,36 +72,37 @@ export function useSignIn(say: (t: string) => void, from: "pay" | "write") {
     if (!v || wayState === "busy") return;
     setWayState("busy");
     try {
-      const signer = await NostrConnectSigner.fromBunkerURI(v);
-      const pubkey = await signer.getPublicKey();
-      adopt(new NostrConnectAccount<AccountMetadata>(pubkey, signer), "in", `Bunker ${count()}`);
+      adopt(await fromBunkerLink(v), "in", `Bunker ${count()}`);
       setBunkerText("");
     } catch {
       setWayState("bad");
     }
   };
-  const scanRun = useRef(0);
+  // the code shown now; stopping it also stops listening for the signer app
+  const listening = useRef<AbortController | null>(null);
+  useEffect(() => () => listening.current?.abort(), []);
   const startScan = async () => {
-    const id = ++scanRun.current;
+    listening.current?.abort();
+    const ctrl = (listening.current = new AbortController());
     setWayState("");
-    const signer = new NostrConnectSigner({ relays: ["wss://relay.nsec.app"] });
-    setScan(signer.getNostrConnectURI({ name: "Routstr Chat" }));
-    const ctrl = new AbortController();
+    const code = signerByCode(["wss://relay.nsec.app"], "Routstr Chat");
+    setScan(code.uri);
     const timeout = window.setTimeout(() => ctrl.abort(), 60_000);
     try {
-      await signer.waitForSigner(ctrl.signal);
-      if (id !== scanRun.current) return;
-      const pubkey = await signer.getPublicKey();
-      adopt(new NostrConnectAccount<AccountMetadata>(pubkey, signer), "in", `Bunker ${count()}`);
+      const account = await code.account(ctrl.signal);
+      if (listening.current !== ctrl) return;
+      adopt(account, "in", `Bunker ${count()}`);
       setScan(null);
     } catch {
-      if (id === scanRun.current) setWayState("late");
+      if (listening.current === ctrl) setWayState("late");
     } finally {
       window.clearTimeout(timeout);
     }
   };
   const stopScan = () => {
-    scanRun.current++;
+    const ctrl = listening.current;
+    listening.current = null;
+    ctrl?.abort();
     setScan(null);
     setWayState("");
   };
