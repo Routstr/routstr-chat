@@ -188,6 +188,8 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
         follow.current = true;
         el.scrollTop += tailBelow + 8;
       }
+      // the answer grows below someone reading further up: the way back appears without a scroll
+      else setAway(el.scrollHeight - reserve - (el.scrollTop + el.clientHeight) > 240);
     });
     ro.observe(box);
     return () => ro.disconnect();
