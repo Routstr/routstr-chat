@@ -3,15 +3,27 @@
 import React, { useState } from "react";
 import { nip19 } from "nostr-tools";
 import { useAccountManager, type Account } from "@/features/session/view";
-import { holdsRecords, useCashuStore } from "@/features/wallet";
+import {
+  calculateBalanceByMint,
+  computeTotalBalanceSats,
+  holdsRecords,
+  useCashuStore,
+} from "@/features/wallet";
 import { useSwitchAccount } from "../useSwitchAccount";
 import Light from "../light/Light";
-import { Btn, Fold, Grp, Ib, Say, narrow, short } from "./parts";
+import { readKeyFlag } from "../wallet/bits";
+import { satUnit, sats } from "../format";
+import { Btn, Fold, Grp, Ib, Say, narrow, plural, short } from "./parts";
 
 // Another key's coins stay on this device when it is removed, but only that
 // key opens them again
-const holdsMoney = (pubkey: string) =>
-  useCashuStore.of(pubkey).getState().proofs.length > 0 || holdsRecords(pubkey);
+const heldBy = (pubkey: string) => {
+  const { proofs, mints } = useCashuStore.of(pubkey).getState();
+  // counted as the wallet counts its balance: per mint, msat mints in sats
+  const { balances, units } = calculateBalanceByMint(proofs, mints);
+  // a token not claimed yet, or a payment still settling, is money too (the wallet book)
+  return { sats: computeTotalBalanceSats(balances, units), settling: holdsRecords(pubkey) };
+};
 
 export default function OtherKeys({ others }: { others: Account[] }) {
   const { session } = useAccountManager();
@@ -27,6 +39,9 @@ export default function OtherKeys({ others }: { others: Account[] }) {
           } catch {
             // keep the hex
           }
+          const held = rm === o.id ? heldBy(o.pubkey) : null;
+          const unsaved =
+            o.type === "nsec" && readKeyFlag(o.pubkey) !== "saved";
           return (
             <React.Fragment key={o.id}>
               <div className="st-it">
@@ -58,6 +73,7 @@ export default function OtherKeys({ others }: { others: Account[] }) {
               <Fold id={`f-rmkey-${o.id}`} open={rm === o.id}>
                 <Say
                   inset="l"
+                  warn={unsaved || holds(held)}
                   acts={
                     <>
                       <Btn onClick={() => setRm(null)}>Keep it</Btn>
@@ -74,12 +90,11 @@ export default function OtherKeys({ others }: { others: Account[] }) {
                     </>
                   }
                 >
-                  <p>
-                    Remove <b>{short(n, 12, 6)}</b> from this device?{" "}
-                    {rm === o.id && holdsMoney(o.pubkey)
-                      ? "It still holds sats here. They stay here for this key, and only this key opens them again. Back up its key, or switch to it and send the sats out first."
-                      : "You can add it again with its secret key."}
-                  </p>
+                  <RemoveNote
+                    name={short(n, 12, 6)}
+                    held={held}
+                    unsaved={unsaved}
+                  />
                 </Say>
               </Fold>
             </React.Fragment>
@@ -87,5 +102,42 @@ export default function OtherKeys({ others }: { others: Account[] }) {
         })}
       </div>
     </Grp>
+  );
+}
+
+type Held = { sats: number; settling: boolean } | null;
+const holds = (held: Held) => !!held && (held.sats > 0 || held.settling);
+
+function RemoveNote({
+  name,
+  held,
+  unsaved,
+}: {
+  name: string;
+  held: Held;
+  unsaved: boolean;
+}) {
+  const money = holds(held);
+  return (
+    <p>
+      Remove <b>{name}</b> from this device?{" "}
+      {held && money && (
+        <>
+          It still holds{" "}
+          <b>
+            {[held.sats > 0 && `${sats(held.sats)} ${satUnit(held.sats)}`, held.settling && "money not settled yet"]
+              .filter(Boolean)
+              .join(" and ")}
+          </b>{" "}
+          here. They stay here for this key, and only this key opens them
+          again.{" "}
+        </>
+      )}
+      {unsaved
+        ? "This device has no record of its secret key being saved. If it is not saved somewhere, nothing can open its sats or chats once it is removed. Switch to it and copy the key first."
+        : money
+          ? "Back up its key, or switch to it and send the sats out first."
+          : "You can add it again with its secret key."}
+    </p>
   );
 }

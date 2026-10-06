@@ -117,4 +117,27 @@ describe("ExportedKeys at a real provider", () => {
     await again.remove(wallet, unknown);
     expect(again.list().map((k) => k.key)).not.toContain(unknown.key);
   });
+
+  it("adopts the key a spent token made, and says 0 for one the provider never saw", async () => {
+    const keys = service();
+    let handed = "";
+    const { p } = purse();
+    const send = p.send;
+    p.send = (mint, sats, handoff) =>
+      send(mint, sats, async (token) => {
+        handed = token;
+        await handoff(token);
+      });
+    const made = await keys.create(p, kit.coreUrl, 30, "laptop");
+
+    // another device, which only has the token the provider redeemed
+    const other = service();
+    expect(await other.adopt(handed, kit.coreUrl)).toBe(30);
+    expect(other.list().map((k) => k.key)).toEqual([made.key]);
+
+    // a token spent at the mint that never reached the provider
+    const spent = await kit.mintToken(5);
+    expect(await kit.redeem(spent)).toBe(5);
+    expect(await other.adopt(spent, kit.coreUrl)).toBe(0);
+  });
 });

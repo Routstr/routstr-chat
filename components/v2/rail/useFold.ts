@@ -12,7 +12,7 @@ export function useFold({
   setIsSidebarCollapsed,
   hideTip,
   rollBack,
-  setRooms,
+  closeMenus,
   edges,
   say,
 }: {
@@ -24,7 +24,7 @@ export function useFold({
   setIsSidebarCollapsed: (on: boolean) => void;
   hideTip: (now?: boolean) => void;
   rollBack: (only?: Element) => void;
-  setRooms: (open: boolean) => void;
+  closeMenus: () => void;
   edges: () => void;
   say: (t: string) => void;
 }) {
@@ -36,7 +36,7 @@ export function useFold({
       if (phoneNow() || on === isSidebarCollapsed) return;
       hideTip(true);
       rollBack();
-      setRooms(false);
+      closeMenus();
       flipFrom.current = reduced() ? null : flipEls().map((el) => el.getBoundingClientRect());
       flipEls().forEach((el) => el.getAnimations().forEach((a) => a.cancel()));
       // leaving the rest box: back on the scaled form first, so the shadow grows with the card
