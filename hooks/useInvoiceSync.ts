@@ -267,12 +267,14 @@ export function useInvoiceSync() {
     [getLocalInvoices, saveLocalInvoices, syncToCloud]
   );
 
-  // Update invoice
+  // Update invoice, found by its id or by its quote id (the payment flows only have the quote id)
   const updateInvoice = useCallback(
     async (id: string, updates: Partial<StoredInvoice>) => {
       const existing = getLocalInvoices();
       const updated = existing.map((inv) =>
-        inv.id === id ? { ...inv, ...updates, checkedAt: Date.now() } : inv
+        inv.id === id || inv.quoteId === id
+          ? { ...inv, ...updates, checkedAt: Date.now() }
+          : inv
       );
       saveLocalInvoices(updated);
 
