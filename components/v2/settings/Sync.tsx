@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useObservableState } from "applesauce-react/hooks";
-import { useAccountManager } from "@/components/ClientProviders";
+import { useAccountManager } from "@/features/session/view";
 import { useChatSync } from "@/hooks/useChatSync";
 import {
   loadAutoDeleteConversations,

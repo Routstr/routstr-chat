@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { nip19 } from "nostr-tools";
 import { useObservableState } from "applesauce-react/hooks";
 import { useApiKeysSync } from "@/hooks/useApiKeysSync";
-import { useAccountManager } from "@/components/ClientProviders";
+import { useAccountManager } from "@/features/session/view";
 import { useChatSync } from "@/hooks/useChatSync";
 import { useSdkUsageHistory } from "@/features/wallet/hooks/useSdkUsageHistory";
 import { loadRemoteNode } from "@/utils/storageUtils";

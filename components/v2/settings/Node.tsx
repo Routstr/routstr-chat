@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { nip19 } from "nostr-tools";
 import { useObservableState } from "applesauce-react/hooks";
-import { useAccountManager } from "@/components/ClientProviders";
+import { useAccountManager } from "@/features/session/view";
 import { connectRemoteNode, RemoteNodeError } from "@/lib/remoteNode";
 import { normalizeProviderUrl } from "@/utils/torUtils";
 import { loadRemoteNode, saveRemoteNode, type RemoteNode } from "@/utils/storageUtils";

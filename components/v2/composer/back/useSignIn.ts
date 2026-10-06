@@ -3,8 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import { ExtensionAccount, NostrConnectAccount, PrivateKeyAccount } from "applesauce-accounts/accounts";
 import { NostrConnectSigner } from "applesauce-signers";
-import { useAccountManager } from "@/components/ClientProviders";
-import type { Account, AccountMetadata } from "@/features/session/service";
+import {
+  useAccountManager,
+  type Account,
+  type AccountMetadata,
+} from "@/features/session/view";
 import { useUi } from "../../ui";
 import { touch } from "./bits";
 

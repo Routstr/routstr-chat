@@ -4,7 +4,7 @@ import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "re
 import { useChat } from "@/context/ChatProvider";
 import { useChatSync } from "@/hooks/useChatSync";
 import { useObservableState } from "applesauce-react/hooks";
-import { useAccountManager } from "@/components/ClientProviders";
+import { useAccountManager } from "@/features/session/view";
 import { useSdkUsageHistory } from "@/features/wallet/hooks/useSdkUsageHistory";
 import { useTransactionHistoryStore } from "@/features/wallet/state/transactionHistoryStore";
 import { getPendingCashuTokenAmount, getPendingCashuTokenDistribution } from "@/utils/cashuUtils";

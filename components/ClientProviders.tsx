@@ -3,35 +3,22 @@
 // Initialize logger early to intercept all console calls
 import "@/lib/logger";
 
-import {
-  ReactNode,
-  useEffect,
-  useState,
-  useSyncExternalStore,
-  createContext,
-  useContext,
-} from "react";
+import { ReactNode, useEffect, useState, useSyncExternalStore } from "react";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import dynamic from "next/dynamic";
 import { migrateStorageItems, saveRelays } from "@/utils/storageUtils";
 import { InvoiceRecoveryProvider } from "@/components/InvoiceRecoveryProvider";
 import { session } from "@/runtime";
-import type { Accounts, SessionService } from "@/features/session/service";
+import { AccountContext } from "@/features/session/view";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { AppProvider } from "./AppProvider";
 import { AppConfig } from "@/context/AppContext";
 
-interface AccountContextType {
-  manager: Accounts;
-  session: SessionService;
-}
-
 const accountContext = { manager: session.accounts, session };
-const AccountContext = createContext<AccountContextType>(accountContext);
 
-export const useAccountManager = () => useContext(AccountContext);
+export { useAccountManager } from "@/features/session/view";
 
 const presetRelays = [
   { url: "wss://relay.routstr.com", name: "Routstr Relay" },

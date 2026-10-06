@@ -4,7 +4,7 @@ import React from "react";
 import dynamic from "next/dynamic";
 import { useUi } from "../ui";
 import { useObservableState } from "applesauce-react/hooks";
-import { useAccountManager } from "@/components/ClientProviders";
+import { useAccountManager } from "@/features/session/view";
 import { Btn, Grp, Head, Row } from "./parts";
 
 /* API keys. Their create, top up, refund and delete logic lives in the

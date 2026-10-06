@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { nip19 } from "nostr-tools";
 import { useObservableState } from "applesauce-react/hooks";
-import { useAccountManager } from "@/components/ClientProviders";
+import { useAccountManager } from "@/features/session/view";
 import { Btn, Grp, Head, Row, narrow, short, useCopied } from "./parts";
 import SignedOut from "./SignedOut";
 import OtherKeys from "./OtherKeys";

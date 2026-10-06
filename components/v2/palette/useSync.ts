@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import type { useChat } from "@/context/ChatProvider";
 import type { Conversation } from "@/types/chat";
 import { useObservableState } from "applesauce-react/hooks";
-import { useAccountManager } from "@/components/ClientProviders";
+import { useAccountManager } from "@/features/session/view";
 import { useAppContext } from "@/hooks/useAppContext";
 import type { Item, Sync, SyncOutcome } from "./types";
 

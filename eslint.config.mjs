@@ -5,7 +5,6 @@ import prettier from "eslint-config-prettier/flat";
 // What the screens still take from the old engine. Each module's wiring removes its lines; the list
 // goes away with the old hooks, and the rule below then has no exceptions.
 const LEGACY = [
-  "./components/ClientProviders.tsx",
   "./components/QueryTimeoutModal.tsx",
   "./components/settings/ApiKeysTab.tsx",
   "./components/chat/model-selector/display.tsx",
@@ -15,7 +14,6 @@ const LEGACY = [
   "./components/pwa/KeepAliveProvider.tsx",
   "./context/AuthProvider.tsx",
   "./context/ChatProvider.tsx",
-  "./features/session/service.ts",
   "./features/wallet/hooks/useCashuToken.ts",
   "./features/wallet/hooks/useCashuWallet.ts",
   "./features/wallet/hooks/useSdkUsageHistory.ts",
