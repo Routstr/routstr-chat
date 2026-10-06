@@ -1,4 +1,4 @@
-import { matchFilter, type NostrEvent } from "nostr-tools";
+import { matchFilter, type Filter, type NostrEvent } from "nostr-tools";
 import { Observable, Subject, filter as where } from "rxjs";
 import type { RelayPort } from "../ports";
 
@@ -9,7 +9,13 @@ interface FakeRelay {
   cap?: number;
   /** a broken or hostile relay: answers with everything it holds */
   ignoresFilters?: boolean;
+  /** does NIP-77; `syncFails` makes every sync fail, `syncHangs` never answer */
+  nip77?: boolean;
+  syncFails?: boolean;
+  syncHangs?: boolean;
   received: NostrEvent[];
+  /** every REQ filter it was asked */
+  asked: Filter[];
 }
 
 /** Relays in memory: what they store, whether they answer, what they were sent. */
@@ -19,7 +25,7 @@ export function network() {
   const relay = (url: string): FakeRelay => {
     let found = relays.get(url);
     if (!found) {
-      found = { events: new Map(), down: false, received: [] };
+      found = { events: new Map(), down: false, received: [], asked: [] };
       relays.set(url, found);
     }
     return found;
@@ -28,6 +34,7 @@ export function network() {
     request: (url, filter) =>
       new Observable<NostrEvent>((observer) => {
         const r = relay(url);
+        r.asked.push(filter);
         // answers after the caller subscribed, as a socket does
         queueMicrotask(() => {
           if (r.down) return observer.error(new Error(`${url} is down`));
@@ -61,6 +68,23 @@ export function network() {
         feed.next({ url, event });
       }
       return true;
+    },
+    reconcile: async (url, filter, local, signal) => {
+      const r = relay(url);
+      if (r.down) throw new Error(`${url} is down`);
+      if (!r.nip77) return null;
+      if (r.syncFails) throw new Error("NEG-ERR");
+      if (r.syncHangs)
+        return new Promise((_, reject) =>
+          signal.addEventListener("abort", () => reject(new Error("stopped")))
+        );
+      const ours = new Set(local.map((event) => event.id));
+      return {
+        have: local.filter((e) => !r.events.has(e.id)).map((e) => e.id),
+        need: [...r.events.values()]
+          .filter((e) => matchFilter(filter, e) && !ours.has(e.id))
+          .map((e) => e.id),
+      };
     },
   };
   return {
