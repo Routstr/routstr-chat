@@ -1,9 +1,7 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { normalizeURL } from "applesauce-core/helpers/url";
-import { useDeviceRelays } from "@/features/relays/view";
-import { relayPool } from "@/lib/applesauce-core";
+import React, { useState } from "react";
+import { useDeviceRelays, useRelayStatus } from "@/features/relays/view";
 import { Icon } from "../icons";
 import { Btn, GoneRow, Grp, Ib, at, hostOf, plural, useGone } from "./parts";
 
@@ -11,19 +9,8 @@ export default function Relays() {
   const [relays, updateRelays] = useDeviceRelays();
   const [relayIn, setRelayIn] = useState("");
   const [relayErr, setRelayErr] = useState("");
-  const [, tick] = useState(0);
-  useEffect(() => {
-    // relays report their own state; look again every few seconds
-    const id = window.setInterval(() => tick((n) => n + 1), 3000);
-    return () => window.clearInterval(id);
-  }, []);
-  // read without opening one (relay() would create it, and a fresh relay is not yet connected): a
-  // relay is 'bad' only after it has tried and failed, until then it is connecting. One nothing has
-  // opened (signed out, nothing syncs) is idle
-  const stateOf = (u: string): "ok" | "bad" | "wait" | "idle" => {
-    const r = relayPool.relays.get(normalizeURL(u));
-    return !r ? "idle" : r.connected ? "ok" : r.error$.value || r.attempts$.value > 0 ? "bad" : "wait";
-  };
+  // one nothing has opened (signed out, nothing syncs) is idle
+  const stateOf = useRelayStatus();
   const ok = relays.filter((u) => stateOf(u) === "ok").length;
   const idle = relays.every((u) => stateOf(u) === "idle");
   const addRelay = () => {

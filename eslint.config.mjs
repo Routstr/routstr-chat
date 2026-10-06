@@ -34,7 +34,6 @@ const LEGACY = [
   "./hooks/useLogs.ts",
   "./hooks/useRemoteNode.ts",
   "./hooks/useSdkCachedBalance.ts",
-  "./lib/applesauce-core.ts",
   "./lib/blossom.ts",
   "./lib/preconfiguredModels.ts",
   "./lib/remoteNode.ts",

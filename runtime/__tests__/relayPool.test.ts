@@ -52,8 +52,9 @@ describe("the app's relay pool", () => {
       refused(),
     ]);
     const owner = getPublicKey(generateSecretKey());
+    const port = poolPort(newRelayPool());
     const relays = new Relays(
-      poolPort(newRelayPool()),
+      port,
       memoryStorage(),
       `?relays=${[answering, silent, drops, closed].join(",")}`
     );
@@ -63,6 +64,10 @@ describe("the app's relay pool", () => {
       .fetch({ kinds: [1081], authors: [owner] });
 
     expect(got).toEqual({ events: [], answered: [answering] });
+    // what Settings shows for each, read without opening anything
+    expect(port.status(answering)).toBe("ok");
+    expect(port.status(closed)).toBe("bad");
+    expect(port.status("ws://127.0.0.1:1/never-used")).toBe("idle");
   }, 30_000);
 
   it("syncs by NIP-77 with a relay whose NIP-11 lists it: only the difference moves", async () => {
