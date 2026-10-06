@@ -14,7 +14,7 @@ import { NodeContext } from "@/features/node/view";
 import { CatalogContext } from "@/features/catalog/view";
 import { AccountContext } from "@/features/session/view";
 import { activeHistory, relays } from "@/runtime/nostr";
-import { purseFor } from "@/runtime/wallet";
+import { walletPurseFor } from "@/runtime/wallet";
 import { HistoryContext } from "@/features/history/view";
 import { activeChat } from "@/runtime/accountChat";
 import { AccountChatContext } from "@/features/chat/view";
@@ -90,8 +90,8 @@ export default function ClientProviders({ children }: { children: ReactNode }) {
           <AppProvider>
             <QueryClientProvider client={queryClient}>
               <HistoryContext.Provider value={history}>
-                <PurseContext.Provider value={purseFor}>
-                <KeysPurseContext.Provider value={purseFor}>
+                <PurseContext.Provider value={walletPurseFor}>
+                <KeysPurseContext.Provider value={walletPurseFor}>
                 <AccountChatContext.Provider value={chat}>
                   <InvoiceRecoveryProvider key={generation}>
                     {children}

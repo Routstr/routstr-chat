@@ -48,9 +48,12 @@ vi.mock("@/features/wallet/core/services/MintService", () => ({
   },
 }));
 
+import { useCashuStore } from "@/features/wallet/state/cashuStore";
 import {
   legacyActivity,
   legacyCoins,
+  listMint,
+  localActivity,
   registerCommitter,
   registerRecorder,
 } from "../purseBridge";
@@ -127,5 +130,27 @@ it("writes activity through the open wallet, and on this device for any other ac
   expect(state.local).toMatchObject([
     { owner: "bob", direction: "in", amount: "40" },
   ]);
+  close();
+});
+
+it("lists a mint about to be paid into, before any coin is there", async () => {
+  state.store.addMint.mockClear();
+  state.activateMint.mockClear();
+  await listMint(useCashuStore.of("alice").getState(), "m9");
+  expect(state.activateMint).toHaveBeenCalledWith("m9");
+  expect(state.store.addMint).toHaveBeenCalledWith("m9");
+  // a listed mint with its keysets is left alone
+  await listMint(useCashuStore.of("alice").getState(), "m1");
+  expect(state.activateMint).toHaveBeenCalledTimes(1);
+});
+
+it("keeps a reply's activity on this device, even for the open account", () => {
+  const record = vi.fn();
+  const close = registerRecorder("carol", record);
+  localActivity.record("carol", { direction: "out", sats: 21 });
+  expect(record).not.toHaveBeenCalled();
+  expect(state.local).toContainEqual(
+    expect.objectContaining({ owner: "carol", direction: "out", amount: "21" })
+  );
   close();
 });

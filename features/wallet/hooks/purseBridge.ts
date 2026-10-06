@@ -44,7 +44,7 @@ export const legacyCoins: CoinStore = {
     if (!commitFor) {
       throw new Error("This account's wallet is not open; this waits for it.");
     }
-    await listMint(owner, mintUrl, add);
+    await listMint(useCashuStore.of(owner).getState(), mintUrl, add);
     await commitFor(mintUrl)(add, remove);
   },
   async coins(owner, mintUrl) {
@@ -95,13 +95,17 @@ export const legacyCoins: CoinStore = {
 };
 
 /** Coins of a mint or keyset the store does not list are stored but never
- *  counted: list the mint and its keysets first. The coins are stored either
- *  way; a mint that does not answer is listed by the wallet's next refresh. */
-async function listMint(owner: string, mintUrl: string, add: Proof[]) {
-  const store = useCashuStore.of(owner).getState();
+ *  counted: list the mint and its keysets first (also for a mint about to be
+ *  paid into). The coins are stored either way; a mint that does not answer is
+ *  listed by the wallet's next refresh. */
+export async function listMint(
+  store: ReturnType<typeof useCashuStore.getState>,
+  mintUrl: string,
+  add: Proof[] = []
+) {
   const listed = store.mints.find((m) => m.url === mintUrl);
   const ids = new Set(listed?.keysets?.map((k) => keysetOf(k).id));
-  if (add.every((p) => ids.has(p.id))) return;
+  if (ids.size && add.every((p) => ids.has(p.id))) return;
   try {
     const { mintInfo, keysets, keys } = await new MintService().activateMint(
       mintUrl
@@ -125,21 +129,29 @@ export function registerRecorder(owner: string, record: Recorder): () => void {
   return () => recorders.delete(owner);
 }
 
-export const legacyActivity: ActivityLog = {
+/** Activity kept on this device only: chat's per-reply payments and refunds,
+ *  so a reply never asks the signer for anything. */
+export const localActivity: ActivityLog = {
   record(owner, { direction, sats }) {
-    const amount = String(sats);
-    const record = recorders.get(owner);
-    if (record) return record({ direction, amount });
-    // an account whose wallet is not open has no signer here: this device only
     useTransactionHistoryStore
       .of(owner)
       .getState()
       .addHistoryEntry({
         id: crypto.randomUUID(),
         direction,
-        amount,
+        amount: String(sats),
         timestamp: Math.floor(Date.now() / 1000),
       });
+  },
+};
+
+/** Activity of moves the person makes on the wallet screens: published
+ *  (NIP-60) through the open wallet, else kept on this device. */
+export const legacyActivity: ActivityLog = {
+  record(owner, entry) {
+    const record = recorders.get(owner);
+    if (!record) return localActivity.record(owner, entry);
+    record({ direction: entry.direction, amount: String(entry.sats) });
   },
 };
 

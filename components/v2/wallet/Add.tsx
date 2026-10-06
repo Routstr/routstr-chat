@@ -192,7 +192,7 @@ export default function Add({
   };
 
   /* ── what shows ────────────────────────────────────────────────────────── */
-  const mn = mint.active?.name ?? "the mint";
+  const mn = mint.all.find((m) => m.url === funding.mint)?.name ?? mint.active?.name ?? "the mint";
   const change = (
     <button
       type="button"
