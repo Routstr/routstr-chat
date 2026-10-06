@@ -57,6 +57,37 @@ export const API_KEY = "kit-upstream-key";
 
 const DIRECTIVE = /\[kit:([a-z]+)(?:=([^\]]*))?\]/g;
 
+const FILLER =
+  "the reply goes on in plain words so the page has real text to lay out and wrap".split(
+    " "
+  );
+
+/**
+ * A long markdown reply of about `words` words, the same every time: headings, emphasis,
+ * links, lists, code blocks and tables. It starts with "startlong" and ends with "endlong".
+ */
+function markdown(words: number): string {
+  const parts = ["startlong"];
+  for (let i = 1, count = 1; count < words; i++) {
+    const filler = Array.from(
+      { length: 48 },
+      (_, k) => FILLER[(i + k) % FILLER.length]
+    ).join(" ");
+    const block = [
+      `## Section ${i}`,
+      `Paragraph ${i} has **bold**, *italic*, \`inline code\` and [a link](https://example.com/${i}). ${filler}.`,
+      `- first point ${i}\n- second point with \`code\`\n- third point`,
+      `1. step one\n2. step two\n3. step three`,
+      `\`\`\`ts\nconst total${i} = items.reduce((sum, x) => sum + x.amount, 0);\nconsole.log(total${i});\n\`\`\``,
+      `| name | sats |\n|---|---|\n| row ${i} | ${i * 21} |`,
+    ].join("\n\n");
+    parts.push(block);
+    count += block.split(/\s+/).length;
+  }
+  parts.push("endlong");
+  return parts.join("\n\n");
+}
+
 export function parseDirectives(text: string): Behaviour | undefined {
   let found: Behaviour | undefined;
   for (const [, name, value] of text.matchAll(DIRECTIVE)) {
@@ -67,6 +98,7 @@ export function parseDirectives(text: string): Behaviour | undefined {
     else if (name === "cut") found.cut = Number(value ?? 2);
     else if (name === "think") found.think = true;
     else if (name === "text") found.text = value ?? "";
+    else if (name === "md") found.text = markdown(Number(value ?? 4600));
     else if (name === "usage") {
       const [p, c] = (value ?? "").split(",").map(Number);
       found.usage = { prompt: p || 1, completion: c || 1 };

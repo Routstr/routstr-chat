@@ -7,6 +7,7 @@
 //   pnpm kit locks          who holds and who waits for the locks: pid, worktree, command, age
 //   pnpm kit build [dir]    build a checkout's out/ (with the kit's provider address)
 //   pnpm kit mutate <file>  break the code on purpose and check the tests notice (see mutate.ts)
+//   pnpm kit perf ...       measure the app (see tests/perf/perf.ts)
 //   pnpm kit parity --main-out <dir>   the parity checks on main's build and on v2
 //
 // Shared machine rules, built in: before a step it waits until enough memory is free
@@ -535,6 +536,49 @@ async function mutate(file: string): Promise<number> {
   return missed.length ? 1 : 0;
 }
 
+/** Perf runs, one heavy-lock hold per run so no hold gets long and each run has a quiet machine. */
+async function perf(args: string[]): Promise<number> {
+  const script = path.join(ROOT, "tests", "perf", "perf.ts");
+  if (!args.includes("--driver")) return run(...tsx(script, args)); // just a comparison table
+  const runs = Number(take(args, "runs") ?? 5);
+  const json = path.resolve(
+    take(args, "json") ?? path.join(os.tmpdir(), `kit-perf-${Date.now()}.json`)
+  );
+  const url = args.includes("--url");
+  if (url && fs.existsSync(json))
+    throw new Error(
+      "a running app (--url) has no version to check runs against: use a new --json"
+    );
+  // core alone needs no app build; its numbers still want a quiet machine (heavy lock).
+  // An app's out/ is built (or found up to date) first, so the numbers are its sources'.
+  const coreOnly = args[args.indexOf("--driver") + 1] === "core";
+  const outArg = take(args, "out");
+  const out =
+    url || coreOnly
+      ? undefined
+      : await withLock("heavy", () =>
+          build(outArg ? path.resolve(outArg, "..") : ROOT)
+        );
+  let code = 0;
+  for (let i = 0; i < runs && code === 0; i++) {
+    code = await withLock("heavy", () =>
+      run(
+        ...tsx(script, [
+          ...args,
+          "--runs",
+          "1",
+          "--json",
+          json,
+          ...(out ? ["--out", out] : []),
+        ]),
+        { sealed: !url }
+      )
+    );
+  }
+  say(`results: ${json}`);
+  return code;
+}
+
 async function main(argv: string[]): Promise<number> {
   const [command = "test", ...rest] = argv;
   if (unsealed && command !== "__app")
@@ -548,6 +592,7 @@ async function main(argv: string[]): Promise<number> {
       () => 0
     );
   if (command === "mutate") return mutate(rest[0]);
+  if (command === "perf") return perf(rest);
   if (command === "parity") return parity(rest);
   if (command !== "test") throw new Error(`unknown command ${command}`);
   const [step, ...args] = rest;
