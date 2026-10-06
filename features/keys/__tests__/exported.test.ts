@@ -440,6 +440,119 @@ describe("ExportedKeys", () => {
 // Ported from GitHub #215 (Abdou). A provider with routstr-core #779 answers a
 // key it does not know with key_not_found, in detail.error, in the top-level
 // error, or in both; the SDK reads all three.
+describe("a new key when storage fails", () => {
+  const full = () => {
+    throw new DOMException("full", "QuotaExceededError");
+  };
+  const ids = async (saved: Saved) =>
+    JSON.parse((await saved.get("api_keys:alice")) ?? "[]").map(
+      (k: ExportedKey) => k.key
+    );
+
+  it("is in IndexedDB before its token is let go, when localStorage is full", async () => {
+    const storage = memory();
+    const saved = kept();
+    const keys = new ExportedKeys("alice", storage, provider(), saved);
+    await settle();
+    storage.setItem = full;
+    // IndexedDB is slow to write; what it holds when the handoff ends is what counts
+    const put = saved.put;
+    saved.put = async (k, v) => {
+      await new Promise((r) => setTimeout(r, 20));
+      return put(k, v);
+    };
+    const { p, calls } = purse();
+    const send = p.send;
+    let atHandoff: string[] = [];
+    p.send = async (mint, sats, handoff) =>
+      send(mint, sats, async (t) => {
+        await handoff(t);
+        atHandoff = await ids(saved);
+      });
+
+    await keys.create(p, "https://p.test/", 21, "laptop");
+
+    expect(calls).toEqual(["send https://mint.test 21"]);
+    expect(atHandoff).toEqual(["sk-made"]);
+    const next = new ExportedKeys("alice", storage, provider(), saved);
+    await settle();
+    expect(next.list().map((k) => k.key)).toEqual(["sk-made"]);
+  });
+
+  it("survives the IndexedDB copy being read after it was made", async () => {
+    const storage = memory();
+    const saved = kept();
+    await saved.put("api_keys:alice", JSON.stringify([key({ key: "sk-1" })]));
+    // the first read is answered at once but arrives late, as IndexedDB does
+    let read: () => void = () => {};
+    const gate = new Promise<void>((r) => (read = r));
+    let first = true;
+    const late: Saved = {
+      ...saved,
+      get: async (k) => {
+        const v = await saved.get(k);
+        if (first) {
+          first = false;
+          await gate;
+        }
+        return v;
+      },
+    };
+    const keys = new ExportedKeys("alice", storage, provider(), late);
+    storage.setItem = full;
+
+    await keys.create(purse().p, "https://p.test/", 21, "laptop");
+    read();
+    await settle();
+
+    expect(keys.list().map((k) => k.key)).toEqual(["sk-1", "sk-made"]);
+    expect(await ids(saved)).toEqual(["sk-1", "sk-made"]);
+  });
+
+  it("never brings back a key removed here while it is saved", async () => {
+    const storage = memory();
+    const saved = kept();
+    await saved.put("api_keys:alice", JSON.stringify([key({ key: "sk-old" })]));
+    let read: () => void = () => {};
+    const gate = new Promise<void>((r) => (read = r));
+    // reads are answered at once but arrive late, as IndexedDB does: here
+    // both the first read and the new key's read still see the removed key
+    let reads = 0;
+    const late: Saved = {
+      ...saved,
+      get: async (k) => {
+        const v = await saved.get(k);
+        if (++reads === 2) read();
+        await gate;
+        return v;
+      },
+    };
+    const keys = new ExportedKeys("alice", storage, provider(), late);
+    keys.forget("sk-old");
+    storage.setItem = full;
+
+    await keys.create(purse().p, "https://p.test/", 21, "laptop");
+    await settle();
+
+    expect(await ids(saved)).toEqual(["sk-made"]);
+  });
+
+  it("hands its token back only when neither store could keep it", async () => {
+    const storage = memory();
+    const saved = kept();
+    const keys = new ExportedKeys("alice", storage, provider(), saved);
+    await settle();
+    storage.setItem = full;
+    saved.put = async () => {
+      throw new Error("disk full");
+    };
+
+    await expect(
+      keys.create(purse().p, "https://p.test/", 21, "laptop")
+    ).rejects.toThrow("disk full");
+  });
+});
+
 describe("refresh, as the SDK reads the provider's answer", () => {
   const notFound = {
     message:

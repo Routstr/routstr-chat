@@ -88,7 +88,9 @@ export class ExportedKeys {
       .get(this.name)
       .then((json) => {
         const keys = json ? parseExported(JSON.parse(json)) : [];
-        this.kept = keys === "unreadable" ? [] : keys;
+        const stored = keys === "unreadable" ? [] : keys;
+        // a key made before this read, with localStorage full, is only here
+        this.kept = [...stored, ...this.keys.filter((k) => !has(stored, k))];
         this.repair();
       })
       .catch(report);
@@ -131,7 +133,12 @@ export class ExportedKeys {
     );
     const keys = next([...disk, ...lost]);
     const json = JSON.stringify(keys);
-    this.storage.setItem(this.name, json);
+    try {
+      this.storage.setItem(this.name, json);
+    } catch (error) {
+      // localStorage full: the IndexedDB copy still gets it
+      report(error);
+    }
     this.keys = keys;
     this.listeners.forEach((listener) => listener());
     if (this.kept) {
@@ -147,8 +154,10 @@ export class ExportedKeys {
     );
   }
 
-  /** Spends `sats` into a new key. The key is on disk before the token is let
-   *  go; if the provider fails, the token stays in the wallet's unclaimed list. */
+  /** Spends `sats` into a new key. The key is stored for good before the token
+   *  is let go; if the provider fails, or neither store keeps the key, the
+   *  token stays in the wallet's unclaimed list (the provider finds the same
+   *  key again from that token). */
   async create(purse: Purse, baseUrl: string, sats: number, label: string) {
     let made: ExportedKey | undefined;
     await purse.send(purse.activeMint(), sats, async (token) => {
@@ -168,9 +177,28 @@ export class ExportedKeys {
         baseUrl: slash(baseUrl),
       };
       this.change((keys) => [...keys, made!]);
+      await this.keep(made);
       this.push();
     });
     return made!;
+  }
+
+  /** Waits until the key is in IndexedDB, unless localStorage already has it. */
+  private async keep(key: ExportedKey): Promise<void> {
+    try {
+      const json = await this.saved.get(this.name);
+      const read = json ? parseExported(JSON.parse(json)) : [];
+      const stored = read === "unreadable" ? [] : read;
+      const keys = [
+        ...this.keys,
+        ...stored.filter((k) => !has(this.keys, k) && !this.removed.has(k.key)),
+      ];
+      await this.saved.put(this.name, JSON.stringify(keys));
+      this.kept = keys;
+    } catch (error) {
+      if (!has(this.read(), key)) throw error;
+      report(error);
+    }
   }
 
   async refresh(key: ExportedKey): Promise<void> {
@@ -271,6 +299,8 @@ export class ExportedKeys {
 
 // a failed backup is tried again on the next change
 const report = (error: unknown) => console.error("[exported keys]", error);
+const has = (keys: ExportedKey[], key: ExportedKey) =>
+  keys.some((k) => k.key === key.key);
 
 const services = new Map<string, ExportedKeys>();
 
