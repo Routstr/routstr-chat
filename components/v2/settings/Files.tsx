@@ -3,19 +3,15 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useObservableState } from "applesauce-react/hooks";
 import { useAccountManager } from "@/features/session/view";
-import { useBlossomSync } from "@/hooks/useBlossomSync";
-import { DEFAULT_BLOSSOM_SERVERS } from "@/lib/blossom";
+import { DEFAULT_FILE_SERVERS as DEFAULT_BLOSSOM_SERVERS, useFileSync } from "@/features/chat/view";
 import { Btn, Fold, GoneRow, Grp, Ib, Row, Say, Sw, at, hostOf, useGone } from "./parts";
 
 export default function Files() {
   const { manager } = useAccountManager();
   const active = useObservableState(manager.active$);
-  const {
-    blossomSyncEnabled,
-    setBlossomSyncEnabled,
-    blossomServers,
-    setBlossomServers,
-  } = useBlossomSync();
+  const [{ on: blossomSyncEnabled, servers: blossomServers }, setSync] = useFileSync();
+  const setBlossomSyncEnabled = (on: boolean) => setSync({ on });
+  const setBlossomServers = (servers: string[]) => setSync({ servers });
   const [serverIn, setServerIn] = useState("");
   const [serverErr, setServerErr] = useState("");
   const [reset, setReset] = useState(false);

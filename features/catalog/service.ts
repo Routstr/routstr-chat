@@ -86,6 +86,17 @@ export class CatalogService {
     });
   }
 
+  /** What a provider itself lists for a model, whatever its routing state:
+   *  a pin to a provider that dropped out is priced at its own listing. */
+  listedAt(baseUrl: string, modelId: string): Model | undefined {
+    const cached =
+      this.deps.discoveryAdapter.getCachedModels() as unknown as Record<
+        string,
+        Model[]
+      >;
+    return cached[baseUrl]?.find((model) => model.id === modelId);
+  }
+
   /** The managers once their cache holds models: the SDK then routes from
    *  the cache instead of discovering on its own first. */
   warm() {

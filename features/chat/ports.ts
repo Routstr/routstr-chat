@@ -38,14 +38,42 @@ export interface StoredFile {
   blossomServers?: string[];
 }
 
+/** Whether files are copied to Blossom, and to which servers. Device-wide,
+ *  in main's keys. */
+export interface FileSync {
+  on: boolean;
+  servers: string[];
+}
+
+/** The servers files go to until the person picks others (main's). */
+export const DEFAULT_FILE_SERVERS = [
+  "https://blossom.primal.net",
+  "https://cdn.nostr.build",
+];
+
 /** The device's file store and the account's Blossom copies. */
 export interface FileStore {
   /** The file as a data URL, or undefined when no copy can be reached.
-   *  Settles soon after `signal` aborts. */
+   *  A copy fetched from Blossom is kept here too. Settles soon after
+   *  `signal` aborts. */
   load(file: StoredFile, signal: AbortSignal): Promise<string | undefined>;
   /** Keeps a data URL's file here and, while file sync is on, on Blossom
    *  until `signal` aborts. Returns only the copies made; never rejects. */
   store(dataUrl: string, signal: AbortSignal): Promise<StoredFile>;
+}
+
+/** The file store as screens use it: a file taken into the composer is kept
+ *  here at once and copied to Blossom in the background. */
+export interface Files extends FileStore {
+  /** Keeps it on this device only: its id, or undefined when it cannot. */
+  keep(dataUrl: string): Promise<string | undefined>;
+  /** Copies it to Blossom while file sync is on and the account's history
+   *  is open; only the copies made, never rejects. */
+  copy(dataUrl: string, signal: AbortSignal): Promise<StoredFile>;
+  sync(): FileSync;
+  setSync(change: Partial<FileSync>): void;
+  /** Calls `listener` when the sync setting changes in this tab. */
+  subscribe(listener: () => void): () => void;
 }
 
 export interface ChatModel {

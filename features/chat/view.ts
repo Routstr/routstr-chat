@@ -6,6 +6,7 @@ import {
 } from "react";
 import type { RefundResult } from "@/features/payments/refund";
 import type { ReplyCosts } from "./costs";
+import { DEFAULT_FILE_SERVERS, type Files, type FileSync } from "./ports";
 import type { RunSnapshot } from "./run";
 import type { ChatService } from "./service";
 
@@ -17,6 +18,8 @@ export interface AccountChatView {
   /** Sats this account holds at providers, main's old shared credit too. */
   held: { subscribe(listener: () => void): () => void; get(): number };
   viewing(conversationId: string | null): void;
+  /** The account's files: kept here, copied to Blossom. */
+  files: Files;
 }
 
 export const AccountChatContext = createContext<AccountChatView | null>(null);
@@ -83,6 +86,24 @@ export function useHeldCredit(): number {
   );
 }
 
+/** The account's file store; null while nobody is signed in. */
+export const useFiles = (): Files | null => useAccountChat()?.files ?? null;
+
+const SYNC_OFF: FileSync = { on: false, servers: DEFAULT_FILE_SERVERS };
+const keepSync = () => {};
+
+/** Whether files are copied to Blossom, and where; off while nobody is
+ *  signed in (nothing uploads without the account's keys). */
+export function useFileSync(): [FileSync, (change: Partial<FileSync>) => void] {
+  const files = useFiles();
+  const sync = useSyncExternalStore(
+    files?.subscribe ?? none,
+    () => files?.sync() ?? SYNC_OFF,
+    () => SYNC_OFF
+  );
+  return [sync, files?.setSync ?? keepSync];
+}
+
 const noCosts: Record<string, number> = {};
 
 /** What each reply of the active account cost, by reply event id. */
@@ -96,5 +117,6 @@ export function useReplyCosts(): Record<string, number> {
 }
 
 export { editedOf, questionOf } from "./question";
-export type { ChatModel } from "./ports";
+export type { ChatModel, FileSync } from "./ports";
+export { DEFAULT_FILE_SERVERS } from "./ports";
 export type { RunSnapshot } from "./run";

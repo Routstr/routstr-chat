@@ -2,13 +2,17 @@
 
 import React, { useEffect, useState } from "react";
 import type { MessageContent } from "@/types/chat";
-import { getFile, saveFile } from "@/utils/indexedDb";
-import { useBlossomSync } from "@/hooks/useBlossomSync";
+import { useFiles, useFileSync } from "@/features/chat/view";
 import { useHistoryKeys } from "@/features/history/view";
-import { storeStorageIdMapping } from "@/utils/storageUtils";
 import Picture, { Thumb } from "./Picture";
 
-// one object URL per stored image for the life of the page
+// one object URL per stored image for the life of the page: the bytes stay
+// out of script memory
+const objectUrlOf = (dataUrl: string) => {
+  const [head, data] = dataUrl.split(",", 2);
+  const bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
+  return URL.createObjectURL(new Blob([bytes], { type: head.slice(5).replace(/;base64$/, "") }));
+};
 const cache = new Map<string, string>();
 
 /* A picture a model made, or one you attached. It may live inline, in this
@@ -28,55 +32,27 @@ export default function StoredImage({
   const key = ref?.storageId || ref?.blossomHash || "";
   const [url, setUrl] = useState<string | undefined>(() => ref?.url || cache.get(key));
   const [failed, setFailed] = useState(false);
-  const { fetchFromBlossom, blossomSyncEnabled } = useBlossomSync();
+  const files = useFiles();
+  const [{ on: blossomSyncEnabled }] = useFileSync();
   const pnsKeys = useHistoryKeys();
 
   useEffect(() => {
-    if (url || !ref || !key) return;
-    let cancelled = false;
-    (async () => {
-      if (ref.storageId) {
-        try {
-          const file = await getFile(ref.storageId);
-          if (file && !cancelled) {
-            const u = URL.createObjectURL(file);
-            cache.set(key, u);
-            setUrl(u);
-            return;
-          }
-        } catch {
-          // fall through to Blossom
-        }
+    if (url || !ref || !key || !files) return;
+    const stop = new AbortController();
+    void files.load(ref, stop.signal).then((found) => {
+      if (stop.signal.aborted) return;
+      if (found) {
+        const u = objectUrlOf(found);
+        cache.set(key, u);
+        setUrl(u);
+        return;
       }
-      if (ref.blossomHash && blossomSyncEnabled) {
-        if (!pnsKeys) return; // keys not ready yet; try again when they are
-        try {
-          const res = await fetchFromBlossom(ref.blossomHash, pnsKeys, ref.blossomServers);
-          if (res && !cancelled) {
-            const blob = new Blob([new Uint8Array(res.data).buffer as ArrayBuffer], { type: res.mimeType });
-            const u = URL.createObjectURL(blob);
-            cache.set(key, u);
-            setUrl(u);
-            if (ref.storageId) {
-              try {
-                const id = await saveFile(new File([blob], "recovered-image", { type: res.mimeType }));
-                storeStorageIdMapping(ref.storageId, id);
-              } catch {
-                // shown already; saving a local copy is a nicety
-              }
-            }
-            return;
-          }
-        } catch {
-          // reported below
-        }
-      }
-      if (!cancelled) setFailed(true);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [url, ref, key, blossomSyncEnabled, pnsKeys, fetchFromBlossom]);
+      // keys not ready yet: try again when they are
+      if (ref.blossomHash && blossomSyncEnabled && !pnsKeys) return;
+      setFailed(true);
+    });
+    return () => stop.abort();
+  }, [url, ref, key, files, blossomSyncEnabled, pnsKeys]);
 
   if (failed) {
     return (

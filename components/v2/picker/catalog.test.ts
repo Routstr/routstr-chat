@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Model } from "@/types/models";
-import { fmt, handles, measureFor, priceScale, searchRank, sortRows, type Row } from "./catalog";
+import { baseKey, fmt, handles, hostOf, measureFor, priceScale, searchRank, sortRows, type Row } from "./catalog";
 
 const model = (id: string, name: string, extra: Partial<Model> = {}) =>
   ({ id, name, created: 0, context_length: 0, architecture: { input_modalities: ["text"], output_modalities: ["text"] }, ...extra }) as unknown as Model;
@@ -67,5 +67,19 @@ describe("words", () => {
   it("places prices on a log line", () => {
     const s = priceScale([1, 10, 100]);
     expect(s.at(10)).toBeCloseTo(0.5);
+  });
+});
+
+describe("baseKey and hostOf", () => {
+  it("keys a base url with a scheme and a closing slash, as pins and the cache do", () => {
+    expect(baseKey("api.example.com")).toBe("https://api.example.com/");
+    expect(baseKey("http://127.0.0.1:8000")).toBe("http://127.0.0.1:8000/");
+    expect(baseKey("https://api.example.com/")).toBe("https://api.example.com/");
+  });
+
+  it("names a route by its host, else by the maker in the model's name", () => {
+    expect(hostOf("https://api.example.com/", model("m", "OpenAI: GPT-5"))).toBe("api.example.com");
+    expect(hostOf(null, model("m", "OpenAI: GPT-5"))).toBe("OpenAI");
+    expect(hostOf(null, model("m", "GPT-5"))).toBe("Unknown");
   });
 });

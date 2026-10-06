@@ -50,6 +50,25 @@ export const answers = (m: Model) => {
   return out && inn;
 };
 
+/** A base url as the app pins and the discovery cache keys it: with a scheme
+ *  and a closing slash. */
+export const baseKey = (base: string) => {
+  const url = base.startsWith("http") ? base : `https://${base}`;
+  return url.endsWith("/") ? url : `${url}/`;
+};
+
+/** Who serves a route, as people read it: the provider's host, else the maker
+ *  from a "Maker: Name" model name. */
+export function hostOf(base: string | null, model: Model): string {
+  try {
+    if (base) return new URL(baseKey(base)).host;
+  } catch {
+    // not a url: name the maker instead
+  }
+  const colon = model.name.indexOf(":");
+  return colon < 0 ? "Unknown" : model.name.slice(0, colon).trim();
+}
+
 export const parseKey = (key: string) => {
   const i = key.indexOf("@@");
   return i < 0 ? { id: key, base: null as string | null } : { id: key.slice(0, i), base: key.slice(i + 2) };
