@@ -6,7 +6,7 @@
  */
 
 import { KINDS } from "@/lib/nostr-kinds";
-import type { StoredApiKey } from "@/components/settings/ApiKeysTab";
+import type { ExportedKey } from "@/features/keys/exported";
 import type { StoredInvoice } from "@/hooks/useInvoiceSync";
 
 export type ThemeConfig =
@@ -52,12 +52,12 @@ function defineConfig<T>(
  * 3. The system will automatically include it in the unified subscription
  */
 export const CONFIG_TYPES = {
-  API_KEYS: defineConfig<StoredApiKey[]>({
+  API_KEYS: defineConfig<ExportedKey[]>({
     id: "api-keys",
     kind: KINDS.ARBITRARY_APP_DATA, // 30078
     dTag: "routstr-chat-api-keys-v1",
     encrypted: true,
-    parseContent: (data: unknown): StoredApiKey[] | null => {
+    parseContent: (data: unknown): ExportedKey[] | null => {
       if (!Array.isArray(data)) return null;
       // Basic validation - ensure each item has required fields
       const valid = data.every(
@@ -67,7 +67,7 @@ export const CONFIG_TYPES = {
           "key" in item &&
           typeof item.key === "string"
       );
-      return valid ? (data as StoredApiKey[]) : null;
+      return valid ? (data as ExportedKey[]) : null;
     },
     defaultValue: [],
   }),
