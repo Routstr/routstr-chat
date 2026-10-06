@@ -23,7 +23,9 @@ export function useSync({
   const syncT = useRef({ start: 0, before: new Set<string>(), timers: [] as number[] });
   // the result stays while you look at it: it clears once the selection leaves Sync
   const onSync = useRef(false);
-  onSync.current = it?.id === "sync";
+  useLayoutEffect(() => {
+    onSync.current = it?.id === "sync";
+  });
   const idleLater = useRef(false);
   useEffect(() => {
     if (onSync.current || !idleLater.current) return;
@@ -31,14 +33,14 @@ export function useSync({
     setSync("idle");
     setCame([]);
   }, [it?.id]);
-  const convRef = useRef(conversations);
-  convRef.current = conversations;
   const { manager } = useAccountManager();
   const account = useObservableState(manager.active$);
   const history = useHistory();
   const [relays] = useDeviceRelays();
   const syncCtx = useRef({ active: false, relays: 0 });
-  syncCtx.current = { active: !!account, relays: relays.length };
+  useLayoutEffect(() => {
+    syncCtx.current = { active: !!account, relays: relays.length };
+  });
   const finishSync = useCallback((outcome: SyncOutcome) => {
     const s = syncT.current;
     // the glyph turns for a moment at least, so a quick sync still reads as one

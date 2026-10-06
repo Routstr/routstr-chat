@@ -1,7 +1,7 @@
 import React, { type RefObject } from "react";
 import type { useUndoDelete } from "./useUndoDelete";
 
-export function railHover({
+export function useRailHover({
   tip,
   folded,
   tipFor,

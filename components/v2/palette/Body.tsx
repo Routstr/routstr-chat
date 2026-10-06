@@ -142,7 +142,7 @@ export default function Body({ closing }: { closing: boolean }) {
                   page,
                   sync,
                   came,
-                  origRoom: origRoom.current,
+                  origRoom,
                   roomNow: room.room,
                   roomResolved: room.resolved,
                   first,

@@ -40,7 +40,7 @@ export interface Ctx {
   page: "root" | "rooms";
   sync: Sync;
   came: string[];
-  origRoom: RoomId | null;
+  origRoom: React.RefObject<RoomId | null>;
   roomNow: RoomId;
   roomResolved: RoomId;
   first: boolean;

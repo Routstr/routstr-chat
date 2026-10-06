@@ -24,7 +24,7 @@ import { useGlide } from "./useGlide";
 import { useGutter } from "./useGutter";
 import { useListActions } from "./useListActions";
 import { useLongTitles } from "./useLongTitles";
-import { railHover } from "./railHover";
+import { useRailHover } from "./railHover";
 import { useRailKeys } from "./useRailKeys";
 import { useRailTip } from "./useRailTip";
 import { useSwipeRow } from "./useSwipeRow";
@@ -130,7 +130,7 @@ export default function Rail() {
   useRailKeys({ ui, isSidebarCollapsed, setFold, turn, hideTip });
   const { swDown, swMove, swEnd, openRow, closeOpen, justSwiped } = useSwipeRow(ui);
   const { delAt, onListClick, onListKey, onListEnd } = useListActions({ list, remove, undo, open, finalise, setFocusId, openRow, closeOpen, justSwiped });
-  const { onRailOver, onRailMove, onRailOut, onListFocus, onListBlur } = railHover({ tip, folded, tipFor, armTip, hideTip, armRoll, rollBack, ringOf, delAt });
+  const { onRailOver, onRailMove, onRailOut, onListFocus, onListBlur } = useRailHover({ tip, folded, tipFor, armTip, hideTip, armRoll, rollBack, ringOf, delAt });
 
   const newCurrent = !finding && !activeConversationId;
   return (

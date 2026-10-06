@@ -52,7 +52,9 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
 
   // stable handlers, so memoised messages do not re-render on every token
   const slotsRef = useRef(slots);
-  slotsRef.current = slots;
+  useLayoutEffect(() => {
+    slotsRef.current = slots;
+  });
   // another version is another message, so the turn remounts: the arrow you pressed keeps the keyboard
   const refocus = useRef<{ depth: number; label: string } | null>(null);
   const onVersion = useCallback<Go>(
@@ -68,7 +70,9 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
   );
   const actions = useActions();
   const latest = useRef({ retry: actions.retry, edit: startEditingMessage });
-  latest.current = { retry: actions.retry, edit: startEditingMessage };
+  useLayoutEffect(() => {
+    latest.current = { retry: actions.retry, edit: startEditingMessage };
+  });
   const onRetry = useCallback((i: number) => latest.current.retry(i), []);
   const onEdit = useCallback((i: number) => latest.current.edit(i), []);
 
@@ -106,7 +110,6 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
     pinned.current = true;
     const el = scroller.current;
     if (el) el.scrollTop = el.scrollHeight;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeConversationId, loadingFromUrl, slots.length > 0]);
 
   // you sent something: make room under it and bring it to the top
@@ -127,9 +130,10 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
       if (h2 !== h) setReserve(Math.max(0, el.clientHeight - h2 - 120));
       requestAnimationFrame(() => el.scrollTo({ top: q.offsetTop - 28, behavior: "smooth" }));
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userKey, isLoading]);
 
+  // a fold already handed its space back
+  const folding = useRef(false);
   // the answer outgrew the room we made: follow its tail, until you scroll
   useEffect(() => {
     const el = scroller.current;
@@ -244,7 +248,6 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
     return () => ro.disconnect();
   }, [reserve]);
 
-  const folding = useRef(false);
   const onFold = useCallback((h: number, ms: number) => {
     if (!h) return;
     folding.current = true;
@@ -290,25 +293,27 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
   const hideStoredTail =
     liveHere && lastSlot?.displayed.role === "assistant" && streamingText && getTextFromContent(lastSlot.displayed.content) === streamingText;
 
-  // messages already here when a chat opens arrive still; new ones rise in
-  const born = useRef<{ conv: string | null | undefined; keys: Set<string> }>({ conv: undefined, keys: new Set() });
+  // messages already here when a chat opens arrive still; new ones rise in,
+  // once: after its rise a turn is known, so a remount (another version) stays still
   const slotKeys = slots.map((s) => s.displayed._eventId);
-  if (born.current.conv !== activeConversationId) born.current = { conv: activeConversationId, keys: new Set(slotKeys) };
+  const [known, setKnown] = useState({ conv: activeConversationId, keys: new Set(slotKeys) });
+  if (known.conv !== activeConversationId) setKnown({ conv: activeConversationId, keys: new Set(slotKeys) });
+  const keyList = slotKeys.join(" ");
   useEffect(() => {
-    slotKeys.forEach((k) => born.current.keys.add(k));
-  });
+    if (slotKeys.every((k) => known.keys.has(k))) return;
+    const t = window.setTimeout(() => setKnown((k) => ({ ...k, keys: new Set([...k.keys, ...slotKeys]) })), tokenMs("--d-move"));
+    return () => window.clearTimeout(t);
+  }, [keyList, known]);
 
   // one polite line for screen readers when an answer lands (trouble says
   // itself: it mounts as a status or an alert)
   const [said, setSaid] = useState("");
-  const wasLive = useRef(false);
-  useEffect(() => {
-    if (wasLive.current && !liveHere) {
-      const last = slots[slots.length - 1]?.displayed;
-      if (last?.role === "assistant") setSaid(`${fullName(last._modelId)} ${stoppedAnswer ? "stopped part way" : "answered"}.`);
-    }
-    wasLive.current = liveHere;
-  }, [liveHere, slots, fullName, stoppedAnswer]);
+  const [wasLive, setWasLive] = useState(liveHere);
+  if (wasLive !== liveHere) {
+    setWasLive(liveHere);
+    const last = slots[slots.length - 1]?.displayed;
+    if (!liveHere && last?.role === "assistant") setSaid(`${fullName(last._modelId)} ${stoppedAnswer ? "stopped part way" : "answered"}.`);
+  }
 
   return (
     <div className="thread-wrap" ref={wrap}>
@@ -333,7 +338,7 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
             if (msg.role === "user")
               return (
                 <Mine key={key} msg={msg} index={depth} {...v} isLast={isLast} busy={isLoading}
-                  editing={editingMessageIndex === depth} fresh={!born.current.keys.has(key)}
+                  editing={editingMessageIndex === depth} fresh={!known.keys.has(key)}
                   onVersion={onVersion} onEdit={onEdit} />
               );
             if (DECLINED.test(getTextFromContent(msg.content)))

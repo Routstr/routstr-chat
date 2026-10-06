@@ -94,7 +94,9 @@ export function useUndoDelete({
     else window.setTimeout(() => finalise(id), tokenMs("--d-move") + 160);
   };
   const latestCommit = useRef(commit);
-  latestCommit.current = commit;
+  useLayoutEffect(() => {
+    latestCommit.current = commit;
+  });
   // each new undo line gets its ring, unwinding over five seconds
   useLayoutEffect(() => {
     gone.forEach((v, id) => {
