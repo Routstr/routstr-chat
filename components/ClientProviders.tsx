@@ -8,9 +8,10 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import dynamic from "next/dynamic";
 import { migrateStorageItems } from "@/utils/storageUtils";
 import { InvoiceRecoveryProvider } from "@/components/InvoiceRecoveryProvider";
-import { session } from "@/runtime";
+import { routing, session } from "@/runtime";
 import { node } from "@/runtime/node";
 import { NodeContext } from "@/features/node/view";
+import { CatalogContext } from "@/features/catalog/view";
 import { AccountContext } from "@/features/session/view";
 import { activeHistory, relays } from "@/runtime/nostr";
 import { HistoryContext } from "@/features/history/view";
@@ -82,6 +83,7 @@ export default function ClientProviders({ children }: { children: ReactNode }) {
   return (
     <AccountContext.Provider value={accountContext}>
       <NodeContext.Provider value={node}>
+      <CatalogContext.Provider value={routing.catalog}>
       <ThemeProvider>
         <RelaysContext.Provider value={relays}>
           <AppProvider presetRelays={presetRelays}>
@@ -95,6 +97,7 @@ export default function ClientProviders({ children }: { children: ReactNode }) {
           </AppProvider>
         </RelaysContext.Provider>
       </ThemeProvider>
+      </CatalogContext.Provider>
       </NodeContext.Provider>
     </AccountContext.Provider>
   );
