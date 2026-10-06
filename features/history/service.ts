@@ -349,7 +349,7 @@ export class HistoryService {
   // Only once a relay has said this account has none: a second keyring
   // would split the account's history between devices.
   private async makeKeyring(): Promise<void> {
-    // a switched-away account's signer is never asked
+    // a switched-away account's signer is not asked to start one
     if (this.disposed) return;
     let made: Awaited<ReturnType<typeof createKeyring>>;
     try {
@@ -359,7 +359,8 @@ export class HistoryService {
       this.makeFailed = true;
       return;
     }
-    if (this.keyrings.size > 0) return;
+    // a switch during the prompt: the old account keeps nothing from it
+    if (this.disposed || this.keyrings.size > 0) return;
     await this.deps.log.put([made.event]);
     this.keyrings.set(made.event.id, made);
     this.deps.relays.publish(made.event).catch(() => {

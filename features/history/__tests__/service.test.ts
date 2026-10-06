@@ -933,6 +933,32 @@ describe("HistoryService: the first keyring and a broken disk", () => {
     expect(decrypts).toBe(0);
   });
 
+  it("keeps and publishes no first keyring once the account switched away during its prompt", async () => {
+    const who = person();
+    let answer!: () => void;
+    const signer: HistorySigner = {
+      ...who.signer,
+      nip44: {
+        decrypt: who.signer.nip44!.decrypt,
+        encrypt: async (peer, text) => {
+          await new Promise<void>((resolve) => (answer = resolve));
+          return who.signer.nip44!.encrypt(peer, text);
+        },
+      },
+    };
+    const { history, net, log } = device({ who, signer });
+    history.start();
+    await until(() => answer !== undefined);
+
+    history.dispose();
+    answer();
+    for (let i = 0; i < 20; i++) await settle();
+
+    const keyrings = (events: Iterable<{ kind: number }>) => [...events].filter((e) => e.kind === KIND_KEYRING);
+    expect(keyrings(log.rows.values())).toEqual([]);
+    expect(DEFAULT_RELAYS.flatMap((url) => keyrings(net.relay(url).events.values()))).toEqual([]);
+  });
+
   it("never asks a switched-away account's signer for a first keyring", async () => {
     const who = person();
     let prompts = 0;
