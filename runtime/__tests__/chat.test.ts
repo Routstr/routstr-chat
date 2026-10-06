@@ -46,7 +46,15 @@ async function setup() {
     spending: () => ({ mode: "apikeys" }),
     ...emptyDevice(),
   });
-  return { account, calls, credit, wallet, history };
+  /** Credit at a provider, last used long ago, so an automatic refund takes it. */
+  const holdOld = (name: string) => {
+    credit.keys.storage().setApiKey(`https://${name}.example/`, `sk-${name}`);
+    const { store } = credit.stores.direct;
+    store.setState({
+      apiKeys: store.getState().apiKeys.map((key) => ({ ...key, lastUsed: 0 })),
+    });
+  };
+  return { account, calls, credit, wallet, history, holdOld };
 }
 
 // a provider holding 120 sats on every key, paying them out on refund
@@ -106,21 +114,20 @@ describe("createAccountChat", () => {
 
   it("does not count idle time while a reply is being paid for", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
-    const { account, calls, credit } = await setup();
-    const refunds = () => credit.keys.ready.mock.calls.length;
+    const { account, calls, wallet, holdOld } = await setup();
     const turn = await account.chat.send("c", "hello", model);
     await vi.advanceTimersByTimeAsync(0);
-    const before = refunds();
+    holdOld("idle");
 
     await vi.advanceTimersByTimeAsync(30 * MINUTE);
-    expect(refunds()).toBe(before);
+    expect(wallet.received).toEqual([]);
 
     calls[0].args[1].onMessageAppend({ role: "assistant", content: "hi" });
     calls[0].finish();
     await turn.settled;
     await turn.reply;
     await vi.advanceTimersByTimeAsync(10 * MINUTE);
-    expect(refunds()).toBe(before + 1);
+    expect(wallet.received).toEqual([tokenOf(120)]);
     account.dispose();
   });
 
@@ -144,20 +151,23 @@ describe("createAccountChat", () => {
   });
 
   it("refunds automatically on open and on leaving a chat, and stops when put away", async () => {
-    const { account, credit } = await setup();
-    await tick();
-    // once by the test's own setup, once by the refund on open
-    const opened = credit.keys.ready.mock.calls.length;
-    expect(opened).toBe(2);
+    const { account, credit, wallet, holdOld } = await setup();
+    holdOld("open");
+    await vi.waitFor(() => expect(wallet.received).toHaveLength(1));
 
     account.viewing("a");
+    holdOld("left");
     account.viewing("b");
-    await tick();
-    expect(credit.keys.ready.mock.calls.length).toBe(opened + 1);
+    await vi.waitFor(() => expect(wallet.received).toHaveLength(2));
 
+    // a put-away account no longer takes the account's payment lock
     account.dispose();
+    holdOld("away");
+    const locks = credit.keys.lock.mock.calls.length;
     account.viewing("c");
     await tick();
-    expect(credit.keys.ready.mock.calls.length).toBe(opened + 1);
+    await tick();
+    expect(credit.keys.lock.mock.calls.length).toBe(locks);
+    expect(wallet.received).toHaveLength(2);
   });
 });
