@@ -14,7 +14,10 @@ type Sub = { id: string; filters: Filter[]; ws: WebSocket };
 
 interface Store {
   events: Map<string, NostrEvent>;
+  /** what kind-5 events deleted: ids, and addresses up to a time, so they cannot come back */
+  deleted: Map<string, number>;
   subs: Set<Sub>;
+  sockets: Set<WebSocket>;
   down: boolean; // refuses connections and drops open ones
   eoseDelayMs: number;
 }
@@ -45,22 +48,34 @@ const isAddressable = (k: number) => k >= 30000 && k < 40000;
 const address = (e: NostrEvent) =>
   isAddressable(e.kind)
     ? `${e.kind}:${e.pubkey}:${tagValues(e, "d")[0] ?? ""}`
-    : `${e.kind}:${e.pubkey}`;
+    : `${e.kind}:${e.pubkey}:`;
+
+function isDeleted(store: Pick<Store, "deleted">, e: NostrEvent): boolean {
+  if (store.deleted.has(`${e.pubkey}:${e.id}`)) return true;
+  if (!isReplaceable(e.kind) && !isAddressable(e.kind)) return false;
+  return (
+    (store.deleted.get(`${e.pubkey}:${address(e)}`) ?? -Infinity) >=
+    e.created_at
+  );
+}
 
 /** Stores one event the way a relay would; returns [accepted, message]. */
 export function storeEvent(
-  store: Pick<Store, "events">,
+  store: Pick<Store, "events" | "deleted">,
   e: NostrEvent
 ): [boolean, string] {
   if (store.events.has(e.id))
     return [true, "duplicate: already have this event"];
+  if (isDeleted(store, e)) return [false, "blocked: deleted by its author"];
   if (e.kind === 5) {
-    const ids = new Set(tagValues(e, "e"));
-    const addrs = new Set(tagValues(e, "a"));
-    for (const [id, old] of store.events) {
-      if (old.pubkey !== e.pubkey || old.created_at > e.created_at) continue;
-      if (ids.has(id) || addrs.has(address(old))) store.events.delete(id);
-    }
+    // keys carry the author, so a deletion only reaches the author's own events;
+    // an id is gone for good, an address up to the request's time
+    for (const id of tagValues(e, "e"))
+      store.deleted.set(`${e.pubkey}:${id}`, Infinity);
+    for (const a of tagValues(e, "a"))
+      store.deleted.set(`${e.pubkey}:${a}`, e.created_at);
+    for (const [id, old] of store.events)
+      if (isDeleted(store, old)) store.events.delete(id);
   }
   if (isReplaceable(e.kind) || isAddressable(e.kind)) {
     for (const [id, old] of store.events) {
@@ -79,21 +94,16 @@ export function storeEvent(
 }
 
 export interface Relay {
-  url: string; // ws://127.0.0.1:<port>
-  urlFor(name: string): string; // a separate relay on its own path
-  events(name?: string): NostrEvent[];
-  seed(events: NostrEvent[], name?: string): void;
-  setDown(down: boolean, name?: string): void;
-  setEoseDelay(ms: number, name?: string): void;
+  url: string; // ws://127.0.0.1:<port>; ws://.../<name> is a separate relay
   close(): Promise<void>;
 }
 
 function setDown(store: Store, down: boolean) {
   store.down = down;
-  if (down) for (const s of store.subs) s.ws.terminate();
+  if (down) for (const ws of store.sockets) ws.terminate();
 }
 
-export async function startRelay(port = 0): Promise<Relay> {
+export async function startRelay(): Promise<Relay> {
   const stores = new Map<string, Store>();
   const storeOf = (name: string) => {
     let s = stores.get(name);
@@ -102,7 +112,9 @@ export async function startRelay(port = 0): Promise<Relay> {
         name,
         (s = {
           events: new Map(),
+          deleted: new Map(),
           subs: new Set(),
+          sockets: new Set(),
           down: false,
           eoseDelayMs: 0,
         })
@@ -132,7 +144,8 @@ export async function startRelay(port = 0): Promise<Relay> {
         return done(
           (JSON.parse(body) as NostrEvent[]).map((e) => storeEvent(store, e))
         );
-      if (url.pathname === "/_kit/reset") return (store.events.clear(), done());
+      if (url.pathname === "/_kit/reset")
+        return (store.events.clear(), store.deleted.clear(), done());
       if (url.pathname === "/_kit/down")
         return (setDown(store, url.searchParams.get("on") !== "0"), done());
       if (url.pathname === "/_kit/eose-delay")
@@ -147,6 +160,7 @@ export async function startRelay(port = 0): Promise<Relay> {
   wss.on("connection", (ws, req) => {
     const store = storeOf(nameOf(req.url));
     if (store.down) return ws.terminate();
+    store.sockets.add(ws);
     const mine = new Map<string, Sub>();
     const send = (msg: unknown[]) =>
       ws.readyState === ws.OPEN && ws.send(JSON.stringify(msg));
@@ -206,23 +220,17 @@ export async function startRelay(port = 0): Promise<Relay> {
         send(["NOTICE", `unsupported: ${type}`]);
       }
     });
-    ws.on("close", () => mine.forEach((s) => store.subs.delete(s)));
+    ws.on("close", () => {
+      mine.forEach((s) => store.subs.delete(s));
+      store.sockets.delete(ws);
+    });
   });
 
-  await new Promise<void>((resolve) =>
-    server.listen(port, "127.0.0.1", resolve)
-  );
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const { port: bound } = server.address() as { port: number };
   const url = `ws://127.0.0.1:${bound}`;
   return {
     url,
-    urlFor: (name) => `${url}/${encodeURIComponent(name)}`,
-    events: (name = "default") => [...storeOf(name).events.values()],
-    seed: (events, name = "default") =>
-      events.forEach((e) => storeEvent(storeOf(name), e)),
-    setDown: (down, name = "default") => setDown(storeOf(name), down),
-    setEoseDelay: (ms, name = "default") =>
-      void (storeOf(name).eoseDelayMs = ms),
     close: () =>
       new Promise<void>((resolve) => {
         wss.clients.forEach((c) => c.terminate());

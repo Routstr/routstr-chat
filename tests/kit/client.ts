@@ -4,7 +4,7 @@
 import {
   Mint,
   Wallet,
-  getEncodedTokenV4,
+  getEncodedToken,
   getTokenMetadata,
   type Proof,
   type ProofState,
@@ -45,11 +45,8 @@ export function kitClient(env: KitEnv) {
   };
 
   /** Fresh coins worth `sats`, minted by paying a fake invoice (paid at once). */
-  async function mintProofs(
-    sats: number,
-    mintUrl = env.mintUrl
-  ): Promise<Proof[]> {
-    const wallet = await walletAt(mintUrl);
+  async function mintProofs(sats: number): Promise<Proof[]> {
+    const wallet = await walletAt(env.mintUrl);
     const quote = await wallet.createMintQuote(sats);
     for (
       let i = 0;
@@ -68,13 +65,32 @@ export function kitClient(env: KitEnv) {
       return env.coreUrl;
     },
     mintProofs,
-    /** A cashuB token worth `sats` from the kit mint. */
-    async mintToken(sats: number, mintUrl = env.mintUrl): Promise<string> {
-      return getEncodedTokenV4({
-        mint: mintUrl,
-        proofs: await mintProofs(sats, mintUrl),
+    /**
+     * A token worth `sats` from the kit mint, written the way cashu-ts writes it: cashuB with
+     * the short keyset id. `v3` writes cashuA with full ids, for a test about something other
+     * than reading tokens.
+     */
+    async mintToken(
+      sats: number,
+      opts: { v3?: boolean } = {}
+    ): Promise<string> {
+      const token = {
+        mint: env.mintUrl,
+        proofs: await mintProofs(sats),
         unit: "sat",
-      });
+      };
+      return getEncodedToken(token, { version: opts.v3 ? 3 : 4 });
+    },
+    /**
+     * Swaps a token at its mint for fresh coins and returns what they are worth. This is
+     * the proof a token is real: amounts written on a token are not checked until then.
+     */
+    async redeem(token: string): Promise<number> {
+      const wallet = await walletAt(getTokenMetadata(token).mint);
+      return (await wallet.receive(token)).reduce(
+        (sum, p) => sum + p.amount,
+        0
+      );
     },
     /** A fake Lightning invoice for `sats` from the second mint (pay it from the first). */
     async invoice(sats: number): Promise<string> {

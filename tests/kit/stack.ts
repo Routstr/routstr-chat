@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { generateSecretKey, nip19 } from "nostr-tools";
 import { startCore } from "./services/core";
+import { endLeftovers } from "./services/procs";
 import { startMint } from "./services/mint";
 import { startRelay } from "./services/relay";
 import { startUpstream } from "./services/upstream";
@@ -19,10 +20,7 @@ export interface KitEnv {
 }
 
 export interface StackOptions {
-  dir?: string;
-  core?: boolean; // default true
-  coreDir?: string; // default KIT_CORE_DIR
-  offline?: boolean; // mints from the uv cache only (sealed runs)
+  core?: boolean; // default true: routstr-core from KIT_CORE_DIR
   log?: (line: string) => void;
 }
 
@@ -33,7 +31,10 @@ export interface Stack {
 
 const RUNS = path.join(os.tmpdir(), "routstr-kit");
 
-/** Removes the folders of earlier runs whose process is gone (a live `kit up` keeps its own). */
+/**
+ * Removes the folders of earlier runs whose process is gone (a live `kit up` keeps its own),
+ * after ending any mint or core such a run left running.
+ */
 function pruneRuns() {
   const alive = (pid: number) => {
     try {
@@ -50,20 +51,19 @@ function pruneRuns() {
         fs.rmSync(dir, { recursive: true, force: true });
       continue; // a run being set up right now
     }
-    if (!alive(Number(fs.readFileSync(pidFile, "utf8"))))
-      fs.rmSync(dir, { recursive: true, force: true });
+    if (alive(Number(fs.readFileSync(pidFile, "utf8")))) continue;
+    endLeftovers(dir, path.join(dir, "pids"));
+    fs.rmSync(dir, { recursive: true, force: true });
   }
 }
 
 export async function startStack(opts: StackOptions = {}): Promise<Stack> {
   const log = opts.log ?? (() => {});
-  let dir = opts.dir;
-  if (!dir) {
-    pruneRuns();
-    fs.mkdirSync(RUNS, { recursive: true });
-    dir = fs.mkdtempSync(path.join(RUNS, "run-"));
-    fs.writeFileSync(path.join(dir, "pid"), String(process.pid));
-  }
+  pruneRuns();
+  fs.mkdirSync(RUNS, { recursive: true });
+  const dir = fs.mkdtempSync(path.join(RUNS, "run-"));
+  fs.writeFileSync(path.join(dir, "pid"), String(process.pid));
+  const pidFile = path.join(dir, "pids");
   const stops: (() => Promise<void>)[] = [];
   const stop = async () => {
     for (const s of stops.reverse()) await s().catch(() => {});
@@ -73,13 +73,12 @@ export async function startStack(opts: StackOptions = {}): Promise<Stack> {
     const started = await Promise.allSettled([
       startRelay().then((s) => (stops.push(s.close), s)),
       startUpstream().then((s) => (stops.push(s.close), s)),
-      startMint({ dir: path.join(dir, "mint"), offline: opts.offline }).then(
+      startMint({ dir: path.join(dir, "mint"), pidFile }).then(
         (s) => (stops.push(s.stop), s)
       ),
-      startMint({
-        dir: path.join(dir, "invoice-mint"),
-        offline: opts.offline,
-      }).then((s) => (stops.push(s.stop), s)),
+      startMint({ dir: path.join(dir, "invoice-mint"), pidFile }).then(
+        (s) => (stops.push(s.stop), s)
+      ),
     ]);
     const failed = started.find((r) => r.status === "rejected");
     if (failed) throw (failed as PromiseRejectedResult).reason;
@@ -96,7 +95,7 @@ export async function startStack(opts: StackOptions = {}): Promise<Stack> {
     );
     let coreUrl: string | null = null;
     if (opts.core !== false) {
-      const coreDir = opts.coreDir ?? process.env.KIT_CORE_DIR;
+      const coreDir = process.env.KIT_CORE_DIR;
       if (!coreDir)
         throw new Error(
           "set KIT_CORE_DIR to a routstr-core checkout with a .venv (uv sync --frozen --no-dev), or start without core"
@@ -104,6 +103,7 @@ export async function startStack(opts: StackOptions = {}): Promise<Stack> {
       const core = await startCore({
         coreDir,
         dir: path.join(dir, "core"),
+        pidFile,
         mintUrls: [mint.url],
         upstreamUrl: upstream.url,
         relayUrls: [relay.url],
