@@ -1,0 +1,287 @@
+/* ══ blocks in a streaming answer: each settles in once, then holds ═══════ */
+.md > .blk + .blk { margin-top: .92em; }
+.md .blk > * + * { margin-top: .92em; }
+.md .blk > :is(h1, h2) { margin-top: 1.55em; }
+.md .blk > :is(h3, h4) { margin-top: 1.25em; }
+.md .blk > :is(h1, h2, h3, h4) + * { margin-top: .5em; }
+.md .blk:has(> :is(h1, h2, h3, h4):last-child) + .blk > :first-child { margin-top: .5em; }
+.md > .blk:first-child > :first-child { margin-top: 0; }
+.md .blk > .rd-table, .md .blk > .rd-code { margin-top: 1.2em; }
+.md .blk > :is(.rd-table, .rd-code) + * { margin-top: 1.2em; }
+.md .dead-link { text-decoration: underline dotted var(--ink-3); }
+/* the tail of a streaming answer: the caret, and new words settling in */
+.md[data-streaming] .blk:last-child > :last-child::after {
+  content: ""; display: inline-block; width: 2px; height: 1.02em; margin-left: 2px;
+  vertical-align: -.16em; background: var(--tint); border-radius: 1px;
+  animation: blink 1.15s steps(1, end) infinite;
+}
+.md[data-streaming] .blk:last-child > pre:last-child::after,
+.md[data-streaming] .blk:last-child > .rd-code:last-child::after,
+.md[data-streaming] .blk:last-child > ul:last-child::after,
+.md[data-streaming] .blk:last-child > ol:last-child::after,
+.md[data-streaming] .blk:last-child > .rd-table:last-child::after { display: none; }
+.md[data-streaming] .blk:last-child > ul:last-child > li:last-child::after,
+.md[data-streaming] .blk:last-child > ol:last-child > li:last-child::after {
+  content: ""; display: inline-block; width: 2px; height: 1.02em; margin-left: 2px;
+  vertical-align: -.16em; background: var(--tint); border-radius: 1px;
+  animation: blink 1.15s steps(1, end) infinite;
+}
+@keyframes blink { 0%, 55% { opacity: 1; } 56%, 100% { opacity: .18; } }
+.blk { animation: blkIn var(--d-slow) var(--e-out) both; }
+@keyframes blkIn { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+.md:not([data-streaming]) .blk { animation: none; }
+
+/* ══ code figure ═════════════════════════════════════════════════════════ */
+.code {
+  margin: 1.1em 0; border-radius: var(--r-sm); background: var(--code-bg); overflow: hidden;
+  box-shadow: inset 0 1px 0 var(--code-lip), inset 0 0 0 1px var(--hair);
+}
+.code-copy {
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 9px; border-radius: var(--r-xs);
+  font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .04em; text-transform: none;
+  color: var(--ink-3); transition: background var(--d-fast), color var(--d-fast);
+}
+.code-copy:hover { background: var(--fill-1); color: var(--ink); }
+.swap { display: grid; }
+.swap > * { grid-area: 1 / 1; transition: opacity var(--d-fast) var(--e-out), transform var(--d-fast) var(--e-spring); }
+.swap > :last-child { opacity: 0; transform: scale(.6); color: var(--tint); }
+.swap[data-on] > :first-child { opacity: 0; transform: scale(.6); }
+.swap[data-on] > :last-child { opacity: 1; transform: none; }
+.code pre {
+  margin: 0; padding: var(--s1) var(--s4) var(--s4); overflow-x: auto;
+  background: none !important;
+}
+.code code, .code pre {
+  font-family: var(--f-mono); font-size: 12.6px; line-height: 1.58; color: var(--ink);
+  font-variant-ligatures: none; white-space: pre; tab-size: 2;
+}
+.code .linenumber { color: var(--ink-3); opacity: .55; min-width: 2.2em !important; padding-right: 1em !important; }
+.code .token.comment, .code .token.prolog, .code .token.doctype, .code .token.cdata { color: var(--code-c); font-style: italic; }
+
+/* ══ images a model makes: the frame is reserved, the title waits in it ══ */
+.frame {
+  position: relative; width: min(100%, 520px); aspect-ratio: 1; border-radius: var(--r-md);
+  background: var(--fill-1); overflow: hidden; margin: .4em 0 1em;
+  box-shadow: inset 0 0 0 1px var(--hair);
+  display: grid; place-items: center; text-align: center; padding: var(--s6);
+}
+.frame-t {
+  font-family: var(--f-display); font-size: clamp(20px, 3vw, 30px); line-height: 1.12;
+  color: var(--ink-3); letter-spacing: var(--display-track); text-wrap: balance;
+  font-stretch: var(--display-stretch, 100%);
+}
+.frame::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(110deg, transparent 30%, color-mix(in srgb, var(--surface-lit) 40%, transparent) 50%, transparent 70%);
+  background-size: 250% 100%; animation: sweep 2.2s var(--e-in-out) infinite;
+}
+@keyframes sweep { from { background-position: 120% 0; } to { background-position: -20% 0; } }
+@keyframes develop { from { opacity: 0; filter: blur(14px) saturate(.6); transform: scale(1.01); } to { opacity: 1; filter: none; transform: none; } }
+
+/* ══ loading a chat: two faint lines where the words will be ═════════════ */
+.ghost-lines { display: grid; gap: 12px; padding: var(--s6) 0; }
+.ghost-lines i { display: block; height: 11px; border-radius: 6px; background: var(--fill-1);
+  animation: breathe 1.6s var(--e-in-out) infinite; }
+.ghost-lines i:nth-child(2) { width: 82%; animation-delay: .15s; }
+.ghost-lines i:nth-child(3) { width: 64%; animation-delay: .3s; }
+
+/* ══ arrivals: a new turn rises in once; turns already here arrive still ══ */
+.msg-enter { animation: msgIn var(--d-move) var(--e-out) both; }
+@keyframes msgIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+/* a picture that is not on this device reads like a file slip */
+.rd-missing { height: 64px; }
+.rd-thumb-wait { width: 76px; background: var(--fill-1); animation: breathe 1.6s var(--e-in-out) infinite; }
+
+/* The answer on its way: the wait, the reasoning, the words
+   arriving, the stop, the picture developing, and the ways it can fail.
+   Tokens only (rooms.css). Every size below is either a token or derived from
+   one; the few literal px are optical (caret width, hang offset, type size of
+   the status line, which matches the app's mono meta sizes). */
+
+/* wet ink: the colour of a word as it lands, the caret and the live halo.
+   A room token (goes into rooms.css): the tint where the tint is calm, and a
+   muted room ink in Meridian, whose red tint reads as alarm on every word */
+html { --wet: var(--tint); }
+html[data-room="meridian"] { --wet: color-mix(in srgb, var(--ink-3) 62%, var(--sh-c0)); }
+
+.la {
+  --frame-w: min(100%, 520px, 54vh); /* a picture's width; its receipt matches it */
+  /* one prose line: the status line, the first answer line and the error
+     headline all live in exactly this box, so swapping them moves nothing */
+  --la-lh: calc(var(--read) * var(--read-lh));
+  --la-hang: 13px;            /* the caret and chevron hang left of the column */
+  --la-pad: 0px;              /* phone: the line's words sit after an inline mark */
+  --think-cap: 132px;         /* the live reasoning window grows to this, then holds */
+  --la-ink: 620ms;            /* how long a new word takes to settle into ink */
+}
+
+/* ══ the stage: status line, reasoning, answer ══════════════════════════ */
+.la-stage { display: grid; grid-template-columns: minmax(0, 1fr); }
+.la-stage > .la-line { grid-row: 1; grid-column: 1; }
+.la-stage > .la-think { grid-row: 2; grid-column: 1; }
+.la-stage > .la-answer, .la-stage > .la-trouble { grid-row: 3; grid-column: 1; }
+/* no reasoning: the first words (or the error headline) take the status
+   line's own box, so the line is replaced in place, not pushed */
+.la:not([data-think]) .la-stage > .la-answer,
+.la:not([data-think]) .la-stage > .la-trouble { grid-row: 1; }
+
+/* ══ the status line ════════════════════════════════════════════════════ */
+.la-line {
+  position: relative; display: flex; align-items: center; min-width: 0;
+  height: var(--la-lh); padding-left: var(--la-pad);
+  font-family: var(--f-ui); font-size: 13.5px; letter-spacing: .004em;
+  color: var(--ink-3);
+  transition: opacity var(--d-fast) var(--e-out);
+}
+.la-line[data-gone] { opacity: 0; pointer-events: none; transition-duration: var(--d-quick); }
+.la-line[data-gone] .la-mark { visibility: hidden; }
+
+/* the mark hangs in the gutter so the words align with the prose edge */
+.la-mark {
+  position: absolute; left: calc(-1 * var(--la-hang)); top: 0; width: 12px; height: var(--la-lh);
+  display: grid; place-items: center; pointer-events: none;
+}
+.la-mark > * { grid-area: 1 / 1; }
+.la-caret {
+  width: 2px; height: calc(var(--read) * 1.02); border-radius: 1px; background: var(--wet);
+  transition: opacity var(--d-fast) var(--e-out), transform var(--d-mid) var(--e-out), background-color var(--d-move) var(--e-out);
+  box-shadow: 0 0 10px 0 color-mix(in srgb, var(--wet) 55%, transparent);
+  animation: la-breathe var(--la-breath, 1.9s) var(--e-in-out) infinite;
+}
+/* the longer the wait, the slower the caret breathes: calmer, never anxious */
+.la[data-phase="pay"] { --la-breath: 1.1s; }
+.la[data-phase="route"] { --la-breath: 1.5s; }
+.la[data-phase="first"] { --la-breath: 2s; }
+.la[data-phase="first"][data-slow] { --la-breath: 2.8s; }
+.la-chev {
+  /* nudged by its margin: the build drops translate beside a transform */
+  margin-left: -3px;
+  width: 14px; height: 14px; color: var(--ink-3); opacity: 0; transform: rotate(0deg) scale(.6);
+  transition: opacity var(--d-mid) var(--e-out), transform var(--d-mid) var(--e-out);
+}
+.la-chev path { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.la[data-think] .la-caret { opacity: 0; transform: scaleY(.4); animation: none; }
+.la[data-think] .la-chev { opacity: .75; transform: rotate(90deg); }
+.la[data-think][data-folded] .la-chev { transform: rotate(0deg); }
+@keyframes la-breathe { 0%, 100% { opacity: 1; } 50% { opacity: .28; } }
+
+/* the words: a verb and, while reasoning, the newest heading. Each sits in
+   its own clipped slot one line tall; a new phrase rolls up into it */
+.la-words { position: relative; display: block; flex: 1 1 auto; min-width: 0; height: var(--la-lh); overflow: hidden; }
+/* the verb sits in flow; the separator and topic are placed after it by a
+   transform (set from the verb's width), so a longer verb glides them along
+   without moving anything's layout box */
+.la-slot { display: inline-grid; align-items: center; height: var(--la-lh); overflow: hidden; vertical-align: top; }
+.la-sep, .la-topic { position: absolute; left: 0; top: 0; height: var(--la-lh); display: inline-grid; align-items: center;
+  transform: translateX(var(--after, 0px)); transition: transform var(--d-mid) var(--e-out), opacity var(--d-mid) var(--e-out); }
+/* the gap and the drawn dot are the settled line's (.rd-thought-t), so the
+   dot does not change at the hand-off */
+.la { --la-gap: calc(1.1em + 3px); }
+.la-topic { overflow: hidden; max-width: calc(100% - var(--after, 0px) - var(--la-gap)); padding-left: var(--la-gap); }
+.la-sep { width: var(--la-gap); justify-items: center; opacity: 0; }
+.la-sep::before { content: ""; width: 3px; height: 3px; border-radius: 50%; background: currentColor; opacity: .7; }
+.la-words[data-topic] .la-sep { opacity: 1; }
+.la-w {
+  grid-area: 1 / 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  transition: transform var(--d-fast) var(--e-out), opacity var(--d-fast) var(--e-out);
+}
+.la-w[data-out] { transform: translateY(-62%); opacity: 0; }
+.la-w .ch {
+  display: inline-block; white-space: pre;
+  transition: transform var(--d-mid) var(--e-out) calc(var(--i) * 14ms), opacity var(--d-mid) var(--e-out) calc(var(--i) * 14ms);
+}
+.la-w[data-in] .ch { transform: translateY(72%); opacity: 0; transition: none; }
+
+/* the light passing over the verb while it waits; the ink-3 floor keeps 4.5:1 */
+.la-line[data-shimmer] .la-main .la-w:not([data-out]) {
+  background: linear-gradient(90deg, var(--ink-3) 0%, var(--ink-3) 38%, var(--ink) 50%, var(--ink-3) 62%, var(--ink-3) 100%);
+  background-size: 280% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: la-shimmer 2.6s linear infinite;
+}
+@keyframes la-shimmer { from { background-position: 100% 0; } to { background-position: 0% 0; } }
+
+/* the longest wait offers the one next step on the line itself. It sits
+   after the phrase (placed by the same --after as the topic), fades in once
+   the phrase has rolled, and never changes the line's box */
+.la-line-act {
+  position: absolute; top: 50%; left: calc(var(--la-pad) + var(--after, 0px) + var(--s3));
+  opacity: 0; transform: translate(-4px, -50%); pointer-events: none;
+  transition: opacity var(--d-fast) var(--e-out), transform var(--d-fast) var(--e-out), background-color var(--d-fast) var(--e-out), color var(--d-fast) var(--e-out);
+}
+.la-line-act[data-on] {
+  opacity: 1; transform: translateY(-50%); pointer-events: auto;
+  transition-duration: var(--d-move); transition-delay: var(--d-mid);
+}
+
+/* after the answer: the same line is the disclosure for the reasoning */
+.la-line button.la-toggle {
+  position: absolute; inset: 0 auto 0 calc(-1 * var(--la-hang) - 6px);
+  padding: 0; border-radius: var(--r-xs); width: calc(100% + var(--la-hang) + 12px);
+}
+.la-line button.la-toggle:focus-visible { box-shadow: var(--focus); outline: 0; }
+.la-line:has(.la-toggle):hover { color: var(--ink-2); }
+.la-line:has(.la-toggle):hover .la-chev { opacity: 1; color: var(--ink-2); }
+.la[data-think][data-folded][data-open-thought] .la-chev { transform: rotate(90deg); }
+
+/* ══ the reasoning window ════════════════════════════════════════════════ */
+.la-think {
+  display: grid; grid-template-rows: 0fr;
+  transition: grid-template-rows var(--d-move) var(--e-out);
+}
+.la-think[data-open] { grid-template-rows: 1fr; }
+.la-think-clip { min-height: 0; overflow: hidden; }
+.la-think-in {
+  position: relative; margin: 2px 0 var(--s5);
+  padding-left: var(--s4); box-shadow: inset 1px 0 0 var(--hair);
+  /* the process speaks in the UI face (like the status line above it); only
+     the answer speaks in the reading face. The two voices never blur */
+  font-family: var(--f-ui); font-size: 14px; line-height: 1.64; letter-spacing: .002em;
+  color: var(--ink-2); overflow-wrap: anywhere; text-wrap: pretty;
+  transform-origin: 0 0;
+  transition: opacity var(--d-fast) var(--e-out), transform var(--d-move) var(--e-out);
+}
+/* live: the window grows with the first lines (nothing is below it yet), then
+   holds at --think-cap. The transcript's own box never moves: it only
+   translates up, so the rise is a pure transform (no layout shift) */
+.la-think[data-live] .la-think-in { overflow: hidden; }
+.la-think[data-live] .la-rise { position: absolute; left: var(--s4); right: 0; top: 0; }
+.la-think[data-live][data-full] .la-think-in {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 46%, #000 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 46%, #000 100%);
+}
+.la-rise { will-change: transform; }
+/* the fold: the reasoning is drawn up into the line that names it, while
+   the window closes under it */
+.la-think[data-folding] .la-think-in { opacity: 0; transform: translateY(calc(-1 * var(--s4))) scale(.97); }
+/* opened again after the answer: the whole transcript, scrolling in place */
+.la-think:not([data-live]) .la-think-in { max-height: min(46vh, 420px); overflow-y: auto; overscroll-behavior: contain; }
+.la-think .t-h, .la-think .t-l { display: block; }
+.la-think .t-h {
+  font-weight: 560; color: var(--ink); margin-top: 1.05em; line-height: 1.5;
+}
+.la-think .t-h:first-child { margin-top: 0; }
+.la-think .t-h + .t-l { margin-top: .2em; }
+.la-think .t-l + .t-l { margin-top: .45em; }
+/* live, the newest heading is already the status line's topic: in the
+   window a heading is only a pause between its lines, never said twice */
+.la-think[data-live] .t-h { display: none; }
+.la-think[data-live] .t-h + .t-l { margin-top: .9em; }
+.la-think[data-live] .t-h:first-child + .t-l { margin-top: 0; }
+
+/* ══ the answer: words arrive, then settle into ink ══════════════════════ */
+.la-answer { position: relative; min-width: 0; }
+.la-answer .md .blk { animation: none; }
+.la .w.new { animation: la-ink var(--la-ink) var(--e-out) backwards; }
+/* opacity and colour only: both are cheap on a phone. Wet ink drying */
+@keyframes la-ink {
+  0% { opacity: 0; color: color-mix(in srgb, var(--wet) 70%, var(--ink)); }
+  32% { opacity: 1; }
+}
+.la .md[data-streaming] *::after { content: none !important; }
+/* the caret at the tail: steady while words flow, breathing when the model pauses */
+.la-tail {
+  display: inline-block; width: 2px; height: 1.02em; margin-left: 2px; vertical-align: -.16em;
+  background: var(--wet); border-radius: 1px;
+  transition: background-color var(--d-move) var(--e-out), opacity var(--d-mid) var(--e-out);
+}
+.la-tail[data-idle] { animation: la-breathe 1.3s var(--e-in-out) infinite; }

@@ -9,7 +9,10 @@ import { useActions } from "../useActions";
 import { shortModelName } from "../format";
 import { Icon } from "../icons";
 import { tokenMs } from "../motion";
-import { Answer, Mine, Tips, type Go } from "./Turns";
+import { Answer } from "./answer/Answer";
+import type { Go } from "./atoms/helpers";
+import { Mine } from "./mine/Mine";
+import { Tips } from "./Tips";
 import Live from "./Live";
 import Trouble, { DECLINED, isStopped } from "./Trouble";
 

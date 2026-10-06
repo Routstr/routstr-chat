@@ -1,0 +1,79 @@
+/* ══ trouble: the caret stops and becomes the seam ═══════════════════════ */
+.la-trouble { position: relative; min-width: 0; }
+.la-t-msg { position: relative; }
+.la-seam {
+  position: absolute; left: calc(-1 * var(--la-hang) + 5px); top: calc((var(--la-lh) - var(--read) * 1.02) / 2);
+  width: 2px; bottom: calc((var(--la-lh) - var(--read) * 1.02) / 2); border-radius: 1px;
+  background: var(--ink-3); opacity: 0; transform-origin: 50% 0;
+}
+/* the caret stops, cools into the seam, and the seam leaves: at rest the
+   headline stands alone, with no stray tick before it */
+.la-trouble[data-enter] .la-seam { animation: la-seam calc(var(--d-slow) * 3) var(--e-out) both; }
+@keyframes la-seam {
+  0% { transform: scaleY(var(--seam-from, .2)); background: var(--wet); opacity: 1; }
+  35% { transform: none; background: var(--ink-3); opacity: .55; }
+  70% { opacity: .55; }
+  100% { transform: none; background: var(--ink-3); opacity: 0; }
+}
+.la-t-head {
+  min-height: var(--la-lh); display: flex; align-items: center;
+  font-family: var(--f-body); font-size: var(--read); line-height: var(--read-lh); color: var(--ink);
+  text-wrap: pretty;
+}
+.la-t-sub {
+  font-family: var(--f-ui); font-size: 14px; line-height: 1.55; color: var(--ink-2); text-wrap: pretty;
+  max-width: 52ch;
+}
+.la-t-sub .n { font-variant-numeric: tabular-nums; color: var(--ink); }
+.la-trouble[data-enter] .la-t-head { animation: la-roll-in var(--d-mid) var(--e-out) both; }
+.la-trouble[data-enter] .la-t-sub { animation: la-fade-up var(--d-move) 60ms var(--e-out) both; }
+.la-trouble[data-enter] .la-acts { animation: la-fade-up var(--d-move) 120ms var(--e-out) both; }
+@keyframes la-roll-in { from { opacity: 0; transform: translateY(40%); } }
+@keyframes la-fade-up { from { opacity: 0; transform: translateY(4px); } }
+
+.la-acts { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2); margin-top: var(--s3); }
+.la-act {
+  display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 12px;
+  border-radius: var(--r-sm); font-family: var(--f-ui); font-size: 13.5px; font-weight: 500; color: var(--ink-2);
+  transition: background-color var(--d-fast) var(--e-out), color var(--d-fast) var(--e-out), transform var(--d-fast) var(--e-spring);
+}
+.la-act .v2-ico { width: 15px; height: 15px; }
+.la-act:hover { background: var(--fill-1); color: var(--ink); }
+.la-act:active { transform: scale(.97); }
+.la-act:focus-visible { box-shadow: var(--focus); outline: 0; }
+.la-act.la-prime { background: var(--fill-1); color: var(--ink); }
+.la-act.la-prime:hover { background: var(--fill-2); }
+.la-act.la-prime .v2-ico { color: var(--ink-2); }
+.la-act[aria-expanded] .v2-ico { transition: transform var(--d-mid) var(--e-out); }
+.la-act[aria-expanded="true"] .v2-ico { transform: rotate(90deg); }
+.la-act.quiet { padding: 0 8px; color: var(--ink-3); font-weight: 400; }
+.la-act.quiet:hover { color: var(--ink); }
+/* in the action row every second choice reads the same: one primary, equals after it */
+.la-acts .la-act.quiet { padding: 0 12px; color: var(--ink-2); font-weight: 500; }
+.la-acts .la-act.quiet:hover { color: var(--ink); }
+
+/* details and attempts open under the actions, height by grid rows */
+.la-more { display: grid; grid-template-rows: 0fr; transition: grid-template-rows var(--d-move) var(--e-out); }
+.la-more[data-open] { grid-template-rows: 1fr; }
+.la-more > div { min-height: 0; overflow: hidden; }
+.la-more-in { margin-top: var(--s3); opacity: 0; transition: opacity var(--d-fast) var(--e-out); }
+.la-more[data-open] .la-more-in { opacity: 1; transition-duration: var(--d-mid); transition-delay: 60ms; }
+.la-raw {
+  position: relative; padding: var(--s3) 88px var(--s3) var(--s4); border-radius: var(--r-sm);
+  background: var(--code-bg); box-shadow: inset 0 1px 0 var(--code-lip), inset 0 0 0 1px var(--hair);
+  font-family: var(--f-mono); font-size: 12px; line-height: 1.6; color: var(--ink-2);
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.la-raw .code-copy { position: absolute; top: 6px; right: 6px; }
+/* one row per kind of failure, no rules between them: a repeat merges
+   ("No answer, twice") and the raw line shows only when it adds something */
+.la-tries { display: grid; gap: var(--s2); margin: 0; padding: 0; list-style: none; }
+.la-try { display: grid; grid-template-columns: 34px minmax(0, 1fr); align-items: baseline; gap: 0 var(--s2); }
+.la-try .i { font-family: var(--f-mono); font-size: 11px; color: var(--ink-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.la-try .l { font-family: var(--f-ui); font-size: 13.5px; color: var(--ink-2); }
+.la-try .l .x { color: var(--ink-3); }
+.la-try .r { grid-column: 2; font-family: var(--f-mono); font-size: 11px; line-height: 1.5; color: var(--ink-3); margin-top: 2px; padding-right: var(--s2); overflow-wrap: anywhere; }
+
+/* stopped before any words: one quiet line, one action */
+.la-quiet { display: flex; align-items: center; gap: var(--s3); height: var(--la-lh); font-family: var(--f-ui); font-size: 13.5px; color: var(--ink-3); }
+.la-quiet .la-act { height: 30px; margin-left: -4px; }

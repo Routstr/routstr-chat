@@ -1,0 +1,88 @@
+/* The conversation as a book spread. Who spoke hangs in the left
+   margin, where it came from hangs in the right; the words keep one measure.
+   Finished messages are rd-*; the live answer and trouble share the grid. */
+
+.thread {
+  min-width: 0; min-height: 0; overflow-y: auto; overflow-x: hidden;
+  overscroll-behavior: contain; padding: var(--s2) 0 0;
+  mask-image: linear-gradient(to bottom, transparent 0, #000 36px, #000 calc(100% - 24px), transparent 100%);
+  scroll-padding-top: 24px;
+}
+.thread-in {
+  width: min(100%, var(--column)); margin-inline: auto;
+  padding: var(--s4) var(--s5) var(--s6);
+}
+.thread-foot { height: var(--reserve, 0px); }
+
+.thread-wrap { position: relative; min-height: 0; display: grid; }
+
+/* Finished messages (rd-*). Tokens only. */
+
+@property --rd-fade { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@property --rd-fl { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@property --rd-fr { syntax: "<length>"; inherits: false; initial-value: 0px; }
+
+/* the query box is the width you can see: under the open sidebar the rail
+   narrows this wrapper, not the scroller, so the margins only open when the
+   visible pane has room for them */
+.thread-box { container: thread / inline-size; margin-inline: auto; }
+.thread-in { width: min(100%, calc(var(--measure) + 2 * var(--label-col) + 2 * var(--s5))); margin-inline: auto; }
+.thread-in {
+  --line: calc(var(--read) * var(--read-lh));
+  --note-gap: 24px;
+  --note-w: calc(var(--label-col) - var(--note-gap) + 6px);
+  /* turns group as pairs: a question sits close to its answer, a new
+     question starts after a clear breath (2x the pair gap: 32 / 64) */
+  --rd-pair-gap: var(--s7);
+  --rd-turn-gap: calc(var(--s9) + var(--s2));
+  padding: var(--s5) var(--s5) var(--s9);
+}
+
+/* ══ the spread: margin · measure · margin ══════════════════════════════ */
+.rd-msg {
+  display: grid; position: relative;
+  grid-template-columns: var(--label-col) minmax(0, var(--measure)) var(--label-col);
+  font-family: var(--f-body); font-size: var(--read); line-height: var(--read-lh);
+  font-weight: var(--w-body); color: var(--ink);
+}
+.rd-msg + .rd-msg { margin-top: var(--s8); }
+.rd-me + .rd-ai { margin-top: var(--rd-pair-gap); }
+.rd-ai + .rd-me { margin-top: var(--rd-turn-gap); }
+
+/* who said it: mono marginalia on the first line's baseline */
+.rd-who {
+  grid-column: 1; grid-row: 1; align-self: baseline; position: relative;
+  padding-right: var(--label-gap); text-align: right; min-width: 0;
+  font-family: var(--f-mono); font-size: 10.5px; line-height: 1.5; letter-spacing: .01em;
+  color: var(--ink-3); user-select: none;
+}
+/* a long name folds onto a second line (balanced) before it is ever cut */
+.rd-who-n {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+  text-wrap: balance; overflow-wrap: anywhere;
+}
+.rd-when {
+  position: absolute; right: var(--label-gap); top: calc(100% + 2px);
+  font-size: 10px; white-space: nowrap; font-variant-numeric: tabular-nums;
+  opacity: 0; transform: translateY(-2px);
+  transition: opacity var(--d-quick) var(--e-out), transform var(--d-quick) var(--e-out);
+}
+.rd-msg:is(:hover, :focus-within) .rd-when, .rd-msg.is-editing .rd-when { opacity: 1; transform: none; transition-duration: var(--d-fast); }
+.rd-editing { color: var(--tint); }
+/* your version count at rest: marginalia under "you", in the slot the time
+   takes on hover. Waking the strip hands the count to it (arrows beside it) */
+.rd-who-v {
+  position: absolute; right: var(--label-gap); top: calc(100% + 2px);
+  display: inline-flex; align-items: baseline; gap: .5ch;
+  font-size: 10px; white-space: nowrap; font-variant-numeric: tabular-nums;
+  transition: opacity var(--d-fast) var(--e-out), transform var(--d-fast) var(--e-out);
+}
+.rd-who-v .rd-roll { height: 1.5em; }
+.rd-msg:is(:hover, :focus-within) .rd-who-v { opacity: 0; transform: translateY(2px); transition-duration: var(--d-quick); }
+@media (min-width: 761px) {
+  .rd-mstrip .rd-vers { transition: opacity var(--d-quick) var(--e-out); }
+  .rd-me:not(:hover, :focus-within) .rd-mstrip .rd-vers { opacity: 0; }
+  .rd-me:is(:hover, :focus-within) .rd-mstrip .rd-vers { opacity: 1; transition-duration: var(--d-fast); }
+}
+
+.rd-body { grid-column: 2; grid-row: 1; align-self: baseline; min-width: 0; }

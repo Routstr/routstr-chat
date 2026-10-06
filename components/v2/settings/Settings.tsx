@@ -16,7 +16,12 @@ import { useMoney } from "../useMoney";
 import { tokenMs } from "../motion";
 import { satUnit, sats } from "../format";
 import { Roll, ToastHost, n0, plural, reducedMotion, short } from "./parts";
-import { Look, Account, Sync, Node, About, Console } from "./sections";
+import Look from "./Look";
+import Account from "./Account";
+import Sync from "./Sync";
+import Node from "./Node";
+import Console from "./Console";
+import About from "./About";
 import Payments from "./Payments";
 import Models from "./Models";
 import Usage from "./Usage";
@@ -491,7 +496,7 @@ function Layer({ leaving }: { leaving: boolean }) {
       case "look":
         return <Look />;
       case "account":
-        return <Account go={go} />;
+        return <Account />;
       case "wallet":
         return <Payments />;
       case "keys":

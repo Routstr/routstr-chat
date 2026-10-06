@@ -250,7 +250,7 @@ html[data-nogl] body {
   padding: 0 calc(var(--label-col) + var(--s5));
   container: dock / inline-size;
 }
-/* a narrow panel reads without the right margin (read.css): in a chat the
+/* a narrow panel reads without the right margin (thread-phone.css): in a chat the
    composer keeps to that same column, so its edges meet the text's. The query
    reads the slot's inner box: the thread's 900 less 2 x (label column 150 + 20) */
 @container dock (max-width: 559.98px) {

@@ -21,7 +21,7 @@ import { useAttachments } from "./useAttachments";
 import { estimateSats, promptTokens } from "../price";
 import { settle, takeFlight } from "./landing";
 import { tokenMs } from "../motion";
-import Back from "./Back";
+import Back from "./back/Back";
 
 /** The model chip, so the picker can hang from it. */
 export const chipAnchor: { el: HTMLElement | null } = { el: null };

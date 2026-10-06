@@ -1,0 +1,114 @@
+/* ══ the code figure ═════════════════════════════════════════════════════ */
+.md > .rd-code { margin-top: 1.2em; }
+.md > .rd-code + * { margin-top: 1.2em; }
+.rd-code {
+  border-radius: var(--r-sm); background: var(--code-bg); overflow: clip;
+  box-shadow: inset 0 1px 0 var(--code-lip), inset 0 0 0 1px var(--hair);
+  font-family: var(--f-mono);
+  /* one line box for the gutter and the code, whatever their font sizes */
+  --rd-code-lh: 20px;
+  line-height: var(--rd-code-lh);
+  --rd-bleed: 96px;
+}
+/* bled (only when that makes every line fit): the figure opens 96px into
+   both margins, but its words stay on the column. The caption and the code
+   start on the text's left edge; the line numbers hang in the left bleed. */
+.rd-code[data-bleed] { margin-inline: calc(-1 * var(--rd-bleed)); }
+.rd-code[data-bleed] .rd-code-cap { padding-left: var(--rd-bleed); }
+.rd-code[data-bleed][data-nums=""] .rd-gutter { box-sizing: border-box; width: var(--rd-bleed); padding-left: 0; padding-right: 14px; }
+.rd-code[data-bleed][data-nums=""] .rd-pre { padding-left: 0; }
+.rd-code[data-bleed][data-nums="off"] .rd-pre { padding-left: var(--rd-bleed); }
+.rd-code-cap {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s3);
+  min-height: 38px; padding: 4px 5px 0 var(--s4);
+}
+.rd-code-lang { display: inline-flex; align-items: baseline; gap: 10px; font-size: 11px; letter-spacing: .02em; color: var(--ink-3); }
+.rd-code-n { font-size: 10.5px; font-variant-numeric: tabular-nums; }
+.rd-code-n::before { margin: 0 9px 0 0; }
+.rd-code-acts { display: flex; align-items: center; gap: 2px; }
+.rd-code-btn {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 0 9px; border-radius: var(--r-xs);
+  font-family: var(--f-mono); font-size: 11px; color: var(--ink-3);
+  transition: background var(--d-fast), color var(--d-fast);
+}
+.rd-code-btn[hidden] { display: none; }
+.rd-code-btn:hover { background: var(--fill-1); color: var(--ink); }
+.rd-code-btn[aria-pressed="true"] { color: var(--ink); background: var(--fill-1); }
+.rd-code-btn .v2-ico { width: 14px; height: 14px; }
+.rd-code-body { display: grid; grid-template-columns: auto minmax(0, 1fr); }
+.rd-code[data-nums="off"] .rd-code-body { grid-template-columns: minmax(0, 1fr); }
+.rd-gutter {
+  display: grid; align-content: start; padding: 6px 0 16px 14px; user-select: none;
+  font-size: 11px; line-height: var(--rd-code-lh); color: var(--ink-3); text-align: right; font-variant-numeric: tabular-nums;
+}
+.rd-gutter span { opacity: 1; }
+.rd-pre {
+  margin: 0; padding: 6px var(--s4) 16px; overflow-x: auto; overflow-y: hidden;
+  font-size: 12.5px; line-height: var(--rd-code-lh); color: var(--ink); tab-size: 2; white-space: pre;
+  font-variant-ligatures: none;
+  --rd-fl: 0px; --rd-fr: 0px;
+  transition: --rd-fl var(--d-fast), --rd-fr var(--d-fast);
+}
+.rd-pre[data-over] { mask-image: linear-gradient(to right, transparent 0, #000 var(--rd-fl), #000 calc(100% - var(--rd-fr)), transparent); }
+.rd-pre:focus-visible { box-shadow: inset 0 0 0 2px var(--tint-soft); border-radius: 0 0 var(--r-sm) var(--r-sm); }
+.rd-pre[data-more-l] { --rd-fl: 24px; }
+.rd-pre[data-more-r] { --rd-fr: 44px; }
+.rd-code[data-nums=""] .rd-pre { padding-left: 14px; }
+.rd-pre code { font: inherit; }
+.rd-pre .ln { display: block; min-height: var(--rd-code-lh); }
+/* wrap: long lines fold under themselves, numbers ride with their line */
+.rd-code[data-wrap="on"] .rd-gutter { display: none; }
+.rd-code[data-wrap="on"] .rd-code-body { grid-template-columns: minmax(0, 1fr); }
+.rd-code[data-wrap="on"] .rd-pre { white-space: pre-wrap; overflow-wrap: anywhere; overflow-x: hidden; mask-image: none; counter-reset: ln; }
+.rd-code[data-wrap="on"] .rd-pre .ln {
+  /* a folded line hangs two characters past its own indent */
+  --hang: calc((var(--i, 0) + 2) * 1ch);
+  position: relative; padding-left: var(--hang); text-indent: calc(-1 * var(--hang));
+}
+.rd-code[data-wrap="on"][data-nums=""] .rd-pre .ln { padding-left: calc(3.1em + var(--hang)); }
+.rd-code[data-wrap="on"][data-nums=""] .rd-pre .ln::before {
+  counter-increment: ln; content: counter(ln); position: absolute; left: 0; top: 0; width: 1.9em; text-align: right; text-indent: 0;
+  color: var(--ink-3); font-variant-numeric: tabular-nums; user-select: none;
+}
+.rd-code[data-wrap="on"][data-nums=""] .rd-pre { padding-left: 4px; }
+.rd-code .token.comment, .rd-code .token.prolog { color: var(--code-c); font-style: italic; }
+.rd-code .token:is(.keyword, .important, .atrule, .selector, .tag, .boolean, .builtin) { color: var(--code-k); font-weight: var(--w-strong); }
+.rd-code .token:is(.function, .class-name, .property, .attr-name, .macro) { color: var(--code-f); }
+.rd-code .token:is(.string, .char, .attr-value, .regex, .template-string, .url) { color: var(--code-s); }
+.rd-code .token:is(.number, .constant, .symbol, .lifetime-annotation) { color: var(--code-f); }
+.rd-code .token:is(.punctuation, .operator) { color: var(--ink-2); }
+
+/* the copy confirmation: glyph and word swap in place, same width */
+.rd-swap { display: grid; }
+.rd-swap > * { grid-area: 1 / 1; transition: opacity var(--d-fast) var(--e-out), transform var(--d-fast) var(--e-spring); }
+.rd-swap > :last-child { opacity: 0; transform: scale(.6); color: var(--tint); }
+.rd-swap[data-on] > :first-child { opacity: 0; transform: scale(.6); }
+.rd-swap[data-on] > :last-child { opacity: 1; transform: none; }
+.rd-swapw { display: grid; }
+.rd-swapw > * { grid-area: 1 / 1; transition: opacity var(--d-fast) var(--e-out); }
+.rd-swapw > :last-child { opacity: 0; }
+.rd-swapw[data-on] > :first-child { opacity: 0; }
+.rd-swapw[data-on] > :last-child { opacity: 1; color: var(--ink); }
+
+/* ── a picture the model made ── */
+/* the picture keeps its own shape on the text's left edge: never taller than
+   about half the window (so its strip shows on the first screen), and a wide
+   one may use the whole measure */
+.rd-img {
+  position: relative; margin-top: var(--s3);
+  --img-max: min(520px, 48vh);
+  width: min(100%, calc(var(--img-max) * var(--ar, 1)));
+}
+.rd-img-open { display: block; width: 100%; border-radius: var(--r-md); overflow: hidden; cursor: zoom-in; box-shadow: var(--lift-2); }
+.rd-img-open img { display: block; width: 100%; height: auto; animation: rdDevelop 900ms var(--e-out) both; }
+@keyframes rdDevelop { from { opacity: 0; filter: blur(14px) saturate(.6); transform: scale(1.015); } }
+.rd-img-open:focus-visible { box-shadow: var(--focus), var(--lift-2); border-radius: var(--r-md); }
+.rd-img-save {
+  position: absolute; right: 10px; bottom: 10px; display: grid; place-items: center; width: 36px; height: 36px;
+  border-radius: 99px; color: var(--ink); background: rgb(var(--surface-hero) / .92); box-shadow: var(--lift-2), var(--glow);
+  opacity: 0; transform: translateY(4px);
+  transition: opacity var(--d-quick) var(--e-out), transform var(--d-quick) var(--e-out), background var(--d-fast);
+}
+.rd-img:is(:hover, :focus-within) .rd-img-save { opacity: 1; transform: none; transition-duration: var(--d-fast); }
+.rd-img-save:hover { background: rgb(var(--surface-hero)); }
+.rd-img-save:active { transform: scale(.94); }

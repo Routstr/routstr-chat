@@ -14,6 +14,9 @@ export const plural = (n: number, one: string, many?: string) => `${n0(n)} ${n =
 export const hostOf = (u: string) => u.replace(/^(https?|wss?):\/\//, "").replace(/\/$/, "");
 export const short = (k: string, a = 10, b = 6) => (k.length > a + b + 1 ? `${k.slice(0, a)}…${k.slice(-b)}` : k);
 export const reducedMotion = () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+export const narrow = () => typeof window !== "undefined" && window.matchMedia("(max-width: 419px)").matches;
+// put back where it was
+export const at = (list: string[], u: string, i: number) => (list.includes(u) ? list : [...list.slice(0, i), u, ...list.slice(i)]);
 
 /* ── the page head: a title and a lede that breaks only between sentences ── */
 export function Head({ title, lede }: { title: string; lede?: string }) {

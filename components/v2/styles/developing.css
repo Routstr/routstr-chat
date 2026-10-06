@@ -1,0 +1,126 @@
+/* ══ a picture on its way: a sheet of photographic paper takes tone ══════ */
+.la-frame {
+  position: relative; width: var(--frame-w); height: var(--frame-h, auto); aspect-ratio: var(--frame-ar, 1);
+  margin: var(--s3) 0 0; border-radius: var(--r-md); overflow: hidden; isolation: isolate;
+  /* the paper is made of the room: its ground is the room's own light, lit
+     from above like the panel. Pools of the room's shader colours and
+     --tint-soft drift under the grain, never raw --tint (a red tint muddied
+     Meridian's green) */
+  --plate: color-mix(in srgb, var(--sh-c1) 70%, var(--surface-lit));
+  --pool-a: var(--surface-lit); --pool-a-o: 1;
+  --pool-b: var(--sh-c2); --pool-b-o: .8;
+  --pool-c: var(--tint-soft);
+  /* what the density is made of: a deeper tone of the same room */
+  --vig: color-mix(in srgb, var(--ink) 34%, var(--sh-c0));
+  --grain: .08; --grain-blend: multiply;
+  background: var(--plate);
+  box-shadow: var(--glow-2), inset 0 0 0 1px var(--hair);
+  transition: height var(--d-move) var(--e-out), box-shadow var(--d-slow) var(--e-out);
+}
+/* density: the sheet takes tone as the wait goes on, one step per phase. It
+   comes in from the top and the sides, the way a printer burns in a sky, so
+   the tone is seen at the edges, while the corner that holds the caption
+   stays paper-light (the caption keeps 4.5:1 at every step) */
+.la-dens {
+  position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  background:
+    radial-gradient(125% 105% at 38% 104%, transparent 40%, color-mix(in srgb, var(--vig) 55%, transparent) 72%, var(--vig) 100%);
+  opacity: var(--dens, 0);
+  transition: opacity calc(var(--d-slow) * 3.5) linear, visibility 0s;
+}
+.la[data-phase="pay"] .la-frame { --dens: .2; }
+.la[data-phase="route"] .la-frame { --dens: .38; }
+.la[data-phase="first"] .la-frame { --dens: .56; }
+.la[data-phase="first"][data-slow] .la-frame { --dens: .74; }
+html[data-room="night"] .la[data-phase="pay"] .la-frame { --dens: .3; }
+html[data-room="night"] .la[data-phase="route"] .la-frame { --dens: .5; }
+html[data-room="night"] .la[data-phase="first"] .la-frame { --dens: .72; }
+html[data-room="night"] .la[data-phase="first"][data-slow] .la-frame { --dens: .9; }
+.la-frame-light { position: absolute; inset: -30%; pointer-events: none; z-index: 0; }
+/* silver grain over the whole sheet, visible at 100%: a darkroom, not a
+   spinner. Contrast-stretched grey noise, multiplied in light rooms and
+   screened in dark ones */
+.la-frame::before {
+  content: ""; position: absolute; inset: -50%; z-index: 2; pointer-events: none; opacity: var(--grain);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.82' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncR type='linear' slope='2.6' intercept='-.8'/%3E%3CfeFuncG type='linear' slope='2.6' intercept='-.8'/%3E%3CfeFuncB type='linear' slope='2.6' intercept='-.8'/%3E%3CfeFuncA type='linear' slope='0' intercept='1'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  mix-blend-mode: var(--grain-blend); animation: la-grain 1.2s steps(6) infinite;
+  transition: opacity var(--d-mid) var(--e-out);
+}
+html[data-room="night"] .la-frame {
+  --plate: color-mix(in srgb, var(--sh-c1) 55%, var(--surface));
+  --pool-a: var(--sh-c3); --pool-a-o: .6; --pool-b: var(--sh-c2); --pool-b-o: .75;
+  --vig: var(--sh-c0); --grain: .1; --grain-blend: screen;
+}
+/* Meridian's sage is deep: a paler sheet, so it reads as paper, not a card */
+html[data-room="meridian"][data-face="day"] .la-frame { --plate: color-mix(in srgb, var(--sh-c1) 50%, var(--surface-lit)); }
+html[data-room="meridian"][data-face="dusk"] .la-frame {
+  --plate: color-mix(in srgb, var(--sh-c0) 10%, var(--surface));
+  --pool-a: color-mix(in srgb, var(--sh-c3) 34%, var(--surface)); --pool-a-o: .8;
+  --pool-b: color-mix(in srgb, var(--sh-c2) 22%, var(--surface)); --pool-b-o: .8;
+  --vig: #000; --grain: .1; --grain-blend: screen;
+}
+@keyframes la-grain {
+  0% { transform: translate(0, 0); } 20% { transform: translate(-6%, 4%); } 40% { transform: translate(5%, -7%); }
+  60% { transform: translate(-3%, 8%); } 80% { transform: translate(7%, 2%); } 100% { transform: translate(0, 0); }
+}
+.la-frame[data-state="develop"]::before, .la-frame[data-state="done"]::before { opacity: 0; }
+.la-frame[data-state="develop"] .la-dens, .la-frame[data-state="done"] .la-dens { opacity: 0; transition-duration: var(--d-slow); }
+/* three pools of the room's own light drifting slowly under the grain */
+.la-frame-light::before, .la-frame-light::after, .la-frame-light > i {
+  content: ""; position: absolute; width: 58%; aspect-ratio: 1; border-radius: 50%;
+  filter: blur(56px);
+}
+.la-frame-light::before {
+  left: 8%; top: 12%;
+  background: radial-gradient(circle, var(--pool-a), transparent 66%);
+  opacity: var(--pool-a-o);
+  animation: la-drift-a 17s var(--e-in-out) infinite alternate;
+}
+.la-frame-light::after {
+  right: 6%; bottom: 8%;
+  background: radial-gradient(circle, var(--pool-b), transparent 66%);
+  opacity: var(--pool-b-o);
+  animation: la-drift-b 21s var(--e-in-out) infinite alternate;
+}
+.la-frame-light > i {
+  left: 36%; top: 40%; width: 40%;
+  background: radial-gradient(circle, var(--pool-c), transparent 70%);
+  animation: la-drift-c 13s var(--e-in-out) infinite alternate;
+}
+@keyframes la-drift-a { to { transform: translate(24%, 20%) scale(1.14); } }
+@keyframes la-drift-b { to { transform: translate(-20%, -22%) scale(.88); } }
+@keyframes la-drift-c { from { transform: translate(-18%, 10%) scale(.9); } to { transform: translate(16%, -14%) scale(1.1); } }
+/* the prompt, named like a picture, set as the plate's caption: the reading
+   face, italic, small, bottom left. A label on the sheet, not a headline */
+.la-frame-t {
+  position: absolute; left: var(--s4); right: var(--s4); bottom: var(--s4); z-index: 3; transform-origin: 0 100%;
+  transition: opacity var(--d-fast) var(--e-out), transform var(--d-mid) var(--e-out);
+}
+.la-frame-t q {
+  quotes: none; display: block; max-width: 34ch;
+  font-family: var(--f-body); font-style: italic; font-weight: var(--w-body);
+  font-size: 15px; line-height: 1.4; color: var(--ink-2); text-wrap: pretty;
+}
+.la-frame img, .la-frame canvas {
+  position: absolute; inset: 0; z-index: 4; width: 100%; height: 100%; object-fit: cover; display: block;
+  opacity: 0;
+}
+.la-frame[data-state="develop"] .la-frame-t, .la-frame[data-state="done"] .la-frame-t { opacity: 0; transform: scale(.985); }
+/* the print comes up: shadows first (it starts high key and flat), then
+   tone, then colour, then focus; nothing moves in space */
+.la-frame[data-state="develop"] canvas { animation: la-develop 1600ms var(--e-out) both; }
+.la-frame[data-state="done"] canvas { opacity: 1; }
+.la-frame[data-state="done"] { box-shadow: var(--lift-1); }
+.la-frame[data-state="done"] .la-frame-light { display: none; }
+@keyframes la-develop {
+  0% { opacity: 0; filter: brightness(1.7) contrast(.45) saturate(0) blur(12px); transform: scale(1.025); }
+  30% { opacity: 1; filter: brightness(1.28) contrast(.7) saturate(.2) blur(5px); }
+  65% { filter: brightness(1.06) contrast(.92) saturate(.75) blur(1px); }
+  100% { opacity: 1; filter: none; transform: none; }
+}
+.la-frame .rd-img-save { z-index: 5; }
+/* a 44px hit area around the 28px face */
+.la-frame .rd-img-save::before { content: ""; position: absolute; inset: -8px; }
+.la-frame .rd-img-save:focus-visible { opacity: 1; }
+/* no hover on a phone: the save button is simply there */
+@media (hover: none), (max-width: 760px) { .la-frame .rd-img-save { opacity: 1; } }

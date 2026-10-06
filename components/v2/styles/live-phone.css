@@ -1,0 +1,57 @@
+/* ══ the receipt strip arrives when the words stop ═══════════════════════ */
+/* touch: 44px hit areas, the 36px faces and their icons stay as they are */
+/* a picture's receipt is as wide as the picture, so the cost sits at its edge */
+.rd-ai:has(.rd-img) .rd-strip { max-width: min(100%, calc(min(520px, 48vh) * var(--ar, 1))); }
+
+/* ══ back to the latest, while words still arrive below: a breathing halo ══ */
+.rd-latest[data-live]::after {
+  content: ""; position: absolute; inset: -6px; border-radius: inherit; z-index: -1;
+  background: color-mix(in srgb, var(--wet) 16%, transparent);
+  box-shadow: 0 0 20px 3px color-mix(in srgb, var(--wet) 24%, transparent);
+  animation: la-ring 2.2s var(--e-in-out) infinite;
+}
+@keyframes la-ring { 0%, 100% { opacity: .45; transform: scale(.92); } 50% { opacity: 1; transform: scale(1.06); } }
+
+/* ══ selection and the phone ═════════════════════════════════════════════ */
+.la ::selection { background: var(--sel); color: var(--sel-ink); }
+
+@media (max-width: 760px) {
+  /* one left edge on a phone: the margin label, the status words, the answer
+     and the seam all sit on the column edge (x 20 at 390). Nothing hangs in
+     the 20px gutter. The caret and the chevron trail the status words
+     instead (placed by --tail, the words' layout width), so when the first
+     word lands in the same spot the caret simply moves back to its tail */
+  .la { --la-hang: 0px; --la-pad: 0px; --think-cap: 112px; --frame-w: 100%; }
+  .la-mark {
+    left: 0; width: 14px; justify-items: start;
+    transform: translateX(calc(var(--tail, 0px) + 4px));
+    transition: transform var(--d-mid) var(--e-out);
+  }
+  .la-chev { margin-left: 0; }
+  .la-topic { max-width: calc(100% - var(--after, 0px) - var(--la-gap) - 24px); }
+  .la-line-act { left: calc(var(--tail, 0px) + 18px); }
+  .la-line button.la-toggle { inset: -8px auto -8px -6px; width: calc(100% + 12px); }
+  /* trouble keeps the edge with its seam, like the app's quotes: the rule
+     sits on the column edge and the words start one step in */
+  .la-trouble { padding-left: var(--s4); }
+  .la-seam { left: calc(-1 * var(--s4)); }
+  .la-act { height: 44px; padding: 0 14px; }
+  .la-act.quiet { padding: 0 12px; }
+  /* stopped before any words: the one action is a full 44px target */
+  .la-quiet { height: auto; min-height: 44px; }
+  .la-quiet .la-act { height: 44px; }
+  .la-trouble:has(.la-quiet) .la-seam { top: calc((44px - var(--read) * 1.02) / 2); bottom: calc((44px - var(--read) * 1.02) / 2); }
+  .la-raw { padding-right: var(--s4); padding-top: 44px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .la *, .la *::before, .la *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
+  .la-caret, .la-tail[data-idle] { animation: none !important; }
+  .la-line[data-shimmer] .la-main .la-w:not([data-out]) { animation: none; background: none; color: var(--ink-3); }
+  .la-frame-light::before, .la-frame-light::after, .la-frame-light > i, .la-frame::before { animation: none !important; }
+  .rd-latest[data-live]::after { animation: none !important; opacity: .75; }
+}
+
+.la[data-folded] .la-stage > .la-answer { margin-top: var(--s2); }
+/* the live answer shares the spread: its stage sits in the measure */
+.la .rd-body { min-width: 0; }

@@ -1,0 +1,133 @@
+/* ══ your message ════════════════════════════════════════════════════════ */
+/* order on desktop: your words, then what you enclosed, then your strip
+   (hung in the gap to the answer, so it adds no height) */
+.rd-me .rd-who, .rd-me .rd-q-wrap, .rd-me .rd-edit { grid-row: 1; }
+.rd-me .rd-q-wrap, .rd-me .rd-edit { grid-column: 2; align-self: baseline; min-width: 0; }
+.rd-me .rd-more { grid-column: 2; grid-row: 2; justify-self: start; }
+.rd-me .rd-atts { grid-column: 2; grid-row: 3; }
+
+.rd-q { font-weight: var(--w-strong); color: var(--ink); overflow-wrap: anywhere; }
+/* a long or pasted message reads as text, not as a headline */
+.rd-q-wrap[data-plain] .rd-q { font-weight: var(--w-body); }
+/* every line you typed is its own line; paragraphs keep a breath between */
+.rd-qp, .rd-qc, .rd-ql { display: block; }
+.rd-qp .rd-ql { text-wrap: pretty; }
+.rd-qp + .rd-qp, .rd-qp + .rd-qc, .rd-qc + .rd-qp, .rd-qc + .rd-qc { margin-top: .62em; }
+/* pasted code and logs keep their columns: mono, no box */
+.rd-qc {
+  font-family: var(--f-mono); font-size: .8em; line-height: 1.62; font-weight: 400;
+  color: var(--ink-2); font-variant-ligatures: none; tab-size: 4;
+}
+/* a folded line hangs two characters in, so columns still read */
+.rd-qc .rd-ql { white-space: pre-wrap; min-height: 1.62em; padding-left: 2ch; text-indent: -2ch; }
+
+/* long: seven lines of text (never a blank one), then the rest opens under them */
+.rd-q-wrap { display: grid; grid-template-rows: 1fr; }
+.rd-q-in { min-height: 0; overflow: clip; }
+.rd-q-wrap[data-long] { grid-template-rows: 0fr; transition: grid-template-rows var(--d-mid) var(--e-out); }
+.rd-q-wrap[data-long] .rd-q-in {
+  min-height: var(--rd-clamp, calc(var(--line) * 7));
+  --rd-fade: 64px;
+  mask-image: linear-gradient(to bottom, #000 calc(100% - var(--rd-fade)), transparent);
+  transition: --rd-fade var(--d-mid) var(--e-out);
+}
+.rd-q-wrap[data-long][data-open] { grid-template-rows: 1fr; transition-duration: var(--d-move); }
+.rd-q-wrap[data-long][data-open] .rd-q-in { --rd-fade: 0px; transition-duration: var(--d-move); }
+.rd-more {
+  display: inline-flex; align-items: center; gap: 6px; margin: 4px 0 0 -10px; padding: 0 10px;
+  min-height: 32px; border-radius: var(--r-xs);
+  font-family: var(--f-ui); font-size: 13px; line-height: 1; color: var(--ink-2);
+  transition: background var(--d-fast), color var(--d-fast);
+}
+.rd-more:hover { background: var(--fill-1); color: var(--ink); }
+.rd-more-n { display: inline-block; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.rd-more-n::before { margin: 0 8px 0 2px; }
+.rd-more[aria-expanded="true"] .rd-more-n, .rd-more-n:empty { display: none; }
+.rd-more-c { width: 14px; height: 14px; transition: transform var(--d-move) var(--e-out); }
+.rd-more[aria-expanded="true"] .rd-more-c { transform: rotate(180deg); }
+
+/* attachments: enclosures under your words, pictures at their own shape,
+   a PDF as a quiet slip */
+.rd-atts { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--s2); margin-top: var(--s3); }
+.rd-thumb {
+  display: block; height: 76px; border-radius: var(--r-sm); overflow: hidden; cursor: zoom-in;
+  box-shadow: var(--lift-1), inset 0 0 0 1px var(--hair);
+  transition: transform var(--d-fast) var(--e-spring), box-shadow var(--d-fast);
+}
+.rd-thumb img { display: block; height: 100%; width: auto; max-width: 180px; object-fit: cover; }
+.rd-thumb:hover { transform: translateY(-1px); box-shadow: var(--lift-3); }
+.rd-thumb:active { transform: scale(.98); }
+.rd-doc {
+  display: flex; align-items: center; gap: var(--s3); height: 76px; padding: 0 var(--s4) 0 var(--s3);
+  border-radius: var(--r-sm); background: var(--fill-1); max-width: 300px; min-width: 0;
+}
+.rd-doc-ico {
+  position: relative; flex: 0 0 auto; width: 34px; height: 44px; border-radius: 5px 11px 5px 5px;
+  background: rgb(var(--surface-hero)); box-shadow: var(--lift-1);
+  display: grid; place-items: end center; padding-bottom: 6px;
+  font-family: var(--f-mono); font-size: 8.5px; letter-spacing: .06em; color: var(--ink-2);
+}
+.rd-doc-ico::before { /* the folded corner */
+  content: ""; position: absolute; top: 0; right: 0; width: 11px; height: 11px;
+  border-radius: 0 11px 0 4px; background: var(--fill-2);
+}
+.rd-doc-txt { display: grid; gap: 3px; min-width: 0; }
+.rd-doc-n { display: flex; min-width: 0; font-family: var(--f-ui); font-size: 13.5px; line-height: 1.3; color: var(--ink); white-space: nowrap; }
+.rd-doc-h { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.rd-doc-e { flex: 0 0 auto; }
+.rd-doc-m { font-family: var(--f-mono); font-size: 11px; line-height: 1.3; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+
+/* your strip: the same strip as an answer's (versions, copy, edit), under
+   your words at the measure's left. It hangs in the pair gap, so it adds
+   no height; the right margin holds only sources. */
+.rd-mstrip {
+  grid-column: 2; grid-row: 4; align-self: start; height: 0; overflow: visible;
+  --arrow: 24px;
+}
+.rd-mstrip[hidden] { display: none; }
+.rd-mstrip-in { display: flex; align-items: center; gap: 2px; height: var(--rd-pair-gap); margin-left: -6px; }
+.rd-mstrip .rd-tool { width: 28px; height: 28px; }
+.rd-mstrip .rd-vers .rd-tool { width: var(--arrow); }
+.rd-mstrip-when { display: none; }
+
+/* inline edit: the words do not move; a soft fill grows around them */
+.rd-edit { display: grid; min-width: 0; }
+.rd-edit-f {
+  display: block; width: calc(100% + 28px); margin: -10px -14px; padding: 10px 14px;
+  border-radius: var(--r-sm); background: var(--fill-1); resize: none; overflow: auto;
+  font: inherit; font-weight: var(--w-strong); line-height: var(--read-lh); color: var(--ink);
+  caret-color: var(--tint); white-space: pre-wrap; overflow-wrap: anywhere;
+  animation: rdFill var(--d-mid) var(--e-out) both;
+  transition: background var(--d-fast) var(--e-out);
+}
+/* no outline: focus deepens the fill (a textarea always matches
+   :focus-visible, so the ring would show for a mouse click too) */
+.rd-edit-f:focus, .rd-edit-f:focus-visible { background: var(--fill-2); box-shadow: none; outline: none; }
+@keyframes rdFill { from { background-color: transparent; } }
+.rd-edit-rowwrap { display: grid; grid-template-rows: 1fr; animation: rdRows var(--d-move) var(--e-out) both; }
+@keyframes rdRows { from { grid-template-rows: 0fr; } }
+.rd-edit-row {
+  min-height: 0; overflow: clip; display: flex; align-items: center; justify-content: space-between; gap: var(--s4);
+  padding-top: 20px; animation: fadeUp var(--d-mid) 60ms var(--e-out) both;
+  /* the row shares the fill's edges: Send ends on the field's right edge,
+     the hint starts on the text's left edge */
+  margin-inline: -14px;
+}
+.rd-edit-hint { padding-left: 14px; }
+.rd-edit-hint { font-family: var(--f-mono); font-size: 11px; line-height: 1.4; color: var(--ink-3); }
+.rd-edit-hint kbd { font-family: var(--f-mono); font-size: 10.5px; color: var(--ink-2); padding: 1px 5px; border-radius: 5px; background: var(--fill-1); }
+.rd-edit-acts { display: flex; gap: 6px; flex: 0 0 auto; }
+.rd-btn {
+  display: inline-flex; align-items: center; justify-content: center; min-height: 34px; padding: 0 14px;
+  border-radius: var(--r-xs); font-family: var(--f-ui); font-size: 13.5px; line-height: 1; color: var(--ink-2);
+  transition: background var(--d-fast), color var(--d-fast), transform var(--d-fast) var(--e-spring), filter var(--d-fast);
+}
+.rd-btn:hover { background: var(--fill-1); color: var(--ink); }
+.rd-btn:active { transform: scale(.97); }
+.rd-btn-prime { background: var(--tint-fill); color: var(--tint-ink); box-shadow: var(--lift-1); padding: 0 16px; }
+.rd-btn-prime:hover { background: var(--tint-fill); color: var(--tint-ink); filter: brightness(1.05); }
+.rd-btn:disabled { opacity: .45; pointer-events: none; }
+
+/* an edit sent: the old answer steps out, the new one starts where the
+   live answer surface takes over (one phase line, no timer) */
+.rd-msg[data-leaving] { opacity: 0; transform: translateY(-4px); transition: opacity var(--d-fast) var(--e-out), transform var(--d-fast) var(--e-out); }

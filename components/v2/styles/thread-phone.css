@@ -1,0 +1,118 @@
+/* ══ a narrow panel: no right margin, the notes become cards ═════════════ */
+@container thread (max-width: 899.98px) {
+  .rd-msg { grid-template-columns: var(--label-col) minmax(0, var(--measure)) 0; }
+}
+
+/* ══ phone ═══════════════════════════════════════════════════════════════ */
+@media (max-width: 760px) {
+  .thread-in { padding: var(--s3) var(--s5) var(--s7); --rd-pair-gap: var(--s5); --rd-turn-gap: var(--s7); }
+  .rd-msg { grid-template-columns: minmax(0, 1fr); }
+  .rd-msg > * { grid-column: 1 !important; }
+  .rd-who { grid-row: 1; padding: 0; text-align: left; margin-bottom: 6px; align-self: start; }
+  .rd-who-n { display: block; white-space: nowrap; text-overflow: ellipsis; }
+  .rd-when { display: none; }
+  .rd-ai .rd-body { grid-row: 2; }
+
+  /* your words sit in a soft bubble on the right; enclosures ride above it */
+  .rd-me .rd-who { display: none; }
+  .rd-me .rd-atts { grid-row: 1; justify-self: end; justify-content: flex-end; flex-wrap: nowrap; margin: 0 0 var(--s2); }
+  .rd-me .rd-q-wrap, .rd-me .rd-edit { grid-row: 2; justify-self: end; max-width: 86%; }
+  .rd-me .rd-q-wrap { padding: 9px 14px 10px; border-radius: 20px 20px 6px 20px; background: var(--fill-1); transition: background var(--d-fast); cursor: default; }
+  .rd-me.is-open .rd-q-wrap { background: var(--fill-2); }
+  .rd-me .rd-q { font-weight: var(--w-body); }
+  .rd-qc { font-size: .76em; }
+  /* pasted code gets the full width, so fewer of its lines fold */
+  .rd-me .rd-q-wrap:has(.rd-qc) { max-width: 100%; }
+  .rd-me .rd-edit { width: 100%; max-width: 100%; }
+  .rd-me .rd-more { grid-row: 3; justify-self: end; margin: 0 -10px 0 0; min-height: 44px; }
+
+  /* your strip: a 44px row under the bubble. A tap on the bubble opens it;
+     with versions the row is always there and only the tools slide in */
+  .rd-mstrip {
+    grid-row: 4; justify-self: end; height: auto; margin-right: -12px;
+    display: grid; grid-template-rows: 0fr; transition: grid-template-rows var(--d-mid) var(--e-out);
+  }
+  /* keyboard focus on a tucked tool opens the row too */
+  .rd-mstrip:has(.rd-vers), .rd-me:is(.is-open, :focus-within) .rd-mstrip { grid-template-rows: 1fr; }
+  .rd-me:is(.is-open, :focus-within) .rd-mstrip { transition-duration: var(--d-move); }
+  .rd-mstrip-in { min-height: 0; overflow: clip; height: auto; margin: 0; flex-direction: row-reverse; gap: 0; }
+  .rd-mstrip .rd-tool, .rd-mstrip .rd-vers .rd-tool { width: 44px; height: 44px; }
+  .rd-msg.rd-me .rd-tools {
+    display: grid; grid-template-columns: 0px 0px; gap: 0; opacity: 0;
+    transition: grid-template-columns var(--d-mid) var(--e-out), opacity var(--d-quick) var(--e-out);
+  }
+  .rd-me .rd-tools > * { min-width: 0; overflow: clip; }
+  .rd-msg.rd-me:is(.is-open, :focus-within) .rd-tools {
+    grid-template-columns: 44px 44px; opacity: 1;
+    transition: grid-template-columns var(--d-move) var(--e-out), opacity var(--d-mid) 60ms var(--e-out);
+  }
+  .rd-me:is(.is-open, :focus-within) .rd-mstrip-when {
+    display: block; order: 9; align-self: center; padding: 0 6px 0 4px;
+    font: 10.5px/1 var(--f-mono); color: var(--ink-3); font-variant-numeric: tabular-nums;
+    animation: fadeUp var(--d-mid) var(--e-out) both;
+  }
+
+  /* answers: the strip is always awake, every target 44px */
+  .rd-tool, .rd-vers .rd-tool { width: 44px; height: 44px; }
+  .rd-ai .rd-tools { opacity: 1; }
+  .rd-strip { margin: var(--s1) 0 0 -14px; min-height: 44px; }
+  .rd-msg .rd-vers .rd-tool { opacity: 1 !important; }
+  .rd-msg .rd-vers-n { transform: none !important; }
+  .rd-model { display: none; }
+  .rd-thought { min-height: 44px; margin: -8px 0 -4px; }
+  .rd-thought .rd-chev { position: static; margin: 0 0 0 4px; order: 9; }
+
+  .rd-edit-f { width: 100%; margin: 0; font-weight: var(--w-body); border-radius: 20px 20px 6px 20px; padding: 9px 14px 10px; }
+  .rd-edit-row { flex-direction: column; align-items: stretch; gap: var(--s3); padding-top: var(--s3); margin-inline: 0; }
+  .rd-edit-hint { display: none; }
+  .rd-edit-acts { justify-content: flex-end; }
+  .rd-btn { min-height: 44px; padding: 0 18px; }
+
+  .rd-code, .rd-code[data-bleed] { margin-inline: -8px; }
+  .rd-pre, .rd-gutter { font-size: 12px; } /* the line box stays --rd-code-lh */
+  .rd-code-cap { min-height: 44px; padding: 0 0 0 var(--s4); }
+  .rd-code-btn { min-height: 44px; padding: 0 12px; }
+  .rd-table { margin-inline: -20px; padding-inline: 20px; }
+  /* words need room: a text column never squeezes under ~9em, so a wide
+     table scrolls sideways (with its edge fade) instead of turning ragged */
+  .rd-table :is(th, td):not([data-num]) { min-width: 9em; }
+  .rd-thumb, .rd-doc { height: 64px; }
+  .rd-doc { max-width: 220px; padding-right: var(--s3); }
+  .rd-img { --img-max: min(520px, 60vh); }
+  .rd-img-save { opacity: 1; transform: none; width: 44px; height: 44px; right: 8px; bottom: 8px; }
+  .rd-src a { grid-template-columns: 18px minmax(0, 1fr); row-gap: 1px; padding-block: 8px; min-height: 44px; }
+  .rd-src .h { grid-column: 2; }
+  .rd-src .t { white-space: normal; }
+  .rd-cite { font-size: .7em; }
+  .rd-cite::after { inset: -16px -18px; }
+  .rd-card-go { min-height: 44px; }
+  .md .katex-display > .katex { font-size: 1em; }
+
+  /* jump: 44px, centred over Send (island inset s3, its padding s2, Send 40px here) */
+  .thread-wrap:has(> .rd-latest[data-on]) { grid-template-rows: minmax(0, 1fr) 52px; }
+  .rd-latest { width: 44px; height: 44px; bottom: 4px; }
+
+  /* viewer: the picture goes edge to edge; Close top right, Save bottom
+     right, both 44px glyphs inside the safe areas */
+  .rd-viewer-bar { display: contents; }
+  .rd-vbtn {
+    position: absolute; z-index: 1; width: 44px; height: 44px; min-height: 0; padding: 0; justify-content: center;
+    color: var(--ink); background: rgb(var(--surface-hero) / .92); box-shadow: var(--lift-2), var(--glow);
+    opacity: 0; transition: opacity var(--d-fast) var(--e-out), background var(--d-fast);
+  }
+  .rd-viewer[data-on] .rd-vbtn { opacity: 1; transition: opacity var(--d-mid) 120ms var(--e-out), background var(--d-fast); }
+  .rd-vbtn > span { display: none; }
+  .rd-viewer-img { border-radius: 0; box-shadow: none; }
+  .rd-vbtn[data-close] { top: calc(env(safe-area-inset-top) + 10px); right: 10px; }
+  .rd-vbtn[data-save] { bottom: calc(env(safe-area-inset-bottom) + 14px); right: 10px; }
+}
+@media (hover: none) {
+  .rd-ai .rd-tools { opacity: 1; }
+  .rd-model { display: none; }
+  .rd-img-save { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rd-msg *, .rd-msg, .rd-tip, .rd-latest, .rd-viewer *, .thread-wrap { animation-duration: 1ms !important; transition-duration: 1ms !important; }
+  .rd-tools, .rd-model, .rd-when, .rd-who-v, .rd-tip, .rd-img-save, .rd-msg[data-leaving], .rd-card { transform: none !important; }
+}
