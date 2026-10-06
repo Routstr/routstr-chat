@@ -5,7 +5,7 @@ export default defineConfig({
   test: {
     exclude: [...configDefaults.exclude, "**/postcss.config.mjs"],
     environment: "node",
-    include: ["sdk/__tests__/**/*.test.ts", "components/v2/**/*.test.ts"],
+    include: ["**/__tests__/**/*.test.ts", "components/v2/**/*.test.ts"],
     globals: true,
   },
   resolve: {
