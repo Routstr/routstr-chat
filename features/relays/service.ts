@@ -1,4 +1,4 @@
-import type { Filter, NostrEvent } from "nostr-tools";
+import { verifyEvent, type Filter, type NostrEvent } from "nostr-tools";
 import { getOutboxes } from "applesauce-core/helpers";
 import {
   Observable,
@@ -316,10 +316,18 @@ export class AccountRelays {
       kinds: [KIND_RELAY_LIST],
       authors: [this.owner],
     });
-    const list = events.reduce<NostrEvent | null>(
-      (best, event) => (!best || newer(event, best) ? event : best),
-      null
-    );
+    // a relay may answer with anything: only the owner's own signed list counts
+    const list = events
+      .filter(
+        (event) =>
+          event.kind === KIND_RELAY_LIST &&
+          event.pubkey === this.owner &&
+          verifyEvent(event)
+      )
+      .reduce<NostrEvent | null>(
+        (best, event) => (!best || newer(event, best) ? event : best),
+        null
+      );
     this.written = list ? getOutboxes(list) : [];
     if (this.written.length > 0) this.notify();
   }

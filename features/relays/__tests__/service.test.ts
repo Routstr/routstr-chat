@@ -76,6 +76,22 @@ describe("AccountRelays", () => {
     ]);
   });
 
+  it("takes only the account's own signed NIP-65 list, whatever else a relay serves", async () => {
+    const net = network();
+    const own = sign(10002, 1, [["r", "wss://mine.example.com"]]);
+    const stranger = finalizeEvent({ kind: 10002, created_at: 5, tags: [["r", "wss://theirs.example.com"]], content: "" }, generateSecretKey());
+    // forged: the owner's key named on someone else's signature
+    const forged = JSON.parse(JSON.stringify({ ...stranger, pubkey: OWNER, created_at: 6 }));
+    const note = sign(1, 7, [["r", "wss://note.example.com"]]);
+    net.relay(R1).ignoresFilters = true;
+    [own, stranger, forged, note].forEach((e) => net.relay(R1).events.set(e.id, e));
+    const account = new Relays(net.port, memoryStorage()).of(OWNER);
+
+    await account.ready();
+
+    expect(account.urls()).toEqual([...DEFAULT_RELAYS, "wss://mine.example.com"]);
+  });
+
   it("uses no relay at all when the person emptied this device's list", async () => {
     const net = network();
     const list = sign(10002, 1, [["r", "wss://mine.example.com"]]);
