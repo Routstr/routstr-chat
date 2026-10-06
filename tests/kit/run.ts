@@ -1,12 +1,14 @@
 // The test kit's one command.
 //
-//   pnpm test               unit + money tests
-//   pnpm test unit [args]   the same, args go to vitest (e.g. a file filter)
+//   pnpm test               unit + money tests, then the in-app tests
+//   pnpm test unit [args]   vitest only (args go to vitest, e.g. a file filter)
+//   pnpm test app [args]    in-app tests only (args go to playwright, e.g. a file or -g name)
 //   pnpm kit up             start the stack and print its env, until Ctrl-C
+//   pnpm kit build [dir]    build a checkout's out/ (with the kit's provider address)
 //
 // Shared machine rules, built in: before a step it waits until enough memory is free
-// (KIT_MIN_FREE_MB, default 1536), then takes the light lock (vitest) or the heavy lock
-// (browser runs). The locks are files named .light.lock / .heavy.lock in a parent
+// (KIT_MIN_FREE_MB, default 1536), then takes the light lock (vitest) or the heavy lock (app
+// build, browser runs). The locks are files named .light.lock / .heavy.lock in a parent
 // folder of this checkout, shared by every checkout below it; KIT_LIGHT_LOCK / KIT_HEAVY_LOCK
 // name other files, "" turns a lock off. Tests run inside a network namespace with only
 // loopback (unshare -rn) when the system allows it, so nothing can reach the internet.
@@ -14,6 +16,8 @@ import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { PROVIDER_ALIAS } from "./net";
+import { serveStatic } from "./services/static";
 import { envVars, startStack } from "./stack";
 
 const ROOT = path.resolve(__dirname, "../..");
@@ -135,7 +139,7 @@ const sealable =
 function run(
   cmd: string,
   args: string[],
-  opts: { env?: Record<string, string>; sealed?: boolean } = {}
+  opts: { env?: Record<string, string>; sealed?: boolean; cwd?: string } = {}
 ): Promise<number> {
   const env = { ...process.env, ...opts.env };
   if (opts.sealed && !sealable && !unsealed)
@@ -154,9 +158,9 @@ function run(
             cmd,
             ...args,
           ],
-          { stdio: "inherit", env, cwd: ROOT }
+          { stdio: "inherit", env, cwd: opts.cwd ?? ROOT }
         )
-      : spawn(cmd, args, { stdio: "inherit", env, cwd: ROOT });
+      : spawn(cmd, args, { stdio: "inherit", env, cwd: opts.cwd ?? ROOT });
   // Ctrl-C: pass it on, then stop the whole kit (not just this step) once the child is gone;
   // the error unwinds through the finally blocks that restore files and release locks
   let stopped: NodeJS.Signals | undefined;
@@ -174,6 +178,11 @@ function run(
   );
 }
 
+const tsx = (script: string, args: string[]): [string, string[]] => [
+  path.join(BIN, "tsx"),
+  [script, ...args],
+];
+
 // ---------- steps ----------
 
 async function unit(args: string[]): Promise<number> {
@@ -184,6 +193,98 @@ async function unit(args: string[]): Promise<number> {
   );
 }
 
+/** Newest change among the files that go into the app build. */
+function sourceStamp(dir: string): number {
+  const files = spawnSync("git", ["ls-files", "-co", "--exclude-standard"], {
+    cwd: dir,
+    encoding: "utf8",
+  }).stdout.split("\n");
+  let newest = 0;
+  for (const f of files) {
+    // next-env.d.ts is rewritten by every next dev and next build
+    if (
+      !f ||
+      f.startsWith("tests/") ||
+      f.endsWith(".md") ||
+      f === "next-env.d.ts"
+    )
+      continue;
+    try {
+      newest = Math.max(newest, fs.statSync(path.join(dir, f)).mtimeMs);
+    } catch {
+      /* deleted in the working tree */
+    }
+  }
+  return newest;
+}
+
+/** Builds a checkout's out/ unless no source changed since its last kit build. Returns the folder. */
+async function build(dir = ROOT): Promise<string> {
+  const out = path.join(dir, "out");
+  const stampFile = path.join(out, ".kit-build");
+  // the build names a fixed provider URL; the sealed browser forwards it to the run's core
+  const env = {
+    NEXT_PUBLIC_ROUTSTR_PROVIDERS: PROVIDER_ALIAS,
+    NEXT_TELEMETRY_DISABLED: "1",
+  };
+  const sources = sourceStamp(dir); // taken before: a file saved during the build counts as new
+  const stamp = { env, sources };
+  try {
+    const last = JSON.parse(fs.readFileSync(stampFile, "utf8"));
+    if (
+      JSON.stringify(last.env) === JSON.stringify(env) &&
+      last.sources >= sources
+    )
+      return out;
+  } catch {
+    /* never built by the kit */
+  }
+  say(`building the app (next build in ${dir})`);
+  // next directly: pnpm may first try the npm registry while this holds the heavy lock
+  const code = await run(
+    path.join(dir, "node_modules", ".bin", "next"),
+    ["build", "--webpack"],
+    { env, cwd: dir }
+  );
+  if (code !== 0) throw new Error(`next build failed (${code})`);
+  fs.writeFileSync(stampFile, JSON.stringify(stamp));
+  return out;
+}
+
+/** In-app tests on this checkout's build, KIT_APP_OUT (another build), or KIT_APP_URL (a dev server). */
+async function app(args: string[]): Promise<number> {
+  const appUrl = process.env.KIT_APP_URL;
+  if (!appUrl && !process.env.KIT_APP_OUT)
+    await withLock("heavy", () => build());
+  // a dev server outside the namespace is only reachable unsealed; the browser stays sealed
+  return withLock("heavy", () =>
+    run(...tsx(__filename, ["__app", ...args]), { sealed: !appUrl })
+  );
+}
+
+/** Inside the (sealed) step: stack + app server + playwright. */
+async function appInside(args: string[]): Promise<number> {
+  const stack = await startStack({ log: say });
+  const server = process.env.KIT_APP_URL
+    ? undefined
+    : await serveStatic(process.env.KIT_APP_OUT ?? path.join(ROOT, "out"));
+  try {
+    return await run(
+      path.join(BIN, "playwright"),
+      ["test", "-c", "tests/app/playwright.config.ts", ...args],
+      {
+        env: {
+          ...envVars(stack.env),
+          KIT_APP_URL: process.env.KIT_APP_URL ?? server!.url,
+        },
+      }
+    );
+  } finally {
+    await server?.close();
+    await stack.stop();
+  }
+}
+
 async function up(): Promise<number> {
   await waitForMemory();
   const stack = await startStack({ log: say });
@@ -191,6 +292,8 @@ async function up(): Promise<number> {
   say(
     "stack is up; paste these to point tests or a dev session at it, Ctrl-C to stop:"
   );
+  // a dev server started with this enables the kit's core without a Routstr review
+  vars.NEXT_PUBLIC_ROUTSTR_PROVIDERS = stack.env.coreUrl ?? "";
   for (const [k, v] of Object.entries(vars)) console.log(`export ${k}=${v}`);
   await new Promise<void>((resolve) =>
     process.once("SIGINT", resolve).once("SIGTERM", resolve)
@@ -201,13 +304,22 @@ async function up(): Promise<number> {
 
 async function main(argv: string[]): Promise<number> {
   const [command = "test", ...rest] = argv;
-  if (unsealed) say("KIT_NO_SEAL: tests run without the network seal");
+  if (unsealed && command !== "__app")
+    say("KIT_NO_SEAL: tests run without the network seal");
+  if (command === "__app") return appInside(rest);
   if (command === "up") return up();
+  if (command === "build")
+    return withLock("heavy", () => build(path.resolve(rest[0] ?? ROOT))).then(
+      () => 0
+    );
   if (command !== "test") throw new Error(`unknown command ${command}`);
   const [step, ...args] = rest;
   if (step === "unit") return unit(args);
-  if (step) throw new Error(`unknown step ${step}`);
-  return unit([]);
+  if (step === "app") return app(args);
+  if (step) throw new Error(`unknown step ${step} (unit or app)`);
+  const unitCode = await unit([]);
+  const appCode = await app([]);
+  return unitCode || appCode;
 }
 
 if (require.main === module) {
