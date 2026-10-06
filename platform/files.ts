@@ -157,9 +157,13 @@ export function createFileStore(deps: {
       },
       keys.pnsKeypair.privKey
     );
-    const late = new AbortController();
-    const timer = setTimeout(() => late.abort(), UPLOAD_WAIT_MS);
-    const stop = AbortSignal.any([signal, late.signal]);
+    // Stop or the wait, whichever comes first (AbortSignal.any is too new for
+    // the browsers the app builds for)
+    const stop = new AbortController();
+    const end = () => stop.abort();
+    const timer = setTimeout(end, UPLOAD_WAIT_MS);
+    if (signal.aborted) end();
+    else signal.addEventListener("abort", end, { once: true });
     const results = await Promise.allSettled(
       setting(SERVERS, DEFAULT_SERVERS).map(async (server) => {
         const response = await fetch(`${trim(server)}/upload`, {
@@ -169,7 +173,7 @@ export function createFileStore(deps: {
             Authorization: `Nostr ${btoa(JSON.stringify(auth))}`,
           },
           body: blob,
-          signal: stop,
+          signal: stop.signal,
         });
         if (!response.ok)
           throw new Error(`${server} answered ${response.status}`);
@@ -177,6 +181,7 @@ export function createFileStore(deps: {
       })
     );
     clearTimeout(timer);
+    signal.removeEventListener("abort", end);
     const servers = results.flatMap((r) =>
       r.status === "fulfilled" ? [r.value] : []
     );
