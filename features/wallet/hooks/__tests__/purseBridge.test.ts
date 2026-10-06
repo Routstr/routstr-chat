@@ -23,7 +23,8 @@ vi.mock("@/features/wallet/state/cashuStore", () => ({
         activeMintUrl: "m1",
         mints: [
           { url: "m1", keysets: [{ id: "k-sat", unit: "sat" }] },
-          { url: "m2", keysets: [{ id: "k-msat", unit: "msat" }] },
+          // as a tab loads them from storage
+          { url: "m2", keysets: [{ _id: "k-msat", _unit: "msat" }] },
         ],
       }),
     }),

@@ -14,6 +14,19 @@ import { useCashuStore } from "../state/cashuStore";
 
 const committers = new Map<string, (mintUrl: string) => CommitProofs>();
 
+// keysets are stored as cashu-ts objects, which come back from storage with
+// their fields as _id and _unit
+type StoredKeyset = {
+  id?: string;
+  unit?: string;
+  _id?: string;
+  _unit?: string;
+};
+const keysetOf = (keyset: object) => {
+  const k = keyset as StoredKeyset;
+  return { id: k.id ?? k._id, unit: k.unit ?? k._unit ?? "sat" };
+};
+
 /** Lets purses store coins for `owner` through this commit; the returned
  *  function takes it back. */
 export function registerCommitter(
@@ -38,7 +51,10 @@ export const legacyCoins: CoinStore = {
     // a coin's mint and unit are its keyset's
     const keysets = new Map(
       mints.flatMap((m) =>
-        (m.keysets ?? []).map((k) => [k.id, { mintUrl: m.url, unit: k.unit }])
+        (m.keysets ?? []).map((stored) => {
+          const k = keysetOf(stored);
+          return [k.id, { mintUrl: m.url, unit: k.unit }];
+        })
       )
     );
     return proofs.flatMap((proof): Coin[] => {
@@ -56,7 +72,7 @@ export const legacyCoins: CoinStore = {
 async function listMint(owner: string, mintUrl: string, add: Proof[]) {
   const store = useCashuStore.of(owner).getState();
   const listed = store.mints.find((m) => m.url === mintUrl);
-  const ids = new Set(listed?.keysets?.map((k) => k.id));
+  const ids = new Set(listed?.keysets?.map((k) => keysetOf(k).id));
   if (add.every((p) => ids.has(p.id))) return;
   try {
     const { mintInfo, keysets, keys } = await new MintService().activateMint(
