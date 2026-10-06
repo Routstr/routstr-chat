@@ -13,8 +13,6 @@ export interface PayDeps {
   live(): boolean;
 }
 
-const slash = (url: string) => (url.endsWith("/") ? url : `${url}/`);
-
 // NUT error code: the mint saw these proofs spent already
 const ALREADY_SPENT = 11001;
 
@@ -78,26 +76,6 @@ export function sdkWallet(
   };
 }
 
-/** Only the node's key may pay while the node pays. */
-function nodeOnly(storage: StorageAdapter, url: string): StorageAdapter {
-  const base = slash(url);
-  return {
-    ...storage,
-    getApiKey(provider) {
-      if (slash(provider) !== base) {
-        throw new Error("Node mode: only your node can answer.");
-      }
-      return storage.getApiKey(provider);
-    },
-    getAllApiKeys: () =>
-      storage.getAllApiKeys().filter((key) => slash(key.baseUrl) === base),
-    getApiKeyDistribution: () =>
-      storage
-        .getApiKeyDistribution()
-        .filter((key) => slash(key.baseUrl) === base),
-  };
-}
-
 /** Pays for each request of one account through the Routstr SDK. */
 export function createPay(deps: PayDeps): Pay {
   return async ({ messages, model }, callbacks, signal) => {
@@ -129,9 +107,7 @@ export function createPay(deps: PayDeps): Pay {
       if (signal.aborted) return;
       if (!sameSource()) throw changed();
       const storage = lockedAfter(
-        node
-          ? nodeOnly(deps.keys.storage("node"), node.url)
-          : deps.keys.storage("direct"),
+        deps.keys.storage(source),
         () => released,
         deps.keys,
         source
