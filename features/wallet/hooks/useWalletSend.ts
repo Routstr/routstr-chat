@@ -13,18 +13,18 @@ import {
   type UnclaimedToken,
 } from "@/features/wallet";
 import { getCurrentMintBalance as utilGetCurrentMintBalance } from "@/utils/walletUtils";
-import { payMeltQuote, createMeltQuote } from "@/lib/cashuLightning";
+import { createMeltQuote } from "@/lib/cashuLightning";
+import { dismissToken, useBook } from "./useBook";
 import { useCashuWithXYZ } from "@/hooks/useCashuWithXYZ";
-import { useCashuWallet } from "@/features/wallet";
 import { toast } from "sonner";
 
 export function useWalletSend() {
   const { currentMintUnit } = useChat();
   const { addInvoice, updateInvoice } = useInvoiceSync();
-  const { cleanSpentProofs, receiveToken } = useCashuToken();
+  const { receiveToken } = useCashuToken();
   const cashuStore = useCashuStore();
   const unclaimedTokensStore = useUnclaimedTokensStore();
-  const { wallet, updateProofs } = useCashuWallet();
+  const { activeExecutor } = useBook();
   const { spendCashu } = useCashuWithXYZ();
 
   // Send tab state
@@ -47,7 +47,7 @@ export function useWalletSend() {
   const nip60ProcessingInvoiceRef = useRef<string | null>(null);
   const reclaimsInFlightRef = useRef<Set<string>>(new Set());
 
-  // Unclaimed send tokens live in the persisted store, not this resettable UI state.
+  // Unclaimed send tokens live in the wallet book, not this resettable UI state.
   const reset = useCallback(() => {
     setSendAmount("");
     setSendTab("token");
@@ -114,13 +114,6 @@ export function useWalletSend() {
     }
   }, [sendAmount, cashuStore.activeMintUrl, currentMintUnit, spendCashu]);
 
-  const dismissUnclaimedToken = useCallback(
-    (id: string) => {
-      unclaimedTokensStore.removeUnclaimedToken(id);
-    },
-    [unclaimedTokensStore]
-  );
-
   const reclaimUnclaimedToken = useCallback(
     async (entry: UnclaimedToken) => {
       // Synchronous guard: the disabled prop renders too late to stop a
@@ -135,15 +128,15 @@ export function useWalletSend() {
         // the entry is never removed while the funds are in limbo.
         const proofs = await receiveToken(entry.token, true);
         const total = proofs.reduce((sum, p) => sum + p.amount, 0);
-        unclaimedTokensStore.removeUnclaimedToken(entry.id);
+        dismissToken(entry.id);
         setSuccessMessage(`Reclaimed ${formatBalance(total, entry.unit)} back to your wallet`);
         setTimeout(() => setSuccessMessage(""), 5000);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         if (/already spent|already claimed|already redeemed/i.test(msg)) {
           // Redeemed by the recipient, or by an earlier reclaim whose
-          // storage failed (those funds restore from backup on next start).
-          unclaimedTokensStore.removeUnclaimedToken(entry.id);
+          // storage failed (the wallet book stores those funds later).
+          dismissToken(entry.id);
           setSuccessMessage("");
           setWarningMessage("Token was already redeemed.");
           setTimeout(() => setWarningMessage(""), 5000);
@@ -155,7 +148,7 @@ export function useWalletSend() {
         setReclaimingTokenId(null);
       }
     },
-    [receiveToken, unclaimedTokensStore]
+    [receiveToken]
   );
 
   const handleNip60InvoiceInput = useCallback(
@@ -237,19 +230,28 @@ export function useWalletSend() {
         setIsNip60Processing(false);
         return;
       }
-      const result = await payMeltQuote(mintUrl, nip60MeltQuoteId, selectedProofs, cleanSpentProofs);
-      if (result.success) {
-        await updateProofs({
-          mintUrl,
-          proofsToAdd: [...result.keep, ...result.change],
-          proofsToRemove: selectedProofs,
-        });
-        const settled = result.state !== MeltQuoteState.PENDING;
-        await updateInvoice(nip60MeltQuoteId, settled ? { state: MeltQuoteState.PAID, paidAt: Date.now() } : { state: MeltQuoteState.PENDING });
+      const executor = activeExecutor();
+      if (!executor) throw new Error("User not logged in");
+      const quote = cashuStore.getMeltQuote(mintUrl, nip60MeltQuoteId);
+      const result = await executor.pay(mintUrl, quote, selectedProofs);
+      const amount = `${formatBalance(invoiceAmount, currentMintUnit)}s`;
+      if (result.state === "failed") {
+        await updateInvoice(nip60MeltQuoteId, { state: MeltQuoteState.UNPAID });
+        setError(
+          "The payment did not go through. Your sats are back in the wallet."
+        );
+      } else {
+        const paid = result.state === "paid";
+        await updateInvoice(
+          nip60MeltQuoteId,
+          paid
+            ? { state: MeltQuoteState.PAID, paidAt: Date.now() }
+            : { state: MeltQuoteState.PENDING }
+        );
         setSuccessMessage(
-          result.state === MeltQuoteState.PENDING
-            ? `Sending ${formatBalance(invoiceAmount, currentMintUnit)}s, waiting for the network to confirm.`
-            : `Paid ${formatBalance(invoiceAmount, currentMintUnit)}s!`
+          paid
+            ? `Paid ${amount}!`
+            : `Sending ${amount}, waiting for the network to confirm.`
         );
         handleNip60PaymentCancel();
         setTimeout(() => setSuccessMessage(""), 5000);
@@ -266,12 +268,11 @@ export function useWalletSend() {
     invoiceAmount,
     invoiceFeeReserve,
     nip60MeltQuoteId,
-    updateProofs,
+    activeExecutor,
     error,
     currentMintUnit,
     handleNip60InvoiceInput,
     handleNip60PaymentCancel,
-    cleanSpentProofs,
     updateInvoice,
   ]);
 
@@ -296,7 +297,7 @@ export function useWalletSend() {
     reset,
     copyToClipboard,
     generateSendToken,
-    dismissUnclaimedToken,
+    dismissUnclaimedToken: dismissToken,
     reclaimUnclaimedToken,
     handleNip60InvoiceInput,
     handleNip60PaymentCancel,

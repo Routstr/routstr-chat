@@ -81,12 +81,7 @@ export function useCashuWithXYZ() {
   } = useCashuWallet();
   const cashuStore = useCashuStore();
   const usingNip60 = cashuStore.getUsingNip60();
-  const {
-    sendToken,
-    receiveToken,
-    cleanSpentProofs,
-    migrateInactiveKeysetBalances,
-  } = useCashuToken();
+  const { sendToken, receiveToken, cleanSpentProofs } = useCashuToken();
   const {
     mutate: handleCreateWallet,
     isPending: isCreatingWallet,
@@ -164,13 +159,6 @@ export function useCashuWithXYZ() {
     isWalletLoading,
     pendingCashuAmountState,
   ]);
-
-  // Migrate inactive keyset balances on mount when wallet is loaded
-  useEffect(() => {
-    if (!isWalletLoading && wallet && usingNip60) {
-      migrateInactiveKeysetBalances();
-    }
-  }, [isWalletLoading, wallet, usingNip60]);
 
   // Effect to listen for changes in localStorage for 'current_cashu_token'
   useEffect(() => {

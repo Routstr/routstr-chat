@@ -4,16 +4,14 @@ import React, { useState } from "react";
 import { nip19 } from "nostr-tools";
 import type { Account } from "@/features/session/service";
 import { useAccountManager } from "@/components/ClientProviders";
-import { useCashuStore } from "@/features/wallet";
-import { useUnclaimedTokensStore } from "@/features/wallet/state/unclaimedTokensStore";
+import { holdsRecords, useCashuStore } from "@/features/wallet";
 import { useSwitchAccount } from "../useSwitchAccount";
 import { Btn, Fold, Grp, Ib, Say, narrow, short } from "./parts";
 
 // Another key's coins stay on this device when it is removed, but only that
 // key opens them again
 const holdsMoney = (pubkey: string) =>
-  useCashuStore.of(pubkey).getState().proofs.length > 0 ||
-  useUnclaimedTokensStore.of(pubkey).getState().unclaimedTokens.length > 0;
+  useCashuStore.of(pubkey).getState().proofs.length > 0 || holdsRecords(pubkey);
 
 export default function OtherKeys({ others }: { others: Account[] }) {
   const { session } = useAccountManager();
