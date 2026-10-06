@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useChat } from "@/context/ChatProvider";
 import { useAccountChat, useAsking, useHeldCredit } from "@/features/chat/view";
 import { useCatalogService } from "@/features/catalog/view";
 import { useThread } from "@/features/history/view";
@@ -144,7 +143,6 @@ function Tile({ a, reading, onRemove, onTip }: { a: MessageAttachment; reading: 
 }
 
 export default function Composer({ centred }: { centred: boolean }) {
-  const { isWalletLoading } = useChat();
   const { id: activeConversationId } = useOpenChat();
   const { text: inputMessage, setText: setInputMessage, attachments: uploadedAttachments, setAttachments: setUploadedAttachments } = useDraft();
   const { model: selectedModel, chosen, loading: isLoadingModels } = useChatModel();
@@ -158,6 +156,7 @@ export default function Composer({ centred }: { centred: boolean }) {
   const isAuthenticated = useSession().pubkey !== null;
   const ui = useUi();
   const money = useMoney();
+  const isWalletLoading = money.loading;
   // what a provider holds for you pays the next reply first
   const held = useHeldCredit();
   const lowBalanceWarningForModel = !!selectedModel && !isModelAvailable(selectedModel, money.total + held);

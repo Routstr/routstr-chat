@@ -2,19 +2,20 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { getTokenMetadata } from "@cashu/cashu-ts";
 import { toast } from "sonner";
 import { AuthProvider } from "@/context/AuthProvider";
 import { useSession } from "@/features/session/view";
-import { ChatProvider, useChat } from "@/context/ChatProvider";
+import { ChatProvider } from "@/context/ChatProvider";
 import { useAccountChat, useAnswering } from "@/features/chat/view";
 import { KeepAliveProvider, useKeepAliveContext } from "@/components/pwa/KeepAliveProvider";
 import { QueryTimeoutModal } from "@/components/QueryTimeoutModal";
-import { useCashuToken, useCashuWallet } from "@/features/wallet";
+import { useCashuWallet } from "@/features/wallet";
+import { peek, usePurse } from "@/features/wallet/view";
 import { useAutoRefill } from "@/hooks/useAutoRefill";
 import { RoomProvider } from "./room/RoomProvider";
 import { UiProvider, useUi } from "./ui";
 import { OpenChatProvider, useOpenChat } from "./openChat";
+import { MoneyProvider, useMoney } from "./useMoney";
 import { useEnsureAccount } from "./useEnsureAccount";
 import Shell from "./Shell";
 import Boot from "./Boot";
@@ -29,7 +30,6 @@ function Behaviour() {
   const searchParams = useSearchParams();
   const { pubkey, ready: authChecked } = useSession();
   const isAuthenticated = pubkey !== null;
-  const { balance } = useChat();
   const { id: openId } = useOpenChat();
   const isStreaming = useAnswering() !== null;
   const accountChat = useAccountChat();
@@ -40,9 +40,10 @@ function Behaviour() {
     setShowQueryTimeoutModal,
     didRelaysTimeout,
     setDidRelaysTimeout,
-    isLoading: isWalletLoading,
   } = useCashuWallet();
-  const { receiveToken } = useCashuToken();
+  const money = useMoney();
+  const isWalletLoading = money.loading;
+  const purse = usePurse();
   const ensureAccount = useEnsureAccount();
 
   // keep the tab alive while an answer streams, if the person asked for it
@@ -53,7 +54,7 @@ function Behaviour() {
   }, [isStreaming, keepAliveEnabled, startKeepAlive, stopKeepAlive]);
 
   // only once the wallet has loaded, so a zero on boot is not mistaken for empty
-  useAutoRefill({ balance, isWalletLoaded: !isWalletLoading });
+  useAutoRefill({ balance: money.wallet, isWalletLoaded: !isWalletLoading });
 
   // leaving a chat hands back what providers still hold for this account
   useEffect(() => accountChat?.viewing(openId), [accountChat, openId]);
@@ -85,10 +86,12 @@ function Behaviour() {
     const token = cashuParam.trim();
     (async () => {
       try {
-        const { unit, amount } = getTokenMetadata(token);
-        const sats = unit === "msat" ? Math.floor(amount / 1000) : amount;
+        peek(token);
         ensureAccount();
-        await receiveToken(token);
+        const into = purse();
+        if (!into) throw new Error("There is no account to receive into.");
+        // what the mint gave back, after any fee
+        const sats = await into.receive(token);
         toast.success(`${sats.toLocaleString()} sats received`);
         replaceQuery((p) => p.delete("cashu"));
       } catch (e) {
@@ -119,8 +122,10 @@ function Content() {
       {authChecked && (
         <UiProvider>
           <OpenChatProvider>
-            <Shell />
-            <Behaviour />
+            <MoneyProvider>
+              <Shell />
+              <Behaviour />
+            </MoneyProvider>
           </OpenChatProvider>
         </UiProvider>
       )}

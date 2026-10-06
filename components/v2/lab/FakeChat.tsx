@@ -13,6 +13,7 @@ import { HistoryContext, type HistoryService } from "@/features/history/view";
 import type { Conversation, Message } from "@/types/chat";
 import { DEFAULT_MINT_URL } from "@/lib/utils";
 import { CatalogStandInContext } from "../picker/useCatalog";
+import { MoneyContext } from "../useMoney";
 import { PICKS, labRoutes } from "./catalog";
 
 const now = Date.now();
@@ -226,12 +227,19 @@ export function FakeChatProvider({
   );
 
   const standIn = useMemo(() => ({ routes: labRoutes, picks: PICKS }), []);
+  // the lab's sats sit on the default mint
+  const money = useMemo(() => {
+    const sats = late ? 0 : balance;
+    return { total: sats, wallet: sats, balances: { [DEFAULT_MINT_URL]: sats }, loading: late, node: null };
+  }, [balance, late]);
   return (
     <ChatContext.Provider value={value as never}>
       <HistoryContext.Provider value={lab}>
         <AccountChatContext.Provider value={account}>
           <CatalogContext.Provider value={catalog}>
-            <CatalogStandInContext.Provider value={standIn}>{children}</CatalogStandInContext.Provider>
+            <CatalogStandInContext.Provider value={standIn}>
+              <MoneyContext.Provider value={money}>{children}</MoneyContext.Provider>
+            </CatalogStandInContext.Provider>
           </CatalogContext.Provider>
         </AccountChatContext.Provider>
       </HistoryContext.Provider>

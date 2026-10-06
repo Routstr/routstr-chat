@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { getTokenMetadata } from "@cashu/cashu-ts";
 import { useHeldCredit } from "@/features/chat/view";
 import { useSession } from "@/features/session/view";
+import { peek } from "@/features/wallet/view";
 import { getRequiredSatsForModel } from "@/utils/modelUtils";
 import { useUi } from "../../ui";
 import { useMoney } from "../../useMoney";
@@ -69,8 +69,8 @@ export function usePay(say: (t: string) => void) {
     if (!t) return { kind: "empty" as const };
     if (/^cashu[AB]/.test(t)) {
       try {
-        const d = getTokenMetadata(t);
-        const sats = d.unit === "msat" ? Math.floor(d.amount / 1000) : d.amount;
+        const d = peek(t);
+        const sats = d.sats;
         let host = d.mint;
         try {
           host = new URL(d.mint).host;

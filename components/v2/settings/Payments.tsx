@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState } from "react";
-import { useChat } from "@/context/ChatProvider";
 import { useBitcoinConnectStatus } from "@/hooks/useBitcoinConnect";
 import { useCashuStore } from "@/features/wallet";
 import { useCashuWallet } from "@/features/wallet/hooks/useCashuWallet";
@@ -11,7 +10,7 @@ import { Icon } from "../icons";
 import { useUi } from "../ui";
 import { useMoney } from "../useMoney";
 import { usePhone } from "../phone";
-import { usePerReply, satsOf } from "../wallet/Wallet";
+import { usePerReply } from "../wallet/Wallet";
 import { Btn, Fold, Grp, Head, Ib, Row, Say, Sw, hostOf, n0, plural, useToast } from "./parts";
 import { satUnit } from "../format";
 
@@ -48,10 +47,9 @@ export default function Payments() {
   /* ── mints ─────────────────────────────────────────────────────────────── */
   const cashu = useCashuStore();
   const { wallet } = useCashuWallet();
-  const { mintBalances, mintUnits } = useChat();
   const { addMintIfNotExists, removeMint, cleanSpentProofs } = useCashuToken();
   const urls = wallet?.mints?.length ? wallet.mints : cashu.mints.map((m) => m.url);
-  const mints = urls.map((url) => ({ url, bal: satsOf(mintBalances?.[url] ?? 0, mintUnits?.[url]) }));
+  const mints = urls.map((url) => ({ url, bal: money.balances[url] ?? 0 }));
   const tot = mints.reduce((a, x) => a + x.bal, 0) || 1;
   const [adding, setAdding] = useState(false);
   const [mintIn, setMintIn] = useState("");

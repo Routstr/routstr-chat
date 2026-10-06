@@ -1,13 +1,12 @@
 "use client";
 
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useChat } from "@/context/ChatProvider";
 import { useCatalogModels } from "@/features/catalog/view";
 import { useConversations, useHistory, useSyncSetting } from "@/features/history/view";
 import { useObservableState } from "applesauce-react/hooks";
 import { useAccountManager } from "@/features/session/view";
 import { useSdkUsageHistory } from "@/features/wallet/hooks/useSdkUsageHistory";
-import { useTransactionHistoryStore } from "@/features/wallet/state/transactionHistoryStore";
+import { useActivity } from "@/features/wallet/view";
 import { getPendingCashuTokenAmount, getPendingCashuTokenDistribution } from "@/utils/cashuUtils";
 import { getLocalCashuTokens } from "@/utils/storageUtils";
 import { renderCompanyIcon } from "@/components/v2/picker/display";
@@ -117,7 +116,6 @@ function Pager({ n, page, onPage }: { n: number; page: number; onPage: (p: numbe
 }
 
 export default function Usage({ view: asked }: { view?: "wallet" } = {}) {
-  const chat = useChat();
   const history = useHistory();
   const { openNew } = useOpenChat();
   const { models } = useCatalogModels();
@@ -203,8 +201,7 @@ export default function Usage({ view: asked }: { view?: "wallet" } = {}) {
   const ms = (t: number) => (t < 1e12 ? t * 1000 : t);
 
   /* ── wallet activity ───────────────────────────────────────────────────── */
-  const entries = useTransactionHistoryStore((s) => s.history);
-  const clearHistory = useTransactionHistoryStore((s) => s.clearHistory);
+  const { entries, clear: clearHistory } = useActivity();
   const [apart, setApart] = useState(false);
   const [actPage, setActPage] = useState(0);
   const reqList = useFullPageHeight(u.entries.length > PAGE);
@@ -614,7 +611,6 @@ export default function Usage({ view: asked }: { view?: "wallet" } = {}) {
                   icon="trash"
                   onClick={() => {
                     // the records only: sats held with providers keep their tokens
-                    chat.setTransactionHistory([]);
                     clearHistory();
                     setAsk("");
                     toast("Payment records cleared");
