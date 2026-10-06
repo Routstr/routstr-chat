@@ -77,7 +77,7 @@ export const INDEX: [string, SettingsSection, string, string, string, string?][]
   ["Other keys on this device", "account", "g-others", "switch account accounts", ""],
   ["Sign out", "account", "g-signout", "log out logout", "Your sats stay here for this key."],
   ["Balance", "wallet", "g-balance", "sats wallet money funds", "On this device."],
-  ["How replies are paid", "wallet", "g-paying", "spend mode per request ecash change x-cashu", "Each message carries its own ecash and the change comes back to your wallet."],
+  ["How replies are paid", "wallet", "g-paying", "spend mode api key per request ecash change x-cashu return", "Through a key at the provider, or per request with the change back to your wallet."],
   ["Lightning wallet", "wallet", "g-lightning", "nwc nostr wallet connect alby invoice", "Connect one with Nostr Wallet Connect to pay invoices without leaving the chat."],
   ["Top up automatically", "wallet", "r-refill", "auto refill auto-refill threshold", "When your ecash runs low, your Lightning wallet pays an invoice for you."],
   ["Mints", "wallet", "g-mints", "mint ecash cashu add mint remove spent proofs", ""],
