@@ -35,7 +35,8 @@ import {
 } from "@/lib/cashuLightning";
 import { MintQuoteState, getTokenMetadata } from "@cashu/cashu-ts";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
-import { useAccountManager, AccountMetadata } from "@/components/ClientProviders";
+import { useAccountManager } from "@/components/ClientProviders";
+import type { AccountMetadata } from "@/features/session/service";
 import {
   ExtensionAccount,
   NostrConnectAccount,
@@ -133,7 +134,7 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
   const [showNsec, setShowNsec] = useState(false);
   const [showSaveConfirmation, setShowSaveConfirmation] = useState(false);
 
-  const { manager, manualSave } = useAccountManager();
+  const { manager, session } = useAccountManager();
 
   useEffect(() => {
     setHasExtension(
@@ -232,9 +233,7 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
     if (accounts.length > 0) return;
     
     const account = PrivateKeyAccount.generateNew<AccountMetadata>();
-    manager.addAccount(account);
-    manager.setActive(account);
-    manualSave.next();
+    session.add(account);
     markEphemeralNsecCreated();
   };
 
@@ -277,22 +276,17 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
 
   const completeSignup = useCallback(() => {
     if (!generatedAccount) return;
-    manager.addAccount(generatedAccount as any);
-    manager.setActive(generatedAccount as any);
-    manualSave.next();
+    session.add(generatedAccount);
     setSignupStep("initial");
     setGeneratedAccount(null);
     onClose();
-  }, [generatedAccount, manager, manualSave, onClose]);
+  }, [generatedAccount, session, onClose]);
 
   const handleExtensionLogin = useCallback(async () => {
     if (!hasExtension) return;
     try {
       setIsConnectingExtension(true);
-      const account = await ExtensionAccount.fromExtension();
-      manager.addAccount(account as any);
-      manager.setActive(account as any);
-      manualSave.next();
+      session.add(await ExtensionAccount.fromExtension());
       onClose();
     } catch (err) {
       console.error("Extension login error:", err);
@@ -302,7 +296,7 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
     } finally {
       setIsConnectingExtension(false);
     }
-  }, [hasExtension, manager, manualSave, onClose]);
+  }, [hasExtension, session, onClose]);
 
   const handleKeyLogin = useCallback(() => {
     if (!loginNsec.trim()) return;
@@ -313,10 +307,7 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
         loginNsec.trim()
       );
       const count = manager.accounts$.value.length + 1;
-      account.metadata = { name: `Account ${count}` };
-      manager.addAccount(account as any);
-      manager.setActive(account as any);
-      manualSave.next();
+      session.add(account, `Account ${count}`);
       setLoginNsec("");
       onClose();
     } catch (err) {
@@ -325,7 +316,7 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
     } finally {
       setIsLoggingIn(false);
     }
-  }, [loginNsec, manager, manualSave, onClose]);
+  }, [loginNsec, manager, session, onClose]);
 
   const handleBunkerConnect = useCallback(async () => {
     if (!bunkerUrl) return;
@@ -337,10 +328,7 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
       const pubkey = await signer.getPublicKey();
       const account = new NostrConnectAccount<AccountMetadata>(pubkey, signer);
       const count = manager.accounts$.value.length + 1;
-      account.metadata = { name: `Bunker ${count}` };
-      manager.addAccount(account as any);
-      manager.setActive(account as any);
-      manualSave.next();
+      session.add(account, `Bunker ${count}`);
       setBunkerUrl("");
       setActiveLoginMethod("nsec");
       onClose();
@@ -350,7 +338,7 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
     } finally {
       setIsConnectingBunker(false);
     }
-  }, [bunkerUrl, manager, manualSave, onClose]);
+  }, [bunkerUrl, manager, session, onClose]);
 
   const handleQrCodeLogin = useCallback(async () => {
     try {
@@ -376,10 +364,7 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
         const pubkey = await signer.getPublicKey();
         const account = new NostrConnectAccount<AccountMetadata>(pubkey, signer);
         const count = manager.accounts$.value.length + 1;
-        account.metadata = { name: `Bunker ${count}` };
-        manager.addAccount(account as any);
-        manager.setActive(account as any);
-        manualSave.next();
+        session.add(account, `Bunker ${count}`);
         setNostrConnectUri(null);
         setActiveLoginMethod("nsec");
         onClose();
@@ -401,7 +386,7 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
     } finally {
       setIsConnectingQR(false);
     }
-  }, [manager, manualSave, onClose]);
+  }, [manager, session, onClose]);
 
   const cancelQR = useCallback(() => {
     setNostrConnectUri(null);

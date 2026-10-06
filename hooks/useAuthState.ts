@@ -15,7 +15,7 @@ export interface UseAuthStateReturn {
  * user session persistence, and authentication checks
  */
 export const useAuthState = (): UseAuthStateReturn => {
-  const { manager } = useAccountManager();
+  const { manager, session } = useAccountManager();
   const accounts = useObservableState(manager.accounts$) || [];
   const [authChecked, setAuthChecked] = useState(false);
 
@@ -24,15 +24,12 @@ export const useAuthState = (): UseAuthStateReturn => {
   const logout = useCallback(async () => {
     // Logout from applesauce-accounts
     const activeAccount = manager.active$.value;
-    if (activeAccount) {
-      // @ts-ignore
-      manager.removeAccount(activeAccount);
-    }
+    if (activeAccount) session.remove(activeAccount.id);
     // Optionally remove all accounts if that's what logout should do
     // For now, just clearing active account and storage seems consistent with existing logic
 
     clearAllStorage();
-  }, [manager]);
+  }, [manager, session]);
 
   // Set authChecked to true on initial render
   useEffect(() => {

@@ -47,7 +47,7 @@ const GeneralTab: React.FC<GeneralTabProps> = ({
     alert(message); // Placeholder for a proper toast notification
   };
 
-  const { manager } = useAccountManager();
+  const { manager, session } = useAccountManager();
   const applesauceAccounts = useObservableState(manager.accounts$) || [];
   const activeApplesauceAccount = useObservableState(manager.active$);
   const { chatSyncEnabled, setChatSyncEnabled } = useChatSync();
@@ -331,14 +331,14 @@ const GeneralTab: React.FC<GeneralTabProps> = ({
                     </div>
                     <button
                       className="px-2 py-1 rounded-md bg-muted hover:bg-muted/80 border border-border text-foreground text-xs transition-colors cursor-pointer"
-                      onClick={() => manager.setActive(acct)}
+                      onClick={() => session.switchTo(acct.id)}
                       type="button"
                     >
                       Use
                     </button>
                     <button
                       className="px-2 py-1 rounded-md bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 text-xs transition-colors cursor-pointer"
-                      onClick={() => manager.removeAccount(acct.id)}
+                      onClick={() => session.remove(acct.id)}
                       type="button"
                     >
                       Remove

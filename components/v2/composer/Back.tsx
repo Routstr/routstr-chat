@@ -6,7 +6,8 @@ import { ExtensionAccount, NostrConnectAccount, PrivateKeyAccount } from "apples
 import { NostrConnectSigner } from "applesauce-signers";
 import { useChat } from "@/context/ChatProvider";
 import { useAuth } from "@/context/AuthProvider";
-import { useAccountManager, type AccountMetadata } from "@/components/ClientProviders";
+import { useAccountManager } from "@/components/ClientProviders";
+import type { Account, AccountMetadata } from "@/features/session/service";
 import { getRequiredSatsForModel } from "@/utils/modelUtils";
 import { Icon, type IconName } from "../icons";
 import { useUi } from "../ui";
@@ -106,7 +107,7 @@ export default function Back({
   const ui = useUi();
   const money = useMoney();
   const funding = useFunding();
-  const { manager, manualSave } = useAccountManager();
+  const { manager, session } = useAccountManager();
   const phone = phoneNow();
 
   /* ── where things stand ─────────────────────────────────────────────── */
@@ -291,11 +292,8 @@ export default function Back({
 
   /* ── sign in ────────────────────────────────────────────────────────── */
   const count = () => manager.accounts$.value.length + 1;
-  const adopt = (account: Parameters<typeof manager.addAccount>[0], kind: "in" | "new", name?: string) => {
-    if (name) account.metadata = { name } as AccountMetadata;
-    manager.addAccount(account);
-    manager.setActive(account);
-    manualSave.next();
+  const adopt = (account: Account, kind: "in" | "new", name?: string) => {
+    session.add(account, name);
     setWay(null);
     setWayState("");
     setDone(kind);
@@ -314,7 +312,7 @@ export default function Back({
     setWay("ext");
     setWayState("busy");
     try {
-      adopt((await ExtensionAccount.fromExtension()) as never, "in");
+      adopt(await ExtensionAccount.fromExtension(), "in");
     } catch {
       setWayState("bad");
     }
@@ -328,7 +326,7 @@ export default function Back({
       return;
     }
     try {
-      adopt(PrivateKeyAccount.fromKey<AccountMetadata>(v) as never, "in", `Account ${count()}`);
+      adopt(PrivateKeyAccount.fromKey<AccountMetadata>(v), "in", `Account ${count()}`);
       setKeyText("");
     } catch {
       setWayState("bad");
@@ -341,7 +339,7 @@ export default function Back({
     try {
       const signer = await NostrConnectSigner.fromBunkerURI(v);
       const pubkey = await signer.getPublicKey();
-      adopt(new NostrConnectAccount<AccountMetadata>(pubkey, signer) as never, "in", `Bunker ${count()}`);
+      adopt(new NostrConnectAccount<AccountMetadata>(pubkey, signer), "in", `Bunker ${count()}`);
       setBunkerText("");
     } catch {
       setWayState("bad");
@@ -359,7 +357,7 @@ export default function Back({
       await signer.waitForSigner(ctrl.signal);
       if (id !== scanRun.current) return;
       const pubkey = await signer.getPublicKey();
-      adopt(new NostrConnectAccount<AccountMetadata>(pubkey, signer) as never, "in", `Bunker ${count()}`);
+      adopt(new NostrConnectAccount<AccountMetadata>(pubkey, signer), "in", `Bunker ${count()}`);
       setScan(null);
     } catch {
       if (id === scanRun.current) setWayState("late");
@@ -372,7 +370,7 @@ export default function Back({
     setScan(null);
     setWayState("");
   };
-  const fresh = () => adopt(PrivateKeyAccount.generateNew<AccountMetadata>() as never, "new", `Account ${count()}`);
+  const fresh = () => adopt(PrivateKeyAccount.generateNew<AccountMetadata>(), "new", `Account ${count()}`);
   const openWay = (w: Way) => {
     stopScan();
     setWayState("");

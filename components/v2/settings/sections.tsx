@@ -177,7 +177,7 @@ export function Look() {
 
 /* ── Account ─────────────────────────────────────────────────────────────── */
 export function Account({ go }: { go: (id: SettingsSection) => void }) {
-  const { manager } = useAccountManager();
+  const { manager, session } = useAccountManager();
   const accounts = useObservableState(manager.accounts$) || [];
   const active = useObservableState(manager.active$);
   const { logout } = useAuth();
@@ -387,7 +387,7 @@ export function Account({ go }: { go: (id: SettingsSection) => void }) {
                         open={rm === o.id}
                         onClick={() => setRm(rm === o.id ? null : o.id)}
                       />
-                      <Btn onClick={() => manager.setActive(o)}>Switch</Btn>
+                      <Btn onClick={() => session.switchTo(o.id)}>Switch</Btn>
                     </div>
                   </div>
                   <Fold id={`f-rmkey-${o.id}`} open={rm === o.id}>
@@ -400,7 +400,7 @@ export function Account({ go }: { go: (id: SettingsSection) => void }) {
                             kind="warn"
                             icon="trash"
                             onClick={() => {
-                              manager.removeAccount(o.id);
+                              session.remove(o.id);
                               setRm(null);
                             }}
                           >

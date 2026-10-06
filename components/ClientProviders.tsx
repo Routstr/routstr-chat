@@ -15,33 +15,21 @@ import Kind1018ThemeBootstrap from "@/components/Kind1018ThemeBootstrap";
 import dynamic from "next/dynamic";
 import { migrateStorageItems, saveRelays } from "@/utils/storageUtils";
 import { InvoiceRecoveryProvider } from "@/components/InvoiceRecoveryProvider";
-import { AccountManager } from "applesauce-accounts";
-import { registerCommonAccountTypes } from "applesauce-accounts/accounts";
-import { merge, Subject } from "rxjs";
+import { session } from "@/runtime";
+import type { Accounts, SessionService } from "@/features/session/service";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { AppProvider } from "./AppProvider";
 import { AppConfig } from "@/context/AppContext";
 
-export interface AccountMetadata {
-  name: string;
-}
-
-// Initialize shared state at the top level
-const manager = new AccountManager<AccountMetadata>();
-registerCommonAccountTypes(manager);
-const manualSave = new Subject<void>();
-
 interface AccountContextType {
-  manager: AccountManager<AccountMetadata>;
-  manualSave: Subject<void>;
+  manager: Accounts;
+  session: SessionService;
 }
 
-const AccountContext = createContext<AccountContextType>({
-  manager,
-  manualSave,
-});
+const accountContext = { manager: session.accounts, session };
+const AccountContext = createContext<AccountContextType>(accountContext);
 
 export const useAccountManager = () => useContext(AccountContext);
 
@@ -93,36 +81,6 @@ export default function ClientProviders({ children }: { children: ReactNode }) {
     saveRelays(relayUrls);
   }, [relayUrls]);
 
-  // Account persistence
-  useEffect(() => {
-    // Load accounts from localStorage
-    const savedAccounts = JSON.parse(localStorage.getItem("accounts") || "[]");
-    manager.fromJSON(savedAccounts);
-
-    // Restore active account if it exists
-    const activeAccountId = localStorage.getItem("activeAccount");
-    if (activeAccountId) {
-      const account = manager.getAccount(activeAccountId);
-      if (account) manager.setActive(account);
-    }
-
-    // Save accounts whenever they change
-    const sub1 = merge(manualSave, manager.accounts$).subscribe(() => {
-      localStorage.setItem("accounts", JSON.stringify(manager.toJSON()));
-    });
-
-    // Save active account whenever it changes
-    const sub2 = manager.active$.subscribe((account) => {
-      if (account) localStorage.setItem("activeAccount", account.id);
-      else localStorage.removeItem("activeAccount");
-    });
-
-    return () => {
-      sub1.unsubscribe();
-      sub2.unsubscribe();
-    };
-  }, []);
-
   const defaultConfig: AppConfig = {
     relayUrls: relayUrls,
   };
@@ -152,7 +110,7 @@ export default function ClientProviders({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AccountContext.Provider value={{ manager, manualSave }}>
+    <AccountContext.Provider value={accountContext}>
       <ThemeProvider>
         <AppProvider
           storageKey="nostr:app-config"
