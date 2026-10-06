@@ -9,6 +9,7 @@ import {
 } from "@routstr/sdk/wallet";
 import { getKit } from "@/tests/kit";
 import { ExportedKeys, type Purse } from "../exported";
+import type { Saved } from "@/features/session/saved";
 
 const kit = getKit();
 
@@ -17,6 +18,16 @@ const memory = () => {
   return {
     getItem: (k: string) => data.get(k) ?? null,
     setItem: (k: string, v: string) => void data.set(k, v),
+  };
+};
+
+// the IndexedDB copy of the list, empty to start with
+const kept = (): Saved => {
+  const data = new Map<string, string>();
+  return {
+    get: async (k) => data.get(k),
+    put: async (k, v) => void data.set(k, v),
+    delete: async (k) => void data.delete(k),
   };
 };
 
@@ -41,7 +52,8 @@ const service = () =>
   new ExportedKeys(
     "alice",
     memory(),
-    new BalanceManager({} as WalletAdapter, {} as StorageAdapter)
+    new BalanceManager({} as WalletAdapter, {} as StorageAdapter),
+    kept()
   );
 
 describe("ExportedKeys at a real provider", () => {
@@ -92,7 +104,8 @@ describe("ExportedKeys at a real provider", () => {
     const again = new ExportedKeys(
       "alice",
       storage,
-      new BalanceManager({} as WalletAdapter, {} as StorageAdapter)
+      new BalanceManager({} as WalletAdapter, {} as StorageAdapter),
+      kept()
     );
     await expect(again.remove(wallet, made)).rejects.toThrow();
     expect(landed).toEqual([30]);

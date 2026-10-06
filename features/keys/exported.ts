@@ -4,6 +4,7 @@ import {
   type WalletAdapter,
 } from "@routstr/sdk/wallet";
 import { owned } from "@/features/session/owned";
+import { savedInIndexedDB, type Saved } from "@/features/session/saved";
 import type { BackupPorts, Remote } from "./relayBackup";
 
 /* Keys a person makes for other apps: credit at one provider behind an sk-
@@ -70,15 +71,27 @@ export class ExportedKeys {
   private push: () => void = () => {};
   // one snapshot until it changes, so screens can watch it
   private keys: ExportedKey[];
+  // the list as kept in IndexedDB, which a main tab's sign-out cannot wipe;
+  // null until that copy was read, and nothing is written over it before
+  private kept: ExportedKey[] | null = null;
   private readonly name: string;
 
   constructor(
     readonly owner: string,
     private readonly storage: Pick<Storage, "getItem" | "setItem">,
-    private readonly provider: Provider
+    private readonly provider: Provider,
+    private readonly saved: Saved
   ) {
     this.name = owned("api_keys", owner);
     this.keys = this.read();
+    saved
+      .get(this.name)
+      .then((json) => {
+        const keys = json ? parseExported(JSON.parse(json)) : [];
+        this.kept = keys === "unreadable" ? [] : keys;
+        this.repair();
+      })
+      .catch(report);
   }
 
   list(): ExportedKey[] {
@@ -89,6 +102,11 @@ export class ExportedKeys {
   reload(): void {
     this.keys = this.read();
     this.listeners.forEach((listener) => listener());
+  }
+
+  /** Writes the list back after localStorage was wiped. */
+  repair(): void {
+    this.change((keys) => keys);
   }
 
   private read(): ExportedKey[] {
@@ -102,13 +120,24 @@ export class ExportedKeys {
     return () => this.listeners.delete(listener);
   };
 
-  /** Every change starts from what is on disk, so a second tab's key is
-   *  never written over with this tab's older list. */
+  /** Every change starts from what is on disk and in IndexedDB, so a second
+   *  tab's key is never written over with this tab's older list, and a wiped
+   *  localStorage loses nothing. */
   private change(next: (keys: ExportedKey[]) => ExportedKey[]): ExportedKey[] {
-    const keys = next(this.read());
-    this.storage.setItem(this.name, JSON.stringify(keys));
+    const disk = this.read();
+    const known = new Set(disk.map((k) => k.key));
+    const lost = (this.kept ?? []).filter(
+      (k) => !known.has(k.key) && !this.removed.has(k.key)
+    );
+    const keys = next([...disk, ...lost]);
+    const json = JSON.stringify(keys);
+    this.storage.setItem(this.name, json);
     this.keys = keys;
     this.listeners.forEach((listener) => listener());
+    if (this.kept) {
+      this.kept = keys;
+      this.saved.put(this.name, json).catch(report);
+    }
     return keys;
   }
 
@@ -254,13 +283,19 @@ export function exportedKeysFor(owner: string): ExportedKeys {
       {} as WalletAdapter,
       {} as StorageAdapter
     );
-    keys = new ExportedKeys(owner, window.localStorage, provider);
+    keys = new ExportedKeys(
+      owner,
+      window.localStorage,
+      provider,
+      savedInIndexedDB()
+    );
     const name = owned("api_keys", owner);
     const service = keys;
-    window.addEventListener(
-      "storage",
-      (e) => e.key === name && service.reload()
-    );
+    window.addEventListener("storage", (e) => {
+      // a main tab's sign-out clears localStorage: the list goes back in
+      if (e.key === null || (e.key === name && !e.newValue)) service.repair();
+      else if (e.key === name) service.reload();
+    });
     services.set(owner, keys);
   }
   return keys;

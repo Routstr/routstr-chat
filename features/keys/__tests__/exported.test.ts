@@ -6,6 +6,7 @@ import {
   type Purse,
 } from "../exported";
 import type { BackupPorts, Remote } from "../relayBackup";
+import type { Saved } from "@/features/session/saved";
 
 const memory = () => {
   const data = new Map<string, string>();
@@ -39,6 +40,16 @@ const balance = (amount: number, more: object = {}) => ({
   apiKey: "sk-made",
   ...more,
 });
+
+// the IndexedDB copy of the list, empty to start with
+const kept = (): Saved => {
+  const data = new Map<string, string>();
+  return {
+    get: async (k) => data.get(k),
+    put: async (k, v) => void data.set(k, v),
+    delete: async (k) => void data.delete(k),
+  };
+};
 
 const provider = (over: Partial<Provider> = {}): Provider => ({
   getTokenBalance: async () => balance(21000),
@@ -93,7 +104,8 @@ describe("ExportedKeys", () => {
           ]);
           return balance(21000);
         },
-      })
+      }),
+      kept()
     );
     const { p, calls } = purse();
     const send = p.send;
@@ -124,7 +136,8 @@ describe("ExportedKeys", () => {
       provider({
         getTokenBalance: async () =>
           balance(0, { apiKey: "", balanceUnknown: true }),
-      })
+      }),
+      kept()
     );
     await expect(
       keys.create(purse().p, "https://p.test/", 21, "x")
@@ -142,7 +155,8 @@ describe("ExportedKeys", () => {
       storage,
       provider({
         getTokenBalance: async () => balance(5000, { apiKey: "sk-1" }),
-      })
+      }),
+      kept()
     );
 
     await keys.topUp(purse("cashuBtopup").p, key(), 4);
@@ -159,7 +173,7 @@ describe("ExportedKeys", () => {
   it("removes a key with credit only after the refund is in the wallet", async () => {
     const storage = memory();
     storage.setItem("api_keys:alice", JSON.stringify([key()]));
-    const keys = new ExportedKeys("alice", storage, provider());
+    const keys = new ExportedKeys("alice", storage, provider(), kept());
     const failing = purse();
     failing.p.receive = async () => {
       throw new Error("mint down");
@@ -193,7 +207,8 @@ describe("ExportedKeys", () => {
       storage,
       provider({
         fetchRefundToken: async (_url, k) => answers[k] as { success: boolean },
-      })
+      }),
+      kept()
     );
 
     for (const k of listed) await keys.remove(purse().p, k).catch(() => {});
@@ -213,7 +228,8 @@ describe("ExportedKeys", () => {
       storage,
       provider({
         getTokenBalance: async (token) => (asked.push(token), answers.shift()!),
-      })
+      }),
+      kept()
     );
 
     await keys.create(purse().p, "https://p.test/", 21, "laptop");
@@ -227,15 +243,15 @@ describe("ExportedKeys", () => {
       "fetch",
       vi.fn(async () => new Response("{}", { status: 400 }))
     );
-    const keys = new ExportedKeys("alice", memory(), provider());
+    const keys = new ExportedKeys("alice", memory(), provider(), kept());
     await expect(keys.topUp(purse().p, key(), 4)).rejects.toThrow("400");
   });
 
   it("never drops a key another tab made, even from a stale list", async () => {
     const storage = memory();
     storage.setItem("api_keys:alice", JSON.stringify([key({ key: "sk-old" })]));
-    const tabA = new ExportedKeys("alice", storage, provider());
-    const tabB = new ExportedKeys("alice", storage, provider());
+    const tabA = new ExportedKeys("alice", storage, provider(), kept());
+    const tabB = new ExportedKeys("alice", storage, provider(), kept());
 
     await tabA.create(purse().p, "https://p.test/", 21, "new");
     tabB.forget("sk-old");
@@ -253,7 +269,7 @@ describe("ExportedKeys", () => {
       "api_keys:alice",
       JSON.stringify([key({ key: "sk-here" })])
     );
-    const keys = new ExportedKeys("alice", storage, provider());
+    const keys = new ExportedKeys("alice", storage, provider(), kept());
     const published: ExportedKey[][] = [];
     let push: (r: Remote<ExportedKey[]>) => void = () => {};
     keys.start({
@@ -288,12 +304,14 @@ describe("ExportedKeys", () => {
     const a = new ExportedKeys(
       "alice",
       disk([key({ key: "sk-1", balance: 1 }), key({ key: "sk-2" })]),
-      provider()
+      provider(),
+      kept()
     );
     const b = new ExportedKeys(
       "alice",
       disk([key({ key: "sk-2", balance: 5 }), key({ key: "sk-1" })]),
-      provider()
+      provider(),
+      kept()
     );
     a.start(r.ports);
     b.start(r.ports);
@@ -323,7 +341,7 @@ describe("ExportedKeys", () => {
       "api_keys:alice",
       JSON.stringify([key({ key: "sk-1" }), key({ key: "sk-2" })])
     );
-    const keys = new ExportedKeys("alice", storage, provider());
+    const keys = new ExportedKeys("alice", storage, provider(), kept());
     const published: ExportedKey[][] = [];
     let push: (r: Remote<ExportedKey[]>) => void = () => {};
     const ports: BackupPorts<ExportedKey[]> = {
@@ -354,7 +372,7 @@ describe("ExportedKeys", () => {
       "api_keys:alice",
       JSON.stringify([key({ key: "sk-1" }), key({ key: "sk-2" })])
     );
-    const keys = new ExportedKeys("alice", storage, provider());
+    const keys = new ExportedKeys("alice", storage, provider(), kept());
     keys.start(r.ports);
     await settle();
 
@@ -365,5 +383,51 @@ describe("ExportedKeys", () => {
 
     const copy = r.copy() as ExportedKey[];
     expect(copy.map((k) => k.key).sort()).toEqual(["sk-1", "sk-2", "sk-made"]);
+  });
+
+  it("keeps the list through a main tab's sign-out, with the app open or closed", async () => {
+    const storage = memory();
+    const saved = kept();
+    const two = [key({ key: "sk-1" }), key({ key: "sk-2" })];
+    storage.setItem("api_keys:alice", JSON.stringify(two));
+    const keys = new ExportedKeys("alice", storage, provider(), saved);
+    await settle();
+    const listed = () =>
+      JSON.parse(storage.data.get("api_keys:alice") ?? "[]").map(
+        (k: ExportedKey) => k.key
+      );
+
+    // open: main clears localStorage, this tab writes the list back
+    storage.data.clear();
+    keys.repair();
+    expect(listed()).toEqual(["sk-1", "sk-2"]);
+
+    // closed: cleared again, the next start reads the IndexedDB copy
+    storage.data.clear();
+    const next = new ExportedKeys("alice", storage, provider(), saved);
+    await settle();
+    expect(next.list().map((k) => k.key)).toEqual(["sk-1", "sk-2"]);
+    expect(listed()).toEqual(["sk-1", "sk-2"]);
+  });
+
+  it("never writes the IndexedDB copy before it was read", async () => {
+    const storage = memory();
+    const saved = kept();
+    await saved.put("api_keys:alice", JSON.stringify([key({ key: "sk-1" })]));
+    let read: () => void = () => {};
+    const gate = new Promise<void>((r) => (read = r));
+    const slow: Saved = {
+      ...saved,
+      get: async (k) => (await gate, saved.get(k)),
+    };
+
+    // localStorage was wiped while the app was closed; a key is forgotten
+    // before the IndexedDB copy came in
+    const keys = new ExportedKeys("alice", storage, provider(), slow);
+    keys.forget("sk-other");
+    read();
+    await settle();
+
+    expect(keys.list().map((k) => k.key)).toEqual(["sk-1"]);
   });
 });
