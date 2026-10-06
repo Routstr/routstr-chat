@@ -55,11 +55,23 @@ async function openSend(page: Page) {
 }
 
 async function openSettings(page: Page, section: string) {
-  if (!(await page.getByRole("dialog", { name: "Settings" }).isVisible()))
-    await page
-      .getByRole("button", { name: "Settings", exact: true })
-      .first()
-      .click();
+  if (!(await page.getByRole("dialog", { name: "Settings" }).isVisible())) {
+    // signed in, the light at the rail's foot opens the account menu first
+    const accounts = page.getByRole("button", {
+      name: /Accounts and settings$/,
+    });
+    if (await accounts.count()) {
+      await accounts.first().click();
+      await page
+        .getByRole("menu", { name: "Accounts" })
+        .getByRole("menuitem", { name: "Settings" })
+        .click();
+    } else
+      await page
+        .getByRole("button", { name: "Settings", exact: true })
+        .first()
+        .click();
+  }
   await page.locator(`#nav-${section}`).click();
 }
 

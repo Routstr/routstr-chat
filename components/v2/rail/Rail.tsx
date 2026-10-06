@@ -4,12 +4,16 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { useChat } from "@/context/ChatProvider";
 import { useConversations, useHistoryLoaded } from "@/features/history/view";
 import { useAuth } from "@/context/AuthProvider";
+import { useObservableState } from "applesauce-react/hooks";
+import { useAccountManager } from "@/features/session/view";
 import { Icon } from "../icons";
 import { useUi } from "../ui";
 import { groupByDay } from "../format";
 import { useCountUp, useMoney } from "../useMoney";
+import { useSwitchAccount } from "../useSwitchAccount";
 import Wallet from "../wallet/Wallet";
 import { RoomsButton, RoomsMenu } from "./RoomMenu";
+import { AccountMenu, nameOf } from "./AccountMenu";
 import { BalanceButton } from "./BalanceButton";
 import { Me } from "./Me";
 import { ChatList } from "./ChatList";
@@ -78,8 +82,17 @@ export default function Rail() {
   const liveId = isLoading ? streamingConversationId : null;
 
   const [focusId, setFocusId] = useState<string | null>(null);
-  /* ── rooms ──────────────────────────────────────────────────────────── */
+  /* ── rooms, accounts ────────────────────────────────────────────────── */
   const [rooms, setRooms] = useState(false);
+  const [accounts, setAccounts] = useState(false);
+  const closeMenus = useCallback(() => {
+    setRooms(false);
+    setAccounts(false);
+  }, []);
+  const { manager } = useAccountManager();
+  const me = useObservableState(manager.active$);
+  // here, not in the menu: a switch waits for a running reply to end, after the menu has gone
+  const switchTo = useSwitchAccount();
 
   const { tipFor, hideTip, showTip, armTip } = useRailTip({ root, tip, list, folded, K, money });
   const { rollBack, armRoll } = useTitleRoll({ folded, showTip, hideTip });
@@ -109,8 +122,8 @@ export default function Rail() {
     null;
 
   const { edges, onScroll } = useGlide({ root, list, finding, activeConversationId, hideTip });
-  const setFold = useFold({ root, list, shade, folded, isSidebarCollapsed, setIsSidebarCollapsed, hideTip, rollBack, setRooms, edges, say });
-  const turn = useTurn({ root, clip, shade, ui, folded, setFold, hideTip, setRooms });
+  const setFold = useFold({ root, list, shade, folded, isSidebarCollapsed, setIsSidebarCollapsed, hideTip, rollBack, closeMenus, edges, say });
+  const turn = useTurn({ root, clip, shade, ui, folded, setFold, hideTip, closeMenus });
   const { delta, zero, waitN, balWait } = useBalance(money, isAuthenticated);
   useGutter(list, root);
   useDrawerFocus(root, ui, phone);
@@ -199,7 +212,15 @@ export default function Rail() {
                     <BalanceButton money={money} shown={shown} zero={zero} balWait={balWait} waitN={waitN} delta={delta} onClick={() => turn("wallet")} />
                     <div className="sb-tools">
                       <RoomsButton open={rooms} onToggle={() => setRooms((o) => !o)} />
-                      <button type="button" className="ghost sb-gear" data-tipk="gear" aria-label="Settings" onClick={() => ui.openSettings()}>
+                      <button
+                        type="button"
+                        className="ghost sb-gear"
+                        data-tipk="gear"
+                        aria-haspopup={me ? "menu" : undefined}
+                        aria-expanded={me ? accounts : undefined}
+                        aria-label={me ? `${nameOf(me)}. Accounts and settings` : "Settings"}
+                        onClick={() => (me ? setAccounts((o) => !o) : ui.openSettings())}
+                      >
                         <Me />
                       </button>
                     </div>
@@ -218,6 +239,17 @@ export default function Rail() {
           onClose={(refocus) => {
             setRooms(false);
             if (refocus) root.current?.querySelector<HTMLElement>(".sb-sw")?.focus({ preventScroll: true });
+          }}
+        />
+      )}
+      {accounts && (
+        <AccountMenu
+          total={balWait || money.node ? null : money.total}
+          busy={isLoading || streamingConversationId !== null}
+          switchTo={switchTo}
+          onClose={(refocus) => {
+            setAccounts(false);
+            if (refocus) root.current?.querySelector<HTMLElement>(".sb-gear")?.focus({ preventScroll: true });
           }}
         />
       )}

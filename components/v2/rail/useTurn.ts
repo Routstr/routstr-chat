@@ -12,7 +12,7 @@ export function useTurn({
   folded,
   setFold,
   hideTip,
-  setRooms,
+  closeMenus,
 }: {
   root: RefObject<HTMLElement | null>;
   clip: RefObject<HTMLDivElement | null>;
@@ -21,12 +21,12 @@ export function useTurn({
   folded: boolean;
   setFold: (on: boolean) => void;
   hideTip: (now?: boolean) => void;
-  setRooms: (open: boolean) => void;
+  closeMenus: () => void;
 }) {
   const turn = (side: "chats" | "wallet") => {
     if (ui.side === side) return;
     hideTip(true);
-    setRooms(false);
+    closeMenus();
     if (side === "wallet" && folded) {
       setFold(false);
       window.setTimeout(() => ui.setSide("wallet"), reduced() ? 0 : tokenMs("--d-move") + 40);
