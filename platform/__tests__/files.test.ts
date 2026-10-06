@@ -79,7 +79,7 @@ describe("FileStore: this device", () => {
   it("keeps files in main's database, so main and v2 open each other's", async () => {
     settings.set("blossomSyncEnabled", "false");
     vi.resetModules();
-    const main = await import("@/utils/indexedDb");
+    const main = await import("./mainFiles");
 
     const { storageId } = await store().store(PNG, signal());
     const fromMain = await main.getFile(storageId!);

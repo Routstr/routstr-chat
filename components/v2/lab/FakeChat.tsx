@@ -5,8 +5,7 @@
    pictures) without spending sats. Nothing here ships: app/lab renders only
    in development. */
 
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { ChatContext } from "@/context/ChatProvider";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { CatalogContext } from "@/features/catalog/view";
 import { AccountChatContext, type AccountChatView } from "@/features/chat/view";
 import { HistoryContext, type HistoryService } from "@/features/history/view";
@@ -117,7 +116,6 @@ function seed(): Conversation[] {
 }
 
 // anything the lab does not fake reads as a no-op
-const UNFAKED = new Proxy({}, { get: (t, k) => (k in t ? (t as Record<PropertyKey, unknown>)[k] : () => undefined) });
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -144,7 +142,6 @@ export function FakeChatProvider({
 }) {
   const params = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : new URLSearchParams();
   const [conversations, setConversations] = useState<Conversation[]>(() => (params.get("fresh") ? [] : seed()));
-  const [activeId, setActiveId] = useState<string | null>(() => (params.get("fresh") ? null : params.get("chat") ?? "c1"));
   // Sync in the lab: busy for a moment, and one chat arrives from "another device"
   const syncNow = useCallback(async () => {
     await sleep(1600);
@@ -175,9 +172,6 @@ export function FakeChatProvider({
   const [lab] = useState(() => history({ remove: (id) => setConversations((cs) => cs.filter((c) => c.id !== id)), sync: syncNow, append }));
   useLayoutEffect(() => lab.update(conversations), [lab, conversations]);
   const [account] = useState(() => chat(lab));
-  // what the bridge hands the screens: the branch shown
-  const slots = useSyncExternalStore(lab.subscribe, () => (activeId ? lab.getThread(activeId) : undefined), () => undefined);
-  const shown = useMemo(() => slots?.map((s) => s.displayed) ?? [], [slots]);
   const [balance, setBalance] = useState(() => Number(params.get("balance") ?? 2140));
   // ?late=<ms>: the balance arrives a moment after the page, as a wallet loading from its mint and relays does
   const [late, setLate] = useState(() => params.has("late"));
@@ -192,39 +186,6 @@ export function FakeChatProvider({
     const t = window.setTimeout(() => setBalance((b) => b + 1000), Number(params.get("bump")) || 4000);
     return () => window.clearTimeout(t);
   }, []);
-  const convRef = useRef(activeId);
-  useLayoutEffect(() => {
-    convRef.current = activeId;
-  });
-
-  const value = useMemo(
-    () => ({
-      __proto__: UNFAKED,
-      activeConversationId: activeId,
-      messages: shown,
-      startNewConversation: () => setActiveId(null),
-      loadConversation: (id: string) => setActiveId(id),
-      clearConversations: () => setConversations([]),
-      getActiveConversationId: () => convRef.current,
-      isSettingsOpen: false,
-      setIsSettingsOpen: () => {},
-      isSidebarOpen: false,
-      setIsSidebarOpen: () => {},
-      isMobile: false,
-      balance: late ? 0 : balance,
-      setBalance,
-      isBalanceLoading: late,
-      isWalletLoading: false,
-      currentMintUnit: "sat",
-      // the lab's sats sit on the default mint, so Send has something to spend
-      mintBalances: { [DEFAULT_MINT_URL]: late ? 0 : balance },
-      mintUnits: { [DEFAULT_MINT_URL]: "sat" },
-      transactionHistory: [],
-      setTransactionHistory: () => {},
-      messagesEndRef: { current: null },
-    }),
-    [activeId, shown, balance, late]
-  );
 
   const standIn = useMemo(() => ({ routes: labRoutes, picks: PICKS }), []);
   // the lab's sats sit on the default mint
@@ -233,16 +194,14 @@ export function FakeChatProvider({
     return { total: sats, wallet: sats, balances: { [DEFAULT_MINT_URL]: sats }, loading: late, node: null };
   }, [balance, late]);
   return (
-    <ChatContext.Provider value={value as never}>
-      <HistoryContext.Provider value={lab}>
-        <AccountChatContext.Provider value={account}>
-          <CatalogContext.Provider value={catalog}>
-            <CatalogStandInContext.Provider value={standIn}>
-              <MoneyContext.Provider value={money}>{children}</MoneyContext.Provider>
-            </CatalogStandInContext.Provider>
-          </CatalogContext.Provider>
-        </AccountChatContext.Provider>
-      </HistoryContext.Provider>
-    </ChatContext.Provider>
+    <HistoryContext.Provider value={lab}>
+      <AccountChatContext.Provider value={account}>
+        <CatalogContext.Provider value={catalog}>
+          <CatalogStandInContext.Provider value={standIn}>
+            <MoneyContext.Provider value={money}>{children}</MoneyContext.Provider>
+          </CatalogStandInContext.Provider>
+        </CatalogContext.Provider>
+      </AccountChatContext.Provider>
+    </HistoryContext.Provider>
   );
 }

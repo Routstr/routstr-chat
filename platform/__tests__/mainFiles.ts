@@ -1,3 +1,5 @@
+// main's file store (utils/indexedDb.ts at 4a0dd2d), kept as the test's oracle: v2 and main must
+// open each other's files. The app no longer ships it.
 import { openDB, DBSchema, IDBPDatabase } from "idb";
 
 // Constants
