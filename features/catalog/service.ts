@@ -72,6 +72,13 @@ export class CatalogService {
     return this.deps.discoveryAdapter.getRoutstr21Models();
   }
 
+  /** The mints a provider takes, as the last discovery found them. */
+  mintsOf(baseUrl: string): string[] {
+    const all = this.deps.discoveryAdapter.getCachedMints();
+    const bare = baseUrl.replace(/\/+$/, "");
+    return all[baseUrl] ?? all[bare] ?? all[`${bare}/`] ?? [];
+  }
+
   /** Providers that serve this model, cheapest first, as routing ranks them. */
   routes(modelId: string) {
     return this.deps.providerManager.getProviderPriceRankingForModel(modelId, {

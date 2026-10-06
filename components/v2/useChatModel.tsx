@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useMemo } from "react";
+import React, { createContext, useCallback, useContext, useLayoutEffect, useMemo, useRef } from "react";
 import { useCatalogModels, useCatalogService } from "@/features/catalog/view";
+import { AcceptedMintsContext } from "@/features/wallet/view";
 import type { Model } from "@/types/models";
 import { getRequiredSatsForModel } from "@/utils/modelUtils";
 import { defaultModel, pickedModel, useModelPick, type Choice } from "./pick";
@@ -23,9 +24,29 @@ function useModelOf() {
 
 const ChatModelContext = createContext<ReturnType<typeof useModelOf> | null>(null);
 
-/** Works out the model once for every screen under it. */
+/** Works out the model once for every screen under it, and tells the wallet
+ *  which mints the provider about to be paid takes, so new money lands where
+ *  it can be spent. */
 export function ChatModelProvider({ children }: { children: React.ReactNode }) {
-  return <ChatModelContext.Provider value={useModelOf()}>{children}</ChatModelContext.Provider>;
+  const value = useModelOf();
+  const catalog = useCatalogService();
+  // read when money comes in: the model and pin as they are then
+  const now = useRef(value);
+  useLayoutEffect(() => {
+    now.current = value;
+  });
+  const accepted = useCallback(() => {
+    const { model, chosen } = now.current;
+    if (!model || !catalog) return [];
+    const routes = catalog.routes(model.id);
+    const base = chatModelOf(model, chosen, routes).provider ?? routes[0]?.baseUrl;
+    return base ? catalog.mintsOf(base) : [];
+  }, [catalog]);
+  return (
+    <ChatModelContext.Provider value={value}>
+      <AcceptedMintsContext.Provider value={accepted}>{children}</AcceptedMintsContext.Provider>
+    </ChatModelContext.Provider>
+  );
 }
 
 /** The model you talk to: your pick (or a "?model=" link) as the catalogue has
