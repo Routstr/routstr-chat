@@ -1,7 +1,7 @@
 "use client";
 
 import React, { memo } from "react";
-import { renderCompanyIcon } from "@/components/chat/model-selector/display";
+import { renderCompanyIcon } from "@/components/v2/picker/display";
 import { Icon } from "../icons";
 import { satUnit } from "../format";
 import { fmt, makerOf, type Row } from "./catalog";

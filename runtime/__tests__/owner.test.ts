@@ -54,6 +54,7 @@ describe("per-person local stores", () => {
         { baseUrl: "https://p/", token: "t" },
       ]),
       transaction_history: JSON.stringify([{ amount: 8 }]),
+      api_keys: JSON.stringify([{ key: "sk-exported", balance: 5 }]),
       sats_spent_by_event: JSON.stringify({ e1: 8 }),
       pending_send_proofs_1700000000000: JSON.stringify({ tokenAmount: 8 }),
     };
@@ -69,6 +70,7 @@ describe("per-person local stores", () => {
       "lightning_invoices:alice": legacy.lightning_invoices,
       "local_cashu_tokens:alice": legacy.local_cashu_tokens,
       "transaction_history:alice": legacy.transaction_history,
+      "api_keys:alice": legacy.api_keys,
       "sats_spent_by_event:alice": legacy.sats_spent_by_event,
       "pending_send_proofs:alice_1700000000000":
         legacy.pending_send_proofs_1700000000000,

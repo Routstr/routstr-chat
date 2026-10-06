@@ -1,7 +1,9 @@
 import { useCallback } from "react";
 import { PrivateKeyAccount } from "applesauce-accounts/accounts";
-import { useAccountManager } from "@/components/ClientProviders";
-import type { AccountMetadata } from "@/features/session/service";
+import {
+  useAccountManager,
+  type AccountMetadata,
+} from "@/features/session/view";
 import { markEphemeralNsecCreated } from "@/utils/storageUtils";
 
 /** No account needed to start: the first time money arrives, a key is made on

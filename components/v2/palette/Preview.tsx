@@ -32,10 +32,10 @@ function Pane({ it, toks, q, ctx }: { it: Item; toks: string[]; q: string; ctx: 
   if (it.kind === "chat" && it.chat) return <ChatPane it={it} toks={toks} ctx={ctx} />;
   if (it.kind === "room" || it.kind === "roomjump") {
     const r = it.room!;
-    const orig = ROOMS.find((x) => x.id === (ctx.origRoom ?? ctx.roomNow));
+    const orig = ROOMS.find((x) => x.id === (ctx.origRoom.current ?? ctx.roomNow));
     const note =
       it.kind === "room"
-        ? r.id === ctx.origRoom
+        ? r.id === ctx.origRoom.current
           ? "This is your room now."
           : // shown or on its way, the same two lines from the first frame; with a filter typed, Esc
             // clears it first, so the note promises nothing about it

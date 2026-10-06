@@ -1,11 +1,20 @@
 "use client";
 
 import React, { createContext, useContext } from "react";
-import { useAuthState, UseAuthStateReturn } from "@/hooks/useAuthState";
+import { useSession } from "@/features/session/view";
 
-interface AuthContextType extends UseAuthStateReturn {}
+/* The old auth shape, now read from the session. Screens move to useSession()
+   directly; the lab fills this context with a fake to draw signed-out views. */
 
-export const AuthContext = createContext<AuthContextType | undefined>(undefined);
+interface AuthContextType {
+  isAuthenticated: boolean;
+  authChecked: boolean;
+  logout: () => Promise<void>;
+}
+
+export const AuthContext = createContext<AuthContextType | undefined>(
+  undefined
+);
 
 export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
@@ -15,19 +24,17 @@ export const useAuth = (): AuthContextType => {
   return context;
 };
 
-interface AuthProviderProps {
-  children: React.ReactNode;
-}
-
-/**
- * Authentication context provider
- * Provides user authentication state, login/logout actions,
- * session management, and authentication persistence
- */
-export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-  const authState = useAuthState();
-
+export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+  const { pubkey, ready, signOut } = useSession();
   return (
-    <AuthContext.Provider value={authState}>{children}</AuthContext.Provider>
+    <AuthContext.Provider
+      value={{
+        isAuthenticated: pubkey !== null,
+        authChecked: ready,
+        logout: signOut,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
   );
 };

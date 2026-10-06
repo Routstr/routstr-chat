@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import type { RemoteNode } from "@/utils/storageUtils";
+import type { RemoteNode } from "@/features/node/view";
 import { Icon } from "../icons";
 import { Btn, Fold, Grp, Row, Say, Sw, hostOf } from "./parts";
 

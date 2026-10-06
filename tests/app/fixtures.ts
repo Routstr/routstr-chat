@@ -15,10 +15,11 @@ export interface AppOptions {
 }
 
 export const test = base.extend<{ kit: KitClient; seal: Seal } & AppOptions>({
-  kit: async ({}, use) => use(kitClient(env)),
+  // Playwright's fixture callback, named `provide`: react-hooks lint reads `use` as React's hook
+  kit: async ({}, provide) => provide(kitClient(env)),
   appUrl: [process.env.KIT_APP_URL ?? "", { option: true }],
   seal: [
-    async ({ context, appUrl }, use, info) => {
+    async ({ context, appUrl }, provide, info) => {
       const state = await seal(context, env, appUrl);
       // what the person would have seen go wrong: page errors, console errors, toasts
       const seen: string[] = [];
@@ -54,7 +55,7 @@ export const test = base.extend<{ kit: KitClient; seal: Seal } & AppOptions>({
             }
         }).observe(document, { childList: true, subtree: true });
       });
-      await use(state);
+      await provide(state);
       if (state.blocked.length)
         info.annotations.push({
           type: "blocked",

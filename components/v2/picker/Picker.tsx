@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useChat } from "@/context/ChatProvider";
-import { useAuth } from "@/context/AuthProvider";
+import { useSession } from "@/features/session/view";
 import { getStorageItem, setStorageItem } from "@/utils/storageUtils";
 import { Icon } from "../icons";
 import { useUi } from "../ui";
@@ -52,7 +52,7 @@ export default function Picker({
   onList?: () => void;
 }) {
   const chat = useChat();
-  const { isAuthenticated } = useAuth();
+  const isAuthenticated = useSession().pubkey !== null;
   const ui = useUi();
 
   const card = useRef<HTMLDivElement>(null);

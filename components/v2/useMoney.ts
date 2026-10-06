@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useChat } from "@/context/ChatProvider";
-import { useNodePays } from "@/hooks/useRemoteNode";
+import { useNodePays } from "@/features/node/view";
 import { getPendingCashuTokenAmount } from "@/utils/cashuUtils";
 
 /** What you can spend: the wallet plus sats held in provider tokens (the same

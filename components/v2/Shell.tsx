@@ -15,28 +15,24 @@ import Palette from "./palette/Palette";
 import Settings from "./settings/Settings";
 import Greeting, { Resume } from "./Greeting";
 import { useCountUp, useMoney } from "./useMoney";
-import { useAuth } from "@/context/AuthProvider";
+import { useSession } from "@/features/session/view";
+import { useConversations, useHistoryLoaded } from "@/features/history/view";
 import { sats } from "./format";
 import { useDrawerDrag, useKeyboardInset, usePhone } from "./phone";
 
 function Panel() {
   const searchParams = useSearchParams();
   const chatIdFromUrl = searchParams.get("chatId");
-  const {
-    messages,
-    activeConversationId,
-    conversations,
-    conversationsLoaded,
-    isSyncing,
-    isSidebarCollapsed,
-    startNewConversation,
-  } = useChat();
+  const { messages, activeConversationId, startNewConversation } = useChat();
+  const conversations = useConversations();
+  const conversationsLoaded = useHistoryLoaded();
   const ui = useUi();
+  const { isSidebarCollapsed } = ui;
   const room = useRoom();
   const money = useMoney();
   // a title too long for the header fades at its end, as the drawer's titles do (never dots)
   const titleIn = useRef<HTMLSpanElement>(null);
-  const { isAuthenticated } = useAuth();
+  const isAuthenticated = useSession().pubkey !== null;
   // the same figure as the drawer's: a wait mark while it loads, then counted up
   const balWait = !money.node && money.loading && isAuthenticated;
   const shownBal = useCountUp(money.total);
@@ -44,7 +40,7 @@ function Panel() {
   const loadingFromUrl =
     !!chatIdFromUrl &&
     !(chatIdFromUrl === activeConversationId && messages.length > 0) &&
-    (!conversationsLoaded || isSyncing);
+    !conversationsLoaded;
   const empty = messages.length === 0 && !loadingFromUrl;
   // whether this new page is a first visit is decided once, when the chats have loaded, and
   // kept for the page: chats that arrive later (a sync) fade the first-run extras, they do not
@@ -195,8 +191,10 @@ function Panel() {
 }
 
 export default function Shell() {
-  const { isSidebarCollapsed, setIsSidebarCollapsed, isLoading, startNewConversation, conversations } = useChat();
+  const { isLoading, startNewConversation } = useChat();
+  const conversations = useConversations();
   const ui = useUi();
+  const { isSidebarCollapsed, setIsSidebarCollapsed } = ui;
   const room = useRoom();
   const roomEl = useRef<HTMLDivElement>(null);
   const phone = usePhone();

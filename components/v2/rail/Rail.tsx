@@ -2,7 +2,8 @@
 
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useChat } from "@/context/ChatProvider";
-import { useAuth } from "@/context/AuthProvider";
+import { useConversations, useHistoryLoaded } from "@/features/history/view";
+import { useSession } from "@/features/session/view";
 import { Icon } from "../icons";
 import { useUi } from "../ui";
 import { groupByDay } from "../format";
@@ -23,7 +24,7 @@ import { useGlide } from "./useGlide";
 import { useGutter } from "./useGutter";
 import { useListActions } from "./useListActions";
 import { useLongTitles } from "./useLongTitles";
-import { railHover } from "./railHover";
+import { useRailHover } from "./railHover";
 import { useRailKeys } from "./useRailKeys";
 import { useRailTip } from "./useRailTip";
 import { useSwipeRow } from "./useSwipeRow";
@@ -40,19 +41,17 @@ import { useUnread } from "./useUnread";
 
 export default function Rail() {
   const {
-    conversations,
     activeConversationId,
     loadConversation,
     startNewConversation,
-    deleteConversation,
-    isSidebarCollapsed,
-    setIsSidebarCollapsed,
     isLoading,
     streamingConversationId,
-    conversationsLoaded,
   } = useChat();
-  const { isAuthenticated } = useAuth();
+  const conversations = useConversations();
+  const conversationsLoaded = useHistoryLoaded();
+  const isAuthenticated = useSession().pubkey !== null;
   const ui = useUi();
+  const { isSidebarCollapsed, setIsSidebarCollapsed } = ui;
   const money = useMoney();
   const shown = useCountUp(money.total);
 
@@ -89,7 +88,6 @@ export default function Rail() {
     activeConversationId,
     loadConversation,
     startNewConversation,
-    deleteConversation,
     hideTip,
     rollBack,
     say,
@@ -131,7 +129,7 @@ export default function Rail() {
   useRailKeys({ ui, isSidebarCollapsed, setFold, turn, hideTip });
   const { swDown, swMove, swEnd, openRow, closeOpen, justSwiped } = useSwipeRow(ui);
   const { delAt, onListClick, onListKey, onListEnd } = useListActions({ list, remove, undo, open, finalise, setFocusId, openRow, closeOpen, justSwiped });
-  const { onRailOver, onRailMove, onRailOut, onListFocus, onListBlur } = railHover({ tip, folded, tipFor, armTip, hideTip, armRoll, rollBack, ringOf, delAt });
+  const { onRailOver, onRailMove, onRailOut, onListFocus, onListBlur } = useRailHover({ tip, folded, tipFor, armTip, hideTip, armRoll, rollBack, ringOf, delAt });
 
   const newCurrent = !finding && !activeConversationId;
   return (

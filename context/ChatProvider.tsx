@@ -16,12 +16,12 @@ import { useModelState, UseModelStateReturn } from "@/hooks/useModelState";
 import { useChatActions, UseChatActionsReturn } from "@/hooks/useChatActions";
 import { useCashuWithXYZ } from "@/hooks/useCashuWithXYZ";
 import { useBlossomSync } from "@/hooks/useBlossomSync";
-import { usePnsKeys } from "@/hooks/usePnsKeys";
+import { useHistoryKeys } from "@/features/history/view";
 import { useAuth } from "./AuthProvider";
 import { useAccountManager } from "@/components/ClientProviders";
 import { useObservableState } from "applesauce-react/hooks";
 import type { NostrEvent } from "nostr-tools";
-import { userPubkey$, userSigner$ } from "@/hooks/useChatSync1081";
+import { userPubkey$, userSigner$ } from "@/hooks/sync/chatSyncInputs";
 import { blobToDataUrl } from "@/utils/messageUtils";
 
 interface ChatContextType
@@ -73,7 +73,7 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     const pubkey = accountToUse.pubkey;
     userPubkey$.next(pubkey);
 
-    // Set the user signer for 1081 event decryption from applesauce account
+    // Set the user signer for the old config sync (kind 30078) from the applesauce account
     const signer = accountToUse.signer;
     if (signer?.nip44 && typeof signer.signEvent === "function") {
       userSigner$.next({
@@ -102,7 +102,7 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
   // Blossom sync for AI-generated images
   const { uploadToBlossomAsync, fetchFromBlossom, blossomSyncEnabled } =
     useBlossomSync();
-  const { pnsKeys } = usePnsKeys();
+  const pnsKeys = useHistoryKeys();
 
   // Create a stable callback for uploading generated images to Blossom
   const handleBlossomUpload = useCallback(

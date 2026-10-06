@@ -26,6 +26,8 @@ export interface Driver {
   /** make an ecash token, until it is shown; returns it */
   makeToken(page: Page, sats: number): Promise<string>;
   send(page: Page, text: string): Promise<void>;
+  /** CSS for the replies, in order (perf times text appearing in the last one, in the page) */
+  replies: string;
   /** the latest reply's text right now ("" when there is none) */
   replyText(page: Page): Promise<string>;
   /** until the latest reply contains `text` */

@@ -5,8 +5,9 @@
    pictures) without spending sats. Nothing here ships: app/lab renders only
    in development. */
 
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { ChatContext } from "@/context/ChatProvider";
+import { HistoryContext, type HistoryService } from "@/features/history/view";
 import type { Conversation, Message, MessageAttachment } from "@/types/chat";
 import type { Model } from "@/types/models";
 import { DEFAULT_MINT_URL } from "@/lib/utils";
@@ -119,16 +120,21 @@ const UNFAKED = new Proxy({}, { get: (t, k) => (k in t ? (t as Record<PropertyKe
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-export function FakeChatProvider({ children }: { children: React.ReactNode }) {
+/** The lab's chats behind the history view; app/lab builds it (labHistory.ts). */
+export type FakeHistory = HistoryService & { update(chats: Conversation[]): void };
+export interface FakeHistoryHooks {
+  remove(id: string): void;
+  sync(): Promise<void>;
+}
+
+export function FakeChatProvider({ children, history }: { children: React.ReactNode; history: (hooks: FakeHistoryHooks) => FakeHistory }) {
   const params = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : new URLSearchParams();
   const [conversations, setConversations] = useState<Conversation[]>(() => (params.get("fresh") ? [] : seed()));
   const [activeId, setActiveId] = useState<string | null>(() => (params.get("fresh") ? null : params.get("chat") ?? "c1"));
   const [messages, setMessagesState] = useState<Message[]>(() => (params.get("fresh") ? [] : (seed().find((c) => c.id === (params.get("chat") ?? "c1"))?.messages ?? [])));
   const [inputMessage, setInputMessage] = useState("");
   // Sync in the lab: busy for a moment, and one chat arrives from "another device"
-  const [syncing, setSyncing] = useState(false);
   const syncNow = useCallback(async () => {
-    setSyncing(true);
     await sleep(1600);
     setConversations((cs) =>
       cs.some((c) => c.id === "c10")
@@ -145,8 +151,17 @@ export function FakeChatProvider({ children }: { children: React.ReactNode }) {
             ...cs,
           ]
     );
-    setSyncing(false);
   }, []);
+  // the screens read chats from history: the lab's chats stand behind it
+  const [lab] = useState(() => history({ remove: (id) => setConversations((cs) => cs.filter((c) => c.id !== id)), sync: syncNow }));
+  useLayoutEffect(() => lab.update(conversations), [lab, conversations]);
+  // what the real bridge hands the screens: the branch shown, then the last request's notes
+  const slots = useSyncExternalStore(lab.subscribe, () => (activeId ? lab.getThread(activeId) : undefined), () => undefined);
+  const shown = useMemo(() => {
+    const branch = slots?.map((s) => s.displayed) ?? [];
+    const after = branch.at(-1)?._createdAt ?? 0;
+    return [...branch, ...messages.filter((m) => m.role === "system" && (m._createdAt ?? 0) > after)];
+  }, [slots, messages]);
   const [uploadedAttachments, setUploadedAttachments] = useState<MessageAttachment[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isPaymentProcessing, setIsPaymentProcessing] = useState(false);
@@ -171,10 +186,6 @@ export function FakeChatProvider({ children }: { children: React.ReactNode }) {
     const t = window.setTimeout(() => setBalance((b) => b + 1000), Number(params.get("bump")) || 4000);
     return () => window.clearTimeout(t);
   }, []);
-  const [collapsed, setCollapsed] = useState(false);
-  const [editingMessageIndex, setEditingMessageIndex] = useState<number | null>(null);
-  const [editingContent, setEditingContent] = useState("");
-  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const abort = useRef(false);
   const convRef = useRef(activeId);
   useLayoutEffect(() => {
@@ -245,24 +256,9 @@ export function FakeChatProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo(() => {
     const base = {
       __proto__: UNFAKED,
-      conversations,
-      conversationsLoaded: true,
       activeConversationId: activeId,
-      messages,
+      messages: shown,
       setMessages,
-      editingMessageIndex,
-      editingContent,
-      setEditingContent,
-      setEditingMessageIndex,
-      startEditingMessage: (i: number) => {
-        setEditingMessageIndex(i);
-        const m = messages[i];
-        setEditingContent(typeof m.content === "string" ? m.content : m.content.find((c) => c.type === "text")?.text ?? "");
-      },
-      cancelEditing: () => {
-        setEditingMessageIndex(null);
-        setEditingContent("");
-      },
       startNewConversation: () => {
         setActiveId(null);
         setMessagesState([]);
@@ -271,16 +267,8 @@ export function FakeChatProvider({ children }: { children: React.ReactNode }) {
         setActiveId(id);
         setMessagesState(conversations.find((c) => c.id === id)?.messages ?? []);
       },
-      deleteConversation: async (id: string) => {
-        setConversations((cs) => cs.filter((c) => c.id !== id));
-      },
       clearConversations: () => setConversations([]),
       getActiveConversationId: () => convRef.current,
-      isSyncing: syncing,
-      syncWithNostr: async () => {
-        await syncNow();
-        return "ok" as const;
-      },
       models: loadingModels ? [] : MODELS,
       selectedModel,
       setSelectedModel,
@@ -296,10 +284,6 @@ export function FakeChatProvider({ children }: { children: React.ReactNode }) {
       lowBalanceWarningForModel: balance <= 0,
       isSettingsOpen: false,
       setIsSettingsOpen: () => {},
-      isLoginModalOpen,
-      setIsLoginModalOpen,
-      isSidebarCollapsed: collapsed,
-      setIsSidebarCollapsed: setCollapsed,
       isSidebarOpen: false,
       setIsSidebarOpen: () => {},
       isMobile: false,
@@ -346,7 +330,7 @@ export function FakeChatProvider({ children }: { children: React.ReactNode }) {
           setActiveId(convId);
           convRef.current = convId;
         }
-        const last = [...messages].reverse().find((m) => m.role !== "system");
+        const last = [...shown].reverse().find((m) => m.role !== "system");
         const user = msg("user", inputMessage, Date.now(), { _prevId: last?._eventId });
         const next = [...messages, user];
         setInputMessage("");
@@ -355,29 +339,30 @@ export function FakeChatProvider({ children }: { children: React.ReactNode }) {
         void run(next, convId, user._eventId);
       },
       retryMessage: (index: number) => {
-        const target = messages[index];
-        const base = messages.slice(0, index);
+        const target = shown[index];
+        const base = shown.slice(0, index);
         setMessages(base);
         void run(base, activeId ?? "c1", target?._prevId);
       },
-      saveInlineEdit: async () => {
-        if (editingMessageIndex === null) return;
-        const old = messages[editingMessageIndex];
-        const edited = msg("user", editingContent, Date.now(), { _prevId: old._prevId });
-        const base = [...messages.slice(0, editingMessageIndex + 1), edited];
-        setEditingMessageIndex(null);
-        setEditingContent("");
+      saveInlineEdit: async (index: number | null, text: string, _m: Message[], _s: unknown, setIndex: (i: number | null) => void) => {
+        if (index === null) return;
+        const old = shown[index];
+        const edited = msg("user", text, Date.now(), { _prevId: old._prevId });
+        const base = [...shown.slice(0, index + 1), edited];
+        setIndex(null);
         setMessages(base);
         void run(base, activeId ?? "c1", edited._eventId);
       },
     };
     return base;
-  }, [conversations, activeId, messages, setMessages, editingMessageIndex, editingContent, selectedModel, balance, late, isLoginModalOpen, collapsed, configuredModels, inputMessage, uploadedAttachments, isLoading, isPaymentProcessing, streamingConversationId, stream, thinking, run, syncing, syncNow]);
+  }, [conversations, activeId, shown, setMessages, selectedModel, balance, late, configuredModels, inputMessage, uploadedAttachments, isLoading, isPaymentProcessing, streamingConversationId, stream, thinking, run]);
 
   const standIn = useMemo(() => ({ routes: labRoutes, picks: PICKS, currentKey }), [currentKey]);
   return (
     <ChatContext.Provider value={value as never}>
-      <CatalogStandInContext.Provider value={standIn}>{children}</CatalogStandInContext.Provider>
+      <HistoryContext.Provider value={lab}>
+        <CatalogStandInContext.Provider value={standIn}>{children}</CatalogStandInContext.Provider>
+      </HistoryContext.Provider>
     </ChatContext.Provider>
   );
 }

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
-import type { useChat } from "@/context/ChatProvider";
+import type { Conversation } from "@/types/chat";
 import { reduced } from "./helpers";
 
 export function useArrivals({
@@ -11,7 +11,7 @@ export function useArrivals({
 }: {
   list: RefObject<HTMLElement | null>;
   finding: boolean;
-  conversations: ReturnType<typeof useChat>["conversations"];
+  conversations: Conversation[];
   conversationsLoaded: boolean;
   isAuthenticated: boolean;
 }) {

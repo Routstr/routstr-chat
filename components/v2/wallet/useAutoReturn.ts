@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useChat } from "@/context/ChatProvider";
 import { useSdkCachedBalance } from "@/hooks/useSdkCachedBalance";
-import { useNodePays } from "@/hooks/useRemoteNode";
+import { useNodePays } from "@/features/node/view";
 
 /** Money a provider still holds after a reply failed comes home by itself: once the wallet has
  *  loaded, and again after each reply ends. Never while a reply runs, since its token is in use. */

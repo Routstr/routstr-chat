@@ -2,8 +2,7 @@
 
 import React, { useState } from "react";
 import { nip19 } from "nostr-tools";
-import type { Account } from "@/features/session/service";
-import { useAccountManager } from "@/components/ClientProviders";
+import { useAccountManager, type Account } from "@/features/session/view";
 import { holdsRecords, useCashuStore } from "@/features/wallet";
 import { useSwitchAccount } from "../useSwitchAccount";
 import Light from "../light/Light";

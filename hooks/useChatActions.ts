@@ -27,7 +27,7 @@ import {
 import { fetchAIResponse, consoleLogger, isTorContext } from "@routstr/sdk";
 import { toast } from "sonner";
 import { useNodePays } from "@/hooks/useRemoteNode";
-import { withNodeModeError } from "@/lib/remoteNode";
+import { withNodeModeError } from "@/features/payments/nodeErrors";
 
 export interface UseChatActionsReturn {
   inputMessage: string;
@@ -160,6 +160,10 @@ export const useChatActions = ({
   const streamingConversationIdRef = useRef<string | null>(null);
   const requestIdRef = useRef<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  // a reply hangs off its question, so it waits for the question's save
+  const questionSaved = useRef<Promise<string | null | void>>(
+    Promise.resolve(null)
+  );
   // retry/edit capture a stale performAIRequest (empty deps), so the Blossom
   // resolver is read through a ref to always use the current PNS keys.
   const onBlossomFetchRef = useRef(onBlossomFetch);
@@ -323,9 +327,10 @@ export const useChatActions = ({
       const updatedMessages = [...messages, updatedMessage];
 
       // The _prevId is already set in the userMessage from our getLastNonSystemMessagePrevId function
-      createAndStoreChatEvent(originConversationId, updatedMessage).catch(
-        console.error
-      );
+      questionSaved.current = createAndStoreChatEvent(
+        originConversationId,
+        updatedMessage
+      ).catch(console.error);
 
       setInputMessage("");
       setUploadedAttachments([]);
@@ -414,7 +419,7 @@ export const useChatActions = ({
           truncatedMessages[truncatedMessages.length - 1],
           truncatedMessages
         );
-        createAndStoreChatEvent(
+        questionSaved.current = createAndStoreChatEvent(
           originConversationId,
           truncatedMessages[truncatedMessages.length - 1]
         ).catch(console.error);
@@ -478,7 +483,12 @@ export const useChatActions = ({
       setThinkingContent("");
       setStreamingConversationId(originConversationId ?? null);
       streamingConversationIdRef.current = originConversationId ?? null;
-      let lastAppend: Promise<unknown> = Promise.resolve();
+      let lastAppend: Promise<unknown> = questionSaved.current;
+      // the question this request answers, then each reply it saved: never
+      // whatever version is on screen by the time the answer lands
+      let parent: Promise<string | null | void> = retryMessage
+        ? Promise.resolve(null)
+        : questionSaved.current;
       let retryPrevApplied = false;
       // What streamed so far: on Stop the SDK drops it and appends only
       // "Generation stopped.", so it is kept here and stored first.
@@ -504,9 +514,9 @@ export const useChatActions = ({
                   "assistant",
                 ]);
             } else {
-              prevId = getLastNonSystemMessageEventId(
-                originConversationId
-              );
+              prevId =
+                (await parent) ||
+                getLastNonSystemMessageEventId(originConversationId);
             }
 
             const updatedMessage = {
@@ -517,10 +527,11 @@ export const useChatActions = ({
             };
 
             if (originConversationId) {
-              await createAndStoreChatEvent(
+              const saved = await createAndStoreChatEvent(
                 originConversationId,
                 updatedMessage
               );
+              if (saved) parent = Promise.resolve(saved);
             }
             // Message is committed; drop the loading UI now instead of
             // holding the loader through the SDK's payment finalize.

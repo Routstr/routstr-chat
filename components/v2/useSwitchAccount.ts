@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { useAccountManager } from "@/components/ClientProviders";
+import { useAccountManager } from "@/features/session/view";
 import { useChat } from "@/context/ChatProvider";
 
 /** A switch stops a reply that is still coming and waits until it has fully

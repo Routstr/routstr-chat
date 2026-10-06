@@ -3,11 +3,11 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { nip19 } from "nostr-tools";
 import { useObservableState } from "applesauce-react/hooks";
-import { useApiKeysSync } from "@/hooks/useApiKeysSync";
-import { useAccountManager } from "@/components/ClientProviders";
-import { useChatSync } from "@/hooks/useChatSync";
+import { useExportedKeys } from "@/features/keys/view";
+import { useAccountManager } from "@/features/session/view";
+import { useSyncSetting } from "@/features/history/view";
 import { useSdkUsageHistory } from "@/features/wallet/hooks/useSdkUsageHistory";
-import { loadRemoteNode } from "@/utils/storageUtils";
+import { useNode } from "@/features/node/view";
 import { useBitcoinConnectStatus } from "@/hooks/useBitcoinConnect";
 import { Icon, type IconName } from "../icons";
 import { useUi, type SettingsSection } from "../ui";
@@ -25,7 +25,7 @@ import About from "./About";
 import Payments from "./Payments";
 import Models from "./Models";
 import Usage from "./Usage";
-import Keys, { loadKeys } from "./Keys";
+import Keys from "./Keys";
 
 /* Settings sit exactly on the rail card and the reading panel, so opening
    them moves nothing: only their contents turn over. Left, the index with
@@ -109,12 +109,7 @@ export default function Settings() {
   }
   if (!ui.settings && mounted && !leaving) setLeaving(true);
   useEffect(() => {
-    if (ui.settings) {
-      // the old keys panel is a separate chunk: fetch it now, so its page opens on the first click
-      void loadKeys();
-      return;
-    }
-    if (!mounted) return;
+    if (ui.settings || !mounted) return;
     // focus goes back to the gear as the layer leaves (from here: the layer's own timer dies with it)
     const t = window.setTimeout(() => {
       setMounted(false);
@@ -133,7 +128,8 @@ function Layer({ leaving }: { leaving: boolean }) {
   const ui = useUi();
   const room = useRoom();
   const money = useMoney();
-  const { chatSyncEnabled } = useChatSync();
+  const { node: savedNode } = useNode();
+  const [chatSyncEnabled] = useSyncSetting();
   const { manager } = useAccountManager();
   const active = useObservableState(manager.active$);
   const week = useMemo(() => Date.now() - 7 * 86_400_000, []);
@@ -191,24 +187,13 @@ function Layer({ leaving }: { leaving: boolean }) {
 
   /* ── every section's live value; a change rolls in (the signature) ──── */
   const nodeState = (() => {
-    const n = loadRemoteNode();
+    const n = savedNode;
     // saved but not paying, the node carries nothing; saved for another key, it waits for that key
     if (!n) return "Off";
     if (money.node) return "Paying";
     return active && n.pubkey !== active.pubkey ? "Other key" : "Paused";
   })();
-  // keys live in the synced store when key sync is on (the default) and an account is active
-  const keysSync = useApiKeysSync();
-  const keysN = (() => {
-    if (keysSync.cloudSyncEnabled && active) return keysSync.syncedApiKeys?.length ?? 0;
-    try {
-      const raw = typeof window !== "undefined" ? localStorage.getItem("api_keys") : null;
-      const arr = raw ? (JSON.parse(raw) as unknown[]) : [];
-      return Array.isArray(arr) ? arr.length : 0;
-    } catch {
-      return 0;
-    }
-  })();
+  const keysN = useExportedKeys().keys.length;
   // a value shows only when it tells you something; defaults and "None" stay quiet
   const values: Record<SettingsSection, string> = {
     look: room.room === "auto" ? "System" : ROOMS.find((r) => r.id === room.room)?.name ?? "",

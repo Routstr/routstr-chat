@@ -2,10 +2,10 @@
 
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useChat } from "@/context/ChatProvider";
-import { useAuth } from "@/context/AuthProvider";
-import { getModelCompanyId } from "@/components/chat/modelCompanies";
-import { renderCompanyIcon } from "@/components/chat/model-selector/display";
-import { normalizeModality } from "@/components/chat/model-selector/modality";
+import { useSession } from "@/features/session/view";
+import { getModelCompanyId } from "@/components/v2/picker/modelCompanies";
+import { renderCompanyIcon } from "@/components/v2/picker/display";
+import { normalizeModality } from "@/components/v2/picker/modality";
 import { providerManager } from "@/sdk/sharedStore";
 import { isTorContext } from "@/utils/torUtils";
 import type { MessageAttachment } from "@/types/chat";
@@ -154,10 +154,8 @@ export default function Composer({ centred }: { centred: boolean }) {
     selectedModel,
     lowBalanceWarningForModel,
     messages,
-    isLoginModalOpen,
-    setIsLoginModalOpen,
   } = chat;
-  const { isAuthenticated } = useAuth();
+  const isAuthenticated = useSession().pubkey !== null;
   const ui = useUi();
   const money = useMoney();
   const { send } = useActions();
@@ -253,13 +251,6 @@ export default function Composer({ centred }: { centred: boolean }) {
   );
   // "loading" lasts until the app has made its own pick, not just until models arrive
   const modelState = selectedModel ? "ready" : isAuthenticated && (busy || !hasPickedModel) ? "loading" : "none";
-
-  // something in the logic asked for a sign in: the composer answers it
-  useEffect(() => {
-    if (!isLoginModalOpen) return;
-    setIsLoginModalOpen(false);
-    ui.setFace("auth");
-  }, [isLoginModalOpen, setIsLoginModalOpen, ui]);
 
   // grow with the words, instantly; never animate the box a caret lives in.
   // Past the cap it scrolls, and only the edge that hides words dissolves.

@@ -6,6 +6,9 @@
 //   pnpm kit up             start the stack and print its env, until Ctrl-C
 //   pnpm kit locks          who holds and who waits for the locks: pid, worktree, command, age
 //   pnpm kit build [dir]    build a checkout's out/ (with the kit's provider address)
+//   pnpm kit mutate <file>  break the code on purpose and check the tests notice (see mutate.ts)
+//   pnpm kit perf ...       measure the app (see tests/perf/perf.ts)
+//   pnpm kit parity --main-out <dir>   the parity checks on main's build and on v2
 //
 // Shared machine rules, built in: before a step it waits until enough memory is free
 // (KIT_MIN_FREE_MB, default 1536), then takes the light lock (vitest) or the heavy lock (app
@@ -17,6 +20,12 @@ import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import {
+  restoreLeftovers,
+  runBatches,
+  type Mutation,
+  type Outcome,
+} from "./mutate";
 import { PROVIDER_ALIAS } from "./net";
 import { serveStatic } from "./services/static";
 import { envVars, startStack } from "./stack";
@@ -169,14 +178,24 @@ function run(
     stopped = sig;
     child.kill(sig);
   };
-  process.on("SIGINT", forward).on("SIGTERM", forward);
+  // SIGHUP too: a closed terminal must still restore files and release locks
+  process.on("SIGINT", forward).on("SIGTERM", forward).on("SIGHUP", forward);
   return new Promise((resolve, reject) =>
     child.on("exit", (code, signal) => {
-      process.off("SIGINT", forward).off("SIGTERM", forward);
+      process
+        .off("SIGINT", forward)
+        .off("SIGTERM", forward)
+        .off("SIGHUP", forward);
       if (stopped) reject(new Error(`stopped by ${stopped}`));
       else resolve(code ?? (signal ? 1 : 0));
     })
   );
+}
+
+/** Removes `--name value` from args and returns the value. */
+function take(args: string[], name: string): string | undefined {
+  const i = args.indexOf(`--${name}`);
+  return i < 0 ? undefined : args.splice(i, 2)[1];
 }
 
 const tsx = (script: string, args: string[]): [string, string[]] => [
@@ -263,27 +282,63 @@ async function app(args: string[]): Promise<number> {
   );
 }
 
-/** Inside the (sealed) step: stack + app server + playwright. */
+/**
+ * Inside the (sealed) step: stack + app server(s) + playwright. KIT_PW_CONFIG picks the
+ * Playwright config (default: the in-app tests); KIT_MAIN_OUT also serves main's build as
+ * KIT_MAIN_URL (parity).
+ */
 async function appInside(args: string[]): Promise<number> {
   const stack = await startStack({ log: say });
   const server = process.env.KIT_APP_URL
     ? undefined
     : await serveStatic(process.env.KIT_APP_OUT ?? path.join(ROOT, "out"));
+  const mainServer = process.env.KIT_MAIN_OUT
+    ? await serveStatic(process.env.KIT_MAIN_OUT)
+    : undefined;
+  const config = process.env.KIT_PW_CONFIG ?? "tests/app/playwright.config.ts";
   try {
     return await run(
       path.join(BIN, "playwright"),
-      ["test", "-c", "tests/app/playwright.config.ts", ...args],
+      ["test", "-c", config, ...args],
       {
         env: {
           ...envVars(stack.env),
           KIT_APP_URL: process.env.KIT_APP_URL ?? server!.url,
+          ...(mainServer ? { KIT_MAIN_URL: mainServer.url } : {}),
         },
       }
     );
   } finally {
     await server?.close();
+    await mainServer?.close();
     await stack.stop();
   }
+}
+
+/** The same checks on main's build and on v2 (this checkout's build, or --v2-out). */
+async function parity(args: string[]): Promise<number> {
+  const mainOut = take(args, "main-out");
+  if (!mainOut)
+    throw new Error("parity needs main's static build: --main-out <dir>");
+  const v2Out =
+    take(args, "v2-out") ?? (await withLock("heavy", () => build()));
+  const env = {
+    KIT_PW_CONFIG: "tests/parity/playwright.config.ts",
+    KIT_MAIN_OUT: path.resolve(mainOut),
+    KIT_APP_OUT: path.resolve(v2Out),
+  };
+  // one hold per app, so no hold runs long; v2 runs even when main fails a check
+  let code = 0;
+  for (const project of ["main", "v2"]) {
+    const projectCode = await withLock("heavy", () =>
+      run(...tsx(__filename, ["__app", "--project", project, ...args]), {
+        env,
+        sealed: true,
+      })
+    );
+    code ||= projectCode;
+  }
+  return code;
 }
 
 /** Who holds and who waits for each lock, from /proc/locks (a waiter's line starts with ->). */
@@ -363,17 +418,182 @@ async function up(): Promise<number> {
   return 0;
 }
 
+/**
+ * Runs one mutation's tests and reads their report: vitest args, or ["app", ...] for in-app
+ * tests. Those need KIT_APP_URL (a dev server, so a change to the app shows without a
+ * rebuild) or, for changes to the kit itself, KIT_APP_OUT (a build).
+ */
+async function check(args: string[]): Promise<Outcome> {
+  const report = path.join(
+    os.tmpdir(),
+    `kit-mutate-${process.pid}-${Date.now()}.json`
+  );
+  try {
+    let code: number;
+    if (args[0] !== "app") {
+      code = await run(
+        path.join(BIN, "vitest"),
+        [
+          "run",
+          "--reporter=default",
+          "--reporter=json",
+          `--outputFile.json=${report}`,
+          ...args,
+        ],
+        { sealed: true }
+      );
+    } else {
+      const appUrl = process.env.KIT_APP_URL;
+      if (!appUrl && !process.env.KIT_APP_OUT)
+        throw new Error(
+          "in-app mutations need KIT_APP_URL (a dev server) or KIT_APP_OUT (a build, for kit changes)"
+        );
+      code = await run(
+        ...tsx(__filename, ["__app", "--reporter=list,json", ...args.slice(1)]),
+        { sealed: !appUrl, env: { PLAYWRIGHT_JSON_OUTPUT_NAME: report } }
+      );
+    }
+    if (!fs.existsSync(report))
+      return { error: `no test report (exit ${code})` };
+    const r = JSON.parse(fs.readFileSync(report, "utf8"));
+    // vitest: numFailedTests; playwright: stats.unexpected. A file that could not load or a
+    // setup that crashed fails no test, so it is an error, not a catch.
+    const failed: number = r.numFailedTests ?? r.stats?.unexpected ?? 0;
+    const unloaded = (r.testResults ?? []).some(
+      (f: { status: string; assertionResults: { status: string }[] }) =>
+        f.status === "failed" &&
+        !f.assertionResults.some((a) => a.status === "failed")
+    );
+    const broken = unloaded || r.errors?.length > 0;
+    if (broken || (code !== 0 && failed === 0))
+      return { error: `the tests could not run (exit ${code})` };
+    return { failed };
+  } finally {
+    fs.rmSync(report, { force: true });
+  }
+}
+
+/**
+ * A file that is mid-mutation would make any other run lie, so refuse to run (at once, not
+ * after waiting for the lock: the mutate run may be alive and holding it, or killed).
+ */
+function refuseLeftovers() {
+  for (const dir of [ROOT, process.env.KIT_CORE_DIR]) {
+    if (!dir) continue;
+    const left = spawnSync(
+      "git",
+      ["-C", dir, "ls-files", "-o", "--exclude-standard"],
+      {
+        encoding: "utf8",
+      }
+    )
+      .stdout.split("\n")
+      .filter((f) => f.endsWith(".kit-original"));
+    if (left.length)
+      throw new Error(
+        `${left.map((f) => path.join(dir, f)).join(", ")}: a file is mid-mutation. A \`kit mutate\` run is using it (see \`kit locks\`), or one was killed: then \`kit mutate\` with its list puts the original back`
+      );
+  }
+}
+
+async function mutate(file: string): Promise<number> {
+  const mutations = JSON.parse(fs.readFileSync(file, "utf8")) as Mutation[];
+  // under the lock: another mutate run only changes files while it holds it
+  const restored = await withLock("heavy", async () =>
+    restoreLeftovers(ROOT, mutations)
+  );
+  if (restored.length)
+    say(`restored files an earlier run left mutated: ${restored.join(", ")}`);
+  refuseLeftovers(); // one that another list left
+  // the tests must pass before anything is broken, or "caught" means nothing; their time
+  // says how many mutations fit in one batch
+  const took = new Map<string, number>();
+  for (const suite of new Set(mutations.map((m) => JSON.stringify(m.test)))) {
+    const outcome = await withLock("heavy", async () => {
+      const started = Date.now(); // the run itself, not the wait for the lock
+      const outcome = await check(JSON.parse(suite));
+      took.set(suite, Date.now() - started);
+      return outcome;
+    });
+    if (!("failed" in outcome) || outcome.failed > 0)
+      throw new Error(
+        `tests fail before any mutation: ${JSON.parse(suite).join(" ")}`
+      );
+  }
+  const results = await runBatches(
+    ROOT,
+    mutations,
+    10,
+    took,
+    (fn) => withLock("heavy", fn),
+    check,
+    say
+  );
+  const missed = results.filter((r) => !r.caught);
+  say(
+    `${results.length - missed.length} of ${results.length} mutations caught${missed.length ? `; missed or errors: ${missed.map((r) => r.id).join(", ")}` : ""}`
+  );
+  return missed.length ? 1 : 0;
+}
+
+/** Perf runs, one heavy-lock hold per run so no hold gets long and each run has a quiet machine. */
+async function perf(args: string[]): Promise<number> {
+  const script = path.join(ROOT, "tests", "perf", "perf.ts");
+  if (!args.includes("--driver")) return run(...tsx(script, args)); // just a comparison table
+  const runs = Number(take(args, "runs") ?? 5);
+  const json = path.resolve(
+    take(args, "json") ?? path.join(os.tmpdir(), `kit-perf-${Date.now()}.json`)
+  );
+  const url = args.includes("--url");
+  if (url && fs.existsSync(json))
+    throw new Error(
+      "a running app (--url) has no version to check runs against: use a new --json"
+    );
+  // core alone needs no app build; its numbers still want a quiet machine (heavy lock).
+  // An app's out/ is built (or found up to date) first, so the numbers are its sources'.
+  const coreOnly = args[args.indexOf("--driver") + 1] === "core";
+  const outArg = take(args, "out");
+  const out =
+    url || coreOnly
+      ? undefined
+      : await withLock("heavy", () =>
+          build(outArg ? path.resolve(outArg, "..") : ROOT)
+        );
+  let code = 0;
+  for (let i = 0; i < runs && code === 0; i++) {
+    code = await withLock("heavy", () =>
+      run(
+        ...tsx(script, [
+          ...args,
+          "--runs",
+          "1",
+          "--json",
+          json,
+          ...(out ? ["--out", out] : []),
+        ]),
+        { sealed: !url }
+      )
+    );
+  }
+  say(`results: ${json}`);
+  return code;
+}
+
 async function main(argv: string[]): Promise<number> {
   const [command = "test", ...rest] = argv;
   if (unsealed && command !== "__app")
     say("KIT_NO_SEAL: tests run without the network seal");
   if (command === "__app") return appInside(rest);
+  if (command !== "locks" && command !== "mutate") refuseLeftovers();
   if (command === "up") return up();
   if (command === "locks") return locks();
   if (command === "build")
     return withLock("heavy", () => build(path.resolve(rest[0] ?? ROOT))).then(
       () => 0
     );
+  if (command === "mutate") return mutate(rest[0]);
+  if (command === "perf") return perf(rest);
+  if (command === "parity") return parity(rest);
   if (command !== "test") throw new Error(`unknown command ${command}`);
   const [step, ...args] = rest;
   if (step === "unit") return unit(args);

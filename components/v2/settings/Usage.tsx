@@ -2,15 +2,15 @@
 
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useChat } from "@/context/ChatProvider";
-import { useChatSync } from "@/hooks/useChatSync";
+import { useConversations, useSyncSetting } from "@/features/history/view";
 import { useObservableState } from "applesauce-react/hooks";
-import { useAccountManager } from "@/components/ClientProviders";
+import { useAccountManager } from "@/features/session/view";
 import { useSdkUsageHistory } from "@/features/wallet/hooks/useSdkUsageHistory";
 import { useTransactionHistoryStore } from "@/features/wallet/state/transactionHistoryStore";
 import { getPendingCashuTokenAmount, getPendingCashuTokenDistribution } from "@/utils/cashuUtils";
 import { getLocalCashuTokens } from "@/utils/storageUtils";
-import { renderCompanyIcon } from "@/components/chat/model-selector/display";
-import { getModelCompanyId } from "@/components/chat/modelCompanies";
+import { renderCompanyIcon } from "@/components/v2/picker/display";
+import { getModelCompanyId } from "@/components/v2/picker/modelCompanies";
 import { Icon } from "../icons";
 import { satUnit, sats, shortModelName } from "../format";
 import { tokenMs } from "../motion";
@@ -116,7 +116,7 @@ function Pager({ n, page, onPage }: { n: number; page: number; onPage: (p: numbe
 
 export default function Usage({ view: asked }: { view?: "wallet" } = {}) {
   const chat = useChat();
-  const { chatSyncEnabled } = useChatSync();
+  const [chatSyncEnabled] = useSyncSetting();
   const { manager } = useAccountManager();
   const active = useObservableState(manager.active$);
   // chats sync only with a key; then copies live on the relays too
@@ -238,7 +238,7 @@ export default function Usage({ view: asked }: { view?: "wallet" } = {}) {
 
   /* ── clearing ──────────────────────────────────────────────────────────── */
   const [ask, setAsk] = useState<"" | "log" | "pay" | "chats">("");
-  const chats = chat.conversations.length;
+  const chats = useConversations().length;
 
   return (
     <>

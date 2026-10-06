@@ -1,13 +1,15 @@
 "use client";
 
 import React from "react";
+import { readSecret } from "@/features/session/view";
 import { Icon } from "../../icons";
 import { Warn, pasteInto } from "./bits";
 import type { SignIn } from "./useSignIn";
 
 export default function KeyForm({ signIn }: { signIn: SignIn }) {
   const { wayState, setWayState, keyText, setKeyText, withKey } = signIn;
-  const npub = /^npub1/.test(keyText.trim());
+  const secret = readSecret(keyText);
+  const npub = "problem" in secret && secret.problem === "public";
   return (
     <>
       <div className="pa-form">

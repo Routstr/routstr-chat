@@ -1,0 +1,16 @@
+[
+  {
+    "id": "seal-lets-outside-requests-through",
+    "file": "tests/kit/net.ts",
+    "find": "    if (url.startsWith(\"data:\") || url.startsWith(\"blob:\") || isOurs(url))",
+    "replace": "    if (url)",
+    "test": ["app", "tests/app/seal.spec.ts"]
+  },
+  {
+    "id": "seal-drops-relay-traffic",
+    "file": "tests/kit/net.ts",
+    "find": "      if (local.readyState === WebSocket.OPEN) local.send(String(m));",
+    "replace": "      if (local.readyState === WebSocket.OPEN) void m;",
+    "test": ["app", "tests/app/seal.spec.ts"]
+  }
+]

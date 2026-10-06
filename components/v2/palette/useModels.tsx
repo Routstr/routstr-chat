@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from "react";
 import type { Model } from "@/types/models";
-import { getModelCompanyId } from "@/components/chat/modelCompanies";
-import { renderCompanyIcon } from "@/components/chat/model-selector/display";
+import { getModelCompanyId } from "@/components/v2/picker/modelCompanies";
+import { renderCompanyIcon } from "@/components/v2/picker/display";
 import { Icon } from "../icons";
 import { shortModelName } from "../format";
 import { estimateSats, promptTokens } from "../price";

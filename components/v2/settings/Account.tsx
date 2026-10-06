@@ -3,7 +3,7 @@
 import React, { useState, useSyncExternalStore } from "react";
 import { nip19 } from "nostr-tools";
 import { useObservableState } from "applesauce-react/hooks";
-import { useAccountManager } from "@/components/ClientProviders";
+import { secretOf, useAccountManager } from "@/features/session/view";
 import { writeKeyFlag } from "../wallet/bits";
 import Light from "../light/Light";
 import { Btn, Grp, Head, Row, narrow, short, useCopied } from "./parts";
@@ -39,18 +39,10 @@ export default function Account() {
       ? "Signed by your browser extension"
       : "Signed by a remote signer";
   const copyNsec = async () => {
-    try {
-      const key = (active as unknown as { signer: { key: unknown } }).signer
-        .key;
-      if (
-        key instanceof Uint8Array &&
-        (await copy(nip19.nsecEncode(key), "nsec"))
-      ) {
-        setCopiedKey(true);
-        writeKeyFlag(active.pubkey, "saved");
-      }
-    } catch {
-      // this key cannot be exported: nothing was copied, so nothing is claimed
+    const nsec = secretOf(active);
+    if (nsec && (await copy(nsec, "nsec"))) {
+      setCopiedKey(true);
+      writeKeyFlag(active.pubkey, "saved");
     }
   };
   const others = accounts.filter((a) => a.id !== active.id);
