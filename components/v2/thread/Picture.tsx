@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from
 import { createPortal } from "react-dom";
 import { downloadImageFromSrc } from "@/utils/download";
 import { Icon } from "../icons";
+import { hostOf } from "./links";
 
 /** An enclosure under your words: the picture at its own shape, 76px tall. */
 export function Thumb({ src, alt }: { src: string; alt: string }) {
@@ -68,6 +69,27 @@ export default function Picture({ src, alt, className = "" }: { src: string; alt
         />
       )}
     </figure>
+  );
+}
+
+/* A picture an answer points at on another server waits for a click: loading it would tell that
+   server your address, and the link itself can carry words from the chat. */
+export function RemotePicture({ src, alt }: { src: string; alt: string }) {
+  const [on, setOn] = useState(false);
+  if (on) return <Picture src={src} alt={alt} />;
+  const host = hostOf(src);
+  return (
+    <button type="button" className="rd-doc rd-remote" onClick={() => setOn(true)} aria-label={`Load the picture from ${host}`}>
+      <span className="rd-doc-ico" aria-hidden="true">
+        <span>IMG</span>
+      </span>
+      <span className="rd-doc-txt">
+        <span className="rd-doc-n">
+          <span className="rd-doc-h">{alt || "Picture"}</span>
+        </span>
+        <span className="rd-doc-m">{host}</span>
+      </span>
+    </button>
   );
 }
 
