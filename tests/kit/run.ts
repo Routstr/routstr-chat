@@ -4,6 +4,7 @@
 //   pnpm test unit [args]   vitest only (args go to vitest, e.g. a file filter)
 //   pnpm test app [args]    in-app tests only (args go to playwright, e.g. a file or -g name)
 //   pnpm kit up             start the stack and print its env, until Ctrl-C
+//   pnpm kit locks          who holds and who waits for the locks: pid, worktree, command, age
 //   pnpm kit build [dir]    build a checkout's out/ (with the kit's provider address)
 //
 // Shared machine rules, built in: before a step it waits until enough memory is free
@@ -285,6 +286,66 @@ async function appInside(args: string[]): Promise<number> {
   }
 }
 
+/** Who holds and who waits for each lock, from /proc/locks (a waiter's line starts with ->). */
+function locks(): number {
+  const table = fs.readFileSync("/proc/locks", "utf8").split("\n");
+  const tick = Number(
+    spawnSync("getconf", ["CLK_TCK"], { encoding: "utf8" }).stdout
+  );
+  const uptime = Number(fs.readFileSync("/proc/uptime", "utf8").split(" ")[0]);
+  const read = (pid: string, what: string) => {
+    try {
+      return what === "cwd"
+        ? fs.readlinkSync(`/proc/${pid}/cwd`)
+        : fs.readFileSync(`/proc/${pid}/${what}`, "utf8");
+    } catch {
+      return "";
+    }
+  };
+  const age = (pid: string) => {
+    const started = Number(read(pid, "stat").split(") ")[1]?.split(" ")[19]);
+    const min = Math.round((uptime - started / tick) / 60);
+    return min >= 60 ? `${Math.floor(min / 60)}h${min % 60}m` : `${min}m`;
+  };
+  // one line, and node's loader flags (tsx) left out so the script shows
+  const command = (pid: string) =>
+    read(pid, "cmdline")
+      .replace(/[\0\s]+/g, " ")
+      .replace(/^\S*\/node (--(require|import) \S+ )+/, "node ")
+      .trim();
+  say(`${Math.round(freeMb())} MB free`);
+  for (const kind of ["heavy", "light"] as const) {
+    const file = lockFile(kind);
+    if (!file) continue;
+    const inode = fs.statSync(file).ino;
+    for (const line of table) {
+      const m = line.match(
+        /^\d+:\s+(-> )?FLOCK\s+\S+\s+\S+\s+(\d+) [\da-f]+:[\da-f]+:(\d+) /
+      );
+      if (!m || Number(m[3]) !== inode) continue;
+      const pid = m[2];
+      // the kit's own holder is a bare flock: what it holds the lock for is its parent's job,
+      // and with no parent left its run has ended (it lets go the moment it gets the lock)
+      let job = command(pid);
+      if (job.endsWith("echo held; exec cat")) {
+        const parent = command(read(pid, "stat").split(") ")[1]?.split(" ")[1]);
+        job = /^(\/usr\/lib\/systemd|\/sbin\/init)/.test(parent)
+          ? "(left by a run that ended)"
+          : parent;
+      }
+      const cwd = read(pid, "cwd");
+      const inside = path.relative(path.dirname(file), cwd);
+      const where = inside.startsWith("..")
+        ? cwd.replace(os.homedir(), "~")
+        : inside || ".";
+      console.log(
+        `${kind}  ${m[1] ? "waits" : "holds"}  pid ${pid}  ${age(pid)}  ${where}  ${job.slice(0, 120)}`
+      );
+    }
+  }
+  return 0;
+}
+
 async function up(): Promise<number> {
   await waitForMemory();
   const stack = await startStack({ log: say });
@@ -308,6 +369,7 @@ async function main(argv: string[]): Promise<number> {
     say("KIT_NO_SEAL: tests run without the network seal");
   if (command === "__app") return appInside(rest);
   if (command === "up") return up();
+  if (command === "locks") return locks();
   if (command === "build")
     return withLock("heavy", () => build(path.resolve(rest[0] ?? ROOT))).then(
       () => 0
