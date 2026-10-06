@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useChat } from "@/context/ChatProvider";
+import { useOpenChat } from "../openChat";
 import { useAsking, useRun } from "@/features/chat/view";
 import { useDraft } from "../ui";
 import { useMoney } from "../useMoney";
@@ -7,7 +7,7 @@ import type { LightPulse, LightState } from "./Light";
 
 /** What the app is doing, as your light's state and its pulses (one ring each). */
 export function useLightLife(): { state: LightState; pulse: LightPulse } {
-  const { activeConversationId } = useChat();
+  const { id: activeConversationId } = useOpenChat();
   const asking = useAsking(activeConversationId);
   const run = useRun(activeConversationId);
   const { text } = useDraft();

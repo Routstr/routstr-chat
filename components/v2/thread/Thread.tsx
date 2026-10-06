@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useChat } from "@/context/ChatProvider";
+import { useOpenChat } from "../openChat";
 import { useAccountChat, useAsking, useReplyCosts } from "@/features/chat/view";
 import { useHistory, useThread, type ThreadSlot } from "@/features/history/view";
 import { useActions } from "../useActions";
@@ -22,7 +22,7 @@ const NO_SLOTS: ThreadSlot[] = [];
 
 /* ══ the thread ════════════════════════════════════════════════════════════ */
 export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) {
-  const { activeConversationId } = useChat();
+  const { id: activeConversationId } = useOpenChat();
   const { models, model: selectedModel } = useChatModel();
   // the versions picked live in history, so the model is sent the branch shown here
   const history = useHistory();

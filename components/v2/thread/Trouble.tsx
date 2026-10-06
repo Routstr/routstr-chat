@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { useChat } from "@/context/ChatProvider";
+import { useOpenChat } from "../openChat";
 import { useAsking } from "@/features/chat/view";
 import { useThread } from "@/features/history/view";
 import type { Message } from "@/types/chat";
@@ -64,7 +64,7 @@ export default function Trouble({
   /** Opens one of your messages for editing. */
   onEdit: (index: number) => void;
 }) {
-  const { activeConversationId } = useChat();
+  const { id: activeConversationId } = useOpenChat();
   const asking = useAsking(activeConversationId);
   const slots = useThread(activeConversationId);
   const { retry } = useActions();

@@ -3,7 +3,7 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useChat } from "@/context/ChatProvider";
 import { useCatalogModels } from "@/features/catalog/view";
-import { useConversations, useSyncSetting } from "@/features/history/view";
+import { useConversations, useHistory, useSyncSetting } from "@/features/history/view";
 import { useObservableState } from "applesauce-react/hooks";
 import { useAccountManager } from "@/features/session/view";
 import { useSdkUsageHistory } from "@/features/wallet/hooks/useSdkUsageHistory";
@@ -17,6 +17,7 @@ import { satUnit, sats, shortModelName } from "../format";
 import { tokenMs } from "../motion";
 import { Btn, Fold, Grp, Roll, Say, Seg, Sw, hostOf, n0, plural, useCopied, useToast } from "./parts";
 import { pairChange } from "../wallet/bits";
+import { useOpenChat } from "../openChat";
 
 /* Every request and every payment, kept only in this browser. The period's
    three numbers read at a glance; hover, focus or tap a bar and they roll to
@@ -117,6 +118,8 @@ function Pager({ n, page, onPage }: { n: number; page: number; onPage: (p: numbe
 
 export default function Usage({ view: asked }: { view?: "wallet" } = {}) {
   const chat = useChat();
+  const history = useHistory();
+  const { openNew } = useOpenChat();
   const { models } = useCatalogModels();
   const [chatSyncEnabled] = useSyncSetting();
   const { manager } = useAccountManager();
@@ -648,7 +651,8 @@ export default function Usage({ view: asked }: { view?: "wallet" } = {}) {
                   kind="warn"
                   icon="trash"
                   onClick={() => {
-                    chat.clearConversations();
+                    openNew();
+                    history?.forgetHere().catch((error) => console.error(error));
                     setAsk("");
                     toast("All chats deleted");
                   }}

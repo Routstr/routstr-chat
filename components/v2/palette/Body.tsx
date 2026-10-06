@@ -1,12 +1,12 @@
 "use client";
 
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import { useChat } from "@/context/ChatProvider";
 import { useReplyCosts } from "@/features/chat/view";
 import { useConversations, useHistoryLoaded } from "@/features/history/view";
 import type { Conversation } from "@/types/chat";
 import type { Model } from "@/types/models";
 import { useDraft, useUi } from "../ui";
+import { useOpenChat } from "../openChat";
 import { useChatModel } from "../useChatModel";
 import { useRoom, type RoomId } from "../room/RoomProvider";
 import { useMoney } from "../useMoney";
@@ -32,7 +32,7 @@ export default function Body({ closing }: { closing: boolean }) {
   const ui = useUi();
   const room = useRoom();
   const money = useMoney();
-  const { activeConversationId, loadConversation, startNewConversation } = useChat();
+  const { id: activeConversationId, open: loadConversation, openNew: startNewConversation } = useOpenChat();
   const { setText: setInputMessage } = useDraft();
   const { models, model: selectedModel } = useChatModel();
   const replyCosts = useReplyCosts();

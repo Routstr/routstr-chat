@@ -1,5 +1,5 @@
 import type React from "react";
-import type { useChat } from "@/context/ChatProvider";
+import type { OpenChat } from "../openChat";
 import type { Conversation } from "@/types/chat";
 import type { useUi } from "../ui";
 import { ROOMS, type RoomId, type useRoom } from "../room/RoomProvider";
@@ -41,7 +41,7 @@ export function runItem(
     runSync: () => Promise<void>;
     cancelPreview: () => void;
     close: (how?: Exit) => void;
-  } & Pick<ReturnType<typeof useChat>, "loadConversation" | "startNewConversation"> & { setInputMessage: (text: string) => void }
+  } & { loadConversation: OpenChat["open"]; startNewConversation: OpenChat["openNew"]; setInputMessage: (text: string) => void }
 ) {
   if (!x) return;
   if (x.kind === "action" && x.act === "room") {

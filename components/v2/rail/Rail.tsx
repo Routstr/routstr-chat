@@ -1,13 +1,13 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState } from "react";
-import { useChat } from "@/context/ChatProvider";
 import { useAnswering, useBusy } from "@/features/chat/view";
 import { useConversations, useHistoryLoaded } from "@/features/history/view";
 import { useObservableState } from "applesauce-react/hooks";
 import { useAccountManager, useSession } from "@/features/session/view";
 import { Icon } from "../icons";
 import { useUi } from "../ui";
+import { useOpenChat } from "../openChat";
 import { groupByDay } from "../format";
 import { useCountUp, useMoney } from "../useMoney";
 import { useSwitchAccount } from "../useSwitchAccount";
@@ -44,11 +44,7 @@ import { useUnread } from "./useUnread";
    is. A cut title shows the rest of itself after a still moment. */
 
 export default function Rail() {
-  const {
-    activeConversationId,
-    loadConversation,
-    startNewConversation,
-  } = useChat();
+  const { id: activeConversationId, open: loadConversation, openNew: startNewConversation } = useOpenChat();
   const liveId = useAnswering();
   const busy = useBusy();
   const conversations = useConversations();

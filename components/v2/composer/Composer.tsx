@@ -14,6 +14,7 @@ import type { Model } from "@/types/models";
 import { isModelAvailable } from "@/utils/modelUtils";
 import { Icon } from "../icons";
 import { useChipRef, useDraft, useUi } from "../ui";
+import { useOpenChat } from "../openChat";
 import { useActions } from "../useActions";
 import { useChatModel } from "../useChatModel";
 import { useMoney } from "../useMoney";
@@ -143,7 +144,8 @@ function Tile({ a, reading, onRemove, onTip }: { a: MessageAttachment; reading: 
 }
 
 export default function Composer({ centred }: { centred: boolean }) {
-  const { activeConversationId, isWalletLoading } = useChat();
+  const { isWalletLoading } = useChat();
+  const { id: activeConversationId } = useOpenChat();
   const { text: inputMessage, setText: setInputMessage, attachments: uploadedAttachments, setAttachments: setUploadedAttachments } = useDraft();
   const { model: selectedModel, chosen, loading: isLoadingModels } = useChatModel();
   const catalog = useCatalogService();

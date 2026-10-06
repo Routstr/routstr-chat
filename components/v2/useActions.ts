@@ -1,6 +1,6 @@
 import { useCallback, useRef } from "react";
 import { toast } from "sonner";
-import { useChat } from "@/context/ChatProvider";
+import { useOpenChat } from "./openChat";
 import { useCatalogService } from "@/features/catalog/view";
 import { useHistory } from "@/features/history/view";
 import { editedOf, questionOf, useAccountChat, type AccountChatView, type ChatModel } from "@/features/chat/view";
@@ -17,7 +17,7 @@ export function useActions() {
   const history = useHistory();
   const catalog = useCatalogService();
   const { model, chosen } = useChatModel();
-  const { activeConversationId, getActiveConversationId, loadConversation } = useChat();
+  const { id: activeConversationId, current: getActiveConversationId, open: loadConversation } = useOpenChat();
   const draft = useDraft();
   const { setFace } = useUi();
   // a new chat has no id to claim until its question is in: a second Enter waits

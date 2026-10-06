@@ -8,13 +8,13 @@ import { AuthProvider } from "@/context/AuthProvider";
 import { useSession } from "@/features/session/view";
 import { ChatProvider, useChat } from "@/context/ChatProvider";
 import { useAccountChat, useAnswering } from "@/features/chat/view";
-import { useConversations, useHistoryLoaded } from "@/features/history/view";
 import { KeepAliveProvider, useKeepAliveContext } from "@/components/pwa/KeepAliveProvider";
 import { QueryTimeoutModal } from "@/components/QueryTimeoutModal";
 import { useCashuToken, useCashuWallet } from "@/features/wallet";
 import { useAutoRefill } from "@/hooks/useAutoRefill";
 import { RoomProvider } from "./room/RoomProvider";
 import { UiProvider, useUi } from "./ui";
+import { OpenChatProvider, useOpenChat } from "./openChat";
 import { useEnsureAccount } from "./useEnsureAccount";
 import Shell from "./Shell";
 import Boot from "./Boot";
@@ -29,11 +29,10 @@ function Behaviour() {
   const searchParams = useSearchParams();
   const { pubkey, ready: authChecked } = useSession();
   const isAuthenticated = pubkey !== null;
-  const { balance, loadConversation, activeConversationId } = useChat();
+  const { balance } = useChat();
+  const { id: openId } = useOpenChat();
   const isStreaming = useAnswering() !== null;
   const accountChat = useAccountChat();
-  const conversations = useConversations();
-  const conversationsLoaded = useHistoryLoaded();
   const ui = useUi();
   const { startKeepAlive, stopKeepAlive, isEnabled: keepAliveEnabled } = useKeepAliveContext();
   const {
@@ -57,10 +56,9 @@ function Behaviour() {
   useAutoRefill({ balance, isWalletLoaded: !isWalletLoading });
 
   // leaving a chat hands back what providers still hold for this account
-  useEffect(() => accountChat?.viewing(activeConversationId), [accountChat, activeConversationId]);
+  useEffect(() => accountChat?.viewing(openId), [accountChat, openId]);
 
   const qs = searchParams.toString();
-  const chatIdFromUrl = searchParams.get("chatId");
   const replaceQuery = (mutate: (p: URLSearchParams) => void) => {
     const p = new URLSearchParams(qs);
     mutate(p);
@@ -99,42 +97,6 @@ function Behaviour() {
     })();
   }, [authChecked, cashuParam, isAuthenticated, isWalletLoading]);
 
-  // the open chat lives in the address bar, both ways
-  const pendingUrlSync = useRef(false);
-  const prevActive = useRef<string | null>(null);
-  useEffect(() => {
-    const previous = prevActive.current;
-    prevActive.current = activeConversationId;
-    if (!activeConversationId) {
-      if (chatIdFromUrl && previous) {
-        pendingUrlSync.current = true;
-        replaceQuery((p) => p.delete("chatId"));
-      }
-      return;
-    }
-    if (chatIdFromUrl === activeConversationId) return;
-    pendingUrlSync.current = true;
-    replaceQuery((p) => p.set("chatId", activeConversationId));
-  }, [activeConversationId, chatIdFromUrl]);
-
-  useEffect(() => {
-    if (!chatIdFromUrl || pendingUrlSync.current || !conversationsLoaded) return;
-    if (chatIdFromUrl === activeConversationId) return;
-    if (conversations.some((c) => c.id === chatIdFromUrl)) {
-      loadConversation(chatIdFromUrl);
-      return;
-    }
-    // unknown id: fall back to the latest chat, but only once there are chats
-    if (conversations.length > 0) loadConversation(conversations[0].id);
-  }, [chatIdFromUrl, conversations, conversationsLoaded, activeConversationId, loadConversation]);
-
-  useEffect(() => {
-    if (!pendingUrlSync.current) return;
-    if (activeConversationId ? chatIdFromUrl === activeConversationId : !chatIdFromUrl) {
-      pendingUrlSync.current = false;
-    }
-  }, [chatIdFromUrl, activeConversationId]);
-
   return (
     <div className="legacy">
       <QueryTimeoutModal
@@ -156,8 +118,10 @@ function Content() {
     <>
       {authChecked && (
         <UiProvider>
-          <Shell />
-          <Behaviour />
+          <OpenChatProvider>
+            <Shell />
+            <Behaviour />
+          </OpenChatProvider>
         </UiProvider>
       )}
       {!booted && <Boot ready={authChecked} onDone={() => setBooted(true)} />}

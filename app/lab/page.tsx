@@ -5,6 +5,7 @@ import { AccountContext, useAccountManager } from "@/features/session/view";
 import type { SessionService } from "@/features/session/service";
 import { RoomProvider } from "@/components/v2/room/RoomProvider";
 import { UiProvider } from "@/components/v2/ui";
+import { OpenChatProvider } from "@/components/v2/openChat";
 import { FakeChatProvider } from "@/components/v2/lab/FakeChat";
 import { labHistory } from "./labHistory";
 import { labCatalog, labChat } from "./labChat";
@@ -50,8 +51,11 @@ export default function Lab() {
         <AccountContext.Provider value={account}>
           <FakeChatProvider history={labHistory} chat={(history) => labChat(history, params)} catalog={catalog}>
             <UiProvider>
-              <Shell />
-              <LabBoot />
+              {/* the lab names its chat with ?chat= and leaves the address alone */}
+              <OpenChatProvider initial={new URLSearchParams(window.location.search).get("chat")}>
+                <Shell />
+                <LabBoot />
+              </OpenChatProvider>
             </UiProvider>
           </FakeChatProvider>
         </AccountContext.Provider>

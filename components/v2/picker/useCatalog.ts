@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useMemo } from "react";
-import { useChat } from "@/context/ChatProvider";
+import { useOpenChat } from "../openChat";
 import { useCatalogService } from "@/features/catalog/view";
 import { useThread } from "@/features/history/view";
 import type { Model } from "@/types/models";
@@ -36,7 +36,7 @@ const needOf = (m: Model) => {
 export function useCatalog() {
   const catalog = useCatalogService();
   const { models: all, model: selectedModel, pins, configured, chosen } = useChatModel();
-  const slots = useThread(useChat().activeConversationId);
+  const slots = useThread(useOpenChat().id);
   const { text } = useDraft();
   const standIn = useContext(CatalogStandInContext);
   const money = useMoney();

@@ -1,12 +1,11 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
-import type { useChat } from "@/context/ChatProvider";
+import type { OpenChat } from "../openChat";
 import { useHistory } from "@/features/history/view";
 import type { Conversation } from "@/types/chat";
 import { tokenMs } from "../motion";
 import { reduced } from "./helpers";
 import type { Gone } from "./Row";
 
-type Chat = ReturnType<typeof useChat>;
 
 const UNDO_MS = 5000;
 
@@ -24,9 +23,9 @@ export function useUndoDelete({
 }: {
   root: RefObject<HTMLElement | null>;
   conversations: Conversation[];
-  activeConversationId: Chat["activeConversationId"];
-  loadConversation: Chat["loadConversation"];
-  startNewConversation: Chat["startNewConversation"];
+  activeConversationId: OpenChat["id"];
+  loadConversation: OpenChat["open"];
+  startNewConversation: OpenChat["openNew"];
   hideTip: (now?: boolean) => void;
   rollBack: (only?: Element) => void;
   say: (t: string) => void;
