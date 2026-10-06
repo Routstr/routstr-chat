@@ -6,7 +6,6 @@ import prettier from "eslint-config-prettier/flat";
 // goes away with the old hooks, and the rule below then has no exceptions.
 const LEGACY = [
   "./components/QueryTimeoutModal.tsx",
-  "./components/settings/ApiKeysTab.tsx",
   "./components/chat/model-selector/display.tsx",
   "./components/chat/model-selector/modality.ts",
   "./components/chat/model-selector/useModelPricing.ts",
@@ -22,7 +21,6 @@ const LEGACY = [
   "./features/wallet/index.ts",
   "./features/wallet/state/transactionHistoryStore.ts",
   "./features/wallet/state/unclaimedTokensStore.ts",
-  "./hooks/useApiKeysSync.ts",
   "./hooks/useAppContext.ts",
   "./hooks/useAutoRefill.ts",
   "./hooks/useBitcoinConnect.tsx",
