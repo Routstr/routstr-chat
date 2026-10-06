@@ -35,7 +35,7 @@ const total = (proofs: Pick<Proof, "amount">[]) =>
 
 /** Whole sats: an msat amount is rounded down, never up, and a unit that is
  *  not bitcoin (usd, eur) is worth none. */
-const toSats = (amount: number, unit: string) =>
+export const toSats = (amount: number, unit: string) =>
   unit === "sat" ? amount : unit === "msat" ? Math.floor(amount / 1000) : 0;
 
 /** Spendable sats per mint: each unit's coins added up first, then rounded. */
