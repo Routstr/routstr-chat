@@ -39,7 +39,7 @@ describe("SessionService", () => {
   it("restores the saved accounts and the active one at boot", () => {
     const first = new SessionService();
     const storage = memory();
-    first.boot(storage, savedCopy().saved);
+    first.boot(storage, savedCopy().saved, () => first.settle());
     const alice = key();
     const bob = key();
     first.add(alice, "Alice");
@@ -47,7 +47,9 @@ describe("SessionService", () => {
     first.switchTo(alice.id);
 
     const next = new SessionService();
-    next.boot(memory(Object.fromEntries(storage.data)), savedCopy().saved);
+    next.boot(memory(Object.fromEntries(storage.data)), savedCopy().saved, () =>
+      next.settle()
+    );
     expect(next.accounts.accounts$.value.map((a) => a.pubkey)).toEqual([
       alice.pubkey,
       bob.pubkey,
@@ -64,7 +66,7 @@ describe("SessionService", () => {
 
   it("keeps the lifetime when a first account is adopted, and bumps it on every change after", () => {
     const session = new SessionService();
-    session.boot(memory(), savedCopy().saved);
+    session.boot(memory(), savedCopy().saved, () => session.settle());
     const alice = key();
     const bob = key();
 
@@ -99,7 +101,7 @@ describe("SessionService", () => {
 
   it("tells its listeners before anything else that watches the active account", () => {
     const session = new SessionService();
-    session.boot(memory(), savedCopy().saved);
+    session.boot(memory(), savedCopy().saved, () => session.settle());
     const order: string[] = [];
     session.subscribe(() =>
       order.push(`session ${session.getSnapshot().pubkey}`)
@@ -118,7 +120,7 @@ describe("SessionService", () => {
     const storage = memory();
     const { saved } = savedCopy();
     const first = new SessionService();
-    first.boot(storage, saved);
+    first.boot(storage, saved, () => first.settle());
     await settle();
     const alice = key();
     const bob = key();
@@ -137,7 +139,7 @@ describe("SessionService", () => {
     // closed: the next start reads the saved copy
     mainSignOut(storage);
     const next = new SessionService();
-    next.boot(storage, saved);
+    next.boot(storage, saved, () => next.settle());
     expect(next.getSnapshot().pubkey).toBeNull();
     await settle();
     expect(next.accounts.accounts$.value.map((a) => a.pubkey)).toEqual([
@@ -152,7 +154,7 @@ describe("SessionService", () => {
     const storage = memory();
     const { saved, data } = savedCopy();
     const first = new SessionService();
-    first.boot(storage, saved);
+    first.boot(storage, saved, () => first.settle());
     await settle();
     const alice = key();
     first.add(alice);
@@ -162,7 +164,7 @@ describe("SessionService", () => {
     const carol = key();
     storage.setItem("accounts", JSON.stringify([carol.toJSON()]));
     const next = new SessionService();
-    next.boot(storage, saved);
+    next.boot(storage, saved, () => next.settle());
     await settle();
     expect(next.accounts.accounts$.value.map((a) => a.pubkey)).toEqual([
       carol.pubkey,
@@ -187,7 +189,7 @@ describe("SessionService", () => {
     const session = new SessionService();
     storage.setItem("accounts", JSON.stringify([alice.toJSON(), bob.toJSON()]));
     storage.setItem("activeAccount", alice.id);
-    session.boot(storage, late);
+    session.boot(storage, late, () => session.settle());
     // signed out of alice before the saved copy came in
     session.remove(alice.id);
     // and another tab added carol to the mirror
@@ -210,9 +212,9 @@ describe("SessionService", () => {
     const storage = memory();
     const { saved, data } = savedCopy();
     const guest = new SessionService();
-    guest.boot(storage, saved);
+    guest.boot(storage, saved, () => guest.settle());
     const other = new SessionService();
-    other.boot(storage, saved);
+    other.boot(storage, saved, () => other.settle());
     await settle();
 
     // a ?cashu= link opens in the other tab, which makes a key for its coins
@@ -234,9 +236,9 @@ describe("SessionService", () => {
     const storage = memory();
     const { saved, data } = savedCopy();
     const one = new SessionService();
-    one.boot(storage, saved);
+    one.boot(storage, saved, () => one.settle());
     const two = new SessionService();
-    two.boot(storage, saved);
+    two.boot(storage, saved, () => two.settle());
     await settle();
     const alice = key();
     const bob = key();
@@ -267,11 +269,61 @@ describe("SessionService", () => {
     expect(one.accounts.accounts$.value.map((a) => a.id)).toEqual(ids);
   });
 
+  it("leaves every switch another tab causes to the root, and nothing follows before it switches", async () => {
+    const storage = memory();
+    const { saved } = savedCopy();
+    let asked = 0;
+    const one = new SessionService();
+    one.boot(storage, saved, () => asked++);
+    const two = new SessionService();
+    two.boot(storage, saved, () => two.settle());
+    await settle();
+    const alice = key();
+    const bob = key();
+    two.add(alice);
+    two.add(bob);
+    await settle();
+
+    // a guest tab takes the key in use elsewhere through the root as well
+    one.refresh();
+    await settle();
+    expect(asked).toBe(1);
+    expect(one.getSnapshot().pubkey).toBeNull();
+    one.settle();
+    expect(one.getSnapshot().pubkey).toBe(bob.pubkey);
+    // asked again with nothing to change, it stays
+    one.settle();
+    expect(one.getSnapshot().pubkey).toBe(bob.pubkey);
+
+    const moves: (string | null)[] = [];
+    one.subscribe(() => moves.push(one.getSnapshot().pubkey));
+    two.remove(bob.id);
+    await settle();
+    one.refresh();
+    await settle();
+    expect(asked).toBe(2);
+    expect(one.getSnapshot().pubkey).toBe(bob.pubkey);
+    expect(moves).toEqual([]);
+
+    one.settle();
+    expect(moves).toEqual([alice.pubkey]);
+    expect(one.accounts.accounts$.value.map((a) => a.id)).toEqual([alice.id]);
+    one.settle();
+    expect(moves).toEqual([alice.pubkey]);
+
+    // this tab's own sign-out takes the same path
+    one.remove(alice.id);
+    expect(asked).toBe(3);
+    expect(one.getSnapshot().pubkey).toBe(alice.pubkey);
+    one.settle();
+    expect(one.getSnapshot().pubkey).toBeNull();
+  });
+
   it("never signs back in to the last key signed out of, even from a main tab's stale list", async () => {
     const storage = memory();
     const { saved } = savedCopy();
     const first = new SessionService();
-    first.boot(storage, saved);
+    first.boot(storage, saved, () => first.settle());
     await settle();
     const alice = key();
     first.add(alice);
@@ -282,7 +334,7 @@ describe("SessionService", () => {
     // a main tab that still had alice writes its list
     storage.setItem("accounts", JSON.stringify([alice.toJSON()]));
     const next = new SessionService();
-    next.boot(storage, saved);
+    next.boot(storage, saved, () => next.settle());
     await settle();
     expect(next.getSnapshot().pubkey).toBeNull();
   });
@@ -291,7 +343,7 @@ describe("SessionService", () => {
     const storage = memory();
     const { saved, data } = savedCopy();
     const session = new SessionService();
-    session.boot(storage, saved);
+    session.boot(storage, saved, () => session.settle());
     await settle();
 
     const alice = key();
@@ -309,9 +361,9 @@ describe("SessionService", () => {
     const storage = memory();
     const { saved, data } = savedCopy();
     const one = new SessionService();
-    one.boot(storage, saved);
+    one.boot(storage, saved, () => one.settle());
     const two = new SessionService();
-    two.boot(storage, saved);
+    two.boot(storage, saved, () => two.settle());
     await settle();
 
     // the next write to IndexedDB hangs until let go
@@ -344,7 +396,7 @@ describe("SessionService", () => {
     const storage = memory();
     const { saved, data } = savedCopy();
     const session = new SessionService();
-    session.boot(storage, saved);
+    session.boot(storage, saved, () => session.settle());
     await settle();
     storage.setItem = () => {
       throw new DOMException("full", "QuotaExceededError");

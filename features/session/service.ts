@@ -23,6 +23,10 @@ export interface Session {
 }
 
 type KeyValueStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
+/** The root's one switch path, called when the account in use has to change
+ *  without a screen asking: the root stops that account's work (chat's, once
+ *  it is built there), then calls `settle()`, which picks where to go then. */
+export type Switcher = () => void;
 type SavedAccounts = ReturnType<AccountManager["toJSON"]>;
 
 const ACCOUNTS_KEY = "accounts";
@@ -53,6 +57,7 @@ export class SessionService {
   private listeners = new Set<() => void>();
   private storage!: KeyValueStorage;
   private saved!: Saved;
+  private switcher!: Switcher;
   // removed in this tab or another: a stored copy read later must not bring
   // them back
   private readonly gone = new Set<string>();
@@ -60,6 +65,8 @@ export class SessionService {
   // is its own and not written yet, so it joins the list; one it has, and the
   // list no longer has, was removed in another tab, so it is gone here too
   private seen = new Set<string>();
+  // the account in use in the stored list, for a tab that has none
+  private storedActive: string | null = null;
 
   constructor() {
     registerCommonAccountTypes(this.manager);
@@ -73,13 +80,15 @@ export class SessionService {
    *  there is no account. The mirror in `storage` is read at once; accounts
    *  only the `saved` copy still has (the mirror was wiped) come back when it
    *  has been read. */
-  boot(storage: KeyValueStorage, saved: Saved): void {
+  boot(storage: KeyValueStorage, saved: Saved, switcher: Switcher): void {
     this.storage = storage;
     this.saved = saved;
-    this.load(
-      parse(storage.getItem(ACCOUNTS_KEY)),
-      storage.getItem(ACTIVE_KEY)
-    );
+    this.switcher = switcher;
+    this.manager.fromJSON(parse(storage.getItem(ACCOUNTS_KEY)));
+    const activeId = storage.getItem(ACTIVE_KEY);
+    if (activeId && this.manager.getAccount(activeId)) {
+      this.manager.setActive(activeId);
+    }
     this.manager.active$.subscribe((account) => {
       if (account) this.saveActive(account.id);
       this.update(account);
@@ -114,8 +123,39 @@ export class SessionService {
     this.manager.setActive(id);
   }
 
-  /** Removing the active account moves to the next one first, so a removal
-   *  never leaves accounts with none in use. */
+  /** The root calls this once the work of the account in use has stopped.
+   *  Off an account that was removed, to the next one or to none; a tab with
+   *  none in use takes the stored one. Otherwise it does nothing, so asking
+   *  twice is safe. */
+  settle(): void {
+    const active = this.manager.active$.value;
+    if (active && this.gone.has(active.id)) {
+      const next = this.manager.accounts$.value.find(
+        (a) => !this.gone.has(a.id)
+      );
+      if (next) this.manager.setActive(next);
+      else {
+        this.manager.clearActive();
+        // none left: a main tab's stale list must not sign it back in
+        this.storage.removeItem(ACTIVE_KEY);
+        this.saved.delete(ACTIVE_KEY).catch(report);
+      }
+    } else if (
+      !active &&
+      this.storedActive &&
+      this.seen.has(this.storedActive)
+    ) {
+      this.manager.setActive(this.storedActive);
+    }
+    // removed while in use: it leaves once nothing uses it
+    const now = this.manager.active$.value?.id;
+    for (const a of this.manager.accounts$.value) {
+      if (this.gone.has(a.id) && a.id !== now) this.manager.removeAccount(a.id);
+    }
+  }
+
+  /** Removing the account in use asks the root to move off it, to the next
+   *  one, so a removal never leaves accounts with none in use. */
   remove(id: string): void {
     this.gone.add(id);
     this.leave(id);
@@ -123,16 +163,10 @@ export class SessionService {
   }
 
   private leave(id: string): void {
-    const next = this.manager.accounts$.value.find((a) => !this.gone.has(a.id));
-    if (this.manager.active$.value?.id === id) {
-      if (next) this.manager.setActive(next);
-      // the last one: a stale list from a main tab must not sign it back in
-      else {
-        this.storage.removeItem(ACTIVE_KEY);
-        this.saved.delete(ACTIVE_KEY).catch(report);
-      }
+    if (this.manager.active$.value?.id !== id) {
+      return this.manager.removeAccount(id);
     }
-    this.manager.removeAccount(id);
+    this.switcher();
   }
 
   /** Under a lock every tab shares, so no tab writes over another's change. */
@@ -160,23 +194,20 @@ export class SessionService {
     const json = JSON.stringify(list);
     mirrorTo(this.storage, ACCOUNTS_KEY, json);
     this.seen = new Set(list.map((a) => a.id));
-    this.load(list, activeId ?? this.storage.getItem(ACTIVE_KEY));
+    this.manager.fromJSON(list);
     // removed in another tab
     const out = this.manager.accounts$.value.filter(
       (a) => !this.seen.has(a.id)
     );
     out.forEach((a) => this.gone.add(a.id));
     out.forEach((a) => this.leave(a.id));
-    if (json !== saved) await this.saved.put(ACCOUNTS_KEY, json);
-  }
-
-  /** Takes in accounts this tab does not have yet, and makes the given one
-   *  active when none is. */
-  private load(accounts: SavedAccounts, activeId: string | null): void {
-    this.manager.fromJSON(accounts.filter((a) => !this.gone.has(a.id)));
-    if (!this.manager.active$.value && activeId) {
-      if (this.manager.getAccount(activeId)) this.manager.setActive(activeId);
+    // a tab with none in use takes the stored one, also through the root
+    const stored = activeId ?? this.storage.getItem(ACTIVE_KEY);
+    this.storedActive = stored;
+    if (!this.manager.active$.value && stored && this.seen.has(stored)) {
+      this.switcher();
     }
+    if (json !== saved) await this.saved.put(ACCOUNTS_KEY, json);
   }
 
   private saveActive(id: string): void {

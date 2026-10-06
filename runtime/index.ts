@@ -1,4 +1,4 @@
-import { SessionService } from "@/features/session/service";
+import { SessionService, type Switcher } from "@/features/session/service";
 import { savedInIndexedDB } from "@/features/session/saved";
 import { bindOwner } from "./owner";
 import { relays } from "./nostr";
@@ -9,7 +9,11 @@ import { startKeys } from "./keys";
 export const session = new SessionService();
 
 if (typeof window !== "undefined") {
-  session.boot(window.localStorage, savedInIndexedDB());
+  // The one switch path. The account's chat will stop here first, once the
+  // chat engine is built here (and settle runs even if that fails); history
+  // and keys follow the session after it.
+  const switchAccount: Switcher = () => session.settle();
+  session.boot(window.localStorage, savedInIndexedDB(), switchAccount);
   // another tab added or removed an account, or a main tab from before the
   // update cleared localStorage when someone signed out there
   window.addEventListener("storage", (event) => {
