@@ -67,6 +67,8 @@ export class SessionService {
   private seen = new Set<string>();
   // the account in use in the stored list, for a tab that has none
   private storedActive: string | null = null;
+  // a key just signed in with, waiting for the root's switch
+  private wanted: string | null = null;
 
   constructor() {
     registerCommonAccountTypes(this.manager);
@@ -104,12 +106,12 @@ export class SessionService {
     this.sync().catch(report);
   }
 
-  /** Adds an account and makes it the active one. It is on the mirror at
-   *  once, so a reload right after keeps it. */
+  /** Adds an account; the root makes it the one in use once the current
+   *  one's work has stopped. It is on the mirror at once, so a reload right
+   *  after keeps it. */
   add(account: Account, name?: string): void {
     if (name) account.metadata = { name };
     this.manager.addAccount(account);
-    this.manager.setActive(account);
     const mirror = parse(this.storage.getItem(ACCOUNTS_KEY));
     mirrorTo(
       this.storage,
@@ -117,6 +119,8 @@ export class SessionService {
       JSON.stringify(merge(mirror, [account.toJSON()]))
     );
     this.sync().catch(report);
+    this.wanted = account.id;
+    this.switcher();
   }
 
   switchTo(id: string): void {
@@ -124,12 +128,16 @@ export class SessionService {
   }
 
   /** The root calls this once the work of the account in use has stopped.
-   *  Off an account that was removed, to the next one or to none; a tab with
-   *  none in use takes the stored one. Otherwise it does nothing, so asking
-   *  twice is safe. */
+   *  To a key just signed in with; else off an account that was removed, to
+   *  the next one or to none; else a tab with none in use takes the stored
+   *  one. Otherwise it does nothing, so asking twice is safe. */
   settle(): void {
     const active = this.manager.active$.value;
-    if (active && this.gone.has(active.id)) {
+    const wanted = this.wanted;
+    this.wanted = null;
+    if (wanted && this.manager.getAccount(wanted) && !this.gone.has(wanted)) {
+      this.manager.setActive(wanted);
+    } else if (active && this.gone.has(active.id)) {
       const next = this.manager.accounts$.value.find(
         (a) => !this.gone.has(a.id)
       );

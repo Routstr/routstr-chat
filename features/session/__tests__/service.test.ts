@@ -269,7 +269,7 @@ describe("SessionService", () => {
     expect(one.accounts.accounts$.value.map((a) => a.id)).toEqual(ids);
   });
 
-  it("leaves every switch another tab causes to the root, and nothing follows before it switches", async () => {
+  it("leaves every switch to the root (another tab, a sign-in, a sign-out), and nothing follows before it switches", async () => {
     const storage = memory();
     const { saved } = savedCopy();
     let asked = 0;
@@ -311,12 +311,24 @@ describe("SessionService", () => {
     one.settle();
     expect(moves).toEqual([alice.pubkey]);
 
-    // this tab's own sign-out takes the same path
-    one.remove(alice.id);
+    // a key signed in with here waits for the root as well
+    const carol = key();
+    one.add(carol);
     expect(asked).toBe(3);
     expect(one.getSnapshot().pubkey).toBe(alice.pubkey);
+    expect(one.accounts.accounts$.value.map((a) => a.id)).toContain(carol.id);
     one.settle();
-    expect(one.getSnapshot().pubkey).toBeNull();
+    expect(one.getSnapshot().pubkey).toBe(carol.pubkey);
+    one.switchTo(alice.id);
+    one.settle();
+    expect(one.getSnapshot().pubkey).toBe(alice.pubkey);
+
+    // this tab's own sign-out takes the same path
+    one.remove(alice.id);
+    expect(asked).toBe(4);
+    expect(one.getSnapshot().pubkey).toBe(alice.pubkey);
+    one.settle();
+    expect(one.getSnapshot().pubkey).toBe(carol.pubkey);
   });
 
   it("never signs back in to the last key signed out of, even from a main tab's stale list", async () => {
