@@ -2,6 +2,7 @@
 // charging and refunding real coins through the fake upstream.
 import { getEncodedToken, type Proof } from "@cashu/cashu-ts";
 import { finalizeEvent, generateSecretKey } from "nostr-tools";
+import { Relay } from "applesauce-relay";
 import WebSocket from "ws";
 import { describe, expect, it } from "vitest";
 import { getKit } from "..";
@@ -112,6 +113,27 @@ describe("relay", () => {
       await kit.relay.down(false);
     }
     expect(await kit.relay.events()).toEqual([]);
+  });
+
+  it("tells a negentropy (NIP-77) client exactly which events it is missing", async () => {
+    await kit.relay.reset();
+    const sk = generateSecretKey();
+    const notes = [1, 2, 3].map((n) =>
+      finalizeEvent(
+        { kind: 1080, created_at: 100 + n, tags: [], content: `n${n}` },
+        sk
+      )
+    );
+    await kit.relay.seed(notes);
+    const relay = new Relay(kit.env.relayUrl);
+    let need: string[] = [];
+    await relay.negentropy(
+      [notes[0]],
+      { kinds: [1080] },
+      async (_have, missing) => void (need = missing)
+    );
+    relay.close();
+    expect(need.sort()).toEqual([notes[1].id, notes[2].id].sort());
   });
 
   it("forgets what its author deleted, and refuses it back", async () => {
