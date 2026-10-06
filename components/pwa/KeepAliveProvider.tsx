@@ -4,7 +4,6 @@ import {
   createContext,
   useContext,
   useState,
-  useEffect,
   useCallback,
   ReactNode,
 } from "react";
@@ -46,13 +45,9 @@ export function useKeepAliveContext() {
  * When enabled, it will only activate during inference (when startKeepAlive is called).
  */
 export function KeepAliveProvider({ children }: { children: ReactNode }) {
-  const [isEnabled, setIsEnabled] = useState(false);
+  // the setting, read once (false where there is no storage, as in the static render)
+  const [isEnabled] = useState(loadKeepAliveEnabled);
   const [shouldBeActive, setShouldBeActive] = useState(false);
-
-  useEffect(() => {
-    // Load setting from localStorage after mount (client-side only)
-    setIsEnabled(loadKeepAliveEnabled());
-  }, []);
 
   // Only pass enabled=true to useKeepAlive when both:
   // 1. Feature is enabled in settings

@@ -194,13 +194,9 @@ export function useKeepAlive(enabled: boolean = false) {
   }, []);
 
   // Auto-start on first user interaction (required by mobile browsers)
-  // Only if enabled is true
+  // Only if enabled is true; whoever turns it off calls stop()
   useEffect(() => {
-    if (!enabled) {
-      // If disabled, ensure audio is stopped
-      stop();
-      return;
-    }
+    if (!enabled) return;
 
     const handleInteraction = () => {
       start();
@@ -219,7 +215,7 @@ export function useKeepAlive(enabled: boolean = false) {
       document.removeEventListener("touchstart", handleInteraction);
       document.removeEventListener("keydown", handleInteraction);
     };
-  }, [enabled, start, stop]);
+  }, [enabled, start]);
 
   // Handle visibility changes - resume audio when app becomes visible
   useEffect(() => {
