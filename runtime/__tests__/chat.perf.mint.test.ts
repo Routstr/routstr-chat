@@ -15,7 +15,7 @@ import { sdkWallet } from "@/features/payments/request";
 import { getKit } from "@/tests/kit";
 import { createAccountChat } from "../chat";
 import { createRouting } from "../routing";
-import { bookPurse } from "./bookPurse";
+import { kitPurse } from "./kitPurse";
 
 const kit = getKit();
 const RUNS = 7;
@@ -29,7 +29,7 @@ describe("pipeline cost", () => {
       extraProviders: [kit.coreUrl],
     });
     await routing.catalog.refresh();
-    const wallet = bookPurse(kit, "alice", kit.env.mintUrl);
+    const wallet = kitPurse(kit, "alice", kit.env.mintUrl);
     await wallet.fund(500);
     const credit = fakeKeys();
     await credit.keys.ready();

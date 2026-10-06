@@ -18,7 +18,7 @@ import type { Spending } from "@/features/payments/ports";
 import { getKit } from "@/tests/kit";
 import { createAccountChat } from "../chat";
 import { createRouting } from "../routing";
-import { bookPurse } from "./bookPurse";
+import { kitPurse } from "./kitPurse";
 
 const kit = getKit();
 
@@ -36,7 +36,7 @@ beforeEach(async () => {
 });
 
 async function account(owner = "alice", sats = 300) {
-  const wallet = bookPurse(kit, owner, kit.env.mintUrl);
+  const wallet = kitPurse(kit, owner, kit.env.mintUrl);
   await wallet.fund(sats);
   const credit = fakeKeys();
   await credit.keys.ready();
@@ -61,7 +61,7 @@ const model = () => ({ id: "kit-cheap", provider: kit.coreUrl });
 
 /** Nothing the account owns is lost: its coins are all good at the mint and
  *  nothing is stuck in the wallet book. */
-async function settledAndUnspent(wallet: ReturnType<typeof bookPurse>) {
+async function settledAndUnspent(wallet: ReturnType<typeof kitPurse>) {
   expect(await kit.coinStates(wallet.coins)).toEqual(
     wallet.coins.map(() => "UNSPENT")
   );
