@@ -16,9 +16,13 @@ function provider(msats: Record<string, number>) {
       if (String(url).endsWith("v1/wallet/refund")) {
         refunded.push(base);
         msats[base] = 0;
-        return new Response(JSON.stringify({ token: `refund-${base}`, sats: "1" }));
+        return new Response(
+          JSON.stringify({ token: `refund-${base}`, sats: "1" })
+        );
       }
-      return new Response(JSON.stringify({ balance: msats[base], reserved: 0 }));
+      return new Response(
+        JSON.stringify({ balance: msats[base], reserved: 0 })
+      );
     })
   );
   return refunded;
@@ -42,14 +46,25 @@ async function setup(shared?: Awaited<ReturnType<typeof device>>) {
     keys: credit.keys,
     purse: wallet.purse,
     sdk: fakeSdk(),
-    oldCredit: { load: vi.fn(async () => old.storage), lock: () => old.lock.lock() },
+    oldCredit: {
+      load: vi.fn(async () => old.storage),
+      lock: () => old.lock.lock(),
+    },
     otherDevices: {
       keys: () => others,
       drop: vi.fn(async (_keys: string[]) => {}),
     },
     live: () => true,
   };
-  return { deps, credit, wallet, others, direct: credit.keys.storage(), legacy: old.storage, old };
+  return {
+    deps,
+    credit,
+    wallet,
+    others,
+    direct: credit.keys.storage(),
+    legacy: old.storage,
+    old,
+  };
 }
 
 // Automatic refunds skip keys used in the last five minutes
@@ -77,7 +92,10 @@ describe("refundCredit", () => {
     lastUsed(credit, Date.now() - 10 * 60_000);
     await refundCredit(deps, false);
     expect(refunded).toEqual([LARGE]);
-    expect(direct.getApiKey(SMALL)).toMatchObject({ key: "sk-small", balance: 7.5 });
+    expect(direct.getApiKey(SMALL)).toMatchObject({
+      key: "sk-small",
+      balance: 7.5,
+    });
 
     await refundCredit(deps, true);
     expect(refunded).toEqual([LARGE, SMALL]);
@@ -117,10 +135,17 @@ describe("refundCredit", () => {
   it("clears a key the provider no longer knows", async () => {
     const notFound = JSON.stringify({
       detail: {
-        error: { message: "Key not found", type: "invalid_request_error", code: "key_not_found" },
+        error: {
+          message: "Key not found",
+          type: "invalid_request_error",
+          code: "key_not_found",
+        },
       },
     });
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(notFound, { status: 401 })));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(notFound, { status: 401 }))
+    );
     const { deps, direct, credit } = await setup();
     direct.setApiKey(LARGE, "sk-forgotten");
     lastUsed(credit, 0);
@@ -148,10 +173,15 @@ describe("refundCredit", () => {
     const alice = await setup(shared);
     const bob = await setup(shared);
 
-    await Promise.all([refundCredit(alice.deps, false), refundCredit(bob.deps, false)]);
+    await Promise.all([
+      refundCredit(alice.deps, false),
+      refundCredit(bob.deps, false),
+    ]);
 
     expect(refunded).toEqual([SMALL]);
-    expect([...alice.wallet.received, ...bob.wallet.received]).toEqual([`refund-${SMALL}`]);
+    expect([...alice.wallet.received, ...bob.wallet.received]).toEqual([
+      `refund-${SMALL}`,
+    ]);
     expect(shared.lock.held).toBe(0);
   });
 
@@ -168,7 +198,12 @@ describe("refundCredit", () => {
   it("recovers a lost device's keys on the Refund button only", async () => {
     const refunded = provider({ [LARGE]: 120_000, [SMALL]: 120_000 });
     const { deps, others, wallet, direct, credit } = await setup();
-    others.push({ baseUrl: LARGE, key: "sk-lost-device", balance: 120, lastUsed: null });
+    others.push({
+      baseUrl: LARGE,
+      key: "sk-lost-device",
+      balance: 120,
+      lastUsed: null,
+    });
     // this device's own key, so the automatic refund really runs
     direct.setApiKey(SMALL, "sk-mine");
     lastUsed(credit, 0);
@@ -186,7 +221,12 @@ describe("refundCredit", () => {
   it("counts a lost device's key as done when the provider reports it empty", async () => {
     const refunded = provider({ [LARGE]: 0 });
     const { deps, others } = await setup();
-    others.push({ baseUrl: LARGE, key: "sk-gone-device", balance: 0, lastUsed: null });
+    others.push({
+      baseUrl: LARGE,
+      key: "sk-gone-device",
+      balance: 0,
+      lastUsed: null,
+    });
 
     await refundCredit(deps, true);
 
@@ -197,7 +237,12 @@ describe("refundCredit", () => {
   it("keeps a lost device's key when its payout could not be received", async () => {
     provider({ [LARGE]: 120_000 });
     const { deps, others, wallet } = await setup();
-    others.push({ baseUrl: LARGE, key: "sk-lost-device", balance: 120, lastUsed: null });
+    others.push({
+      baseUrl: LARGE,
+      key: "sk-lost-device",
+      balance: 120,
+      lastUsed: null,
+    });
     wallet.purse.receive.mockRejectedValueOnce(new Error("Failed to fetch"));
 
     const results = await refundCredit(deps, true);
@@ -214,21 +259,32 @@ describe("refundCredit", () => {
       vi.fn(async (url: string, init?: RequestInit) => {
         const auth = new Headers(init?.headers).get("authorization") ?? "";
         if (!String(url).endsWith("v1/wallet/refund")) {
-          return new Response(JSON.stringify({ balance: 120_000, reserved: 0 }));
+          return new Response(
+            JSON.stringify({ balance: 120_000, reserved: 0 })
+          );
         }
         if (auth.includes("sk-mine")) {
           return new Response(
-            JSON.stringify({ detail: "Cannot refund key. There are ongoing requests" }),
+            JSON.stringify({
+              detail: "Cannot refund key. There are ongoing requests",
+            }),
             { status: 400 }
           );
         }
         refunded.push(auth);
-        return new Response(JSON.stringify({ token: `refund-${LARGE}`, sats: "120" }));
+        return new Response(
+          JSON.stringify({ token: `refund-${LARGE}`, sats: "120" })
+        );
       })
     );
     const { deps, direct, others } = await setup();
     direct.setApiKey(LARGE, "sk-mine");
-    others.push({ baseUrl: LARGE, key: "sk-lost-device", balance: 120, lastUsed: null });
+    others.push({
+      baseUrl: LARGE,
+      key: "sk-lost-device",
+      balance: 120,
+      lastUsed: null,
+    });
 
     await refundCredit(deps, true);
 
@@ -239,7 +295,12 @@ describe("refundCredit", () => {
   it("forgets refunded keys only after the payment lock is free, and a failure there loses nothing", async () => {
     provider({ [LARGE]: 120_000 });
     const { deps, others, credit } = await setup();
-    others.push({ baseUrl: LARGE, key: "sk-lost-device", balance: 120, lastUsed: null });
+    others.push({
+      baseUrl: LARGE,
+      key: "sk-lost-device",
+      balance: 120,
+      lastUsed: null,
+    });
     let heldWhileDropping = -1;
     deps.otherDevices.drop.mockImplementationOnce(async () => {
       heldWhileDropping = credit.held;
@@ -251,7 +312,12 @@ describe("refundCredit", () => {
 
     expect(heldWhileDropping).toBe(0);
     expect(results).toContainEqual({ baseUrl: LARGE, success: true });
-    await vi.waitFor(() => expect(warn).toHaveBeenCalledWith("Could not forget refunded keys yet", expect.any(Error)));
+    await vi.waitFor(() =>
+      expect(warn).toHaveBeenCalledWith(
+        "Could not forget refunded keys yet",
+        expect.any(Error)
+      )
+    );
   });
 
   it("writes the old store's sweep to disk before letting go of the device-wide lock", async () => {
@@ -273,10 +339,18 @@ describe("refundCredit", () => {
   it("does not wait for the key backup to publish", async () => {
     provider({ [LARGE]: 120_000 });
     const { deps, others } = await setup();
-    others.push({ baseUrl: LARGE, key: "sk-lost-device", balance: 120, lastUsed: null });
+    others.push({
+      baseUrl: LARGE,
+      key: "sk-lost-device",
+      balance: 120,
+      lastUsed: null,
+    });
     deps.otherDevices.drop.mockImplementationOnce(() => new Promise(() => {}));
 
-    await expect(refundCredit(deps, true)).resolves.toContainEqual({ baseUrl: LARGE, success: true });
+    await expect(refundCredit(deps, true)).resolves.toContainEqual({
+      baseUrl: LARGE,
+      success: true,
+    });
   });
 
   it("sweeps what is on disk once it holds the device-wide lock, not an earlier copy", async () => {
@@ -334,9 +408,13 @@ describe("refundCredit", () => {
 
     await refundCredit(deps, false);
 
-    const asked = vi.mocked(fetch).mock.calls.map(([, init]) =>
-      new Headers((init as RequestInit | undefined)?.headers).get("authorization")
-    );
+    const asked = vi
+      .mocked(fetch)
+      .mock.calls.map(([, init]) =>
+        new Headers((init as RequestInit | undefined)?.headers).get(
+          "authorization"
+        )
+      );
     expect(asked).toContain("Bearer sk-old-enough");
     expect(asked).not.toContain("Bearer sk-just-used");
   });

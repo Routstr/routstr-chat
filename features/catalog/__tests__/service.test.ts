@@ -20,13 +20,20 @@ function setup(cache: Record<string, unknown[]> = {}) {
       return [PUBLIC];
     }),
     // like the SDK: a pass keeps only the providers it was given
-    fetchModels: vi.fn(async (bases: string[], _force: boolean, progress?: (m: unknown[]) => void) => {
-      for (const key of Object.keys(cache)) if (!bases.includes(key)) delete cache[key];
-      for (const base of bases) cache[base] ??= [model(`${base}m`)];
-      const models = bases.flatMap((base) => cache[base]);
-      progress?.(models);
-      return models;
-    }),
+    fetchModels: vi.fn(
+      async (
+        bases: string[],
+        _force: boolean,
+        progress?: (m: unknown[]) => void
+      ) => {
+        for (const key of Object.keys(cache))
+          if (!bases.includes(key)) delete cache[key];
+        for (const base of bases) cache[base] ??= [model(`${base}m`)];
+        const models = bases.flatMap((base) => cache[base]);
+        progress?.(models);
+        return models;
+      }
+    ),
     getBaseUrls: () => discovery.bases,
   };
   const deps = {
@@ -65,7 +72,10 @@ describe("CatalogService", () => {
 
     await catalog.refresh();
 
-    expect(catalog.getSnapshot()).toEqual({ models: [model(`${PUBLIC}m`)], loading: false });
+    expect(catalog.getSnapshot()).toEqual({
+      models: [model(`${PUBLIC}m`)],
+      loading: false,
+    });
     expect(deps.mintDiscovery.discoverMints).toHaveBeenCalledWith([PUBLIC]);
   });
 
@@ -95,7 +105,11 @@ describe("CatalogService", () => {
     await catalog.refresh();
 
     expect(modelManager.bootstrapProviders).not.toHaveBeenCalled();
-    expect(modelManager.fetchModels).toHaveBeenCalledWith([NODE], true, expect.any(Function));
+    expect(modelManager.fetchModels).toHaveBeenCalledWith(
+      [NODE],
+      true,
+      expect.any(Function)
+    );
     expect(catalog.getSnapshot().models).toEqual([model(`${NODE}m`)]);
   });
 
@@ -107,7 +121,11 @@ describe("CatalogService", () => {
     setNode(undefined);
     await catalog.refresh();
 
-    expect(modelManager.fetchModels).toHaveBeenLastCalledWith([PUBLIC], true, expect.any(Function));
+    expect(modelManager.fetchModels).toHaveBeenLastCalledWith(
+      [PUBLIC],
+      true,
+      expect.any(Function)
+    );
     expect(catalog.getSnapshot().models).toEqual([model(`${PUBLIC}m`)]);
   });
 
@@ -116,7 +134,11 @@ describe("CatalogService", () => {
 
     await catalog.refresh();
 
-    expect(modelManager.fetchModels).toHaveBeenCalledWith([PUBLIC], false, expect.any(Function));
+    expect(modelManager.fetchModels).toHaveBeenCalledWith(
+      [PUBLIC],
+      false,
+      expect.any(Function)
+    );
   });
 
   it("fetches for real once when every list came back empty", async () => {
@@ -126,21 +148,32 @@ describe("CatalogService", () => {
     await catalog.refresh();
 
     expect(modelManager.fetchModels).toHaveBeenCalledTimes(2);
-    expect(modelManager.fetchModels).toHaveBeenLastCalledWith([PUBLIC], true, expect.any(Function));
+    expect(modelManager.fetchModels).toHaveBeenLastCalledWith(
+      [PUBLIC],
+      true,
+      expect.any(Function)
+    );
   });
 
   it("opens with the last visit's models that can still be routed", async () => {
-    const { catalog, deps, modelManager } = setup({ [PUBLIC]: [model("a"), model("b")] });
+    const { catalog, deps, modelManager } = setup({
+      [PUBLIC]: [model("a"), model("b")],
+    });
     vi.mocked(deps.providerManager.getBestProviderForModel).mockImplementation(
       (id: string) => (id === "a" ? PUBLIC : null) as never
     );
-    modelManager.bootstrapProviders.mockImplementation(() => new Promise(() => {}));
+    modelManager.bootstrapProviders.mockImplementation(
+      () => new Promise(() => {})
+    );
 
     catalog.start();
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(catalog.getSnapshot()).toEqual({ models: [model("a")], loading: false });
+    expect(catalog.getSnapshot()).toEqual({
+      models: [model("a")],
+      loading: false,
+    });
     catalog.dispose();
   });
 
@@ -152,7 +185,10 @@ describe("CatalogService", () => {
 
     await catalog.refresh();
 
-    expect(catalog.getSnapshot()).toEqual({ models: [model(`${PUBLIC}m`)], loading: false });
+    expect(catalog.getSnapshot()).toEqual({
+      models: [model(`${PUBLIC}m`)],
+      loading: false,
+    });
   });
 
   it("refreshes every half hour until disposed", async () => {

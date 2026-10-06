@@ -38,7 +38,9 @@ function startRun() {
 }
 
 // a frame per update, so subscribers see each phase
-beforeEach(() => vi.stubGlobal("requestAnimationFrame", (flush: () => void) => flush()));
+beforeEach(() =>
+  vi.stubGlobal("requestAnimationFrame", (flush: () => void) => flush())
+);
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.useRealTimers();
@@ -54,10 +56,19 @@ describe("RequestRun", () => {
     wire.cb.onPaymentProcessing?.(true);
     wire.cb.onThinkingUpdate("hm");
     wire.cb.onStreamingUpdate("Blind");
-    wire.cb.onMessageAppend({ role: "assistant", content: "Blind signatures." });
+    wire.cb.onMessageAppend({
+      role: "assistant",
+      content: "Blind signatures.",
+    });
     wire.cb.onPaymentProcessing?.(false);
 
-    expect(phases).toEqual(["preparing", "paying", "thinking", "answering", "done"]);
+    expect(phases).toEqual([
+      "preparing",
+      "paying",
+      "thinking",
+      "answering",
+      "done",
+    ]);
   });
 
   it("ends when the answer ends, before the payment settles", async () => {
@@ -67,7 +78,10 @@ describe("RequestRun", () => {
     void settled.then(() => order.push("settled"));
 
     wire.cb.onStreamingUpdate("Blind signatures.");
-    wire.cb.onMessageAppend({ role: "assistant", content: "Blind signatures." });
+    wire.cb.onMessageAppend({
+      role: "assistant",
+      content: "Blind signatures.",
+    });
     wire.cb.onStreamingUpdate("");
     await Promise.resolve();
     expect(order).toEqual(["ended"]);
@@ -144,12 +158,17 @@ describe("RequestRun", () => {
 
     wire.cb.onStreamingUpdate("");
     wire.cb.onThinkingUpdate("");
-    wire.cb.onMessageAppend({ role: "system", content: "Uncaught Error: cut off" });
+    wire.cb.onMessageAppend({
+      role: "system",
+      content: "Uncaught Error: cut off",
+    });
 
     expect(run.getSnapshot()).toMatchObject({
       phase: "failed",
       thinking: "hmm",
-      message: { content: [{ type: "text", text: "half an", thinking: "hmm" }] },
+      message: {
+        content: [{ type: "text", text: "half an", thinking: "hmm" }],
+      },
     });
   });
 
@@ -218,11 +237,18 @@ describe("RequestRun", () => {
     wire.cb.onThinkingUpdate("The user wants BDHKE.");
     vi.advanceTimersByTime(9000);
     wire.cb.onStreamingUpdate("Blind");
-    wire.cb.onMessageAppend({ role: "assistant", content: "Blind signatures." });
+    wire.cb.onMessageAppend({
+      role: "assistant",
+      content: "Blind signatures.",
+    });
 
     expect(run.getSnapshot().thinkingMs).toBe(9000);
     expect(run.getSnapshot().message?.content).toEqual([
-      { type: "text", text: "Blind signatures.", thinking: "The user wants BDHKE." },
+      {
+        type: "text",
+        text: "Blind signatures.",
+        thinking: "The user wants BDHKE.",
+      },
     ]);
   });
 
@@ -232,13 +258,18 @@ describe("RequestRun", () => {
 
     wire.cb.onRequestId?.("req-42");
 
-    expect(run.getSnapshot()).toMatchObject({ phase: "done", requestId: "req-42" });
+    expect(run.getSnapshot()).toMatchObject({
+      phase: "done",
+      requestId: "req-42",
+    });
   });
 
   it("tells subscribers once per frame however fast tokens arrive", () => {
     const wire = manualTransport();
     const frames: Array<() => void> = [];
-    vi.stubGlobal("requestAnimationFrame", (flush: () => void) => frames.push(flush));
+    vi.stubGlobal("requestAnimationFrame", (flush: () => void) =>
+      frames.push(flush)
+    );
     const run = new RequestRun(wire.transport);
     const listener = vi.fn();
     run.subscribe(listener);

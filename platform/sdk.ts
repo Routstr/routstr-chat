@@ -48,7 +48,11 @@ export function createSdk({ extraProviders }: { extraProviders: string[] }) {
   const request: Sdk["request"] = (options, callbacks) =>
     fetchAIResponse(
       { ...options, discoveryAdapter, usageTrackingDriver, sdkStore: store },
-      { ...callbacks, onBalanceUpdate: () => {}, onTransactionUpdate: () => {} },
+      {
+        ...callbacks,
+        onBalanceUpdate: () => {},
+        onTransactionUpdate: () => {},
+      },
       { alertLevel: "min", logger: noopLogger }
     );
   // by request id alone: the log keeps the canonical model id, not the one picked

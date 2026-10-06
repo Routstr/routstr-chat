@@ -198,7 +198,9 @@ export class ChatService {
           return this.deps.costs.record(saved._eventId, requestId);
         }
       })
-      .catch((error) => console.warn("Could not record what a reply cost", error));
+      .catch((error) =>
+        console.warn("Could not record what a reply cost", error)
+      );
     this.notify();
     return { run, reply, settled };
   }

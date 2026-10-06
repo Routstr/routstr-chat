@@ -14,11 +14,17 @@ describe("ReplyCosts", () => {
 
     expect(lookup).toHaveBeenCalledWith("req-1");
     expect(costs.getSnapshot()).toEqual({ "reply-1": 3.2 });
-    expect(JSON.parse(storage.getItem("sats_spent_by_event:alice")!)).toEqual({ "reply-1": 3.2 });
+    expect(JSON.parse(storage.getItem("sats_spent_by_event:alice")!)).toEqual({
+      "reply-1": 3.2,
+    });
   });
 
   it("records nothing when the usage log has no entry", async () => {
-    const costs = new ReplyCosts(memoryStorage(), "sats_spent_by_event:alice", price(undefined));
+    const costs = new ReplyCosts(
+      memoryStorage(),
+      "sats_spent_by_event:alice",
+      price(undefined)
+    );
 
     await costs.record("reply-1", "req-1");
 
@@ -30,7 +36,13 @@ describe("ReplyCosts", () => {
     storage.setItem("sats_spent_by_event:alice", '{"e1":2}');
     storage.setItem("sats_spent_by_event:bob", '{"e2":5}');
 
-    expect(new ReplyCosts(storage, "sats_spent_by_event:alice", price()).getSnapshot()).toEqual({ e1: 2 });
+    expect(
+      new ReplyCosts(
+        storage,
+        "sats_spent_by_event:alice",
+        price()
+      ).getSnapshot()
+    ).toEqual({ e1: 2 });
   });
 
   it("keeps another tab's costs when it writes its own", async () => {
@@ -41,11 +53,18 @@ describe("ReplyCosts", () => {
     await tabA.record("from-a", "r");
     await tabB.record("from-b", "r");
 
-    expect(JSON.parse(storage.getItem("sats_spent_by_event:alice")!)).toEqual({ "from-a": 1, "from-b": 2 });
+    expect(JSON.parse(storage.getItem("sats_spent_by_event:alice")!)).toEqual({
+      "from-a": 1,
+      "from-b": 2,
+    });
   });
 
   it("tells the screen when a cost arrives", async () => {
-    const costs = new ReplyCosts(memoryStorage(), "sats_spent_by_event:alice", price(1));
+    const costs = new ReplyCosts(
+      memoryStorage(),
+      "sats_spent_by_event:alice",
+      price(1)
+    );
     const listener = vi.fn();
     costs.subscribe(listener);
 

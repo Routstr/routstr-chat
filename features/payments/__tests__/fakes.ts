@@ -79,7 +79,14 @@ export const tokenOf = (amount: number) =>
   getEncodedTokenV4({
     mint: MINT,
     unit: "sat",
-    proofs: [{ id: "009a1f293253e41e", amount, secret: `s${amount}`, C: "02" + "a".repeat(64) }],
+    proofs: [
+      {
+        id: "009a1f293253e41e",
+        amount,
+        secret: `s${amount}`,
+        C: "02" + "a".repeat(64),
+      },
+    ],
   });
 
 /** A wallet for one account; it remembers what it sent and received. */
@@ -90,7 +97,11 @@ export function fakePurse(balance = 100) {
     balances: vi.fn(async () => ({ [MINT]: balance })),
     activeMint: () => MINT,
     send: vi.fn(
-      async (_mint: string, sats: number, handoff?: (token: string) => Promise<void>) => {
+      async (
+        _mint: string,
+        sats: number,
+        handoff?: (token: string) => Promise<void>
+      ) => {
         const token = tokenOf(sats);
         await handoff?.(token);
         sent.push(sats);

@@ -12,12 +12,19 @@ const callbacks = () => ({
   onPaymentProcessing: vi.fn(),
   onRequestId: vi.fn(),
 });
-const request = { messages: [{ role: "user", content: "hi" }], model: { id: "m" } };
+const request = {
+  messages: [{ role: "user", content: "hi" }],
+  model: { id: "m" },
+};
 const NODE = { url: "https://node.example/", apiKey: "node-key" };
 
 /** An SDK call the test finishes by hand. */
 function heldFetch() {
-  const calls: Array<{ args: RequestArgs; finish(): void; fail(e: Error): void }> = [];
+  const calls: Array<{
+    args: RequestArgs;
+    finish(): void;
+    fail(e: Error): void;
+  }> = [];
   const request = vi.fn(
     (...args: RequestArgs) =>
       new Promise<void>((finish, fail) => calls.push({ args, finish, fail }))
@@ -25,7 +32,11 @@ function heldFetch() {
   return { request, calls };
 }
 
-async function setup(spending: { mode: "apikeys" | "xcashu"; node?: typeof NODE } = { mode: "apikeys" }) {
+async function setup(
+  spending: { mode: "apikeys" | "xcashu"; node?: typeof NODE } = {
+    mode: "apikeys",
+  }
+) {
   const credit = fakeKeys();
   await credit.keys.ready();
   const wallet = fakePurse();
@@ -60,8 +71,12 @@ describe("sdkWallet", () => {
 
     allowed = false;
 
-    await expect(wallet.sendToken(MINT, 7)).rejects.toMatchObject({ name: "AbortError" });
-    await expect(wallet.getBalances()).rejects.toMatchObject({ name: "AbortError" });
+    await expect(wallet.sendToken(MINT, 7)).rejects.toMatchObject({
+      name: "AbortError",
+    });
+    await expect(wallet.getBalances()).rejects.toMatchObject({
+      name: "AbortError",
+    });
     expect(purse.send).not.toHaveBeenCalled();
   });
 
@@ -87,7 +102,12 @@ describe("sdkWallet", () => {
     const { purse } = fakePurse();
     const handoff = vi.fn(async () => {});
 
-    await sdkWallet(purse, () => true, false).sendToken(MINT, 7, undefined, handoff);
+    await sdkWallet(purse, () => true, false).sendToken(
+      MINT,
+      7,
+      undefined,
+      handoff
+    );
 
     expect(purse.send).toHaveBeenCalledWith(MINT, 7, handoff);
     expect(handoff).toHaveBeenCalledWith(tokenOf(7));
@@ -95,7 +115,10 @@ describe("sdkWallet", () => {
 
   it("lets the SDK read every balance as sats, whatever unit the mint keeps", async () => {
     const { purse } = fakePurse(5_000);
-    const client = fakeSdk().client(sdkWallet(purse, () => true, false), fakeKeys().keys.storage());
+    const client = fakeSdk().client(
+      sdkWallet(purse, () => true, false),
+      fakeKeys().keys.storage()
+    );
 
     const state = await client.getBalanceManager().getBalanceState();
 
@@ -106,7 +129,9 @@ describe("sdkWallet", () => {
     const { purse } = fakePurse();
     purse.receive.mockRejectedValueOnce(new Error("mint unreachable"));
 
-    const result = await sdkWallet(purse, () => true, false).receiveToken(tokenOf(5));
+    const result = await sdkWallet(purse, () => true, false).receiveToken(
+      tokenOf(5)
+    );
 
     expect(result).toEqual({
       success: false,
@@ -122,7 +147,10 @@ describe("createPay", () => {
     const a = await setup();
     void a.pay(request, callbacks(), new AbortController().signal);
     await tick();
-    expect(a.fetch.calls[0].args[0]).toMatchObject({ mode: "apikeys", modelId: "m" });
+    expect(a.fetch.calls[0].args[0]).toMatchObject({
+      mode: "apikeys",
+      modelId: "m",
+    });
 
     const b = await setup({ mode: "xcashu" });
     void b.pay(request, callbacks(), new AbortController().signal);
@@ -221,7 +249,9 @@ describe("createPay", () => {
     fetch.calls[0].finish();
     await paying;
 
-    await expect(late.sendToken(MINT, 7)).rejects.toMatchObject({ name: "AbortError" });
+    await expect(late.sendToken(MINT, 7)).rejects.toMatchObject({
+      name: "AbortError",
+    });
     await late.receiveToken(tokenOf(3));
     expect(wallet.sent).toEqual([]);
     expect(wallet.received).toEqual([tokenOf(3)]);
@@ -236,20 +266,33 @@ describe("createPay", () => {
 
     controller.abort();
 
-    await expect(sdkPays.sendToken(MINT, 7)).rejects.toMatchObject({ name: "AbortError" });
+    await expect(sdkPays.sendToken(MINT, 7)).rejects.toMatchObject({
+      name: "AbortError",
+    });
     expect(wallet.sent).toEqual([]);
   });
 
   it("forces a pinned provider only when the SDK reads the warm cache", async () => {
     const cold = await setup();
-    void cold.pay({ ...request, model: { id: "m", provider: "https://p.example/" } }, callbacks(), new AbortController().signal);
+    void cold.pay(
+      { ...request, model: { id: "m", provider: "https://p.example/" } },
+      callbacks(),
+      new AbortController().signal
+    );
     await tick();
     expect(cold.fetch.calls[0].args[0].forcedProvider).toBeUndefined();
 
     const warm = await setup();
-    const managers = { modelManager: {} as never, providerManager: {} as never };
+    const managers = {
+      modelManager: {} as never,
+      providerManager: {} as never,
+    };
     warm.sdk.warm.mockReturnValue(managers as never);
-    void warm.pay({ ...request, model: { id: "m", provider: "https://p.example/" } }, callbacks(), new AbortController().signal);
+    void warm.pay(
+      { ...request, model: { id: "m", provider: "https://p.example/" } },
+      callbacks(),
+      new AbortController().signal
+    );
     await tick();
     expect(warm.fetch.calls[0].args[0]).toMatchObject({
       forcedProvider: "https://p.example/",
@@ -260,7 +303,10 @@ describe("createPay", () => {
 
 describe("createPay in node mode", () => {
   it("routes only to the node, with the node's key, and never spends the wallet", async () => {
-    const { pay, fetch, credit, sdk, wallet } = await setup({ mode: "xcashu", node: NODE });
+    const { pay, fetch, credit, sdk, wallet } = await setup({
+      mode: "xcashu",
+      node: NODE,
+    });
     credit.stores.node.storage.setApiKey("https://other.example/", "other-key");
 
     void pay(request, callbacks(), new AbortController().signal);
@@ -268,12 +314,21 @@ describe("createPay in node mode", () => {
     const [options] = fetch.calls[0].args;
 
     expect(sdk.ensureNode).toHaveBeenCalledWith(NODE.url);
-    expect(options).toMatchObject({ forcedProvider: NODE.url, mode: "apikeys" });
+    expect(options).toMatchObject({
+      forcedProvider: NODE.url,
+      mode: "apikeys",
+    });
     expect(options.storageAdapter!.getApiKey(NODE.url)?.key).toBe("node-key");
-    expect(() => options.storageAdapter!.getApiKey("https://other.example/")).toThrow("only your node");
-    expect(options.storageAdapter!.getAllApiKeys().map((k) => k.key)).toEqual(["node-key"]);
+    expect(() =>
+      options.storageAdapter!.getApiKey("https://other.example/")
+    ).toThrow("only your node");
+    expect(options.storageAdapter!.getAllApiKeys().map((k) => k.key)).toEqual([
+      "node-key",
+    ]);
     expect(credit.keys.flush).toHaveBeenCalledWith("node");
-    await expect(options.walletAdapter!.sendToken(MINT, 7)).rejects.toThrow("refusing to pay");
+    await expect(options.walletAdapter!.sendToken(MINT, 7)).rejects.toThrow(
+      "refusing to pay"
+    );
     expect(wallet.sent).toEqual([]);
   });
 
@@ -285,11 +340,16 @@ describe("createPay in node mode", () => {
 
     current.spending = { mode: "apikeys", node: NODE };
 
-    await expect(sdkPays.sendToken(MINT, 7)).rejects.toMatchObject({ name: "AbortError" });
+    await expect(sdkPays.sendToken(MINT, 7)).rejects.toMatchObject({
+      name: "AbortError",
+    });
   });
 
   it("never routes a node request after node mode was turned off while it waited", async () => {
-    const { pay, fetch, credit, sdk, current } = await setup({ mode: "apikeys", node: NODE });
+    const { pay, fetch, credit, sdk, current } = await setup({
+      mode: "apikeys",
+      node: NODE,
+    });
     const release = await credit.keys.lock();
     const paying = pay(request, callbacks(), new AbortController().signal);
 
@@ -302,12 +362,17 @@ describe("createPay in node mode", () => {
   });
 
   it("never routes a node request after node mode was turned off while the node's models loaded", async () => {
-    const { pay, fetch, sdk, current } = await setup({ mode: "apikeys", node: NODE });
+    const { pay, fetch, sdk, current } = await setup({
+      mode: "apikeys",
+      node: NODE,
+    });
     sdk.ensureNode.mockImplementationOnce(async () => {
       current.spending = { mode: "apikeys" };
     });
 
-    await expect(pay(request, callbacks(), new AbortController().signal)).rejects.toMatchObject({
+    await expect(
+      pay(request, callbacks(), new AbortController().signal)
+    ).rejects.toMatchObject({
       name: "AbortError",
     });
     expect(fetch.calls).toHaveLength(0);

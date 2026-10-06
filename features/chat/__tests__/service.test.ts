@@ -245,7 +245,10 @@ describe("ChatService: answer and payment are separate", () => {
   it("saves the answer while the payment is still settling", async () => {
     const turn = await chat.send("c", "Q1", model);
     await flush();
-    provider.last.callbacks.onMessageAppend({ role: "assistant", content: "A1" });
+    provider.last.callbacks.onMessageAppend({
+      role: "assistant",
+      content: "A1",
+    });
 
     const saved = await turn.reply;
 
@@ -273,7 +276,10 @@ describe("ChatService: answer and payment are separate", () => {
   it("keeps the answer when the payment cannot finish", async () => {
     const turn = await chat.send("c", "Q1", model);
     await flush();
-    provider.last.callbacks.onMessageAppend({ role: "assistant", content: "A1" });
+    provider.last.callbacks.onMessageAppend({
+      role: "assistant",
+      content: "A1",
+    });
     provider.last.fail(new Error("disk full"));
 
     expect((await turn.reply)?.content).toBe("A1");
@@ -311,7 +317,10 @@ describe("ChatService: what a reply cost", () => {
   it("records the cost by reply event id once the payment settled", async () => {
     const turn = await chat.send("c", "Q1", { id: "m1" });
     await flush();
-    provider.last.callbacks.onMessageAppend({ role: "assistant", content: "A1" });
+    provider.last.callbacks.onMessageAppend({
+      role: "assistant",
+      content: "A1",
+    });
     const saved = await turn.reply;
     expect(costs.record).not.toHaveBeenCalled();
 
@@ -328,7 +337,10 @@ describe("ChatService: what a reply cost", () => {
     const turn = await chat.send("c", "Q1", model);
     await flush();
     provider.last.callbacks.onRequestId?.("req-7");
-    provider.last.callbacks.onMessageAppend({ role: "system", content: "Uncaught Error: down" });
+    provider.last.callbacks.onMessageAppend({
+      role: "system",
+      content: "Uncaught Error: down",
+    });
     provider.last.settle();
     await turn.settled;
     await flush();

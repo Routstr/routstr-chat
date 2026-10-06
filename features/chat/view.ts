@@ -1,4 +1,9 @@
-import { createContext, useCallback, useContext, useSyncExternalStore } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useSyncExternalStore,
+} from "react";
 import type { RefundResult } from "@/features/payments/refund";
 import type { ReplyCosts } from "./costs";
 import type { RunSnapshot } from "./run";
@@ -30,7 +35,8 @@ export function useRun(conversationId: string | null): RunSnapshot | undefined {
   );
   return useSyncExternalStore(
     subscribe,
-    () => (conversationId ? chat?.getRun(conversationId)?.getSnapshot() : undefined),
+    () =>
+      conversationId ? chat?.getRun(conversationId)?.getSnapshot() : undefined,
     () => undefined
   );
 }

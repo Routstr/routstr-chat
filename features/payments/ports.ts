@@ -69,7 +69,10 @@ export interface Sdk {
   /** One request through the SDK's routing and payment; resolves once the
    *  payment is settled. */
   request(
-    options: Omit<FetchOptions, "discoveryAdapter" | "usageTrackingDriver" | "sdkStore">,
+    options: Omit<
+      FetchOptions,
+      "discoveryAdapter" | "usageTrackingDriver" | "sdkStore"
+    >,
     callbacks: RunCallbacks
   ): Promise<void>;
   client(wallet: WalletAdapter, storage: StorageAdapter): RoutstrClient;

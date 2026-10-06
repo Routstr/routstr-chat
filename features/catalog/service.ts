@@ -1,4 +1,8 @@
-import type { MintDiscovery, ModelManager, ProviderManager } from "@routstr/sdk";
+import type {
+  MintDiscovery,
+  ModelManager,
+  ProviderManager,
+} from "@routstr/sdk";
 import type { DiscoveryAdapter } from "@routstr/sdk/discovery";
 import type { Model } from "@/types/models";
 
@@ -106,12 +110,16 @@ export class CatalogService {
   private seed(): void {
     const torMode = this.deps.torMode();
     const byId = new Map<string, Model>();
-    for (const models of Object.values(this.deps.discoveryAdapter.getCachedModels())) {
+    for (const models of Object.values(
+      this.deps.discoveryAdapter.getCachedModels()
+    )) {
       for (const model of models as unknown as Model[]) {
         // a model nobody can serve right now would show as loaded but never route
         if (
           !byId.has(model.id) &&
-          this.deps.providerManager.getBestProviderForModel(model.id, { torMode })
+          this.deps.providerManager.getBestProviderForModel(model.id, {
+            torMode,
+          })
         ) {
           byId.set(model.id, model);
         }
@@ -134,12 +142,14 @@ export class CatalogService {
       const cached = discoveryAdapter.getCachedModels();
       const stale = !bases.some((base) => cached[base]?.length);
       const show = (models: unknown[]) => {
-        if (models.length) this.set({ models: models as Model[], loading: false });
+        if (models.length)
+          this.set({ models: models as Model[], loading: false });
       };
       let models = await modelManager.fetchModels(bases, stale, show);
       // Models were lost while their timestamps survived, so every pass would
       // serve the empty cache as fresh: fetch once for real
-      if (!models.length) models = await modelManager.fetchModels(bases, true, show);
+      if (!models.length)
+        models = await modelManager.fetchModels(bases, true, show);
       this.set({ models: models as unknown as Model[], loading: false });
       await mintDiscovery.discoverMints(bases);
     } catch (error) {

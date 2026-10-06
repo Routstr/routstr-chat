@@ -32,7 +32,9 @@ const due = (key: ApiKeyEntry) =>
 /** Credit a refund would act on; `force` counts keys just used too. */
 const hasCredit = (storage: StorageAdapter, force = true) =>
   storage.getAllApiKeys().some((key) => force || due(key)) ||
-  Object.values(storage.getXcashuTokens()).some((tokens) => tokens.length > 0) ||
+  Object.values(storage.getXcashuTokens()).some(
+    (tokens) => tokens.length > 0
+  ) ||
   storage.getCachedReceiveTokens().length > 0;
 
 /**
@@ -57,7 +59,12 @@ export async function refundCredit(
   try {
     await keys.reload("direct");
     const wallet = sdkWallet(deps.purse, deps.live, false);
-    results = await refundStorage(deps.sdk, wallet, keys.storage("direct"), force);
+    results = await refundStorage(
+      deps.sdk,
+      wallet,
+      keys.storage("direct"),
+      force
+    );
     if (force) {
       const others = await refundOthers(deps, wallet);
       results.push(...others.results);
@@ -76,7 +83,9 @@ export async function refundCredit(
   if (refunded.length) {
     void deps.otherDevices
       .drop(refunded)
-      .catch((error) => console.warn("Could not forget refunded keys yet", error));
+      .catch((error) =>
+        console.warn("Could not forget refunded keys yet", error)
+      );
   }
   return results;
 }
@@ -87,7 +96,12 @@ async function sweepOld(deps: RefundDeps, wallet: WalletAdapter) {
   const release = await deps.oldCredit.lock();
   try {
     // No chat uses the old store's keys, so nothing there waits for one
-    return await refundStorage(deps.sdk, wallet, await deps.oldCredit.load(), true);
+    return await refundStorage(
+      deps.sdk,
+      wallet,
+      await deps.oldCredit.load(),
+      true
+    );
   } finally {
     release();
   }
@@ -158,7 +172,8 @@ async function refundOthers(deps: RefundDeps, wallet: WalletAdapter) {
     // An empty key is done, or a gone device's dead key would linger forever.
     // After a refund attempt only its result counts: a missed payout replays.
     const b = await balances.getTokenBalance(key.key, key.baseUrl);
-    const empty = b.isInvalidApiKey || (!b.balanceUnknown && !b.amount && !b.reserved);
+    const empty =
+      b.isInvalidApiKey || (!b.balanceUnknown && !b.amount && !b.reserved);
     const { success } = empty
       ? { success: true }
       : await balances.refundApiKey({

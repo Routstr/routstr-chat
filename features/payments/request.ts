@@ -15,7 +15,10 @@ export interface PayDeps {
 const slash = (url: string) => (url.endsWith("/") ? url : `${url}/`);
 
 const changed = () =>
-  new DOMException("Account or payment source changed. Send again.", "AbortError");
+  new DOMException(
+    "Account or payment source changed. Send again.",
+    "AbortError"
+  );
 
 /**
  * The wallet as the SDK sees it during one request or refund. It spends only
@@ -48,7 +51,11 @@ export function sdkWallet(
     },
     receiveToken: async (token) => {
       try {
-        return { success: true, amount: await purse.receive(token), unit: "sat" };
+        return {
+          success: true,
+          amount: await purse.receive(token),
+          unit: "sat",
+        };
       } catch (error) {
         // The SDK keeps the key or the X-Cashu token and claims it again later
         return {
@@ -124,7 +131,9 @@ export function createPay(deps: PayDeps): Pay {
           // The node is the only provider in node mode. Elsewhere a pinned
           // provider is forced only when the SDK reads our warm cache: cold, it
           // refetches and throws if that provider dropped the model.
-          forcedProvider: node ? node.url : (warm && model.provider) || undefined,
+          forcedProvider: node
+            ? node.url
+            : (warm && model.provider) || undefined,
           torMode: deps.sdk.torMode(),
           mode: !node && spending.mode === "xcashu" ? "xcashu" : "apikeys",
           walletAdapter: wallet,

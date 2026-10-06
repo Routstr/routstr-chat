@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { FakeHistory, memoryStorage, passThroughAttachments } from "@/features/chat/__tests__/fakes";
+import {
+  FakeHistory,
+  memoryStorage,
+  passThroughAttachments,
+} from "@/features/chat/__tests__/fakes";
 import {
   emptyDevice,
   fakeKeys,
@@ -71,7 +75,9 @@ describe("createAccountChat", () => {
     // the person switches to another account mid-reply
     account.dispose();
 
-    await expect(sdkPays.sendToken(MINT, 7)).rejects.toMatchObject({ name: "AbortError" });
+    await expect(sdkPays.sendToken(MINT, 7)).rejects.toMatchObject({
+      name: "AbortError",
+    });
     await sdkPays.receiveToken(tokenOf(4));
     calls[0].finish();
     await turn.settled;
@@ -91,7 +97,9 @@ describe("createAccountChat", () => {
 
     account.dispose();
 
-    await expect(sdkPays.sendToken(MINT, 7)).rejects.toMatchObject({ name: "AbortError" });
+    await expect(sdkPays.sendToken(MINT, 7)).rejects.toMatchObject({
+      name: "AbortError",
+    });
     expect(wallet.sent).toEqual([]);
     calls[0].finish();
   });

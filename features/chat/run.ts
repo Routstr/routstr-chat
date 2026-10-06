@@ -55,7 +55,11 @@ const nextFrame = (flush: () => void) => {
  * when it ends or aborts, so empty updates are ignored and the text is kept.
  */
 export class RequestRun {
-  private snapshot: RunSnapshot = { phase: "preparing", text: "", thinking: "" };
+  private snapshot: RunSnapshot = {
+    phase: "preparing",
+    text: "",
+    thinking: "",
+  };
   private listeners = new Set<() => void>();
   private controller = new AbortController();
   private thinkingStartedAt: number | undefined;
