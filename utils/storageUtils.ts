@@ -153,8 +153,6 @@ export const migrateStorageItems = (): void => {
     { key: "mint_url", defaultValue: "https://mint.minibits.cash/Bitcoin" },
     { key: "lastUsedModel", defaultValue: null },
     { key: "usingNip60", defaultValue: "true" },
-    // Initialize relays list if missing
-    { key: "nostr_relays", defaultValue: [] as string[] },
   ];
 
   keysToMigrate.forEach(({ key, defaultValue }) => {

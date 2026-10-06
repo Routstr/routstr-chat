@@ -102,8 +102,8 @@ export function network() {
 export const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 /** Waits until `check` holds, a few event-loop turns at a time. */
-export async function until(check: () => boolean, turns = 200): Promise<void> {
-  for (let i = 0; i < turns; i++) {
+export async function until(check: () => boolean): Promise<void> {
+  for (let i = 0; i < 200; i++) {
     if (check()) return;
     await settle();
   }
