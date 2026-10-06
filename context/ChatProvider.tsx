@@ -73,7 +73,7 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     const pubkey = accountToUse.pubkey;
     userPubkey$.next(pubkey);
 
-    // Set the user signer for 1081 event decryption from applesauce account
+    // Set the user signer for the old config sync (kind 30078) from the applesauce account
     const signer = accountToUse.signer;
     if (signer?.nip44 && typeof signer.signEvent === "function") {
       userSigner$.next({

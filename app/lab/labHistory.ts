@@ -1,6 +1,6 @@
 import type { Conversation } from "@/types/chat";
 import type { FakeHistory, FakeHistoryHooks } from "@/components/v2/lab/FakeChat";
-import type { HistoryStatus, SyncOutcome } from "@/features/history/service";
+import type { SyncOutcome } from "@/features/history/service";
 import type { Stored } from "@/features/history/codec";
 import { buildThread, type ThreadSlot } from "@/features/history/thread";
 
@@ -12,16 +12,14 @@ const NONE = new Map<number, string>();
 class LabHistory {
   private listeners = new Set<() => void>();
   private chats: Conversation[] = [];
-  private status: HistoryStatus = "ready";
   private selected = new Map<string, Map<number, string>>();
   private views = new Map<string, { messages: Conversation["messages"]; picks: Map<number, string>; slots: ThreadSlot[] }>();
 
   constructor(private hooks: FakeHistoryHooks) {}
 
   /** The lab's state changed: screens read it again. */
-  update(chats: Conversation[], syncing: boolean): void {
+  update(chats: Conversation[]): void {
     this.chats = chats;
-    this.status = syncing ? "loading" : "ready";
     this.listeners.forEach((listener) => listener());
   }
 
@@ -29,7 +27,8 @@ class LabHistory {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   };
-  getStatus = () => this.status;
+  // like an account's history, it stays ready while a sync runs
+  getStatus = () => "ready" as const;
   getConversations = () => this.chats;
   getThread = (id: string): ThreadSlot[] | undefined => {
     const chat = this.chats.find((c) => c.id === id);

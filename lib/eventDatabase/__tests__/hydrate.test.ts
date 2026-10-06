@@ -10,7 +10,7 @@ const secret = generateSecretKey();
 const event = (kind: number, tags: string[][] = []) =>
   finalizeEvent({ kind, created_at: 1_700_000_000, tags, content: "" }, secret);
 
-it("leaves history's events on disk when the old store hydrates", async () => {
+it("keeps history's events out of the old store's memory when it hydrates", async () => {
   const storage = new Map([["routstr:eventdb:migrated:v1", "1"]]);
   const localStorage = {
     getItem: (key: string) => storage.get(key) ?? null,

@@ -118,7 +118,7 @@ function seed(): Conversation[] {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** The lab's chats behind the history view; app/lab builds it (labHistory.ts). */
-export type FakeHistory = HistoryService & { update(chats: Conversation[], syncing: boolean): void };
+export type FakeHistory = HistoryService & { update(chats: Conversation[]): void };
 export interface FakeHistoryHooks {
   remove(id: string): void;
   sync(): Promise<void>;
@@ -131,9 +131,7 @@ export function FakeChatProvider({ children, history }: { children: React.ReactN
   const [messages, setMessagesState] = useState<Message[]>(() => (params.get("fresh") ? [] : (seed().find((c) => c.id === (params.get("chat") ?? "c1"))?.messages ?? [])));
   const [inputMessage, setInputMessage] = useState("");
   // Sync in the lab: busy for a moment, and one chat arrives from "another device"
-  const [syncing, setSyncing] = useState(false);
   const syncNow = useCallback(async () => {
-    setSyncing(true);
     await sleep(1600);
     setConversations((cs) =>
       cs.some((c) => c.id === "c10")
@@ -150,11 +148,10 @@ export function FakeChatProvider({ children, history }: { children: React.ReactN
             ...cs,
           ]
     );
-    setSyncing(false);
   }, []);
   // the screens read chats from history: the lab's chats stand behind it
   const [lab] = useState(() => history({ remove: (id) => setConversations((cs) => cs.filter((c) => c.id !== id)), sync: syncNow }));
-  useLayoutEffect(() => lab.update(conversations, syncing), [lab, conversations, syncing]);
+  useLayoutEffect(() => lab.update(conversations), [lab, conversations]);
   // what the real bridge hands the screens: the branch shown, then the last request's notes
   const slots = useSyncExternalStore(lab.subscribe, () => (activeId ? lab.getThread(activeId) : undefined), () => undefined);
   const shown = useMemo(() => {
@@ -367,7 +364,7 @@ export function FakeChatProvider({ children, history }: { children: React.ReactN
         return () => undefined;
       },
     });
-  }, [conversations, activeId, shown, setMessages, editingMessageIndex, editingContent, selectedModel, balance, isLoginModalOpen, collapsed, configuredModels, inputMessage, uploadedAttachments, isLoading, isPaymentProcessing, streamingConversationId, stream, thinking, run, syncing, syncNow]);
+  }, [conversations, activeId, shown, setMessages, editingMessageIndex, editingContent, selectedModel, balance, isLoginModalOpen, collapsed, configuredModels, inputMessage, uploadedAttachments, isLoading, isPaymentProcessing, streamingConversationId, stream, thinking, run]);
 
   const standIn = useMemo(() => ({ routes: labRoutes, picks: PICKS, currentKey }), [currentKey]);
   return (
