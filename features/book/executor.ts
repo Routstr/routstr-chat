@@ -274,7 +274,8 @@ export class WalletExecutor {
    * proofs the preview chose from (none when receiving): the inputs among
    * them leave the wallet first, and the ones the swap left untouched are not
    * returned again. The new proofs come back already held in the journal under
-   * the returned id, until the caller stores them.
+   * the returned id, until the caller stores them; a received token whose
+   * answer was lost comes back already stored, from the mint's restore.
    */
   private async swap(
     wallet: Wallet,
@@ -306,9 +307,15 @@ export class WalletExecutor {
     try {
       answer = await wallet.completeSwap(preview);
     } catch (error) {
-      // no answer is not "no swap": settle from what the mint holds, then stop
+      // no answer is not "no swap": settle from what the mint holds
       await afterLostAnswer();
-      await settleSwap(wallet, record, commit, journal).catch(() => false);
+      const restored = await settleSwap(wallet, record, commit, journal).catch(
+        () => null
+      );
+      // a token received: the coins the mint signed for it are ours, so it went through
+      if (!ours.length && restored?.length) {
+        return { id: record.id, keep: restored, send: [] };
+      }
       throw error;
     }
     const fresh = (proofs: Proof[]) =>
