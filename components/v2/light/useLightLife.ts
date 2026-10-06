@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useChat } from "@/context/ChatProvider";
 import { useMoney } from "../useMoney";
+import { isStopped } from "../thread/Trouble";
 import type { LightPulse, LightState } from "./Light";
-
-const isError = (role?: string) => role === "system";
 
 /** What the app is doing, as your light's state and its pulses (one ring each). */
 export function useLightLife(): { state: LightState; pulse: LightPulse } {
@@ -34,7 +33,8 @@ export function useLightLife(): { state: LightState; pulse: LightPulse } {
     if (isLoading && !wasLoading.current) ring("send");
     if (!isLoading && wasLoading.current) {
       endedAt.current = Date.now();
-      setAfter(isError(messages[messages.length - 1]?.role) ? "error" : "done");
+      const last = messages[messages.length - 1];
+      setAfter(last?.role === "system" && !isStopped(last) ? "error" : "done");
       const t = window.setTimeout(() => setAfter(null), 2000);
       wasLoading.current = isLoading;
       return () => window.clearTimeout(t);
@@ -54,12 +54,20 @@ export function useLightLife(): { state: LightState; pulse: LightPulse } {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [streaming.length]);
 
-  // money landing rings gold; a reply's change coming back right after it ends does not
+  // money landing rings gold; a reply's change coming back right after it ends does not, and
+  // neither does the balance arriving as the wallet loads (the wallet card waits the same way)
+  const settled = useRef(false);
+  useEffect(() => {
+    settled.current = false;
+    if (money.loading) return;
+    const t = window.setTimeout(() => (settled.current = true), 1500);
+    return () => window.clearTimeout(t);
+  }, [money.loading]);
   const lastTotal = useRef(money.total);
   useEffect(() => {
     const d = money.total - lastTotal.current;
     lastTotal.current = money.total;
-    if (money.loading || d < 1 || isLoading || Date.now() - endedAt.current < 15000) return;
+    if (!settled.current || d < 1 || isLoading || Date.now() - endedAt.current < 15000) return;
     ring("gold");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [money.total]);

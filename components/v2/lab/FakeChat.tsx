@@ -5,7 +5,7 @@
    pictures) without spending sats. Nothing here ships: app/lab renders only
    in development. */
 
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChatContext } from "@/context/ChatProvider";
 import type { Conversation, Message, MessageAttachment } from "@/types/chat";
 import type { Model } from "@/types/models";
@@ -155,6 +155,13 @@ export function FakeChatProvider({ children }: { children: React.ReactNode }) {
   const loadingModels = !!params.get("loading");
   const [configuredModels, setConfiguredModels] = useState<string[]>(["anthropic/claude-sonnet-5", "openai/gpt-5", "deepseek/deepseek-v3.2@@https://api.nonkycai.com/"]);
   const [balance, setBalance] = useState(() => Number(params.get("balance") ?? 2140));
+  // ?late=1: the balance arrives a moment after the page, as a wallet loading from its mint and relays does
+  const [late, setLate] = useState(() => params.has("late"));
+  useEffect(() => {
+    if (!late) return;
+    const t = window.setTimeout(() => setLate(false), 2500);
+    return () => window.clearTimeout(t);
+  }, [late]);
   const [collapsed, setCollapsed] = useState(false);
   const [editingMessageIndex, setEditingMessageIndex] = useState<number | null>(null);
   const [editingContent, setEditingContent] = useState("");
@@ -302,13 +309,13 @@ export function FakeChatProvider({ children }: { children: React.ReactNode }) {
       getThinkingContentFor: (id: string | null) => (id === streamingConversationId ? thinking : ""),
       streamingContent: stream,
       thinkingContent: thinking,
-      balance,
+      balance: late ? 0 : balance,
       setBalance,
-      isBalanceLoading: false,
+      isBalanceLoading: late,
       isWalletLoading: false,
       currentMintUnit: "sat",
       // the lab's sats sit on the default mint, so Send has something to spend
-      mintBalances: { [DEFAULT_MINT_URL]: balance },
+      mintBalances: { [DEFAULT_MINT_URL]: late ? 0 : balance },
       mintUnits: { [DEFAULT_MINT_URL]: "sat" },
       transactionHistory: [],
       setTransactionHistory: () => {},
@@ -359,7 +366,7 @@ export function FakeChatProvider({ children }: { children: React.ReactNode }) {
         return () => undefined;
       },
     });
-  }, [conversations, activeId, messages, setMessages, editingMessageIndex, editingContent, selectedModel, balance, isLoginModalOpen, collapsed, configuredModels, inputMessage, uploadedAttachments, isLoading, isPaymentProcessing, streamingConversationId, stream, thinking, run, syncing, syncNow]);
+  }, [conversations, activeId, messages, setMessages, editingMessageIndex, editingContent, selectedModel, balance, late, isLoginModalOpen, collapsed, configuredModels, inputMessage, uploadedAttachments, isLoading, isPaymentProcessing, streamingConversationId, stream, thinking, run, syncing, syncNow]);
 
   const standIn = useMemo(() => ({ routes: labRoutes, picks: PICKS, currentKey }), [currentKey]);
   return (
