@@ -157,15 +157,23 @@ export function useWalletSend() {
         setError("No active mint selected. Please select a mint in your wallet settings.");
         return;
       }
-      if (nip60ProcessingInvoiceRef.current === value || nip60MeltQuoteId) return;
+      if (nip60ProcessingInvoiceRef.current === value) return;
 
       setNip60SendInvoice(value);
+      // a quote made for another invoice is never paid for this one
+      setNip60MeltQuoteId("");
+      setInvoiceAmount(null);
+      setInvoiceFeeReserve(null);
       nip60ProcessingInvoiceRef.current = value;
 
       const mintUrl = cashuStore.activeMintUrl;
+      // another invoice can replace this one while its quote is made: then
+      // this quote is dropped, and nothing here touches the other's state
+      const current = () => nip60ProcessingInvoiceRef.current === value;
       try {
         setIsNip60LoadingInvoice(true);
         const meltQuote = await createMeltQuote(mintUrl, value);
+        if (!current()) return;
         setNip60MeltQuoteId(meltQuote.quote);
         setInvoiceAmount(meltQuote.amount);
         setInvoiceFeeReserve(meltQuote.fee_reserve);
@@ -179,17 +187,20 @@ export function useWalletSend() {
           fee: meltQuote.fee_reserve,
         });
       } catch (err) {
+        if (!current()) return;
         setError("Failed to create melt quote: " + (err instanceof Error ? err.message : String(err)));
         setNip60MeltQuoteId("");
         setNip60SendInvoice("");
         setInvoiceAmount(null);
         setInvoiceFeeReserve(null);
       } finally {
-        setIsNip60LoadingInvoice(false);
-        nip60ProcessingInvoiceRef.current = null;
+        if (current()) {
+          setIsNip60LoadingInvoice(false);
+          nip60ProcessingInvoiceRef.current = null;
+        }
       }
     },
-    [cashuStore.activeMintUrl, nip60MeltQuoteId, addInvoice]
+    [cashuStore.activeMintUrl, addInvoice]
   );
 
   const handleNip60PaymentCancel = useCallback(() => {
@@ -197,6 +208,8 @@ export function useWalletSend() {
     setNip60MeltQuoteId("");
     setInvoiceAmount(null);
     setInvoiceFeeReserve(null);
+    // a quote still being made for it is dropped when it answers
+    setIsNip60LoadingInvoice(false);
     nip60ProcessingInvoiceRef.current = null;
   }, []);
 

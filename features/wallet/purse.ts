@@ -54,6 +54,12 @@ export function balancesOf(coins: Coin[]): Record<string, number> {
   );
 }
 
+/** What a token says, without asking its mint: for a preview before receiving. */
+export function peek(token: string): { mint: string; sats: number } {
+  const { mint, amount, unit } = getTokenMetadata(token);
+  return { mint, sats: toSats(amount, unit) };
+}
+
 /** The purse of `owner`: every move goes through the wallet book. */
 export function createPurse(
   owner: string,
@@ -79,9 +85,6 @@ export function createPurse(
         total(await executor.receive(token)),
         getTokenMetadata(token).unit
       ),
-    peek: (token) => {
-      const { mint, amount, unit } = getTokenMetadata(token);
-      return { mint, sats: toSats(amount, unit) };
-    },
+    peek,
   };
 }
