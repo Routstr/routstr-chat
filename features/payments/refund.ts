@@ -5,7 +5,7 @@ import type {
   WalletAdapter,
 } from "@routstr/sdk/wallet";
 import { lockedAfter } from "./lateWrites";
-import type { Keys, OldCredit, OtherDevices, Purse, Sdk } from "./ports";
+import type { Adopt, Keys, OldCredit, OtherDevices, Purse, Sdk } from "./ports";
 import { sdkWallet } from "./request";
 
 export interface RefundResult {
@@ -19,6 +19,7 @@ interface RefundDeps {
   sdk: Sdk;
   oldCredit: OldCredit;
   otherDevices: OtherDevices;
+  adopt: Adopt;
   live(): boolean;
 }
 
@@ -60,16 +61,32 @@ export async function refundCredit(
   const release = await keys.lock();
   try {
     await keys.reload("direct");
-    const wallet = sdkWallet(deps.purse, deps.live, false);
     const storage = lockedAfter(
       keys.storage("direct"),
       () => released,
       keys,
       "direct"
     );
-    results = await refundStorage(deps.sdk, wallet, storage, force);
+    // A payout the mint calls spent, met while one provider pays out a key:
+    // that provider says what it holds for it. A payout this wallet already
+    // took (its key could not be forgotten) is then done, instead of failing
+    // on every refund. Only here: after a failed reply the key stays, and the
+    // next refund brings it home.
+    let refunding: string | undefined;
+    const wallet = sdkWallet(deps.purse, deps.live, false, async (token) =>
+      refunding ? deps.adopt(token, refunding) : undefined
+    );
+    const payingOut: PayingOut = async (baseUrl, payOut) => {
+      refunding = baseUrl;
+      try {
+        return await payOut();
+      } finally {
+        refunding = undefined;
+      }
+    };
+    results = await refundStorage(deps.sdk, wallet, storage, force, payingOut);
     if (force) {
-      const others = await refundOthers(deps, wallet);
+      const others = await refundOthers(deps, wallet, payingOut);
       results.push(...others.results);
       refunded = others.refunded;
     }
@@ -111,18 +128,27 @@ async function sweepOld(deps: RefundDeps, wallet: WalletAdapter) {
   }
 }
 
+/** Runs one provider's payout of one key. */
+type PayingOut = <T>(baseUrl: string, payOut: () => Promise<T>) => Promise<T>;
+
 async function refundStorage(
   sdk: Sdk,
   wallet: WalletAdapter,
   storage: StorageAdapter,
-  force: boolean
+  force: boolean,
+  payingOut: PayingOut = (_, payOut) => payOut()
 ): Promise<RefundResult[]> {
   const client = sdk.client(wallet, storage);
   const spender = client.getCashuSpender();
   const mintUrl = wallet.getActiveMintUrl()!;
   const providers = force
     ? await spender.refundProviders(mintUrl, true)
-    : await refundLargeCredit(client.getBalanceManager(), storage, mintUrl);
+    : await refundLargeCredit(
+        client.getBalanceManager(),
+        storage,
+        mintUrl,
+        payingOut
+      );
   const xcashu = await spender.refundXcashuTokens(mintUrl);
   const held = await spender.recoverCachedReceiveTokens();
   await storage.flush?.();
@@ -136,7 +162,8 @@ async function refundStorage(
 async function refundLargeCredit(
   balances: BalanceManager,
   storage: StorageAdapter,
-  mintUrl: string
+  mintUrl: string,
+  payingOut: PayingOut
 ): Promise<RefundResult[]> {
   const results: RefundResult[] = [];
   // asking the provider about a key just used would only hold the lock longer
@@ -153,19 +180,25 @@ async function refundLargeCredit(
       // the wallet failed to receive, or removes a key the provider forgot
       if (balance.amount > 0 && balance.amount < KEEP_BELOW_MSATS) continue;
     }
-    const { success } = await balances.refundApiKey({
-      mintUrl,
-      baseUrl: key.baseUrl,
-      apiKey: key.key,
-      forceRefund: false,
-    });
+    const { success } = await payingOut(key.baseUrl, () =>
+      balances.refundApiKey({
+        mintUrl,
+        baseUrl: key.baseUrl,
+        apiKey: key.key,
+        forceRefund: false,
+      })
+    );
     results.push({ baseUrl: key.baseUrl, success });
   }
   return results;
 }
 
 /** A lost device's keys live only in the relay backup. */
-async function refundOthers(deps: RefundDeps, wallet: WalletAdapter) {
+async function refundOthers(
+  deps: RefundDeps,
+  wallet: WalletAdapter,
+  payingOut: PayingOut
+) {
   const balances = deps.sdk
     .client(wallet, deps.keys.storage("direct"))
     .getBalanceManager();
@@ -182,12 +215,14 @@ async function refundOthers(deps: RefundDeps, wallet: WalletAdapter) {
     );
     const { success } = isInvalidApiKey
       ? { success: true }
-      : await balances.refundApiKey({
-          mintUrl,
-          baseUrl: key.baseUrl,
-          apiKey: key.key,
-          forceRefund: true,
-        });
+      : await payingOut(key.baseUrl, () =>
+          balances.refundApiKey({
+            mintUrl,
+            baseUrl: key.baseUrl,
+            apiKey: key.key,
+            forceRefund: true,
+          })
+        );
     results.push({ baseUrl: key.baseUrl, success });
     if (success) refunded.push(key.key);
   }

@@ -1,5 +1,6 @@
 import { createAttachments } from "@/features/chat/attachments";
 import type { OtherDevices } from "@/features/keys/backup";
+import { exportedKeysFor } from "@/features/keys/exported";
 import { oldCredit } from "@/features/keys/legacy";
 import { keysFor } from "@/features/keys/service";
 import { createFileStore } from "@/platform/files";
@@ -60,6 +61,8 @@ export function startChat(
             }),
             oldCredit: oldCredit(() => node.paysFor(owner)?.url),
             otherDevices,
+            adopt: (token, baseUrl) =>
+              exportedKeysFor(owner).adopt(token, baseUrl),
           }),
         }
       : null;

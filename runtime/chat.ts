@@ -5,6 +5,7 @@ import type { AccountChatView } from "@/features/chat/view";
 import { AutoRefund } from "@/features/payments/autoRefund";
 import { heldSats } from "@/features/payments/held";
 import type {
+  Adopt,
   Keys,
   OldCredit,
   OtherDevices,
@@ -29,6 +30,8 @@ interface AccountChatDeps {
   spending(): Spending;
   oldCredit: OldCredit;
   otherDevices: OtherDevices;
+  /** A token a provider spent becomes this account's exported key. */
+  adopt: Adopt;
 }
 
 /** Chat and its payments for one account, for as long as it is the one in use. */

@@ -222,6 +222,52 @@ describe("sdkWallet", () => {
       message: "mint unreachable",
     });
   });
+
+  describe("a token the mint calls spent", () => {
+    const spent = () =>
+      Object.assign(new Error("Token already spent"), { code: 11001 });
+
+    it("asks what the provider holds for it, and tells the SDK it is done", async () => {
+      const { purse } = fakePurse();
+      purse.receive.mockRejectedValueOnce(spent());
+      const recover = vi.fn(async () => 0);
+
+      const result = await sdkWallet(
+        purse,
+        () => true,
+        false,
+        recover
+      ).receiveToken(tokenOf(7));
+
+      expect(recover).toHaveBeenCalledWith(tokenOf(7));
+      // nothing reached the wallet either way
+      expect(result).toEqual({ success: true, amount: 0, unit: "sat" });
+    });
+
+    it("keeps the token when the provider does not answer, or is not asked", async () => {
+      const { purse } = fakePurse();
+      purse.receive.mockRejectedValue(spent());
+      const silent = vi.fn(async (): Promise<number> => {
+        throw new Error("provider down");
+      });
+
+      const kept = await sdkWallet(
+        purse,
+        () => true,
+        false,
+        silent
+      ).receiveToken(tokenOf(7));
+      const notAsked = await sdkWallet(
+        purse,
+        () => true,
+        false,
+        async () => undefined
+      ).receiveToken(tokenOf(7));
+
+      expect(kept.success).toBe(false);
+      expect(notAsked.success).toBe(false);
+    });
+  });
 });
 
 describe("createPay", () => {
