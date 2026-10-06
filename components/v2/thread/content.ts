@@ -1,4 +1,4 @@
-import type { AnnotationData, Message, MessageContent } from "@/types/chat";
+import type { Message, MessageContent } from "@/types/chat";
 import { hostOf } from "./links";
 
 export interface Parsed {
@@ -7,18 +7,6 @@ export interface Parsed {
   images: MessageContent[];
   files: MessageContent[];
   sources: { url: string; title: string }[];
-}
-
-/** Annotated ranges become links, from the end so indexes stay valid. */
-function applyAnnotations(text: string, annotations?: AnnotationData[]) {
-  if (!annotations?.length) return text;
-  let out = text;
-  for (const a of [...annotations].sort((x, y) => y.start_index - x.start_index)) {
-    if (a.end_index <= a.start_index) continue;
-    const span = out.substring(a.start_index, a.end_index);
-    out = `${out.substring(0, a.start_index)}[${span}](${a.url})${out.substring(a.end_index)}`;
-  }
-  return out;
 }
 
 /** [1] markers become links to their citation, labelled by host. */
@@ -58,8 +46,9 @@ export function parseContent(content: Message["content"]): Parsed {
   const parts = texts.map((t) => {
     if (t.thinking && !thinking) thinking = t.thinking;
     t.citations?.forEach((u) => sources.set(u, hostOf(u)));
+    // annotations only list sources: the reply reads as the model wrote it, its own links included
     t.annotations?.forEach((a) => sources.set(a.url, a.title || hostOf(a.url)));
-    let s = applyCitations(applyAnnotations(t.text ?? "", t.annotations), t.citations);
+    let s = applyCitations(t.text ?? "", t.citations);
     // image models write "<image>" where the picture goes; the picture renders itself
     if (images.length) s = s.replace(/<image>/gi, "").trim();
     return s;
