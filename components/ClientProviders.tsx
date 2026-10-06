@@ -18,6 +18,7 @@ import { purseFor } from "@/runtime/wallet";
 import { HistoryContext } from "@/features/history/view";
 import { RelaysContext } from "@/features/relays/view";
 import { PurseContext } from "@/features/wallet/view";
+import { PurseContext as KeysPurseContext } from "@/features/keys/view";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
@@ -83,9 +84,11 @@ export default function ClientProviders({ children }: { children: ReactNode }) {
             <QueryClientProvider client={queryClient}>
               <HistoryContext.Provider value={history}>
                 <PurseContext.Provider value={purseFor}>
+                <KeysPurseContext.Provider value={purseFor}>
                   <InvoiceRecoveryProvider key={generation}>
                     {children}
                   </InvoiceRecoveryProvider>
+                </KeysPurseContext.Provider>
                 </PurseContext.Provider>
               </HistoryContext.Provider>
             </QueryClientProvider>
