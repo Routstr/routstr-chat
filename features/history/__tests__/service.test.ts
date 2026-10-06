@@ -275,8 +275,11 @@ describe("HistoryService: the keyring", () => {
       [...net.relay(R1).events.values()].filter((e) => e.kind === KIND_KEYRING)
     ).toHaveLength(1);
 
+    // a sync that could open no key synced nothing, and says so
+    await expect(history.sync()).resolves.toBe("failed");
+
     refuse = false;
-    await history.sync();
+    await expect(history.sync()).resolves.toBe("ok");
     expect(history.getStatus()).toBe("ready");
   });
 
@@ -886,6 +889,74 @@ describe("HistoryService: the first keyring and a broken disk", () => {
     history.start();
 
     await ready(history);
+  });
+
+  it("takes only keyring events as keyrings, whatever else a relay serves", async () => {
+    const net = network();
+    const who = person();
+    // a relay that ignores filters sends the person's own note with the keyrings
+    const note = await who.signer.signEvent({ kind: 1, created_at: NOW - 10, tags: [], content: "hello" });
+    net.relay(R1).ignoresFilters = true;
+    net.relay(R1).events.set(note.id, note);
+    const { history } = device({ net, who });
+    history.start();
+
+    await ready(history);
+    await expect(history.save("c1", ask("x"))).resolves.toBeTruthy();
+  });
+
+  it("never asks a switched-away account's signer to open a keyring", async () => {
+    const net = network();
+    const who = person();
+    await keyringOn(net, who);
+    let decrypts = 0;
+    const signer: HistorySigner = {
+      ...who.signer,
+      nip44: {
+        encrypt: who.signer.nip44!.encrypt,
+        decrypt: async (peer, text) => {
+          decrypts++;
+          return who.signer.nip44!.decrypt(peer, text);
+        },
+      },
+    };
+    const { history } = device({ net, who, signer });
+    // the switch lands while the relays are being asked for a keyring
+    const request = net.port.request;
+    net.port.request = (url, filter) => {
+      if (filter.kinds?.includes(KIND_KEYRING)) history.dispose();
+      return request(url, filter);
+    };
+    history.start();
+    for (let i = 0; i < 20; i++) await settle();
+
+    expect(decrypts).toBe(0);
+  });
+
+  it("keeps and publishes no first keyring once the account switched away during its prompt", async () => {
+    const who = person();
+    let answer!: () => void;
+    const signer: HistorySigner = {
+      ...who.signer,
+      nip44: {
+        decrypt: who.signer.nip44!.decrypt,
+        encrypt: async (peer, text) => {
+          await new Promise<void>((resolve) => (answer = resolve));
+          return who.signer.nip44!.encrypt(peer, text);
+        },
+      },
+    };
+    const { history, net, log } = device({ who, signer });
+    history.start();
+    await until(() => answer !== undefined);
+
+    history.dispose();
+    answer();
+    for (let i = 0; i < 20; i++) await settle();
+
+    const keyrings = (events: Iterable<{ kind: number }>) => [...events].filter((e) => e.kind === KIND_KEYRING);
+    expect(keyrings(log.rows.values())).toEqual([]);
+    expect(DEFAULT_RELAYS.flatMap((url) => keyrings(net.relay(url).events.values()))).toEqual([]);
   });
 
   it("never asks a switched-away account's signer for a first keyring", async () => {

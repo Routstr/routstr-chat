@@ -290,17 +290,6 @@ export const stripImageDataFromSingleMessage = (msg: Message): Message => {
 };
 
 /**
- * Strips image and file data from messages for storage optimization.
- * Removes base64 data URLs while preserving storageIds for later retrieval.
- * If no storageId exists, replaces media content with placeholder text.
- * @param messages Array of messages to process
- * @returns Array of messages with image/file data removed but structure preserved
- */
-export const stripImageDataFromMessages = (messages: Message[]): Message[] => {
-  return messages.map(stripImageDataFromSingleMessage);
-};
-
-/**
  * Extracts thinking tags from streaming AI response chunks.
  * Handles both <thinking> and <thinking> tag formats.
  * @param chunk The current chunk of streaming content

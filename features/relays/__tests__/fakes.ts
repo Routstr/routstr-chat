@@ -13,6 +13,8 @@ interface FakeRelay {
   nip77?: boolean;
   syncFails?: boolean;
   syncHangs?: boolean;
+  /** publishes wait for this before the relay takes them */
+  publishGate?: Promise<void>;
   received: NostrEvent[];
   /** every REQ filter it was asked */
   asked: Filter[];
@@ -61,6 +63,7 @@ export function network() {
       ),
     publish: async (url, event) => {
       const r = relay(url);
+      if (r.publishGate) await r.publishGate;
       if (r.down) return false;
       r.received.push(event);
       if (!r.events.has(event.id)) {
@@ -102,8 +105,8 @@ export function network() {
 export const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 /** Waits until `check` holds, a few event-loop turns at a time. */
-export async function until(check: () => boolean, turns = 200): Promise<void> {
-  for (let i = 0; i < turns; i++) {
+export async function until(check: () => boolean): Promise<void> {
+  for (let i = 0; i < 200; i++) {
     if (check()) return;
     await settle();
   }

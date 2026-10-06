@@ -36,9 +36,9 @@ export default function SyncPane({ ctx }: { ctx: Ctx }) {
         <p role="status" className="pk-sline">
           <span>There are no relays to sync with. Add one in Sync and storage.</span>
         </p>
-      ) : ctx.sync === "slow" ? (
+      ) : ctx.sync === "unreached" ? (
         <p role="status" className="pk-sline" data-s="fail">
-          <span>Your signer did not answer. Try again.</span>
+          <span>No relay answered. Check your connection and try again.</span>
         </p>
       ) : ctx.sync === "fail" ? (
         <p role="status" className="pk-sline" data-s="fail">

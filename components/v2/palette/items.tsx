@@ -45,7 +45,7 @@ const syncHint = (phone: boolean, sync: Sync, came: string[]) => {
     if (sync === "fail") return <span className="pk-st" data-fail="">Could not sync</span>;
     if (sync === "nokey") return <span className="pk-st">Sign in to sync</span>;
     if (sync === "norelay") return <span className="pk-st">Add a relay to sync</span>;
-    if (sync === "slow") return <span className="pk-st">No answer. Try again</span>;
+    if (sync === "unreached") return <span className="pk-st">No answer. Try again</span>;
     return undefined;
   }
   if (sync === "done")

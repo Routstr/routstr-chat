@@ -25,15 +25,6 @@ const accountContext = { manager: session.accounts, session };
 
 export { useAccountManager } from "@/features/session/view";
 
-const presetRelays = [
-  { url: "wss://relay.routstr.com", name: "Routstr Relay" },
-  { url: "wss://nos.lol", name: "nos.lol" },
-  { url: "wss://relay.primal.net", name: "Primal" },
-  { url: "wss://relay.damus.io", name: "Damus" },
-  { url: "wss://relay.nostr.band", name: "Nostr.Band" },
-  { url: "wss://relay.chorus.community", name: "Chorus Relay" },
-];
-
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -86,7 +77,7 @@ export default function ClientProviders({ children }: { children: ReactNode }) {
       <CatalogContext.Provider value={routing.catalog}>
       <ThemeProvider>
         <RelaysContext.Provider value={relays}>
-          <AppProvider presetRelays={presetRelays}>
+          <AppProvider>
             <QueryClientProvider client={queryClient}>
               <HistoryContext.Provider value={history}>
                 <InvoiceRecoveryProvider key={generation}>

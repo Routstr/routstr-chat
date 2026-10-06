@@ -47,8 +47,8 @@ export function useSync({
     const wait = Math.max(0, 900 - (performance.now() - s.start));
     s.timers.push(
       window.setTimeout(() => {
-        // a skipped sync says why, from what the app knows: no key, no relays, or a signer that did not answer
-        const why = !syncCtx.current.active ? "nokey" : !syncCtx.current.relays ? "norelay" : "slow";
+        // a sync that reached no relay says why, from what the app knows: no key, no relays, or none answered
+        const why = !syncCtx.current.active ? "nokey" : !syncCtx.current.relays ? "norelay" : "unreached";
         setSync(outcome === "ok" ? "done" : outcome === "offline" ? why : "fail");
         s.timers.push(
           window.setTimeout(() => {

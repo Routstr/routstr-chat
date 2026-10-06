@@ -38,15 +38,10 @@ function useHistoryValue<T>(
 export const useConversations = (): Conversation[] =>
   useHistoryValue((history) => history.getConversations(), EMPTY);
 
-/** Null while no account is signed in. */
-export const useHistoryStatus = (): HistoryStatus | null =>
-  useHistoryValue<HistoryStatus | null>((history) => history.getStatus(), null);
-
-/** True once this device's copy is on screen, or there is none to wait for. */
-export const useHistoryLoaded = (): boolean => {
-  const status = useHistoryStatus();
-  return status !== "loading";
-};
+/** True once this device's copy is on screen, or there is none to wait for
+ *  (no account signed in). */
+export const useHistoryLoaded = (): boolean =>
+  useHistoryValue<HistoryStatus | null>((history) => history.getStatus(), null) !== "loading";
 
 export const useThread = (
   conversationId: string | null
