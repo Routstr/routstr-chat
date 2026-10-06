@@ -66,12 +66,14 @@ export function useBook() {
 
 /** The secrets of the coins saved for this account. What is saved, not the
  *  store in memory: memory runs ahead when a save fails (storage full), and a
- *  stale tab's memory still holds coins another tab has spent. */
+ *  stale tab's memory still holds coins another tab has spent. Read straight
+ *  from localStorage: a read through the store's own storage counts as this
+ *  tab loading them, and its next save would then drop another tab's coins. */
 function savedSecrets(account: string): Set<string> {
-  const { name, storage } = useCashuStore.of(account).persist.getOptions();
-  const saved = storage?.getItem(name!) as StorageValue<{
-    proofs: Proof[];
-  }> | null;
+  const { name } = useCashuStore.of(account).persist.getOptions();
+  const saved = JSON.parse(
+    localStorage.getItem(name!) ?? "null"
+  ) as StorageValue<{ proofs: Proof[] }> | null;
   return new Set((saved?.state?.proofs ?? []).map((p) => p.secret));
 }
 

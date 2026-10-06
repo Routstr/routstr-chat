@@ -8,6 +8,7 @@ import { ownedStore } from "@/features/session/owned";
 import { persist } from "zustand/middleware";
 import { GetInfoResponse, Keyset, MintKeys } from "@cashu/cashu-ts";
 import { CashuToken } from "../core/domain/Token";
+import { coinSafeStorage } from "./coinSafeStorage";
 
 interface ProofWithEventId extends Proof {
   eventId: string;
@@ -370,6 +371,20 @@ export const useCashuStore = ownedStore<CashuStore>()(
         return get().pendingOnboardingToken;
       },
     }),
-    { name: "cashu" }
+    {
+      name: "cashu",
+      // a tab that saves after another tab changed the coins keeps that tab's
+      // coins, and its own copy follows what was saved
+      storage: coinSafeStorage(
+        () => window.localStorage,
+        (name, proofs) =>
+          useCashuStore
+            .of(name === "cashu" ? null : name.slice("cashu:".length))
+            .setState({ proofs })
+      ),
+      // each copy loads only under its owner's name (ownedStore), so no read
+      // under the shared name counts as the guest copy loading it
+      skipHydration: true,
+    }
   )
 );

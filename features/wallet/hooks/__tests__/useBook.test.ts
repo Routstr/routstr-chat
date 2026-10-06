@@ -22,12 +22,7 @@ vi.mock("@/features/wallet/state/cashuStore", () => ({
   useCashuStore: {
     getState: () => ({ proofs: state.memory }),
     of: () => ({
-      persist: {
-        getOptions: () => ({
-          name: "cashu:alice",
-          storage: { getItem: () => ({ state: { proofs: state.held } }) },
-        }),
-      },
+      persist: { getOptions: () => ({ name: "cashu:alice" }) },
     }),
   },
 }));
@@ -37,6 +32,10 @@ vi.mock("@/features/wallet/hooks/useCashuWallet", () => ({
     updateProofs: state.updateProofs,
   }),
 }));
+
+vi.stubGlobal("localStorage", {
+  getItem: () => JSON.stringify({ state: { proofs: state.held } }),
+});
 
 import { useBook } from "../useBook";
 
