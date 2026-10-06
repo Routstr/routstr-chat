@@ -2,6 +2,8 @@ import type { NostrEvent } from "nostr-tools";
 import { openDB as openNostrIdb, getEventTags, type NostrIDB } from "nostr-idb";
 import { getEventReplaceableKey } from "./replaceables";
 import { readLegacyEvents } from "./legacyMigration";
+import { KIND_PNS } from "@/lib/pns";
+import { KIND_KEYRING } from "@/features/history/keyring";
 
 const DB_NAME = "routstr-event-store";
 const MIGRATION_FLAG_KEY = "routstr:eventdb:migrated:v1";
@@ -71,9 +73,16 @@ async function runLegacyMigrationIfNeeded(db: NostrIDB): Promise<void> {
   }
 }
 
+// History's own events (features/history) share this database, but nothing reads them from this
+// store, and holding thousands of chat messages in it made every boot slow.
+const isHistory = (event: NostrEvent) =>
+  event.kind === KIND_PNS ||
+  event.kind === KIND_KEYRING ||
+  (event.kind === 5 && event.tags.some(([name, value]) => name === "k" && value === String(KIND_PNS)));
+
 async function readAllEvents(db: NostrIDB): Promise<NostrEvent[]> {
   const all = await db.getAll("events");
-  return all.map((record) => record.event);
+  return all.map((record) => record.event).filter((event) => !isHistory(event));
 }
 
 async function bootstrap(): Promise<NostrEvent[]> {
@@ -83,8 +92,8 @@ async function bootstrap(): Promise<NostrEvent[]> {
 }
 
 /**
- * Resolves with every event currently persisted (after legacy migration has
- * been applied). Consumed once by eventStore.ts to hydrate memory before
+ * Resolves with every event currently persisted but history's (after legacy
+ * migration has been applied). Consumed once by eventStore.ts to hydrate memory before
  * resolving eventDatabaseReady.
  */
 export const hydratedEvents: Promise<NostrEvent[]> =
