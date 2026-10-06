@@ -8,6 +8,7 @@ import {
 } from "@/utils/storageUtils";
 import { payWithNWC, isNWCConnected } from "@/lib/nwcPayment";
 import { useCashuStore } from "@/features/wallet/state/cashuStore";
+import { currentOwner } from "@/features/session/owned";
 import { useCashuWallet } from "@/features/wallet";
 import { toast } from "sonner";
 
@@ -73,6 +74,7 @@ export function useAutoRefill({
     async (settings: AutoRefillNWCSettings) => {
       if (isProcessingNWCRef.current) return;
       if (!cashuStore.activeMintUrl) return;
+      const owner = currentOwner();
 
       try {
         isProcessingNWCRef.current = true;
@@ -88,6 +90,7 @@ export function useAutoRefill({
         const result = await payWithNWC(
           settings.amount,
           cashuStore.activeMintUrl,
+          owner,
           {
             onPaymentSuccess: async (proofs, amount) => {
               // Add proofs to wallet

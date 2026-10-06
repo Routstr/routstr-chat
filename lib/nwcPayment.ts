@@ -72,12 +72,14 @@ export interface NWCPaymentResult {
  *
  * @param amount Amount in sats to pay
  * @param mintUrl The Cashu mint URL to create invoice against
+ * @param owner The account the coins go to, even if another one is active by then
  * @param callbacks Optional callbacks for invoice creation, success, and error
  * @returns Promise resolving to payment result
  */
 export async function payWithNWC(
   amount: number,
   mintUrl: string,
+  owner: string | null,
   callbacks?: NWCPaymentCallbacks
 ): Promise<NWCPaymentResult> {
   try {
@@ -104,7 +106,13 @@ export async function payWithNWC(
 
     if (preimage && preimage !== "") {
       // Payment successful, mint tokens
-      const proofs = await mintTokensFromPaidInvoice(mintUrl, quoteId, amount);
+      const proofs = await mintTokensFromPaidInvoice(
+        mintUrl,
+        quoteId,
+        amount,
+        undefined,
+        owner
+      );
 
       if (proofs.length > 0) {
         await callbacks?.onPaymentSuccess?.(proofs, amount);
@@ -128,7 +136,9 @@ export async function payWithNWC(
           const proofs = await mintTokensFromPaidInvoice(
             mintUrl,
             quoteId,
-            amount
+            amount,
+            undefined,
+            owner
           );
           if (proofs.length > 0) {
             await callbacks?.onPaymentSuccess?.(proofs, amount);

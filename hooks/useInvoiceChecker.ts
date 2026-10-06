@@ -8,7 +8,7 @@ import { mintTokensFromPaidInvoice } from "@/lib/cashuLightning";
 import { MintRecoveryUnavailableError } from "@/lib/mintQuoteRecovery";
 
 export function useInvoiceChecker() {
-  const { getPendingInvoices, updateInvoice, cleanupOldInvoices } =
+  const { getPendingInvoices, updateInvoice, cleanupOldInvoices, owner } =
     useInvoiceSync();
   const transactionHistoryStore = useTransactionHistoryStore();
   const [isChecking, setIsChecking] = useState(false);
@@ -44,7 +44,8 @@ export function useInvoiceChecker() {
           invoice.mintUrl,
           invoice.quoteId,
           invoice.amount,
-          1
+          1,
+          owner
         );
         if (proofs.length === 0) {
           throw new Error("Mint returned no proofs for the paid quote");
@@ -107,7 +108,7 @@ export function useInvoiceChecker() {
         return false;
       }
     },
-    [transactionHistoryStore, updateInvoice]
+    [owner, transactionHistoryStore, updateInvoice]
   );
 
   // Check a single melt invoice

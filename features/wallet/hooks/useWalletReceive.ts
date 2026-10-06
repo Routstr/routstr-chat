@@ -21,7 +21,7 @@ import {
 
 export function useWalletReceive(navigateToTab: (tab: "overview" | "invoice") => void) {
   const { balance, currentMintUnit } = useChat();
-  const { addInvoice, updateInvoice } = useInvoiceSync();
+  const { addInvoice, updateInvoice, owner } = useInvoiceSync();
   const { receiveToken } = useCashuToken();
   const cashuStore = useCashuStore();
   const { updateProofs } = useCashuWallet();
@@ -88,7 +88,7 @@ export function useWalletReceive(navigateToTab: (tab: "overview" | "invoice") =>
       invoiceId: string
     ) => {
       try {
-        const proofs = await mintTokensFromPaidInvoice(mintUrl, quoteId, amount);
+        const proofs = await mintTokensFromPaidInvoice(mintUrl, quoteId, amount, undefined, owner);
         if (proofs.length > 0) {
           await updateProofs({ mintUrl, proofsToAdd: proofs, proofsToRemove: [] });
           await updateInvoice(invoiceId, {
@@ -128,7 +128,7 @@ export function useWalletReceive(navigateToTab: (tab: "overview" | "invoice") =>
         }
       }
     },
-    [updateProofs, updateInvoice, transactionHistoryStore, currentMintUnit, navigateToTab]
+    [owner, updateProofs, updateInvoice, transactionHistoryStore, currentMintUnit, navigateToTab]
   );
 
   const createNip60Invoice = useCallback(

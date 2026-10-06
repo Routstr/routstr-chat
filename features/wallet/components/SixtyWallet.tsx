@@ -121,7 +121,9 @@ const SixtyWallet: React.FC<{
       const proofs = await mintTokensFromPaidInvoice(
         cashuStore.activeMintUrl,
         currentMeltQuoteId,
-        pendingAmount
+        pendingAmount,
+        undefined,
+        owner
       );
       console.log(proofs);
       if (proofs.length > 0) {
@@ -267,7 +269,7 @@ const SixtyWallet: React.FC<{
     removeMint,
   } = useCashuToken();
   const transactionHistoryStore = useTransactionHistoryStore();
-  const { addInvoice, updateInvoice } = useInvoiceSync();
+  const { addInvoice, updateInvoice, owner } = useInvoiceSync();
   const { triggerCheck } = useInvoiceChecker();
   const { spendCashu } = useCashuWithXYZ();
 

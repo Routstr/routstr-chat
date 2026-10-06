@@ -93,16 +93,24 @@ export async function createLightningInvoice(
  * @param mintUrl The URL of the mint to use
  * @param quoteId The quote ID from the invoice
  * @param amount Amount in satoshis
+ * @param owner The account the invoice was made for; the active one if left out or a guest
  * @returns The minted proofs
  */
 export async function mintTokensFromPaidInvoice(
   mintUrl: string,
   quoteId: string,
   amount: number,
-  maxAttempts: number = 40
+  maxAttempts: number = 40,
+  owner?: string | null
 ): Promise<Proof[]> {
   try {
-    return await claimPaidMintQuote(mintUrl, quoteId, amount, maxAttempts);
+    return await claimPaidMintQuote(
+      mintUrl,
+      quoteId,
+      amount,
+      maxAttempts,
+      owner
+    );
   } catch (error) {
     console.error("Error minting tokens from paid invoice:", error);
     throw error;

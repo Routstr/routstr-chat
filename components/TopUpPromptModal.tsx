@@ -93,7 +93,7 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
 
   const { updateProofs } = useCashuWallet();
   const cashuStore = useCashuStore();
-  const { addInvoice, updateInvoice } = useInvoiceSync();
+  const { addInvoice, updateInvoice, owner } = useInvoiceSync();
   const transactionHistoryStore = useTransactionHistoryStore();
   const { receiveToken } = useCashuToken();
   const isMobile = useMediaQuery("(max-width: 640px)");
@@ -537,7 +537,9 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
       const proofs = await mintTokensFromPaidInvoice(
         cashuStore.activeMintUrl,
         quoteId,
-        pendingAmount
+        pendingAmount,
+        undefined,
+        owner
       );
       if (proofs.length > 0) {
         await updateProofs({
@@ -580,7 +582,13 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
     pendingId: string
   ) => {
     try {
-      const proofs = await mintTokensFromPaidInvoice(mintUrl, qid, amt);
+      const proofs = await mintTokensFromPaidInvoice(
+        mintUrl,
+        qid,
+        amt,
+        undefined,
+        owner
+      );
       if (proofs.length > 0) {
         await updateProofs({
           mintUrl,
@@ -680,7 +688,9 @@ const TopUpPromptModal: React.FC<TopUpPromptModalProps> = ({
           const proofs = await mintTokensFromPaidInvoice(
             mintUrl,
             qid,
-            amt
+            amt,
+            undefined,
+            owner
           );
           if (proofs.length > 0) {
             await updateProofs({

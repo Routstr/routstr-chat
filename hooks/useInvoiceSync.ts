@@ -487,6 +487,7 @@ export function useInvoiceSync() {
     resetInvoiceRetry,
     getPendingInvoices,
     cleanupOldInvoices,
+    owner,
     cloudSyncEnabled,
     setCloudSyncEnabled,
     refetch,

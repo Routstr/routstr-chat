@@ -130,14 +130,18 @@ vi.mock("@cashu/cashu-ts", () => ({
 
 vi.mock("@/features/wallet/state/cashuStore", () => ({
   useCashuStore: {
-    of: () => ({
-      getState: () => cashu.state.store,
-      persist: { rehydrate: () => cashu.state.rehydrate() },
-    }),
+    of: (owner: string | null) => {
+      cashu.state.copyOwner = owner;
+      return {
+        getState: () => cashu.state.store,
+        persist: { rehydrate: () => cashu.state.rehydrate() },
+      };
+    },
   },
 }));
 
 import { claimPaidMintQuote, finalizeMintClaim } from "@/lib/mintQuoteRecovery";
+import { setOwner } from "@/features/session/owned";
 
 const MINT_URL = "https://mint.test";
 const STORAGE_PREFIX = "cashu_mint_preview_v1";
@@ -368,6 +372,21 @@ describe("paid mint quote recovery", () => {
       secret: "restored-7-8-9",
     });
     finalizeMintClaim(MINT_URL, "issued-quote");
+  });
+
+  it("settles into the account the invoice was made for, even after a switch", async () => {
+    cashu.state.wallets = [{ keysetId: "keyset-a" }];
+    setOwner("bob");
+
+    await claimPaidMintQuote(MINT_URL, "alice-quote", 64, 1, "alice");
+    expect(cashu.state.copyOwner).toBe("alice");
+
+    // a guest's invoice, and the guest has since become bob
+    await claimPaidMintQuote(MINT_URL, "guest-quote", 64, 1, null);
+    expect(cashu.state.copyOwner).toBe("bob");
+    setOwner(null);
+    finalizeMintClaim(MINT_URL, "alice-quote");
+    finalizeMintClaim(MINT_URL, "guest-quote");
   });
 
   it("coalesces concurrent claims for the same normalized quote", async () => {

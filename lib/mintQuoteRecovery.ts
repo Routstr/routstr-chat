@@ -440,18 +440,22 @@ async function claimPaidQuote(
   });
 }
 
+/** The coins go to `owner`, the account the invoice was made for, even if
+ *  another account is active by the time it is paid. A guest's invoice
+ *  (`null`) goes to the key that took the guest over, if one did. */
 export function claimPaidMintQuote(
   mintUrl: string,
   quoteId: string,
   amount: number,
-  maxAttempts = 40
+  maxAttempts = 40,
+  owner: string | null = null
 ): Promise<Proof[]> {
   const key = claimKey(mintUrl, quoteId);
   const existing = activeClaims.get(key);
   if (existing) return existing;
 
   const operation = claimPaidQuote(
-    useCashuStore.of(currentOwner()),
+    useCashuStore.of(owner ?? currentOwner()),
     mintUrl,
     quoteId,
     amount,

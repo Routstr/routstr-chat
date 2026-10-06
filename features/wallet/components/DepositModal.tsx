@@ -86,7 +86,7 @@ const DepositModal: React.FC<DepositModalProps> = ({
     error: hookError,
   } = useCashuToken();
   const transactionHistoryStore = useTransactionHistoryStore();
-  const { addInvoice, updateInvoice } = useInvoiceSync();
+  const { addInvoice, updateInvoice, owner } = useInvoiceSync();
   const { triggerCheck } = useInvoiceChecker();
 
   useEffect(() => {
@@ -196,7 +196,9 @@ const DepositModal: React.FC<DepositModalProps> = ({
       const proofs = await mintTokensFromPaidInvoice(
         cashuStore.activeMintUrl,
         currentMeltQuoteId,
-        pendingAmount
+        pendingAmount,
+        undefined,
+        owner
       );
       if (proofs.length > 0) {
         await updateProofs({
@@ -236,7 +238,13 @@ const DepositModal: React.FC<DepositModalProps> = ({
     pendingTxId: string
   ) => {
     try {
-      const proofs = await mintTokensFromPaidInvoice(mintUrl, quoteId, amount);
+      const proofs = await mintTokensFromPaidInvoice(
+        mintUrl,
+        quoteId,
+        amount,
+        undefined,
+        owner
+      );
 
       if (proofs.length > 0) {
         await updateProofs({
