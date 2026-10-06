@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { roomFontVariables } from "@/components/v2/fonts";
 
-const ROOM_BOOT = `try{if(location.pathname.indexOf("/classic")!==0){var d=document.documentElement,r=localStorage.getItem("routstr.room")||"auto";if(r==="auto")r=matchMedia("(prefers-color-scheme: dark)").matches?"night":"paper";d.dataset.room=r;if(!localStorage.getItem("routstr.firstlight"))d.dataset.firstlight="";if(r==="meridian"){var h=new Date().getHours();d.dataset.face=h>=6&&h<18?"day":"dusk"}}}catch(e){}`;
+const ROOM_BOOT = `try{var d=document.documentElement,r=localStorage.getItem("routstr.room")||"auto";if(r==="auto")r=matchMedia("(prefers-color-scheme: dark)").matches?"night":"paper";d.dataset.room=r;if(!localStorage.getItem("routstr.firstlight"))d.dataset.firstlight="";if(r==="meridian"){var h=new Date().getHours();d.dataset.face=h>=6&&h<18?"day":"dusk"}}catch(e){}`;
 import "./globals.css";
 import ClientProviders from "@/components/ClientProviders";
 import { Toaster } from "@/components/ui/sonner";

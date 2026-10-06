@@ -10,7 +10,7 @@
  * import { useCashuWallet, useCashuToken } from '@/features/wallet';
  *
  * // Use services directly (framework-agnostic)
- * import { MintService, TokenService } from '@/features/wallet';
+ * import { MintService } from '@/features/wallet';
  *
  * // Use domain types
  * import type { Wallet, Proof, CashuToken } from '@/features/wallet';

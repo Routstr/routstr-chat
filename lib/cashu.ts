@@ -7,7 +7,6 @@ import {
   Wallet,
   GetInfoResponse,
   MintKeys,
-  getDecodedToken,
   Keyset,
 } from "@cashu/cashu-ts";
 
@@ -92,14 +91,6 @@ export function formatBalance(balance: number, unit: string): string {
   } else {
     return `${addThousandsSeparator(balance)} ${unit}`;
   }
-}
-
-export function getTokenAmount(token: string): number {
-  const tokenObj = getDecodedToken(token);
-  return tokenObj.proofs.reduce(
-    (acc: number, proof: Proof) => acc + proof.amount,
-    0
-  );
 }
 
 /**

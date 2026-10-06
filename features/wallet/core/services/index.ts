@@ -4,5 +4,4 @@
  */
 
 export * from "./MintService";
-export * from "./TokenService";
 export * from "./LightningService";
