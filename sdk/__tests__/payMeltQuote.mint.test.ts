@@ -16,6 +16,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import fs from "fs";
 import { CheckStateEnum, Mint, Wallet, getEncodedTokenV4, type Proof } from "@cashu/cashu-ts";
+import type { MeltEntry } from "@/lib/meltJournal";
 
 const MINT = process.env.CASHU_TEST_MINT;
 const INVOICE_MINT = process.env.CASHU_TEST_INVOICE_MINT;
@@ -181,6 +182,23 @@ describe.skipIf(!MINT || !INVOICE_MINT)(`payMeltQuote against a real mint (${PAY
       return wallet.commit(add, remove);
     });
     expect(added.filter((a) => coins.some((c) => c.secret === a.secret))).toEqual([]);
+  });
+
+  it.skipIf(PAY_STATE !== "SETTLED")("settles an entry once when two reconcile passes run at once", async () => {
+    // a melt the mint never ran: its coins are unspent and its quote is still UNPAID
+    const coins = await funded(16);
+    const quote = await lightning.createMeltQuote(MINT!, await invoice(10));
+    const entry: MeltEntry = { v: 1, kind: "melt", id: "never-sent", mintUrl: MINT!, keysetId: coins[0].id, createdAt: 0, quoteId: quote.quote, inputs: coins, blanks: [] };
+    journal.putEntry(entry);
+    const added: Proof[] = [];
+    const commit = async (add: Proof[]) => void added.push(...add);
+    const [a, b] = await Promise.all([lightning.reconcileJournal(() => commit), lightning.reconcileJournal(() => commit)]);
+    expect(sum(added)).toBe(16);
+    expect([...a.values(), ...b.values()]).toEqual(["failed"]);
+    expect(journal.listEntries()).toHaveLength(0);
+    // the next pass still runs once that one is done
+    journal.putEntry({ ...entry, id: "never-sent-again" });
+    expect([...(await lightning.reconcileJournal(() => commit)).values()]).toEqual(["failed"]);
   });
 });
 

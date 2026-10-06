@@ -379,6 +379,10 @@ export async function payMeltQuote(
   return { ...settled, fee: meltQuote.fee_reserve || 0 };
 }
 
+// every wallet view runs the invoice checker, and focus and visibilitychange fire together: a second
+// pass at the same time would settle the same entries and commit their coins twice
+let reconciling = false;
+
 /**
  * Settles every journal entry the mint can answer for: a swap whose answer was lost, a melt that
  * was PENDING or unanswered. Melts report their outcome by quote id.
@@ -387,18 +391,24 @@ export async function reconcileJournal(
   commitFor: (mintUrl: string) => CommitProofs
 ): Promise<Map<string, MeltOutcome>> {
   const outcomes = new Map<string, MeltOutcome>();
-  for (const entry of listEntries()) {
-    // a payment still running in this or another tab owns its entry for now
-    if (Date.now() - entry.createdAt < IN_FLIGHT_MS) continue;
-    try {
-      const wallet = await walletFor(entry.mintUrl);
-      const commit = commitFor(entry.mintUrl);
-      if (entry.kind === "swap") await settleSwap(wallet, entry, commit);
-      else outcomes.set(entry.quoteId, (await settleMelt(wallet, entry, commit)).state);
-    } catch (error) {
-      // the mint did not answer: the entry stays for the next pass
-      console.error("Could not settle a pending wallet operation:", error);
+  if (reconciling) return outcomes;
+  reconciling = true;
+  try {
+    for (const entry of listEntries()) {
+      // a payment still running in this or another tab owns its entry for now
+      if (Date.now() - entry.createdAt < IN_FLIGHT_MS) continue;
+      try {
+        const wallet = await walletFor(entry.mintUrl);
+        const commit = commitFor(entry.mintUrl);
+        if (entry.kind === "swap") await settleSwap(wallet, entry, commit);
+        else outcomes.set(entry.quoteId, (await settleMelt(wallet, entry, commit)).state);
+      } catch (error) {
+        // the mint did not answer: the entry stays for the next pass
+        console.error("Could not settle a pending wallet operation:", error);
+      }
     }
+  } finally {
+    reconciling = false;
   }
   return outcomes;
 }
