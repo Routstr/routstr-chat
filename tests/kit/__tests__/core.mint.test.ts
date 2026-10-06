@@ -139,6 +139,38 @@ describe("X-Cashu", () => {
   }, 180_000);
 });
 
+// How soon the first byte comes, for a reply the upstream takes ~1.8 s to write. Core
+// needs the final cost before it can put the change in the X-Cashu header, so it holds
+// those replies whole; API-key replies stream. Generous margins: a busy machine is slow.
+it("streams API-key replies but holds X-Cashu ones until the end", async () => {
+  const firstByte = async (auth: Record<string, string>) => {
+    const t0 = Date.now();
+    const res = await fetch(`${kit.coreUrl}v1/chat/completions`, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...auth },
+      body: JSON.stringify({
+        model: "kit-echo",
+        messages: [
+          { role: "user", content: "[kit:chunk=300] [kit:text=a b c d e f]" },
+        ],
+        stream: true,
+      }),
+    });
+    const reader = res.body!.getReader();
+    await reader.read();
+    const ms = Date.now() - t0;
+    while (!(await reader.read()).done);
+    return ms;
+  };
+  expect(
+    await firstByte({ "X-Cashu": await kit.mintToken(200) })
+  ).toBeGreaterThanOrEqual(1500);
+  const key = (await info(await kit.mintToken(300))).api_key;
+  expect(await firstByte({ authorization: `Bearer ${key}` })).toBeLessThan(
+    1000
+  );
+});
+
 describe("API key", () => {
   it("creates a key from a token, charges replies, tops up and refunds, losing nothing but rounding", async () => {
     const models = (await (await fetch(`${kit.coreUrl}v1/models`)).json()) as {
