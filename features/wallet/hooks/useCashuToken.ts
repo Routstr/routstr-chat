@@ -12,7 +12,6 @@ import {
   CheckStateEnum,
   getEncodedTokenV4,
 } from "@cashu/cashu-ts";
-import { calculateInactiveKeysetBalances } from "../core/utils/balance";
 import { MintService } from "../core/services/MintService";
 import { hashToCurve } from "@cashu/crypto/modules/common";
 
@@ -578,163 +577,6 @@ export function useCashuToken() {
     return cleanupPromise;
   };
 
-  /**
-   * Migrate balances from inactive keysets to active keysets
-   * For each mint with inactive keyset balances, creates a token with wallet.send
-   * and receives it back with wallet.receive to swap into active keyset proofs
-   */
-  const migrateInactiveKeysetBalances = async () => {
-    try {
-      const proofs = await cashuStore.getAllProofs();
-      const mints = cashuStore.mints;
-
-      const inactiveBalances = calculateInactiveKeysetBalances(proofs, mints);
-
-      // Check if there are any inactive balances to migrate
-      const hasInactiveBalances = Object.values(inactiveBalances).some(
-        (keysetBalances) => Object.keys(keysetBalances).length > 0
-      );
-
-      if (!hasInactiveBalances) {
-        console.log("No inactive keyset balances to migrate");
-        return;
-      }
-
-      console.log(
-        "Found inactive keyset balances to migrate:",
-        inactiveBalances
-      );
-
-      // Process each mint
-      for (const mintUrl of Object.keys(inactiveBalances)) {
-        const keysetBalances = inactiveBalances[mintUrl];
-
-        if (Object.keys(keysetBalances).length === 0) {
-          continue;
-        }
-
-        const normalizedMintUrl = mintUrl.replace(/\/+$/, "");
-        const mintDetails = cashuStore.getMint(normalizedMintUrl);
-
-        if (!mintDetails) {
-          console.warn(`Mint details not found for ${normalizedMintUrl}`);
-          continue;
-        }
-
-        const keysets = mintDetails.keysets;
-        if (!keysets) {
-          console.warn(`No keysets found for mint ${normalizedMintUrl}`);
-          continue;
-        }
-
-        // Get active keysets for receiving
-        const activeKeysets = keysets.filter(
-          (k) => (k.active ?? (k as any)._active) === true
-        );
-
-        if (activeKeysets.length === 0) {
-          console.warn(`No active keysets found for mint ${normalizedMintUrl}`);
-          continue;
-        }
-
-        // Get preferred unit from active keysets
-        const units = [
-          ...new Set(activeKeysets.map((k) => k.unit ?? (k as any)._unit)),
-        ];
-        const preferredUnit = units?.includes("msat")
-          ? "msat"
-          : units?.includes("sat")
-            ? "sat"
-            : units?.[0];
-
-        // Process each inactive keyset
-        for (const keysetId of Object.keys(keysetBalances)) {
-          const balance = keysetBalances[keysetId];
-
-          if (balance <= 0) {
-            continue;
-          }
-
-          console.log(
-            `Migrating ${balance} from inactive keyset ${keysetId} on mint ${normalizedMintUrl}`
-          );
-
-          // Get proofs for this specific keyset and remove duplicates by C and secret
-          const keysetProofsRaw = proofs.filter((p) => p.id === keysetId);
-          const seen = new Set<string>();
-          const keysetProofs = keysetProofsRaw.filter((p) => {
-            const key = `${p.C}:${p.secret}`;
-            if (seen.has(key)) {
-              return false;
-            }
-            seen.add(key);
-            return true;
-          }); // Rare edge case where we have duplicate proofs. Only happened as I wasn't deleting evetns from evetnStore. Can be removed later. TODO.
-
-          if (keysetProofs.length === 0) {
-            console.warn(`No proofs found for keyset ${keysetId}`);
-            continue;
-          }
-
-          try {
-            // Create wallet instance
-            const mint = new Mint(normalizedMintUrl);
-            const walletInstance = new Wallet(mint, {
-              unit: preferredUnit,
-              keysets: keysets,
-              mintInfo: mintDetails.mintInfo,
-              keys: Object.values(mintDetails.keys || {}).flatMap((record) =>
-                Object.values(record)
-              ),
-            });
-
-            await walletInstance.loadMint();
-
-            // Try to send (swap) the proofs - this creates a token
-            const sendResult = await walletInstance.send(
-              balance,
-              keysetProofs,
-              {
-                keysetId: activeKeysets[0]?.id,
-              }
-            );
-
-            console.log(
-              `Successfully migrated keyset ${keysetId}: received ${sendResult.send.length} new proofs`
-            );
-
-            // Update proofs in store - remove old inactive keyset proofs, add new active ones
-            await updateProofs({
-              mintUrl: normalizedMintUrl,
-              proofsToAdd: [...sendResult.keep, ...sendResult.send],
-              proofsToRemove: keysetProofs,
-            });
-          } catch (error) {
-            const message =
-              error instanceof Error ? error.message : String(error);
-
-            if (
-              message.includes("Token already spent") ||
-              message.includes("Not enough funds available")
-            ) {
-              console.log(
-                `Proofs for keyset ${keysetId} appear to be spent, cleaning up...`
-              );
-
-              // Clean spent proofs for this specific keyset
-              await cleanSpentProofs(normalizedMintUrl, keysetId);
-            } else {
-              console.error(`Failed to migrate keyset ${keysetId}: ${message}`);
-            }
-          }
-        }
-      }
-
-      console.log("Inactive keyset balance migration completed");
-    } catch (error) {
-      console.error("Error during inactive keyset migration:", error);
-    }
-  };
 
   /**
    * Clean up pending proofs after successful token creation
@@ -769,7 +611,6 @@ export function useCashuToken() {
     addMintIfNotExists,
     removeMint,
     resetRecoveryState,
-    migrateInactiveKeysetBalances,
     isLoading,
     error,
   };
