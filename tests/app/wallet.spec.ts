@@ -62,3 +62,38 @@ test("switches between two keys on one device, each with its own money", async (
   await v2.ready(page);
   await shows(40);
 });
+
+// KNOWN GAP in v2 (and main), owned by the wallet thread: each tab keeps its own copy of the
+// tokens you made and saves the whole list, so a tab that saves after another tab made a token
+// writes over it, and that token can no longer be taken back (checked on v2/ui f69383f: one
+// token of two left). The wallet's IndexedDB store fixes it; then this passes and test.fail
+// below reports it: delete that line.
+test("keeps a token another tab made when this tab saves next (known gap)", async ({
+  page,
+  context,
+  kit,
+  appUrl,
+}) => {
+  test.fail(true, "two tabs: the later save drops the other tab's token");
+  await seedAccounts(context, [newKey()]);
+  await v2.open(page, appUrl);
+  await v2.receive(page, await kit.mintToken(50));
+  await v2.useMint(page, kit.env.mintUrl);
+
+  const other = await context.newPage();
+  await v2.open(other, appUrl);
+  await expect.poll(() => v2.balance(other)).toBe(50);
+  await v2.makeToken(other, 10);
+  // the first tab, which has not seen that token, saves its list next
+  await v2.makeToken(page, 5);
+
+  await page.reload();
+  await v2.ready(page);
+  await page
+    .getByRole("button", { name: /^Open wallet\./ })
+    .first()
+    .click();
+  await expect(
+    page.getByRole("button", { name: /not claimed yet/ })
+  ).toContainText("2 tokens not claimed yet15 sats you can still take back");
+});
