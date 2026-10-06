@@ -1,5 +1,6 @@
 import { AccountManager, type IAccount } from "applesauce-accounts";
 import { registerCommonAccountTypes } from "applesauce-accounts/accounts";
+import type { Saved } from "./saved";
 
 export interface AccountMetadata {
   name: string;
@@ -31,6 +32,13 @@ export class SessionService {
   private readonly manager = new AccountManager<AccountMetadata>();
   private session: Session = { accountId: null, pubkey: null, generation: 0 };
   private listeners = new Set<() => void>();
+  private storage!: KeyValueStorage;
+  private saved!: Saved;
+  // the saved copy is written only once it was read, so a mirror that was
+  // wiped while the app was closed never writes over it
+  private synced = false;
+  // removed in this tab: a saved copy read later must not bring them back
+  private readonly gone = new Set<string>();
 
   constructor() {
     registerCommonAccountTypes(this.manager);
@@ -41,22 +49,32 @@ export class SessionService {
   }
 
   /** Runs once, before the first render, so nothing starts up believing
-   *  there is no account. */
-  boot(storage: KeyValueStorage): void {
-    this.manager.fromJSON(JSON.parse(storage.getItem(ACCOUNTS_KEY) || "[]"));
-    const activeId = storage.getItem(ACTIVE_KEY);
-    if (activeId && this.manager.getAccount(activeId)) {
-      this.manager.setActive(activeId);
-    }
-
-    this.manager.accounts$.subscribe(() =>
-      storage.setItem(ACCOUNTS_KEY, JSON.stringify(this.manager.toJSON()))
-    );
+   *  there is no account. The mirror in `storage` is read at once; accounts
+   *  only the `saved` copy still has (the mirror was wiped) come back when it
+   *  has been read. */
+  boot(storage: KeyValueStorage, saved: Saved): void {
+    this.storage = storage;
+    this.saved = saved;
+    this.load(storage.getItem(ACCOUNTS_KEY), storage.getItem(ACTIVE_KEY));
+    this.manager.accounts$.subscribe(() => this.save());
     this.manager.active$.subscribe((account) => {
-      if (account) storage.setItem(ACTIVE_KEY, account.id);
-      else storage.removeItem(ACTIVE_KEY);
+      this.save();
       this.update(account);
     });
+    Promise.all([saved.get(ACCOUNTS_KEY), saved.get(ACTIVE_KEY)])
+      .then(([accounts, activeId]) => {
+        this.load(accounts ?? null, activeId ?? null);
+        // and what another tab wrote to the mirror meanwhile
+        this.load(storage.getItem(ACCOUNTS_KEY), storage.getItem(ACTIVE_KEY));
+        this.synced = true;
+        this.save();
+      })
+      .catch((error) => console.error("[session] saved accounts", error));
+  }
+
+  /** Writes the mirror again after another tab wiped it. */
+  repair(): void {
+    this.save();
   }
 
   /** Adds an account and makes it the active one. */
@@ -77,7 +95,36 @@ export class SessionService {
     if (this.manager.active$.value?.id === id && next) {
       this.manager.setActive(next);
     }
+    this.gone.add(id);
     this.manager.removeAccount(id);
+  }
+
+  /** Takes in accounts this tab does not have yet, and makes the given one
+   *  active when none is. */
+  private load(accounts: string | null, activeId: string | null): void {
+    const saved: ReturnType<AccountManager["toJSON"]> = JSON.parse(
+      accounts || "[]"
+    );
+    this.manager.fromJSON(saved.filter((a) => !this.gone.has(a.id)));
+    if (!this.manager.active$.value && activeId) {
+      if (this.manager.getAccount(activeId)) this.manager.setActive(activeId);
+    }
+  }
+
+  private save(): void {
+    const accounts = JSON.stringify(this.manager.toJSON());
+    const activeId = this.manager.active$.value?.id;
+    this.storage.setItem(ACCOUNTS_KEY, accounts);
+    if (activeId) this.storage.setItem(ACTIVE_KEY, activeId);
+    else this.storage.removeItem(ACTIVE_KEY);
+    if (!this.synced) return;
+    const done = Promise.all([
+      this.saved.put(ACCOUNTS_KEY, accounts),
+      activeId
+        ? this.saved.put(ACTIVE_KEY, activeId)
+        : this.saved.delete(ACTIVE_KEY),
+    ]);
+    done.catch((error) => console.error("[session] saving accounts", error));
   }
 
   subscribe = (listener: () => void): (() => void) => {
