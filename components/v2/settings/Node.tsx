@@ -52,7 +52,8 @@ export default function Node() {
               unauth: true,
             }
           : {
-              text: "Could not reach a routstrd node at that address. Check it, and that the node is running.",
+              // the node code says what went wrong in words meant for the person
+              text: e instanceof RemoteNodeError ? e.message : "Could not reach a routstrd node at that address. Check it, and that the node is running.",
             }
       );
     } finally {
