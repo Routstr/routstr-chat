@@ -56,6 +56,8 @@ export class Relays {
   private listeners = new Set<() => void>();
   private readonly override: string[] | null;
   private list: string[] | undefined;
+  // "url id" of each event on its way to a relay
+  private sending = new Set<string>();
 
   constructor(
     readonly port: RelayPort,
@@ -133,13 +135,18 @@ export class Relays {
     for (const result of results) {
       if (!result.events) continue;
       answered.push(result.url);
-      result.events.forEach((event) => events.set(event.id, event));
+      result.events.forEach((event) => {
+        // one relay's broken copy must not hide another's good one
+        const had = events.get(event.id);
+        if (!had || (had.sig !== event.sig && !verifyEvent(had))) {
+          events.set(event.id, event);
+        }
+      });
     }
-    await Promise.all(
-      results.map(({ url, events: got, lacks }) =>
-        got ? this.send(url, lacks) : null
-      )
-    );
+    // uploads go on in the background: what the relays sent is shown now
+    results.forEach(({ url, events: got, lacks }) => {
+      if (got) void this.send(url, lacks);
+    });
     return { events: [...events.values()], answered };
   }
 
@@ -214,13 +221,20 @@ export class Relays {
     }
   }
 
+  // A sync during a long upload sends only what is not already on its way.
   private async send(url: string, events: NostrEvent[]): Promise<void> {
-    for (let i = 0; i < events.length; i += UPLOAD_BATCH) {
-      await Promise.all(
-        events
-          .slice(i, i + UPLOAD_BATCH)
-          .map((event) => this.port.publish(url, event).catch(() => false))
-      );
+    const fresh = events.filter((e) => !this.sending.has(`${url} ${e.id}`));
+    fresh.forEach((e) => this.sending.add(`${url} ${e.id}`));
+    try {
+      for (let i = 0; i < fresh.length; i += UPLOAD_BATCH) {
+        await Promise.all(
+          fresh
+            .slice(i, i + UPLOAD_BATCH)
+            .map((event) => this.port.publish(url, event).catch(() => false))
+        );
+      }
+    } finally {
+      fresh.forEach((e) => this.sending.delete(`${url} ${e.id}`));
     }
   }
 }

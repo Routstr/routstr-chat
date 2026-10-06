@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { finalizeEvent, generateSecretKey, getPublicKey } from "nostr-tools";
 import { firstValueFrom, filter, toArray, take } from "rxjs";
 import { DEFAULT_RELAYS, Relays } from "../service";
-import { memoryStorage, network, settle } from "./fakes";
+import { memoryStorage, network, settle, until } from "./fakes";
 
 const [R1, R2, R3] = DEFAULT_RELAYS;
 const secret = generateSecretKey();
@@ -176,6 +176,38 @@ describe("AccountRelays", () => {
         .received.map((e) => e.id)
         .sort()
     ).toEqual(mine.map((e) => e.id).sort());
+  });
+
+  it("answers without waiting for its uploads, and never sends one event twice at once", async () => {
+    const net = network();
+    const [theirs, ours] = [sign(1080, 1), sign(1080, 2)];
+    net.relay(R1).events.set(theirs.id, theirs);
+    let release!: () => void;
+    net.relay(R1).publishGate = new Promise((resolve) => (release = resolve));
+    const account = new Relays(net.port, memoryStorage(), `?relays=${R1}`).of(OWNER);
+
+    const first = await account.fetch({ kinds: [1080], authors: [OWNER] }, [ours]);
+    expect(first.events.map((e) => e.id)).toEqual([theirs.id]);
+    // a second sync while the first upload is still on its way
+    await account.fetch({ kinds: [1080], authors: [OWNER] }, [ours]);
+    release();
+
+    await until(() => net.relay(R1).received.length > 0);
+    await settle();
+    expect(net.relay(R1).received.map((e) => e.id)).toEqual([ours.id]);
+  });
+
+  it("keeps the copy of an event that verifies when relays send different ones", async () => {
+    const net = network();
+    const real = sign(1081, 1, [], "the keyring");
+    const broken = { ...real, content: "tampered" };
+    net.relay(R1).events.set(real.id, real);
+    net.relay(R2).events.set(broken.id, broken);
+    const account = new Relays(net.port, memoryStorage(), `?relays=${R1},${R2}`).of(OWNER);
+
+    const { events } = await account.fetch({ kinds: [1081], authors: [OWNER] });
+
+    expect(events.map((e) => e.content)).toEqual(["the keyring"]);
   });
 
   it("asks a NIP-77 relay only for what this device lacks, and sends it only what it lacks", async () => {
