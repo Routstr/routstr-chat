@@ -41,9 +41,11 @@ vi.mock("@/features/wallet/hooks/useCashuWallet", () => ({
 import { useBook } from "../useBook";
 
 const proof = { id: "00ad268c4d1f5826", amount: 8, secret: "s1", C: "02" };
+// a screen that holds the book, rendered as `owner`
+const Screen = () => useBook();
 const render = (owner: string | undefined) => {
   state.rendered = owner;
-  return useBook();
+  return Screen();
 };
 
 beforeEach(() => {
