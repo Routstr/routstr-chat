@@ -32,8 +32,6 @@ export * from "./state";
 // React Hooks (React integration)
 export * from "./hooks";
 
-// UI Components (React components)
-export * from "./components";
 
 // Constants
 export { defaultMints } from "./core/services/MintService";

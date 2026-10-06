@@ -72,11 +72,29 @@ export class CatalogService {
     return this.deps.discoveryAdapter.getRoutstr21Models();
   }
 
+  /** The mints a provider takes, as the last discovery found them. */
+  mintsOf(baseUrl: string): string[] {
+    const all = this.deps.discoveryAdapter.getCachedMints();
+    const bare = baseUrl.replace(/\/+$/, "");
+    return all[baseUrl] ?? all[bare] ?? all[`${bare}/`] ?? [];
+  }
+
   /** Providers that serve this model, cheapest first, as routing ranks them. */
   routes(modelId: string) {
     return this.deps.providerManager.getProviderPriceRankingForModel(modelId, {
       torMode: this.deps.torMode(),
     });
+  }
+
+  /** What a provider itself lists for a model, whatever its routing state:
+   *  a pin to a provider that dropped out is priced at its own listing. */
+  listedAt(baseUrl: string, modelId: string): Model | undefined {
+    const cached =
+      this.deps.discoveryAdapter.getCachedModels() as unknown as Record<
+        string,
+        Model[]
+      >;
+    return cached[baseUrl]?.find((model) => model.id === modelId);
   }
 
   /** The managers once their cache holds models: the SDK then routes from

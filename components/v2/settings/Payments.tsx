@@ -139,26 +139,30 @@ export default function Payments() {
         <div className="st-block">
           <div className="st-payhead">
             <p className="st-rt">How replies are paid</p>
-            <p className="st-payv">{perRequest ? "Per request" : "API key"}</p>
+            <p className="st-payv">{money.node ? "Your node" : perRequest ? "Per request" : "API key"}</p>
           </div>
-          <div className="st-flow" data-mode={perRequest ? "x-cashu" : "api-key"} aria-hidden="true">
-            <span className="st-flow-end">You</span>
-            <span className="st-lanes">
-              <span className="st-lane out" data-k="solid">
-                <em>{perRequest ? "ecash for the reply" : "sats to a key"}</em>
-                <i className="st-run" />
+          {!money.node && (
+            <div className="st-flow" data-mode={perRequest ? "x-cashu" : "api-key"} aria-hidden="true">
+              <span className="st-flow-end">You</span>
+              <span className="st-lanes">
+                <span className="st-lane out" data-k="solid">
+                  <em>{perRequest ? "ecash for the reply" : "sats to a key"}</em>
+                  <i className="st-run" />
+                </span>
+                <span className="st-lane back" data-k={perRequest ? "solid" : "dash"}>
+                  <em>{perRequest ? "change back" : "change on Return"}</em>
+                  <i className="st-run" />
+                </span>
               </span>
-              <span className="st-lane back" data-k={perRequest ? "solid" : "dash"}>
-                <em>{perRequest ? "change back" : "change on Return"}</em>
-                <i className="st-run" />
-              </span>
-            </span>
-            <span className="st-flow-end">Provider</span>
-          </div>
+              <span className="st-flow-end">Provider</span>
+            </div>
+          )}
           <p className="st-seg-note">
-            {perRequest
-              ? "Each message carries its own ecash and the change comes back to your wallet."
-              : "Sats go to a key at the provider. What replies do not use waits there until you return it to the wallet."}
+            {money.node
+              ? "Your routstrd node pays for replies from its own wallet. This wallet is not used."
+              : perRequest
+                ? "Each message carries its own ecash and the change comes back to your wallet."
+                : "Sats go to a key at the provider. What replies do not use waits there until you return it to the wallet."}
           </p>
         </div>
       </Grp>

@@ -1,8 +1,7 @@
 import { useCallback, useState } from "react";
 import type { MessageAttachment } from "@/types/chat";
 import { extractTextFromPdf } from "@/components/v2/composer/pdfUtils";
-import { saveFile } from "@/utils/indexedDb";
-import { useBlossomSync } from "@/hooks/useBlossomSync";
+import { useFiles, useFileSync } from "@/features/chat/view";
 import { useHistoryKeys } from "@/features/history/view";
 
 /* Taking files into the composer: the same rules the old composer applied
@@ -32,7 +31,8 @@ export function useAttachments(
 ) {
   // PDFs whose text is still being read
   const [reading, setReading] = useState<ReadonlySet<string>>(new Set());
-  const { uploadToBlossomAsync, blossomSyncEnabled } = useBlossomSync();
+  const store = useFiles();
+  const [{ on: blossomSyncEnabled }] = useFileSync();
   const pnsKeys = useHistoryKeys();
 
   const patch = useCallback(
@@ -63,15 +63,8 @@ export function useAttachments(
         }
         try {
           const dataUrl = await toDataUrl(file);
-          let storageId: string | undefined;
-          try {
-            storageId = await saveFile(file);
-          } catch (error) {
-            const msg = error instanceof Error ? error.message : "";
-            if (msg.includes("quota")) {
-              say("Storage full, may not be kept");
-            }
-          }
+          const storageId = await store?.keep(dataUrl);
+          if (store && !storageId) say("Storage full, may not be kept");
           const name =
             file.name || `pasted-image-${Date.now()}.${file.type.split("/")[1] ?? "png"}`;
           built.push({
@@ -112,20 +105,21 @@ export function useAttachments(
               })
             );
         }
-        if (blossomSyncEnabled && pnsKeys) {
-          uploadToBlossomAsync(file, pnsKeys)
-            .then((res) =>
+        if (store && blossomSyncEnabled && pnsKeys) {
+          // copy() never rejects; it names only the copies made
+          void store
+            .copy(attachment.dataUrl, new AbortController().signal)
+            .then((copies) =>
               patch(attachment.id, (a) =>
-                res
-                  ? { ...a, blossomHash: res.hash, blossomServers: res.servers, blossomUploadStatus: "success" }
+                copies.blossomHash
+                  ? { ...a, ...copies, blossomUploadStatus: "success" }
                   : { ...a, blossomUploadStatus: "failed" }
               )
-            )
-            .catch(() => patch(attachment.id, (a) => ({ ...a, blossomUploadStatus: "failed" })));
+            );
         }
       }
     },
-    [blossomSyncEnabled, pnsKeys, patch, setAttachments, uploadToBlossomAsync, say]
+    [store, blossomSyncEnabled, pnsKeys, patch, setAttachments, say]
   );
 
   const remove = useCallback(

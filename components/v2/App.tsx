@@ -3,9 +3,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { AuthProvider } from "@/context/AuthProvider";
 import { useSession } from "@/features/session/view";
-import { ChatProvider } from "@/context/ChatProvider";
 import { useAccountChat, useAnswering } from "@/features/chat/view";
 import { KeepAliveProvider, useKeepAliveContext } from "@/components/pwa/KeepAliveProvider";
 import { QueryTimeoutModal } from "@/components/QueryTimeoutModal";
@@ -137,13 +135,9 @@ function Content() {
 export default function App() {
   return (
     <RoomProvider>
-      <AuthProvider>
-        <ChatProvider>
-          <KeepAliveProvider>
-            <Content />
-          </KeepAliveProvider>
-        </ChatProvider>
-      </AuthProvider>
+      <KeepAliveProvider>
+        <Content />
+      </KeepAliveProvider>
     </RoomProvider>
   );
 }

@@ -39,6 +39,7 @@ function setup(cache: Record<string, unknown[]> = {}) {
   const deps = {
     discoveryAdapter: {
       getCachedModels: () => cache,
+      getCachedMints: () => ({ [PUBLIC]: ["https://mint.example"] }),
       getBaseUrlsList: () => discovery.bases,
       setBaseUrlsList: (urls: string[]) => (discovery.bases = urls),
       setBaseUrlsLastUpdate: (at: number) => (discovery.stamped = at),
@@ -77,6 +78,13 @@ describe("CatalogService", () => {
       loading: false,
     });
     expect(deps.mintDiscovery.discoverMints).toHaveBeenCalledWith([PUBLIC]);
+  });
+
+  it("tells which mints a provider takes, with or without its closing slash", () => {
+    const { catalog } = setup();
+    expect(catalog.mintsOf(PUBLIC)).toEqual(["https://mint.example"]);
+    expect(catalog.mintsOf(PUBLIC.slice(0, -1))).toEqual(["https://mint.example"]);
+    expect(catalog.mintsOf("https://other.example/")).toEqual([]);
   });
 
   it("runs one pass at a time and skips a pass a newer one replaced", async () => {
@@ -270,5 +278,16 @@ describe("CatalogService", () => {
     await catalog.refresh();
 
     expect(catalog.warm()).toMatchObject({ modelManager: expect.anything() });
+  });
+});
+
+describe("CatalogService.listedAt", () => {
+  it("gives what one provider lists for a model, even when it no longer routes it", () => {
+    const { catalog, cache } = setup();
+    cache[PUBLIC] = [model("a"), model("b")];
+
+    expect(catalog.listedAt(PUBLIC, "b")?.id).toBe("b");
+    expect(catalog.listedAt(PUBLIC, "c")).toBeUndefined();
+    expect(catalog.listedAt("https://gone.example/", "a")).toBeUndefined();
   });
 });

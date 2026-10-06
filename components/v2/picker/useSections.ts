@@ -1,9 +1,8 @@
 import { useCallback, useMemo, useState } from "react";
 import { getCompanyMeta } from "@/components/v2/picker/modelCompanies";
-import { normalizeBaseUrl } from "@/utils/modelUtils";
 import type { Catalog } from "./useCatalog";
 import type { Filters } from "./helpers";
-import { draws, isPrivate, makerOf, measureFor, parseKey, searchRank, sortRows, type Row, type Scope, type SortKey } from "./catalog";
+import { baseKey, draws, isPrivate, makerOf, measureFor, parseKey, searchRank, sortRows, type Row, type Scope, type SortKey } from "./catalog";
 
 export interface Section {
   title: string;
@@ -43,7 +42,7 @@ export function useSections({
       keys.flatMap((key): Row[] => {
         const { id, base } = parseKey(key);
         const model = byId.get(id);
-        return model ? [{ key, model, pin: base ? normalizeBaseUrl(base) || null : null }] : [];
+        return model ? [{ key, model, pin: base ? baseKey(base) : null }] : [];
       }),
     [byId]
   );

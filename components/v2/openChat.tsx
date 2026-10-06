@@ -34,7 +34,8 @@ export function OpenChatProvider({ initial, children }: { initial?: string | nul
   const pathname = usePathname();
   const params = useSearchParams();
   const linked = params.get("chatId");
-  const owner = useSession().pubkey ?? "";
+  // the same key added twice is two accounts, each with its own chats
+  const owner = useSession().accountId ?? "";
   const conversations = useConversations();
   const loaded = useHistoryLoaded();
 
@@ -47,9 +48,10 @@ export function OpenChatProvider({ initial, children }: { initial?: string | nul
   useEffect(() => {
     tab.linkTaken = true;
   }, []);
-  // a linked chat this device does not have: the latest one opens instead, once the chats are in
+  // a linked chat this device does not have: the latest one opens instead, once there are chats
+  // (a signed-out page, or history still coming in, waits with the link as it is)
   const [checked, setChecked] = useState(!fromLink);
-  if (!checked && loaded) {
+  if (!checked && loaded && conversations.length > 0) {
     setChecked(true);
     if (id && !conversations.some((c) => c.id === id)) setId(conversations[0]?.id ?? null);
   }

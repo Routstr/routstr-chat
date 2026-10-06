@@ -1,37 +1,20 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { getLogs, clearLogs, subscribeLogs, getLogCount } from "@/lib/logger";
+import { useSyncExternalStore } from "react";
+import { clearLogs, getLogs, subscribeLogs } from "@/lib/logger";
 
-/**
- * Hook to access and manage application logs
- * Automatically updates when new logs are added
- */
+// the log as text lines, made again only after the log changed
+let lines: string[] | null = null;
+const read = () => (lines ??= getLogs());
+const subscribe = (onChange: () => void) =>
+  subscribeLogs(() => {
+    lines = null;
+    onChange();
+  });
+const NONE: string[] = [];
+
+/** The app's log, kept up to date as lines are added. */
 export const useLogs = () => {
-  const [logs, setLogs] = useState<string[]>([]);
-  const [logCount, setLogCount] = useState(0);
-
-  useEffect(() => {
-    // Initial load
-    setLogs(getLogs());
-    setLogCount(getLogCount());
-
-    // Subscribe to changes
-    const unsubscribe = subscribeLogs(() => {
-      setLogs(getLogs());
-      setLogCount(getLogCount());
-    });
-
-    return unsubscribe;
-  }, []);
-
-  const handleClearLogs = useCallback(() => {
-    clearLogs();
-  }, []);
-
-  return {
-    logs,
-    logCount,
-    clearLogs: handleClearLogs,
-  };
+  const logs = useSyncExternalStore(subscribe, read, () => NONE);
+  return { logs, logCount: logs.length, clearLogs };
 };

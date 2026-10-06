@@ -1,5 +1,5 @@
 import { ReplyCosts } from "@/features/chat/costs";
-import type { ChatHistory, Pay } from "@/features/chat/ports";
+import { DEFAULT_FILE_SERVERS, type ChatHistory, type Pay } from "@/features/chat/ports";
 import { ChatService } from "@/features/chat/service";
 import type { AccountChatView } from "@/features/chat/view";
 import type { CatalogService } from "@/features/catalog/service";
@@ -9,6 +9,8 @@ import { LAB_MODELS, PICKS, labRoutes } from "@/components/v2/lab/catalog";
 /* Development only. The real chat engine over the lab's chats, paid by a
    pretend provider that streams canned words, so /lab draws every state of a
    turn as the app does without spending sats. ?fail=1 ?nothink=1 ?loading=1 */
+
+const LAB_SYNC = { on: false, servers: DEFAULT_FILE_SERVERS };
 
 const memory = (): Pick<Storage, "getItem" | "setItem"> => {
   const map = new Map<string, string>();
@@ -66,18 +68,30 @@ export function labChat(history: ChatHistory, params: URLSearchParams): AccountC
     refund: async () => [],
     held: { subscribe: () => () => {}, get: () => 0 },
     viewing: () => {},
+    // files stay inline in the lab: nothing is kept or copied
+    files: {
+      load: async () => undefined,
+      store: async () => ({}),
+      keep: async () => `lab-${Date.now()}`,
+      copy: async () => ({}),
+      sync: () => LAB_SYNC,
+      setSync: () => {},
+      subscribe: () => () => {},
+    },
   };
 }
 
 /** The lab's catalogue behind the catalogue view. */
 export function labCatalog(params: URLSearchParams): CatalogService {
   const snapshot = params.has("loading") ? { models: [], loading: true } : { models: LAB_MODELS, loading: false };
-  const catalog: Pick<CatalogService, "subscribe" | "getSnapshot" | "picks" | "routes" | "refresh"> = {
+  const catalog: Pick<CatalogService, "subscribe" | "getSnapshot" | "picks" | "routes" | "refresh" | "mintsOf"> = {
     subscribe: () => () => {},
     getSnapshot: () => snapshot,
     picks: () => PICKS,
     routes: (id) => labRoutes(id).map((r) => ({ baseUrl: r.base, model: r.model })) as never,
     refresh: async () => {},
+    // the lab names no provider's mints: new money keeps the wallet's own default
+    mintsOf: () => [],
   };
   return catalog as CatalogService;
 }

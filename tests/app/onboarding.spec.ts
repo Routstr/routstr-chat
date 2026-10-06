@@ -48,6 +48,7 @@ test("a first send asks who's writing, then for 100 sats, then sends by itself",
   await page.getByRole("button", { name: /^Receive/ }).click();
   await v2.waitReplyText(page, "Echo: hello kit");
   // with an API key, the default, the change waits on the key until it is returned
+  await v2.waitIdle(page);
   await v2.returnCredit(page);
   await expect.poll(() => v2.balance(page), { timeout: 20_000 }).toBe(99);
 });
