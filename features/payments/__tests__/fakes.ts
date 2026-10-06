@@ -7,6 +7,7 @@ import {
   createMemoryUsageTrackingDriver,
   createSdkStore,
   createStorageAdapterFromStore,
+  type StorageDriver,
 } from "@routstr/sdk/storage";
 import { noopLogger } from "@routstr/sdk";
 import type { Keys, PaySource, Purse, Sdk } from "../ports";
@@ -71,6 +72,31 @@ export function fakeKeys() {
       return locks.held;
     },
   };
+}
+
+/** One tab's copy of an account's credit over the disk every tab shares,
+ *  read back on reload, as the keys service does. */
+export function tabKeys(
+  disk: StorageDriver,
+  locks: ReturnType<typeof fakeLock>
+) {
+  const { store, hydrate } = createSdkStore({ driver: disk });
+  const storage = createStorageAdapterFromStore(store);
+  return {
+    ready: async () => hydrate,
+    storage: () => storage,
+    lock: locks.lock,
+    reload: async () => {
+      await hydrate;
+      await storage.flush?.();
+      const fresh = createSdkStore({ driver: disk });
+      await fresh.hydrate;
+      const { apiKeys, childKeys, xcashuTokens, cachedReceiveTokens } =
+        fresh.store.getState();
+      store.setState({ apiKeys, childKeys, xcashuTokens, cachedReceiveTokens });
+    },
+    flush: async () => storage.flush?.(),
+  } satisfies Keys;
 }
 
 export const MINT = "https://mint.example";

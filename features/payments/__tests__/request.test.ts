@@ -1,7 +1,17 @@
 import { describe, expect, it, vi } from "vitest";
-import type { Sdk } from "../ports";
+import { createMemoryDriver, type StorageDriver } from "@routstr/sdk/storage";
+import { BalanceManager } from "@routstr/sdk/wallet";
+import type { Purse, Sdk } from "../ports";
 import { createPay, sdkWallet } from "../request";
-import { fakeKeys, fakePurse, fakeSdk, MINT, tokenOf } from "./fakes";
+import {
+  fakeKeys,
+  fakeLock,
+  fakePurse,
+  fakeSdk,
+  MINT,
+  tabKeys,
+  tokenOf,
+} from "./fakes";
 
 type RequestArgs = Parameters<Sdk["request"]>;
 
@@ -17,6 +27,8 @@ const request = {
   model: { id: "m" },
 };
 const NODE = { url: "https://node.example/", apiKey: "node-key" };
+const P1 = "https://one.example/";
+const P2 = "https://two.example/";
 
 /** An SDK call the test finishes by hand. */
 function heldFetch() {
@@ -60,7 +72,77 @@ async function setup(
   };
 }
 
+/** One request paid in this tab, with a key at P1; another tab shares the
+ *  disk and the lock. The SDK keeps the request's storage. */
+async function paidInOneOfTwoTabs(disk: StorageDriver = createMemoryDriver()) {
+  const locks = fakeLock();
+  const [here, there] = [tabKeys(disk, locks), tabKeys(disk, locks)];
+  await Promise.all([here.ready(), there.ready()]);
+  here.storage().setApiKey(P1, "k1");
+  await here.flush();
+  const { request: fetchAI, calls } = heldFetch();
+  const pay = createPay({
+    keys: here,
+    purse: fakePurse().purse,
+    sdk: fakeSdk(fetchAI),
+    spending: () => ({ mode: "apikeys" }),
+    live: () => true,
+  });
+  const paying = pay(request, callbacks(), new AbortController().signal);
+  await tick();
+  const storage = calls[0].args[0].storageAdapter!;
+  calls[0].finish();
+  await paying;
+  return { storage, there, locks };
+}
+
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+/** A purse like the wallet book's: a send holds the account's wallet lock
+ *  across the mint swap and the SDK's handoff. The first swap waits for the
+ *  test. */
+function lockingPurse(walletLock: ReturnType<typeof fakeLock>) {
+  let answer!: () => void;
+  const firstSwap = new Promise<void>((resolve) => (answer = resolve));
+  let first = true;
+  const purse: Purse = {
+    balances: async () => ({ [MINT]: 100 }),
+    activeMint: () => MINT,
+    send: async (_mint, sats, handoff) => {
+      const unlock = await walletLock.lock();
+      try {
+        if (first) {
+          first = false;
+          await firstSwap;
+        }
+        const token = tokenOf(sats);
+        await handoff?.(token);
+        return token;
+      } finally {
+        unlock();
+      }
+    },
+    receive: async () => 1,
+  };
+  return { purse, answerSwap: () => answer() };
+}
+
+/** A disk that refuses one write when told, as a full or busy IndexedDB can. */
+function flakyDisk() {
+  const disk = createMemoryDriver();
+  let refuse = false;
+  return {
+    ...disk,
+    setItem: async (key: string, value: unknown) => {
+      if (refuse) {
+        refuse = false;
+        throw new Error("The disk refused the write");
+      }
+      return disk.setItem(key, value);
+    },
+    refuseNext: () => (refuse = true),
+  };
+}
 
 describe("sdkWallet", () => {
   it("stops spending once the request may no longer spend", async () => {
@@ -255,6 +337,99 @@ describe("createPay", () => {
     await late.receiveToken(tokenOf(3));
     expect(wallet.sent).toEqual([]);
     expect(wallet.received).toEqual([tokenOf(3)]);
+  });
+
+  it("keeps a key another tab made when the SDK writes after the payment settled", async () => {
+    const { storage, there, locks } = await paidInOneOfTwoTabs();
+
+    // the other tab makes a key while this tab's margin top-up is out
+    const release = await there.lock();
+    await there.reload();
+    there.storage().setApiKey(P2, "k2");
+    await there.flush();
+    release();
+    // the top-up lands: the SDK records the key's new balance
+    storage.updateApiKeyBalance(P1, 150);
+    await storage.flush?.();
+
+    await there.reload();
+    expect(there.storage().getApiKey(P1)?.balance).toBe(150);
+    expect(there.storage().getApiKey(P2)?.key).toBe("k2");
+    expect(locks.held).toBe(0);
+  });
+
+  it("makes a late write only once the other tab is done with the credit", async () => {
+    const { storage, there } = await paidInOneOfTwoTabs();
+
+    const release = await there.lock();
+    await there.reload();
+    storage.updateApiKeyBalance(P1, 150);
+    await tick();
+    there.storage().setApiKey(P2, "k2");
+    await there.flush();
+    release();
+    await storage.flush?.();
+
+    await there.reload();
+    expect(there.storage().getApiKey(P1)?.balance).toBe(150);
+    expect(there.storage().getApiKey(P2)?.key).toBe("k2");
+  });
+
+  it("writes a late change again when the disk refused it once", async () => {
+    const disk = flakyDisk();
+    const { storage, there } = await paidInOneOfTwoTabs(disk);
+
+    disk.refuseNext();
+    storage.updateApiKeyBalance(P1, 150);
+
+    await vi.waitFor(async () => {
+      await there.reload();
+      expect(there.storage().getApiKey(P1)?.balance).toBe(150);
+    });
+  });
+
+  it("finishes a spend under way before letting go of the lock, so its handoff never waits on it", async () => {
+    const keyLock = fakeLock();
+    const walletLock = fakeLock();
+    const keys = tabKeys(createMemoryDriver(), keyLock);
+    await keys.ready();
+    const { purse, answerSwap } = lockingPurse(walletLock);
+    let topUpOut!: () => void;
+    const out = new Promise<void>((resolve) => (topUpOut = resolve));
+    let first = true;
+    const sdk = fakeSdk(async ({ walletAdapter, storageAdapter }) => {
+      const wallet = walletAdapter!;
+      const storage = storageAdapter!;
+      if (first) {
+        first = false;
+        // the SDK's margin top-up, which it does not wait for
+        void new BalanceManager(wallet, storage)
+          .createProviderToken({ mintUrl: MINT, baseUrl: P1, amount: 5 })
+          .catch(() => {});
+        await tick();
+        return topUpOut();
+      }
+      await wallet.sendToken(MINT, 7, undefined, async (token) => {
+        storage.addXcashuToken(P2, token);
+        await storage.flush?.();
+      });
+    });
+    const pay = createPay({
+      keys,
+      purse,
+      sdk,
+      spending: () => ({ mode: "apikeys" }),
+      live: () => true,
+    });
+    const answered = pay(request, callbacks(), new AbortController().signal);
+    await out;
+    const next = pay(request, callbacks(), new AbortController().signal);
+    await tick();
+    answerSwap();
+
+    await Promise.all([answered, next]);
+    expect([keyLock.held, walletLock.held]).toEqual([0, 0]);
+    expect(keys.storage().getXcashuTokensForBaseUrl(P1)).toHaveLength(1);
   });
 
   it("stops spending after Stop", async () => {

@@ -1,6 +1,7 @@
 import type { StorageAdapter, WalletAdapter } from "@routstr/sdk/wallet";
 import type { Pay } from "@/features/chat/ports";
 import { withNodeModeError } from "@/lib/remoteNode";
+import { lockedAfter } from "./lateWrites";
 import type { Keys, Purse, Sdk, Spending } from "./ports";
 
 export interface PayDeps {
@@ -102,13 +103,31 @@ export function createPay(deps: PayDeps): Pay {
     // The SDK may top a key up in the background after the answer: once the
     // lock is released that must not spend, or two payments would overlap
     let settled = false;
+    // A spend already past that check finishes under the lock, its handoff
+    // included: that handoff runs inside the wallet's lock, so it must never
+    // wait for this one
+    let released = false;
+    const sends = new Set<Promise<string>>();
+    const purse: Purse = {
+      ...deps.purse,
+      send: (...args) => {
+        const sent = deps.purse.send(...args);
+        sends.add(sent);
+        return sent;
+      },
+    };
     try {
       await deps.keys.reload(source);
       if (signal.aborted) return;
       if (!sameSource()) throw changed();
-      const storage = node
-        ? nodeOnly(deps.keys.storage("node"), node.url)
-        : deps.keys.storage("direct");
+      const storage = lockedAfter(
+        node
+          ? nodeOnly(deps.keys.storage("node"), node.url)
+          : deps.keys.storage("direct"),
+        () => released,
+        deps.keys,
+        source
+      );
       if (node) {
         await deps.sdk.ensureNode(node.url);
         // setApiKey refuses to overwrite a key
@@ -119,7 +138,7 @@ export function createPay(deps: PayDeps): Pay {
         if (!sameSource()) throw changed();
       }
       const wallet = sdkWallet(
-        deps.purse,
+        purse,
         () => !settled && !signal.aborted && deps.live() && sameSource(),
         Boolean(node)
       );
@@ -151,6 +170,8 @@ export function createPay(deps: PayDeps): Pay {
       );
     } finally {
       settled = true;
+      await Promise.allSettled(sends);
+      released = true;
       try {
         await deps.keys.flush(source);
       } finally {

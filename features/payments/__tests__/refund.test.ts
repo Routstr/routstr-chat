@@ -1,7 +1,21 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ApiKeyEntry } from "@routstr/sdk/wallet";
+import { createMemoryDriver } from "@routstr/sdk/storage";
+import {
+  CashuSpender,
+  type ApiKeyEntry,
+  type StorageAdapter,
+} from "@routstr/sdk/wallet";
+import type { Sdk } from "../ports";
 import { refundCredit } from "../refund";
-import { fakeKeys, fakeLock, fakePurse, fakeSdk } from "./fakes";
+import { sdkWallet } from "../request";
+import {
+  fakeKeys,
+  fakeLock,
+  fakePurse,
+  fakeSdk,
+  tabKeys,
+  tokenOf,
+} from "./fakes";
 
 const SMALL = "https://small.example/";
 const LARGE = "https://large.example/";
@@ -435,5 +449,43 @@ describe("refundCredit", () => {
     await refundCredit(deps, true);
 
     expect(wallet.received).toEqual([`refund-${LARGE}`]);
+  });
+
+  it("keeps another tab's held token when the SDK's refund retry parks one after the sweep", async () => {
+    provider({});
+    const disk = createMemoryDriver();
+    const locks = fakeLock();
+    const [here, there] = [tabKeys(disk, locks), tabKeys(disk, locks)];
+    await Promise.all([here.ready(), there.ready()]);
+    const sdk = fakeSdk();
+    // the sweep's own client, which runs the X-Cashu refunds and their retry
+    let swept: StorageAdapter | undefined;
+    const deps = {
+      ...(await setup()).deps,
+      keys: here,
+      sdk: {
+        ...sdk,
+        client: (wallet, storage) => sdk.client(wallet, (swept ??= storage)),
+      } satisfies Sdk,
+    };
+    await refundCredit(deps, true);
+    const wallet = sdkWallet(fakePurse().purse, () => true, false);
+
+    // the other tab holds a refund its mint would not take yet
+    const release = await there.lock();
+    await there.reload();
+    new CashuSpender(wallet, there.storage()).cacheReceiveToken(tokenOf(11));
+    await there.flush();
+    release();
+    // two minutes on, this sweep's retry gives up on a token and holds it
+    new CashuSpender(wallet, swept!).cacheReceiveToken(tokenOf(22));
+    await swept!.flush?.();
+
+    await there.reload();
+    const held = there.storage().getCachedReceiveTokens();
+    expect(held.map((t) => t.token).sort()).toEqual(
+      [tokenOf(11), tokenOf(22)].sort()
+    );
+    expect(locks.held).toBe(0);
   });
 });

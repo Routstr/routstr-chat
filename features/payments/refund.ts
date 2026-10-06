@@ -4,6 +4,7 @@ import type {
   StorageAdapter,
   WalletAdapter,
 } from "@routstr/sdk/wallet";
+import { lockedAfter } from "./lateWrites";
 import type { Keys, OldCredit, OtherDevices, Purse, Sdk } from "./ports";
 import { sdkWallet } from "./request";
 
@@ -55,16 +56,18 @@ export async function refundCredit(
   }
   let results: RefundResult[];
   let refunded: string[] = [];
+  let released = false;
   const release = await keys.lock();
   try {
     await keys.reload("direct");
     const wallet = sdkWallet(deps.purse, deps.live, false);
-    results = await refundStorage(
-      deps.sdk,
-      wallet,
+    const storage = lockedAfter(
       keys.storage("direct"),
-      force
+      () => released,
+      keys,
+      "direct"
     );
+    results = await refundStorage(deps.sdk, wallet, storage, force);
     if (force) {
       const others = await refundOthers(deps, wallet);
       results.push(...others.results);
@@ -72,6 +75,7 @@ export async function refundCredit(
     }
     if (hasCredit(old)) results.push(...(await sweepOld(deps, wallet)));
   } finally {
+    released = true;
     try {
       await keys.flush("direct");
     } finally {
