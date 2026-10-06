@@ -1,6 +1,8 @@
 import { SessionService } from "@/features/session/service";
 import { savedInIndexedDB } from "@/features/session/saved";
 import { bindOwner } from "./owner";
+import { relays } from "./nostr";
+import { startKeys } from "./keys";
 
 /* The composition root: built once per tab, before the first render. */
 
@@ -20,4 +22,13 @@ if (typeof window !== "undefined") {
     bindOwner(session.getSnapshot().pubkey, window.localStorage);
   bind();
   session.subscribe(bind);
+
+  let keys: { stop(): void } | null = null;
+  const follow = () => {
+    keys?.stop();
+    const account = session.accounts.active$.value;
+    keys = account ? startKeys(account, relays.of(account.pubkey)) : null;
+  };
+  follow();
+  session.subscribe(follow);
 }
