@@ -3,6 +3,23 @@ import { panelBox } from "../furniture";
 import { phoneNow } from "./helpers";
 
 export function usePlace(pk: React.RefObject<HTMLDivElement | null>, list: React.RefObject<HTMLDivElement | null>, phone: boolean) {
+  /* phone: as tall as what it holds (at least 60% of the screen), full height
+     with the keyboard up. Laid out full height and slid down by what it does
+     not need, so a size change is a transform, never a height animation */
+  const sizeSheet = () => {
+    const el = pk.current;
+    const l = list.current;
+    if (!el || !l || !phoneNow()) return;
+    const vv = window.visualViewport;
+    const kb = !!vv && vv.height < window.innerHeight - 120;
+    const full = Math.round((kb && vv ? vv.height : window.innerHeight) - 40);
+    const ls = getComputedStyle(l);
+    const inner = l.firstElementChild as HTMLElement | null;
+    const need = el.offsetHeight - l.offsetHeight + (inner?.offsetHeight ?? 0) + parseFloat(ls.paddingTop) + parseFloat(ls.paddingBottom);
+    const h = kb ? full : Math.min(full, Math.max(Math.round(window.innerHeight * 0.6), Math.ceil(need)));
+    el.style.setProperty("--sheet-h", `${full}px`);
+    el.style.setProperty("--sheet-off", `${full - h}px`);
+  };
   /* ── where it sits: over the reading panel, never cutting the rail ─────── */
   const place = useCallback(() => {
     const el = pk.current;
@@ -21,25 +38,7 @@ export function usePlace(pk: React.RefObject<HTMLDivElement | null>, list: React
     el.toggleAttribute("data-narrow", w < 720);
     const cx = Math.max(24 + w / 2, Math.min(window.innerWidth - 24 - w / 2, r.left + r.width / 2));
     el.style.setProperty("--pk-x", `${Math.round(cx)}px`);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  /* phone: as tall as what it holds (at least 60% of the screen), full height
-     with the keyboard up. Laid out full height and slid down by what it does
-     not need, so a size change is a transform, never a height animation */
-  const sizeSheet = () => {
-    const el = pk.current;
-    const l = list.current;
-    if (!el || !l || !phoneNow()) return;
-    const vv = window.visualViewport;
-    const kb = !!vv && vv.height < window.innerHeight - 120;
-    const full = Math.round((kb && vv ? vv.height : window.innerHeight) - 40);
-    const ls = getComputedStyle(l);
-    const inner = l.firstElementChild as HTMLElement | null;
-    const need = el.offsetHeight - l.offsetHeight + (inner?.offsetHeight ?? 0) + parseFloat(ls.paddingTop) + parseFloat(ls.paddingBottom);
-    const h = kb ? full : Math.min(full, Math.max(Math.round(window.innerHeight * 0.6), Math.ceil(need)));
-    el.style.setProperty("--sheet-h", `${full}px`);
-    el.style.setProperty("--sheet-off", `${full - h}px`);
-  };
   useLayoutEffect(place, [place, phone]);
   useLayoutEffect(() => {
     if (phone) sizeSheet();

@@ -13,8 +13,8 @@ export function useMakerRail({
   scope,
   setScope,
   setActiveKey,
-  railScroll,
-  railGlide,
+  railScroll: railScrollRef,
+  railGlide: railGlideRef,
 }: {
   lay: Lay;
   cat: Catalog;
@@ -45,8 +45,8 @@ export function useMakerRail({
   const railOrder = useMemo(() => [...railItems.scopes.map((s) => s.id), ...railItems.makers.map((m) => m.id)], [railItems]);
 
   const placeRailGlide = useCallback((instant: boolean) => {
-    const g = railGlide.current;
-    const b = railScroll.current?.querySelector<HTMLElement>(".rail-b[aria-pressed='true']");
+    const g = railGlideRef.current;
+    const b = railScrollRef.current?.querySelector<HTMLElement>(".rail-b[aria-pressed='true']");
     if (!g || !b) return;
     if (instant) g.style.transition = "none";
     g.style.width = `${b.offsetWidth}px`;
@@ -65,7 +65,7 @@ export function useMakerRail({
 
   const [edges, setEdges] = useState({ left: false, right: false });
   const stripEdges = useCallback(() => {
-    const s = railScroll.current;
+    const s = railScrollRef.current;
     if (!s || !strip) return;
     const left = s.scrollLeft > 4;
     const right = s.scrollWidth - s.scrollLeft - s.clientWidth > 4;
@@ -78,7 +78,7 @@ export function useMakerRail({
   const pickScope = (id: Scope, el?: HTMLElement | null) => {
     setScope(id);
     setActiveKey(null);
-    const s = railScroll.current;
+    const s = railScrollRef.current;
     if (el && s) {
       if (strip) {
         // the chosen maker comes into view with its left neighbour whole beside it
@@ -97,7 +97,7 @@ export function useMakerRail({
     e.stopPropagation();
     const i = railOrder.indexOf(scope);
     const j = e.key === "Home" ? 0 : e.key === "End" ? railOrder.length - 1 : Math.max(0, Math.min(railOrder.length - 1, i + (e.key === keys[1] ? 1 : -1)));
-    const b = railScroll.current?.querySelector<HTMLElement>(`[data-co="${railOrder[j]}"]`);
+    const b = railScrollRef.current?.querySelector<HTMLElement>(`[data-co="${railOrder[j]}"]`);
     b?.focus();
     pickScope(railOrder[j], b);
   };

@@ -10,8 +10,8 @@ export function useSelection({
   q,
   page,
   setActive,
-  instant,
-  instantTwice,
+  instant: instantRef,
+  instantTwice: instantTwiceRef,
 }: {
   flat: Item[];
   at: number;
@@ -32,14 +32,13 @@ export function useSelection({
       const i = flat.findIndex((x) => x.id === was.id);
       if (i > -1) {
         // its row moved without animating: the glide lands with it (the first pass already used one)
-        instant.current = true;
-        instantTwice.current = true;
+        instantRef.current = true;
+        instantTwiceRef.current = true;
         setActive(i);
         return;
       }
     }
     sel.current = { id: flat[at]?.id, at, q, page, list: flat };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flat, at]);
   return sel;
 }
@@ -57,11 +56,11 @@ export function useKeys({
   setQ,
   setEnter,
   setKeysUsed,
-  origRoom,
-  quiet,
-  instant,
-  scrollNext,
-  list,
+  origRoom: origRoomRef,
+  quiet: quietRef,
+  instant: instantRef,
+  scrollNext: scrollNextRef,
+  list: listRef,
   room,
   cancelPreview,
   close,
@@ -94,12 +93,12 @@ export function useKeys({
   const lastRoom = useRef<string | null>(null);
   const back = () => {
     cancelPreview();
-    if (origRoom.current) room.setRoom(origRoom.current);
-    origRoom.current = null;
+    if (origRoomRef.current) room.setRoom(origRoomRef.current);
+    origRoomRef.current = null;
     setPage("root");
     setQ("");
     setEnter("back");
-    instant.current = true;
+    instantRef.current = true;
     // back onto the row that opened the page
     setActive(-1);
   };
@@ -107,35 +106,34 @@ export function useKeys({
   useLayoutEffect(() => {
     if (active !== -1) return;
     setActive(Math.max(0, flat.findIndex((x) => x.id === "room")));
-    scrollNext.current = true;
+    scrollNextRef.current = true;
   }, [active, flat]);
   useLayoutEffect(() => {
     if (active === -2) setActive(homeRow(flat));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, flat]);
 
   const setQuery = (v: string) => {
     if (page !== "rooms") {
       // typing rebuilds the list at once: the selection is placed, not slid over unrelated rows
-      instant.current = true;
+      instantRef.current = true;
       setQ(v);
       // cleared, it starts where a fresh open starts (found once the list is rebuilt)
       setActive(v.trim() ? 0 : -2);
-      if (list.current) list.current.scrollTop = 0;
+      if (listRef.current) listRef.current.scrollTop = 0;
       return;
     }
     // rooms: the selection stays on its room while that room is listed; a filter that matched
     // nothing hands it back to the last room you were on (or the one you came from), never room 1
     if (it?.room) lastRoom.current = it.id;
-    const keep = lastRoom.current ?? `room-${origRoom.current}`;
+    const keep = lastRoom.current ?? `room-${origRoomRef.current}`;
     const next = roomsFor(v);
     let i = next.findIndex((r) => `room-${r.id}` === keep);
     if (i < 0) i = Math.max(0, next.findIndex((r) => r.id !== "auto"));
-    quiet.current = true;
+    quietRef.current = true;
     setQ(v);
     setActive(i);
-    scrollNext.current = true;
-    requestAnimationFrame(() => (quiet.current = false));
+    scrollNextRef.current = true;
+    requestAnimationFrame(() => (quietRef.current = false));
   };
   const escape = () => {
     if (q.trim()) return setQuery("");
@@ -146,7 +144,7 @@ export function useKeys({
     setKeysUsed(true);
     if (!flat.length) return;
     setActive(Math.max(0, Math.min(flat.length - 1, at + d)));
-    scrollNext.current = true;
+    scrollNextRef.current = true;
   };
   const onKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
     const k = e.key;

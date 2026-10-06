@@ -91,9 +91,7 @@ export function takeFlight(isl: HTMLElement) {
     from: isl.getBoundingClientRect(),
     fromH: isl.offsetHeight,
     words: takeWords(isl),
-    ghosts: [takeGhost(panel?.querySelector(".stage-in") ?? null), takeGhost(panel?.querySelector(".pf-ideas:not([data-hidden])") ?? null)].filter(
-      (g): g is Ghost => !!g
-    ),
+    ghosts: [takeGhost(panel?.querySelector(".stage-in") ?? null)].filter((g): g is Ghost => !!g),
     pool: takePool(),
   };
 }
@@ -149,7 +147,7 @@ export function land(isl: HTMLElement) {
   const travel = Math.abs(dy) >= 4; // on a phone the island is already at the bottom
   const capDur = travel ? Math.round(slow * 0.86) : ms("--d-move");
 
-  // the greeting and the ideas leave as ghosts, under the dock
+  // the greeting leaves as a ghost, under the dock
   if (panel) {
     const p = panel.getBoundingClientRect();
     f.ghosts.forEach((g) => {

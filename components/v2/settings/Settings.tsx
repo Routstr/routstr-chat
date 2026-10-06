@@ -103,16 +103,18 @@ export default function Settings() {
   const ui = useUi();
   const [mounted, setMounted] = useState(false);
   const [leaving, setLeaving] = useState(false);
+  if (ui.settings && (!mounted || leaving)) {
+    setMounted(true);
+    setLeaving(false);
+  }
+  if (!ui.settings && mounted && !leaving) setLeaving(true);
   useEffect(() => {
     if (ui.settings) {
-      setMounted(true);
-      setLeaving(false);
       // the old keys panel is a separate chunk: fetch it now, so its page opens on the first click
       void loadKeys();
       return;
     }
     if (!mounted) return;
-    setLeaving(true);
     // focus goes back to the gear as the layer leaves (from here: the layer's own timer dies with it)
     const t = window.setTimeout(() => {
       setMounted(false);
@@ -122,7 +124,6 @@ export default function Settings() {
       if (document.activeElement !== gear) document.querySelector<HTMLElement>(".panel-head .lead .only-m")?.focus({ preventScroll: true });
     }, reducedMotion() ? 0 : tokenMs("--d-mid"));
     return () => window.clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ui.settings]);
   if (!mounted) return null;
   return <Layer leaving={leaving} />;
@@ -173,7 +174,6 @@ function Layer({ leaving }: { leaving: boolean }) {
       window.clearTimeout(f);
       cancelAnimationFrame(r);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leaving]);
   useEffect(
     () => () => {

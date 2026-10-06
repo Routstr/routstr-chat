@@ -11,6 +11,7 @@ import { useCountUp, useMoney } from "../useMoney";
 import Wallet from "../wallet/Wallet";
 import { RoomsButton, RoomsMenu } from "./RoomMenu";
 import { BalanceButton } from "./BalanceButton";
+import { Me } from "./Me";
 import { ChatList } from "./ChatList";
 import { Head } from "./Head";
 import { cx, phoneNow } from "./helpers";
@@ -199,7 +200,7 @@ export default function Rail() {
                     <div className="sb-tools">
                       <RoomsButton open={rooms} onToggle={() => setRooms((o) => !o)} />
                       <button type="button" className="ghost sb-gear" data-tipk="gear" aria-label="Settings" onClick={() => ui.openSettings()}>
-                        <Icon name="gear" />
+                        <Me />
                       </button>
                     </div>
                   </footer>

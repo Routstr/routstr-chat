@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useRef } from "react";
 import { Icon } from "../icons";
 import { ROOMS, useRoom, type RoomId } from "../room/RoomProvider";
-import { Grp, Head, Row, Sw, reducedMotion } from "./parts";
+import { useReducedMotion } from "../motion";
+import { Grp, Head, Row, Sw } from "./parts";
 
 function Scene({ id }: { id: string }) {
   return (
@@ -26,8 +27,7 @@ function Scene({ id }: { id: string }) {
 }
 export default function Look() {
   const room = useRoom();
-  const [still, setStill] = useState(false);
-  useEffect(() => setStill(reducedMotion()), []);
+  const still = useReducedMotion();
   const auto = room.room === "auto";
   const real = room.resolved;
   // the room owns its cross-dissolve (and the reduced-motion check)

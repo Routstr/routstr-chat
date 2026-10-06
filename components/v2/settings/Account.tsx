@@ -1,9 +1,11 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useState, useSyncExternalStore } from "react";
 import { nip19 } from "nostr-tools";
 import { useObservableState } from "applesauce-react/hooks";
 import { useAccountManager } from "@/components/ClientProviders";
+import { writeKeyFlag } from "../wallet/bits";
+import Light from "../light/Light";
 import { Btn, Grp, Head, Row, narrow, short, useCopied } from "./parts";
 import SignedOut from "./SignedOut";
 import OtherKeys from "./OtherKeys";
@@ -14,12 +16,12 @@ export default function Account() {
   const accounts = useObservableState(manager.accounts$) || [];
   const active = useObservableState(manager.active$);
   const { done, copy } = useCopied();
-  const [skipped, setSkipped] = useState(false);
-  const [copiedKey, setCopiedKey] = useState(false);
-  useEffect(
-    () => setSkipped(localStorage.getItem("nsec_storing_skipped") === "true"),
-    []
+  const skipped = useSyncExternalStore(
+    () => () => {},
+    () => localStorage.getItem("nsec_storing_skipped") === "true",
+    () => false
   );
+  const [copiedKey, setCopiedKey] = useState(false);
 
   if (!active) return <SignedOut />;
 
@@ -43,8 +45,10 @@ export default function Account() {
       if (
         key instanceof Uint8Array &&
         (await copy(nip19.nsecEncode(key), "nsec"))
-      )
+      ) {
         setCopiedKey(true);
+        writeKeyFlag(active.pubkey, "saved");
+      }
     } catch {
       // this key cannot be exported: nothing was copied, so nothing is claimed
     }
@@ -58,7 +62,7 @@ export default function Account() {
       />
       <Grp id="g-you" k="You">
         <div className="st-id">
-          <span className="st-av lg" aria-hidden="true" />
+          <Light pubkey={active.pubkey} size={44} />
           <div className="st-id-m">
             <p className="st-id-k" title={npub}>
               {narrow() ? short(npub, 8, 4) : short(npub, 12, 6)}

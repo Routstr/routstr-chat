@@ -1,0 +1,37 @@
+/* ══ your light (light/Light.tsx) ═══════════════════════════════════════
+   Only transform and opacity ever change, so the compositor does the work. */
+.lt { position: relative; display: inline-block; flex: none; border-radius: 50%; overflow: hidden; isolation: isolate;
+  background: radial-gradient(circle at 40% 35%, var(--lt-lift), var(--lt-body) 55%, var(--lt-deep)); vertical-align: middle; }
+.lt > span { position: absolute; inset: 0; pointer-events: none; }
+.lt .lt-flow { inset: -30%; background-size: cover; will-change: transform; }
+/* the light falls from one place per key; it leans toward the composer while you type */
+.lt .lt-key { background: radial-gradient(60% 55% at var(--lt-kx) var(--lt-ky), color-mix(in srgb, var(--lt-light) 72%, transparent), transparent 70%);
+  mix-blend-mode: soft-light; opacity: .85; transition: transform var(--d-move) var(--e-out), opacity var(--d-mid) var(--e-out); }
+.lt .lt-glow { background: radial-gradient(40% 36% at var(--lt-kx) var(--lt-ky), color-mix(in srgb, var(--lt-light) 50%, transparent), transparent 75%);
+  mix-blend-mode: screen; opacity: .2; transition: opacity var(--d-mid) var(--e-out); }
+.lt .lt-vig { background: radial-gradient(closest-side, transparent 70%, rgba(0, 0, 0, .16)); }
+.lt .lt-mute { background: #7c8380; mix-blend-mode: saturation; opacity: 0; transition: opacity var(--d-mid) var(--e-out); }
+.lt .lt-rim { border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14), inset 0 1px 0 rgba(255, 255, 255, .22); }
+.lt .lt-rings { overflow: hidden; border-radius: 50%; }
+.lt-ring { position: absolute; inset: 0; border-radius: 50%; opacity: 0; mix-blend-mode: screen; will-change: transform, opacity;
+  background: radial-gradient(closest-side, transparent 55%, color-mix(in srgb, var(--lt-light) 75%, transparent) 86%, transparent); }
+.lt-ring.lt-word { background: radial-gradient(closest-side, transparent 42%, color-mix(in srgb, var(--lt-light) 75%, transparent) 86%, transparent); }
+.lt-ring.lt-gold { background: radial-gradient(closest-side, rgba(255, 211, 138, .18), transparent 55%, rgba(255, 211, 138, .8) 86%, transparent); }
+
+.lt[data-state="typing"] .lt-key { transform: translate(10%, 14%); }
+.lt[data-state="waiting"] .lt-glow { animation: ltBreathe 2.4s ease-in-out infinite; }
+.lt[data-state="stream"] .lt-key { opacity: 1; }
+.lt[data-state="stream"] .lt-glow { opacity: .55; }
+.lt[data-state="done"] .lt-glow { animation: ltAfter 1.8s var(--e-out) both; }
+.lt[data-state="error"] .lt-mute { opacity: .7; }
+.lt[data-state="error"] .lt-key { opacity: .5; }
+.lt[data-state="offline"] .lt-mute { opacity: .85; }
+.lt[data-state="offline"] .lt-key { opacity: .45; }
+@keyframes ltBreathe { 0%, 100% { opacity: .12; } 50% { opacity: .5; } }
+@keyframes ltAfter { from { opacity: .9; } to { opacity: .2; } }
+@media (hover: hover) and (pointer: fine) {
+  :hover > .lt .lt-glow, .lt:hover .lt-glow { opacity: .45; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lt .lt-key, .lt .lt-glow, .lt .lt-mute { transition-duration: 1ms; animation: none !important; }
+}

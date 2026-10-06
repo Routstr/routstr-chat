@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useCallback, useContext, useMemo, useState } from "react";
+import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
 
 /* What the furniture is doing right now. Nothing here is data; the data lives
    in useChat(). */
@@ -48,6 +48,11 @@ export const useUi = () => {
   return v;
 };
 
+// The composer's model chip: the picker hangs from it and gives the focus back to it. Its own
+// context, so the UI state above stays plain values.
+const ChipContext = createContext<React.RefObject<HTMLButtonElement | null>>({ current: null });
+export const useChipRef = () => useContext(ChipContext);
+
 export function UiProvider({ children }: { children: React.ReactNode }) {
   const [drawer, setDrawer] = useState(false);
   const [side, setSide] = useState<RailSide>("chats");
@@ -57,6 +62,7 @@ export function UiProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<SettingsSection | null>(null);
   const [settingsDeep, setSettingsDeep] = useState(false);
   const [sendWhenFunded, setSendWhenFunded] = useState(false);
+  const chipRef = useRef<HTMLButtonElement>(null);
 
   const openSettings = useCallback((section?: SettingsSection) => {
     setPicker(false);
@@ -75,5 +81,9 @@ export function UiProvider({ children }: { children: React.ReactNode }) {
     }),
     [drawer, side, face, picker, palette, settings, settingsDeep, openSettings, closeSettings, sendWhenFunded]
   );
-  return <UiContext.Provider value={value}>{children}</UiContext.Provider>;
+  return (
+    <UiContext.Provider value={value}>
+      <ChipContext.Provider value={chipRef}>{children}</ChipContext.Provider>
+    </UiContext.Provider>
+  );
 }

@@ -30,7 +30,6 @@ export function Thought({ text, answer }: { text: string; answer: string }) {
   const btn = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (was?.focus) btn.current?.focus({ preventScroll: true });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const topic = thinkingTopic(text);
   const well = useRef<HTMLDivElement>(null);

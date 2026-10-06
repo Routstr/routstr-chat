@@ -92,7 +92,7 @@ const restrict = (...paths) => ({ "no-restricted-imports": ["error", ...paths.fl
 const LEGACY_DECODERS = ["components/v2/App.tsx", "components/v2/composer/back/usePay.tsx", "components/v2/wallet/useFunding.ts", "components/v2/wallet/Add.tsx"];
 const TESTS = ["**/__tests__/**", "**/*.test.ts"];
 const packages = [
-  { files: ["**/*.{ts,tsx}"], ignores: ["platform/nostr/**"], rules: restrict(RELAY) },
+  { files: ["**/*.{ts,tsx}"], ignores: ["platform/nostr/**", ...TESTS], rules: restrict(RELAY) },
   {
     files: ["components/v2/**/*.{ts,tsx}", "features/**/*.{ts,tsx}", "runtime/**/*.{ts,tsx}"],
     ignores: ["features/wallet/**", "features/book/**", ...TESTS, ...LEGACY_DECODERS],
@@ -102,7 +102,7 @@ const packages = [
   { files: ["features/wallet/**/*.ts", "features/book/**/*.ts"], ignores: ["features/**/view.ts", ...LEGACY_IMPORTERS, ...TESTS], rules: restrict(RELAY, REACT) },
 ];
 
-export default [
+const config = [
   { ignores: ["node_modules/**", ".next/**", "out/**", "public/**", "components/ui/**", "next-env.d.ts"] },
   ...nextVitals,
   prettier,
@@ -119,3 +119,5 @@ export default [
   graph,
   ...packages,
 ];
+
+export default config;
