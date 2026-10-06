@@ -312,7 +312,12 @@ export class HistoryService {
     event: NostrEvent,
     fromRelay: boolean
   ): Promise<void> {
-    if (this.keyrings.has(event.id) || event.pubkey !== this.owner) return;
+    if (
+      event.kind !== KIND_KEYRING ||
+      event.pubkey !== this.owner ||
+      this.keyrings.has(event.id)
+    )
+      return;
     if (fromRelay && !verifyEvent(event)) return;
     this.keyrings.set(event.id, { event });
     if (fromRelay) await this.deps.log.put([event]);
@@ -323,7 +328,8 @@ export class HistoryService {
   // One decrypt per keyring at a time: "Sync now" during a slow signer's
   // prompt must not ask again.
   private async openOne(event: NostrEvent): Promise<void> {
-    if (this.opening.has(event.id)) return;
+    // a switched-away account's signer is never asked
+    if (this.disposed || this.opening.has(event.id)) return;
     this.opening.add(event.id);
     this.settle();
     const keys = await openKeyring(event, this.owner, this.deps.signer);
