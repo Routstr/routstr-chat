@@ -22,6 +22,9 @@ declare global {
 export async function collectPageMetrics(
   context: BrowserContext
 ): Promise<void> {
+  // perf runs under tsx, which wraps every named function in __name(): code sent to the
+  // page (here and in perf.ts) needs that helper there too
+  await context.addInitScript({ content: "globalThis.__name = (f) => f;" });
   await context.addInitScript(() => {
     const k: NonNullable<Window["__kitPerf"]> = {
       longTasks: [],

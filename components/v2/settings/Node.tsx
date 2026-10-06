@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { nip19 } from "nostr-tools";
 import { useObservableState } from "applesauce-react/hooks";
 import { useAccountManager } from "@/features/session/view";
-import { NodeError, nodeUrl, useNode } from "@/features/node/view";
+import { NodeError, nodeUrl, useNode, type RemoteNode } from "@/features/node/view";
 import { useUi } from "../ui";
 import { Btn, Grp, Head, Row } from "./parts";
 import NodePath from "./NodePath";
@@ -15,10 +15,17 @@ export default function Node() {
   const { manager } = useAccountManager();
   const active = useObservableState(manager.active$);
   const ui = useUi();
-  const { node, save: persist, connect: link } = useNode();
+  const { node, save, connect: link } = useNode();
   const [url, setUrl] = useState(node?.url ?? "");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<NodeErr>(null);
+  const persist = (n: RemoteNode | null) => {
+    try {
+      save(n);
+    } catch (e) {
+      setErr({ text: e instanceof NodeError ? e.message : String(e) });
+    }
+  };
   const npub = active ? nip19.npubEncode(active.pubkey) : "";
   const connect = async () => {
     setErr(null);

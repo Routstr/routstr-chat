@@ -82,15 +82,13 @@ for (const heard of [true, false]) {
       (await again.evaluate(() => localStorage.getItem("activeAccount"))) !==
       k1.id
     ) {
+      // the account menu at the rail's foot: the key not in use is K1
       await again
-        .getByRole("button", { name: "Settings", exact: true })
-        .first()
+        .getByRole("button", { name: /Accounts and settings$/ })
         .click();
-      await again.locator("#nav-account").click();
       await again
-        .locator("#g-others")
-        .getByRole("button", { name: "Switch" })
-        .first()
+        .getByRole("menu", { name: "Accounts" })
+        .getByRole("menuitemradio", { checked: false })
         .click();
     }
     await expect

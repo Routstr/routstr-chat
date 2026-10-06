@@ -41,7 +41,7 @@ export function useRailTip({
     if (kind === "find") return ["Search chats", K("K")];
     if (kind === "bal") return money.node ? ["Paying with your node", ""] : [`Wallet · ${sats(money.total)} sats`, ""];
     if (kind === "room") return [document.querySelector(".sb-sw")?.getAttribute("aria-label")?.split(".")[0] ?? "Room", ""];
-    if (kind === "gear") return ["Settings", ""];
+    if (kind === "gear") return [document.querySelector(".sb-gear")?.getAttribute("aria-label")?.split(".")[0] ?? "Settings", ""];
     return null;
   };
   const showTip = (el: HTMLElement, kind: string) => {

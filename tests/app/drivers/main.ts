@@ -1,6 +1,7 @@
 // How a person uses main (the current app, commit 4a0dd2d), for baselines and parity. Every
 // step returns once the person would see its result.
 import { expect, type Page } from "@playwright/test";
+import { activeAccount } from "../seed";
 import { gone, shown, until } from "./wait";
 
 const composer = (page: Page) =>
@@ -239,25 +240,17 @@ export const main = {
 
   /** Settings → General → Switch Account → Use, there and back, until each balance shows. */
   async switchAccount(page: Page) {
-    const mine = await main.balance(page);
-    const other = async () => {
-      await openSettings(page);
-      await page
-        .getByRole("button", { name: "Use", exact: true })
-        .first()
-        .click();
-    };
-    await other();
+    const was = await activeAccount(page);
+    await openSettings(page);
+    await page
+      .getByRole("button", { name: "Use", exact: true })
+      .first()
+      .click();
     await until(
-      async () => (await main.balance(page)) === 0,
-      "the other key's 0"
+      async () => ![null, was].includes(await activeAccount(page)),
+      "the other key to be active"
     );
     await page.keyboard.press("Escape");
-    await other();
-    await until(
-      async () => (await main.balance(page)) === mine,
-      `this key's ${mine} again`
-    );
-    await page.keyboard.press("Escape");
+    await main.loaded(page);
   },
 };

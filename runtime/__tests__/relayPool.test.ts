@@ -85,7 +85,7 @@ describe("the app's relay pool", () => {
 
       const got = await new Relays(poolPort(pool), memoryStorage(), `?relays=${kit.url}`)
         .of(owner)
-        .fetch(filter, async () => [both, ours]);
+        .fetch(filter, [both, ours]);
 
       // read page by page, the relay would have sent `both` as well
       expect(ids(got.events)).toEqual([theirs.id]);
@@ -98,4 +98,60 @@ describe("the app's relay pool", () => {
       await kit.close();
     }
   }, 30_000);
+
+  it("finishes a NIP-77 sync that takes more than one round", async () => {
+    const kit = await startRelay();
+    try {
+      const secret = generateSecretKey();
+      const owner = getPublicKey(secret);
+      const events = Array.from({ length: 600 }, (_, i) =>
+        finalizeEvent({ kind: 1080, created_at: 1_700_000_000 + i, tags: [], content: `${i}` }, secret)
+      );
+      const pool = newRelayPool();
+      await Promise.all(events.map((event) => pool.relay(kit.url).publish(event)));
+      const theirs = events.slice(0, 10);
+      const extra = finalizeEvent({ kind: 1080, created_at: 1_700_001_000, tags: [], content: "ours" }, secret);
+      const ids = (list: { id: string }[]) => list.map((e) => e.id).sort();
+
+      const started = Date.now();
+      const got = await new Relays(poolPort(pool), memoryStorage(), `?relays=${kit.url}`)
+        .of(owner)
+        .fetch({ kinds: [1080], authors: [owner] }, [...events.slice(10), extra]);
+
+      // read page by page (the fallback after a stalled sync), all 600 would come back
+      expect(ids(got.events)).toEqual(ids(theirs));
+      expect(Date.now() - started).toBeLessThan(10_000);
+    } finally {
+      await kit.close();
+    }
+  }, 60_000);
+
+  it("keeps a live feed through an outage longer than a few retries", async () => {
+    const kit = await startRelay();
+    const control = (on: boolean) =>
+      fetch(`${kit.url.replace(/^ws/, "http")}/_kit/down?store=default&on=${on ? 1 : 0}`, { method: "POST" });
+    const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+    try {
+      const secret = generateSecretKey();
+      const owner = getPublicKey(secret);
+      const got: string[] = [];
+      const live = new Relays(poolPort(newRelayPool()), memoryStorage(), `?relays=${kit.url}`)
+        .of(owner)
+        .live({ kinds: [1080], authors: [owner] })
+        .subscribe((event) => got.push(event.content));
+      await wait(500);
+      // a laptop asleep: longer than applesauce's default three retries a second apart
+      await control(true);
+      await wait(6000);
+      await control(false);
+      const back = finalizeEvent({ kind: 1080, created_at: Math.floor(Date.now() / 1000), tags: [], content: "after the outage" }, secret);
+      await newRelayPool().relay(kit.url).publish(back);
+
+      for (let i = 0; i < 100 && !got.includes("after the outage"); i++) await wait(250);
+      live.unsubscribe();
+      expect(got).toContain("after the outage");
+    } finally {
+      await kit.close();
+    }
+  }, 60_000);
 });

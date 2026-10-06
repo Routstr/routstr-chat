@@ -1,3 +1,4 @@
+import { CoreErrorType, parseCoreError } from "@routstr/sdk";
 import {
   BalanceManager,
   type StorageAdapter,
@@ -88,7 +89,9 @@ export class ExportedKeys {
       .get(this.name)
       .then((json) => {
         const keys = json ? parseExported(JSON.parse(json)) : [];
-        this.kept = keys === "unreadable" ? [] : keys;
+        const stored = keys === "unreadable" ? [] : keys;
+        // a key made before this read, with localStorage full, is only here
+        this.kept = [...stored, ...this.keys.filter((k) => !has(stored, k))];
         this.repair();
       })
       .catch(report);
@@ -131,7 +134,12 @@ export class ExportedKeys {
     );
     const keys = next([...disk, ...lost]);
     const json = JSON.stringify(keys);
-    this.storage.setItem(this.name, json);
+    try {
+      this.storage.setItem(this.name, json);
+    } catch (error) {
+      // localStorage full: the IndexedDB copy still gets it
+      report(error);
+    }
     this.keys = keys;
     this.listeners.forEach((listener) => listener());
     if (this.kept) {
@@ -147,8 +155,10 @@ export class ExportedKeys {
     );
   }
 
-  /** Spends `sats` into a new key. The key is on disk before the token is let
-   *  go; if the provider fails, the token stays in the wallet's unclaimed list. */
+  /** Spends `sats` into a new key. The key is stored for good before the token
+   *  is let go; if the provider fails, or neither store keeps the key, the
+   *  token stays in the wallet's unclaimed list (the provider finds the same
+   *  key again from that token). */
   async create(purse: Purse, baseUrl: string, sats: number, label: string) {
     let made: ExportedKey | undefined;
     await purse.send(purse.activeMint(), sats, async (token) => {
@@ -168,9 +178,63 @@ export class ExportedKeys {
         baseUrl: slash(baseUrl),
       };
       this.change((keys) => [...keys, made!]);
+      await this.keep(made);
       this.push();
     });
     return made!;
+  }
+
+  /** A token handed to this provider that the wallet could not take back (the
+   *  mint says it is spent): the provider made a key from it, and answers that
+   *  key to the same token. Stores the key and returns its sats; 0 when the
+   *  provider says the token was spent elsewhere, and only then is it gone.
+   *  Throws when the provider does not answer. */
+  async adopt(token: string, baseUrl: string): Promise<number> {
+    const url = slash(baseUrl);
+    const response = await fetch(`${url}v1/wallet/info`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!response.ok) {
+      const error = parseCoreError(await response.text(), response.status);
+      if (error.type === CoreErrorType.TOKEN_ALREADY_SPENT) return 0;
+      throw new Error("The provider did not answer. Try again later.");
+    }
+    const info: { api_key: string; balance: number } = await response.json();
+    const found: ExportedKey = {
+      key: info.api_key,
+      balance: info.balance,
+      label: "Recovered",
+      baseUrl: url,
+    };
+    this.change((keys) =>
+      has(keys, found)
+        ? keys.map((k) =>
+            k.key === found.key ? { ...k, balance: found.balance } : k
+          )
+        : [...keys, found]
+    );
+    await this.keep(found);
+    this.push();
+    return Math.floor(info.balance / 1000);
+  }
+
+  /** Waits until the key is in IndexedDB, unless localStorage already has it. */
+  private async keep(key: ExportedKey): Promise<void> {
+    try {
+      const json = await this.saved.get(this.name);
+      const read = json ? parseExported(JSON.parse(json)) : [];
+      const stored = read === "unreadable" ? [] : read;
+      const keys = [
+        ...this.keys,
+        ...stored.filter((k) => !has(this.keys, k) && !this.removed.has(k.key)),
+      ];
+      await this.saved.put(this.name, JSON.stringify(keys));
+      this.kept = keys;
+    } catch (error) {
+      if (!has(this.read(), key)) throw error;
+      report(error);
+    }
   }
 
   async refresh(key: ExportedKey): Promise<void> {
@@ -271,6 +335,8 @@ export class ExportedKeys {
 
 // a failed backup is tried again on the next change
 const report = (error: unknown) => console.error("[exported keys]", error);
+const has = (keys: ExportedKey[], key: ExportedKey) =>
+  keys.some((k) => k.key === key.key);
 
 const services = new Map<string, ExportedKeys>();
 

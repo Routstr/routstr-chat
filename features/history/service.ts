@@ -40,7 +40,8 @@ export interface HistoryDeps {
 /**
  * loading: opening keyrings, or waiting for the first relay answer.
  * ready: messages can be saved.
- * locked: a keyring exists but the signer will not open it.
+ * locked: a keyring exists but the signer will not open it, or the signer
+ *   cannot make a first one.
  * offline: no keyring here and no relay answered, so none can be made safely.
  * failed: it could not start, most likely this device's storage would not open.
  */
@@ -263,8 +264,9 @@ export class HistoryService {
         .filter((keyring) => !keyring.keys)
         .map((keyring) => this.openOne(keyring.event))
     );
-    const found = await this.deps.relays.fetch(this.keyringFilter(), () =>
-      this.deps.log.query(this.keyringFilter())
+    const found = await this.deps.relays.fetch(
+      this.keyringFilter(),
+      await this.deps.log.query(this.keyringFilter())
     );
     await Promise.all(
       found.events.map((event) => this.addKeyring(event, true))
@@ -282,6 +284,8 @@ export class HistoryService {
     this.settle();
     if (found.answered.length === 0) return "offline";
     if (!this.syncOn()) return "ok";
+    // no key opened (locked): nothing could be synced
+    if (this.followed.size === 0) return "failed";
     const pulled = await Promise.all(
       [...this.followed].map(([author, keys]) => this.pull(author, keys))
     );
@@ -301,7 +305,7 @@ export class HistoryService {
     }
     const { events, answered } = await this.deps.relays.fetch(
       this.historyFilter(author),
-      () => this.deps.log.query(this.historyFilter(author))
+      await this.deps.log.query(this.historyFilter(author))
     );
     this.receive(events, keys);
     return answered.length > 0;
@@ -311,7 +315,12 @@ export class HistoryService {
     event: NostrEvent,
     fromRelay: boolean
   ): Promise<void> {
-    if (this.keyrings.has(event.id) || event.pubkey !== this.owner) return;
+    if (
+      event.kind !== KIND_KEYRING ||
+      event.pubkey !== this.owner ||
+      this.keyrings.has(event.id)
+    )
+      return;
     if (fromRelay && !verifyEvent(event)) return;
     this.keyrings.set(event.id, { event });
     if (fromRelay) await this.deps.log.put([event]);
@@ -322,7 +331,8 @@ export class HistoryService {
   // One decrypt per keyring at a time: "Sync now" during a slow signer's
   // prompt must not ask again.
   private async openOne(event: NostrEvent): Promise<void> {
-    if (this.opening.has(event.id)) return;
+    // a switched-away account's signer is never asked
+    if (this.disposed || this.opening.has(event.id)) return;
     this.opening.add(event.id);
     this.settle();
     const keys = await openKeyring(event, this.owner, this.deps.signer);
@@ -339,7 +349,7 @@ export class HistoryService {
   // Only once a relay has said this account has none: a second keyring
   // would split the account's history between devices.
   private async makeKeyring(): Promise<void> {
-    // a switched-away account's signer is never asked
+    // a switched-away account's signer is not asked to start one
     if (this.disposed) return;
     let made: Awaited<ReturnType<typeof createKeyring>>;
     try {
@@ -349,7 +359,8 @@ export class HistoryService {
       this.makeFailed = true;
       return;
     }
-    if (this.keyrings.size > 0) return;
+    // a switch during the prompt: the old account keeps nothing from it
+    if (this.disposed || this.keyrings.size > 0) return;
     await this.deps.log.put([made.event]);
     this.keyrings.set(made.event.id, made);
     this.deps.relays.publish(made.event).catch(() => {
@@ -371,7 +382,7 @@ export class HistoryService {
     });
   }
 
-  /** Events from relays: checked, kept on disk, then shown. */
+  /** Events from relays: checked, then shown and written to this device. */
   private receive(events: NostrEvent[], keys: PnsKeys): void {
     const fresh = events.filter(
       (event) =>

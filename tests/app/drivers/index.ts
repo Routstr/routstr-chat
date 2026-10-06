@@ -50,7 +50,7 @@ export interface Driver {
   waitError(page: Page): Promise<void>;
   /** open the app with ?cashu=<token>, until the balance shows it */
   fundByLink(page: Page, appUrl: string, token: string): Promise<void>;
-  /** switch to the other key on this device (an empty one: until it shows 0) and back */
+  /** switch to the other key on this device, until it is the active one and the app takes a message */
   switchAccount(page: Page): Promise<void>;
 }
 

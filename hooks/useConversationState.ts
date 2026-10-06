@@ -1,9 +1,11 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Message } from "@/types/chat";
-import { stripImageDataFromSingleMessage } from "@/utils/messageUtils";
+import {
+  getTextFromContent,
+  stripImageDataFromSingleMessage,
+} from "@/utils/messageUtils";
 import { loadSatsSpentMap, saveSatsSpent } from "@/utils/storageUtils";
 import { ROOT_ID } from "@/features/history/codec";
-import { textOf } from "@/features/history/thread";
 import { useHistory, useThread } from "@/features/history/view";
 
 /* A bridge for the old chat engine (useChatActions): the chats themselves
@@ -155,7 +157,7 @@ export const useConversationState = (): UseConversationStateReturn => {
     },
     startEditingMessage: (index) => {
       setEditingMessageIndex(index);
-      setEditingContent(messages[index] ? textOf(messages[index].content) : "");
+      setEditingContent(messages[index] ? getTextFromContent(messages[index].content) : "");
     },
     cancelEditing: () => {
       setEditingMessageIndex(null);

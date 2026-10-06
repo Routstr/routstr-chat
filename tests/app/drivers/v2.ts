@@ -1,6 +1,7 @@
 // How a person uses v2 (components/v2), by the names a screen reader would read. Every
 // step returns once the person would see its result.
 import { expect, type Page } from "@playwright/test";
+import { activeAccount } from "../seed";
 import { gone, shown, until } from "./wait";
 
 const composer = (page: Page) => page.getByRole("textbox", { name: "Message" });
@@ -58,11 +59,23 @@ async function openSend(page: Page) {
 }
 
 async function openSettings(page: Page, section: string) {
-  if (!(await page.getByRole("dialog", { name: "Settings" }).isVisible()))
-    await page
-      .getByRole("button", { name: "Settings", exact: true })
-      .first()
-      .click();
+  if (!(await page.getByRole("dialog", { name: "Settings" }).isVisible())) {
+    // signed in, the light at the rail's foot opens the account menu first
+    const accounts = page.getByRole("button", {
+      name: /Accounts and settings$/,
+    });
+    if (await accounts.count()) {
+      await accounts.first().click();
+      await page
+        .getByRole("menu", { name: "Accounts" })
+        .getByRole("menuitem", { name: "Settings" })
+        .click();
+    } else
+      await page
+        .getByRole("button", { name: "Settings", exact: true })
+        .first()
+        .click();
+  }
   await page.locator(`#nav-${section}`).click();
 }
 
@@ -265,24 +278,17 @@ export const v2 = {
 
   /** Settings → Account → Other keys → Switch, there and back, until each balance shows. */
   async switchAccount(page: Page) {
-    const mine = await v2.balance(page);
-    const other = async () => {
-      await openSettings(page, "account");
-      await page
-        .locator("#g-others")
-        .getByRole("button", { name: "Switch" })
-        .first()
-        .click();
-    };
-    await other();
+    const was = await activeAccount(page);
+    await openSettings(page, "account");
+    await page
+      .locator("#g-others")
+      .getByRole("button", { name: "Switch" })
+      .first()
+      .click();
     await until(
-      async () => (await v2.balance(page)) === 0,
-      "the other key's 0"
+      async () => ![null, was].includes(await activeAccount(page)),
+      "the other key to be active"
     );
-    await other();
-    await until(
-      async () => (await v2.balance(page)) === mine,
-      `this key's ${mine} again`
-    );
+    await v2.loaded(page);
   },
 };

@@ -107,12 +107,17 @@ test("D2 main's wallet on this device opens in v2 as its own account's, and only
   // a second key on the device: main's coins stay with the account main had signed in
   await addAccount(page, newKey());
   await v2.ready(page);
-  await v2.switchAccount(page); // to the new key (0 sats) and back
+  const shows = (sats: number) =>
+    expect
+      .poll(() => v2.balance(page).catch(() => -1), { timeout: 30_000 })
+      .toBe(sats);
+  await v2.switchAccount(page);
+  await shows(0);
+  await v2.switchAccount(page);
+  await shows(40);
   await page.reload();
   await v2.ready(page);
-  await expect
-    .poll(() => v2.balance(page).catch(() => -1), { timeout: 30_000 })
-    .toBe(40);
+  await shows(40);
   await v2.useMint(page, kit.env.mintUrl);
   expect(await kit.redeem(await v2.makeToken(page, 40))).toBe(40);
   await context.close();

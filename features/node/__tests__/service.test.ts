@@ -85,6 +85,17 @@ describe("NodeSetting", () => {
     expect(s.get()).toBeNull();
   });
 
+  it("says so when storage is full, and keeps what was saved before", async () => {
+    const { s, storage } = setting({ [NODE_KEY]: JSON.stringify(NODE) });
+    storage.setItem = () => {
+      throw new Error("QuotaExceededError");
+    };
+    expect(() => s.save({ ...NODE, enabled: false })).toThrow(NodeError);
+    expect(s.get()).toEqual(NODE);
+    await expect(s.connect("https://other.example/", ME, { signEvent: vi.fn() })).rejects.toBeInstanceOf(NodeError);
+    expect(s.paysFor(ME)).toEqual(NODE);
+  });
+
   it("treats a broken saved value as no node", () => {
     const { s } = setting({ [NODE_KEY]: "{not json" });
     expect(s.get()).toBeNull();

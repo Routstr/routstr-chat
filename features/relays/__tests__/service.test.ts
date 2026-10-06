@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { finalizeEvent, generateSecretKey, getPublicKey } from "nostr-tools";
 import { firstValueFrom, filter, toArray, take } from "rxjs";
 import { DEFAULT_RELAYS, Relays } from "../service";
-import { memoryStorage, network, settle } from "./fakes";
+import { memoryStorage, network, settle, until } from "./fakes";
 
 const [R1, R2, R3] = DEFAULT_RELAYS;
 const secret = generateSecretKey();
@@ -74,6 +74,22 @@ describe("AccountRelays", () => {
       "wss://both.example.com",
       "wss://write.example.com",
     ]);
+  });
+
+  it("takes only the account's own signed NIP-65 list, whatever else a relay serves", async () => {
+    const net = network();
+    const own = sign(10002, 1, [["r", "wss://mine.example.com"]]);
+    const stranger = finalizeEvent({ kind: 10002, created_at: 5, tags: [["r", "wss://theirs.example.com"]], content: "" }, generateSecretKey());
+    // forged: the owner's key named on someone else's signature
+    const forged = JSON.parse(JSON.stringify({ ...stranger, pubkey: OWNER, created_at: 6 }));
+    const note = sign(1, 7, [["r", "wss://note.example.com"]]);
+    net.relay(R1).ignoresFilters = true;
+    [own, stranger, forged, note].forEach((e) => net.relay(R1).events.set(e.id, e));
+    const account = new Relays(net.port, memoryStorage()).of(OWNER);
+
+    await account.ready();
+
+    expect(account.urls()).toEqual([...DEFAULT_RELAYS, "wss://mine.example.com"]);
   });
 
   it("uses no relay at all when the person emptied this device's list", async () => {
@@ -151,7 +167,7 @@ describe("AccountRelays", () => {
     net.relay(R1).events.set(mine[0].id, mine[0]);
     const account = new Relays(net.port, memoryStorage()).of(OWNER);
 
-    await account.fetch({ kinds: [1080], authors: [OWNER] }, async () => mine);
+    await account.fetch({ kinds: [1080], authors: [OWNER] }, mine);
 
     expect(net.relay(R1).received.map((e) => e.id)).toEqual([mine[1].id]);
     expect(
@@ -160,6 +176,38 @@ describe("AccountRelays", () => {
         .received.map((e) => e.id)
         .sort()
     ).toEqual(mine.map((e) => e.id).sort());
+  });
+
+  it("answers without waiting for its uploads, and never sends one event twice at once", async () => {
+    const net = network();
+    const [theirs, ours] = [sign(1080, 1), sign(1080, 2)];
+    net.relay(R1).events.set(theirs.id, theirs);
+    let release!: () => void;
+    net.relay(R1).publishGate = new Promise((resolve) => (release = resolve));
+    const account = new Relays(net.port, memoryStorage(), `?relays=${R1}`).of(OWNER);
+
+    const first = await account.fetch({ kinds: [1080], authors: [OWNER] }, [ours]);
+    expect(first.events.map((e) => e.id)).toEqual([theirs.id]);
+    // a second sync while the first upload is still on its way
+    await account.fetch({ kinds: [1080], authors: [OWNER] }, [ours]);
+    release();
+
+    await until(() => net.relay(R1).received.length > 0);
+    await settle();
+    expect(net.relay(R1).received.map((e) => e.id)).toEqual([ours.id]);
+  });
+
+  it("keeps the copy of an event that verifies when relays send different ones", async () => {
+    const net = network();
+    const real = sign(1081, 1, [], "the keyring");
+    const broken = { ...real, content: "tampered" };
+    net.relay(R1).events.set(real.id, real);
+    net.relay(R2).events.set(broken.id, broken);
+    const account = new Relays(net.port, memoryStorage(), `?relays=${R1},${R2}`).of(OWNER);
+
+    const { events } = await account.fetch({ kinds: [1081], authors: [OWNER] });
+
+    expect(events.map((e) => e.content)).toEqual(["the keyring"]);
   });
 
   it("asks a NIP-77 relay only for what this device lacks, and sends it only what it lacks", async () => {
@@ -171,7 +219,7 @@ describe("AccountRelays", () => {
 
     const { events, answered } = await account.fetch(
       { kinds: [1080], authors: [OWNER] },
-      async () => [both, ours]
+      [both, ours]
     );
 
     expect(events.map((e) => e.id)).toEqual([theirs.id]);
@@ -190,9 +238,7 @@ describe("AccountRelays", () => {
         net.relay(R1).events.set(theirs.id, theirs);
         const account = new Relays(net.port, memoryStorage(), `?relays=${R1}`).of(OWNER);
 
-        const fetching = account.fetch({ kinds: [1080], authors: [OWNER] }, async () =>
-          setup === "empty" ? [] : [ours]
-        );
+        const fetching = account.fetch({ kinds: [1080], authors: [OWNER] }, setup === "empty" ? [] : [ours]);
         await vi.advanceTimersByTimeAsync(20_000);
         const { events, answered } = await fetching;
 

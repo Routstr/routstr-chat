@@ -305,6 +305,7 @@ async function oneRun(
     await step("walletMakeToken", () => driver.makeToken(page, 5));
     await addAccount(page, nip19.nsecEncode(generateSecretKey()));
     await driver.ready(page);
+    // to the other key, until it is active and the app takes a message
     await step("accountSwitch", () => driver.switchAccount(page));
     await heap("end");
     await context.close();
