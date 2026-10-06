@@ -129,10 +129,9 @@ describe("settleSwap", () => {
       keyChain: { ensureKeysetKeys: async () => keyset },
     } as unknown as Wallet;
 
-    expect(await settleSwap(wallet, record, commit, journal)).toBe(true);
-    expect(
-      commit.mock.calls[0][0].map((p: { amount: number }) => p.amount)
-    ).toEqual([8]);
+    const restored = await settleSwap(wallet, record, commit, journal);
+    expect(restored?.map((p) => p.amount)).toEqual([8]);
+    expect(commit).toHaveBeenCalledWith(restored, []);
     expect(journal.list("alice")).toEqual([]);
   });
 });

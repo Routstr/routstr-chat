@@ -182,3 +182,23 @@ test("shows and pays an invoice in sats at a mint that counts in msat", async ({
   expect(left).toBeLessThanOrEqual(42);
   expect(left).toBeGreaterThanOrEqual(41); // the network may keep a few msat
 });
+
+test("lands a token whose swap answer never arrives, and says it was added", async ({
+  page,
+  kit,
+  appUrl,
+}) => {
+  await v2.open(page, appUrl);
+  let lost = false;
+  await page.route(`${kit.env.mintUrl}/v1/swap`, async (route) => {
+    if (lost) return route.fallback();
+    lost = true;
+    await route.fetch(); // the mint swaps the token
+    await route.abort("failed"); // and its answer never reaches the app
+  });
+  const token = await kit.mintToken(30);
+  await v2.receive(page, token);
+  expect(lost).toBe(true);
+  expect(await v2.balance(page)).toBe(30);
+  expect(new Set(await kit.tokenStates(token))).toEqual(new Set(["SPENT"]));
+});

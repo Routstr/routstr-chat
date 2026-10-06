@@ -481,9 +481,10 @@ describe(`the book against a real mint (${PAY_STATE})`, () => {
       const token = await executorFor(from, "bob").send(MINT, 16, from.get());
       const wallet = walletStore();
       const restore = loseAnswer("/v1/swap");
-      await expect(executorFor(wallet).receive(token)).rejects.toThrow();
+      // the mint swapped: the new coins come back from restore, so it went through
+      const received = await executorFor(wallet).receive(token);
       restore();
-      // the mint swapped: the new coins came back from restore, and they are ours
+      expect(sum(received)).toBe(16);
       expect(sum(wallet.get())).toBe(16);
       expect(journal.list("alice")).toEqual([]);
     }
