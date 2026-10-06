@@ -171,7 +171,7 @@ describe("the Refund button against this node's core", () => {
     await vi.waitFor(() => expect(others).toHaveLength(0));
   }, 30_000);
 
-  it("counts a lost device's credit taken once as done when forgetting it failed", async () => {
+  it("never takes a lost device's credit twice when forgetting it failed", async () => {
     const key = await newKey(40);
     const others: ApiKeyEntry[] = [
       { baseUrl: kit.coreUrl, key, balance: 40, lastUsed: null },
@@ -182,15 +182,14 @@ describe("the Refund button against this node's core", () => {
     state.relayDown = true;
     await chat.refund();
     await vi.waitFor(() => expect(console.warn).toHaveBeenCalled());
-    expect(others).toHaveLength(1);
     state.relayDown = false;
-    // core replays the payout this wallet already took
+    // core replays the payout this wallet already took: the mint refuses it
     expect(await chat.refund()).toEqual([
-      { baseUrl: kit.coreUrl, success: true },
+      { baseUrl: kit.coreUrl, success: false },
     ]);
 
-    await vi.waitFor(() => expect(others).toHaveLength(0));
     expect(received).toHaveLength(1);
+    expect(others).toHaveLength(1);
   }, 30_000);
 
   it("forgets a lost device's key the node does not know, without a refund call", async () => {

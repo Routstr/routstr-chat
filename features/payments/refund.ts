@@ -175,7 +175,7 @@ async function refundOthers(deps: RefundDeps, wallet: WalletAdapter) {
   for (const key of deps.otherDevices.keys()) {
     // A key the provider forgot is done. Every other one goes to the
     // provider, even when it reads empty: a payout this wallet missed is
-    // paid again, and one it already took counts as received.
+    // paid again.
     const { isInvalidApiKey } = await balances.getTokenBalance(
       key.key,
       key.baseUrl

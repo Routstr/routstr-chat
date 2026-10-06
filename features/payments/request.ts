@@ -13,9 +13,6 @@ interface PayDeps {
   live(): boolean;
 }
 
-// NUT error code: the mint saw these proofs spent already
-const ALREADY_SPENT = 11001;
-
 const sourceChanged = () =>
   new DOMException(
     "Account or payment source changed. Send again.",
@@ -59,11 +56,6 @@ export function sdkWallet(
           unit: "sat",
         };
       } catch (error) {
-        // A payout a provider replays after this wallet took it the first
-        // time: done, or the SDK would ask for it on every refund forever
-        if ((error as { code?: number }).code === ALREADY_SPENT) {
-          return { success: true, amount: 0, unit: "sat" };
-        }
         // The SDK keeps the key or the X-Cashu token and claims it again later
         return {
           success: false,
