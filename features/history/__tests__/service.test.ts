@@ -214,6 +214,11 @@ describe("HistoryService: the keyring", () => {
       older.keys.pnsKeypair.pubKey
     );
     expect(newer.keys.pnsKeypair.pubKey).not.toBe(older.keys.pnsKeypair.pubKey);
+    // a file another device encrypted may use either: reading tries the writing one first
+    expect(history.readingKeys().map((k) => k.pnsKeypair.pubKey)).toEqual([
+      older.keys.pnsKeypair.pubKey,
+      newer.keys.pnsKeypair.pubKey,
+    ]);
   });
 
   it("reads the history of every keyring the account has", async () => {

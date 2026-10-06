@@ -146,6 +146,16 @@ export class HistoryService {
     return oldest?.keys;
   }
 
+  /** Every opened keyring's keys, the writing one first: what another device
+   *  wrote (a file on Blossom, say) may use any of them. */
+  readingKeys(): PnsKeys[] {
+    const writing = this.writingKeys();
+    const others = [...this.keyrings.values()]
+      .map((keyring) => keyring.keys)
+      .filter((keys): keys is PnsKeys => !!keys && keys !== writing);
+    return writing ? [writing, ...others] : others;
+  }
+
   /**
    * Resolves only once the message is on this device's disk, so a caller can
    * pay after it. It becomes the version shown at its place. Relays get it
