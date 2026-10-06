@@ -1,4 +1,7 @@
-import { legacyCoins } from "@/features/wallet/hooks/purseBridge";
+import {
+  legacyActivity,
+  legacyCoins,
+} from "@/features/wallet/hooks/purseBridge";
 import { createPurse, type Purse } from "@/features/wallet/purse";
 import { journal, locks } from "./book";
 
@@ -10,7 +13,12 @@ const purses = new Map<string, Purse>();
 export function purseFor(owner: string): Purse {
   let purse = purses.get(owner);
   if (!purse) {
-    purse = createPurse(owner, { coins: legacyCoins, journal, locks });
+    purse = createPurse(owner, {
+      coins: legacyCoins,
+      activity: legacyActivity,
+      journal,
+      locks,
+    });
     purses.set(owner, purse);
   }
   return purse;

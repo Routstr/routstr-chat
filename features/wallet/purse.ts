@@ -1,7 +1,7 @@
 import { getTokenMetadata, type Proof } from "@cashu/cashu-ts";
 import { WalletExecutor } from "@/features/book/executor";
 import type { Journal } from "@/features/book/journal";
-import type { Coin, CoinStore } from "./ports";
+import type { ActivityLog, Coin, CoinStore } from "./ports";
 
 /** One account's money, for that account and no other, in whole sats. The one
  *  door chat and keys use: callers never touch coins. */
@@ -22,10 +22,13 @@ export interface Purse {
   receive(token: string): Promise<number>;
   /** What a token says, without its mint: for a preview before receiving. */
   peek(token: string): { mint: string; sats: number };
+  /** Runs when this account's coins may have changed: read balances again. */
+  subscribe(listener: () => void): () => void;
 }
 
 export interface PurseDeps {
   coins: CoinStore;
+  activity: ActivityLog;
   journal: Journal;
   locks?: LockManager;
 }
@@ -63,8 +66,16 @@ export function peek(token: string): { mint: string; sats: number } {
 /** The purse of `owner`: every move goes through the wallet book. */
 export function createPurse(
   owner: string,
-  { coins, journal, locks }: PurseDeps
+  { coins, activity, journal, locks }: PurseDeps
 ): Purse {
+  // the money moved either way: a log that cannot write never turns that into a failure
+  const note = (entry: { direction: "in" | "out"; sats: number }) => {
+    try {
+      activity.record(owner, entry);
+    } catch (error) {
+      console.error("Could not write the activity:", error);
+    }
+  };
   const executor = new WalletExecutor({
     owner,
     journal,
@@ -75,16 +86,23 @@ export function createPurse(
   return {
     balances: async () => balancesOf(await coins.coins(owner)),
     activeMint: () => coins.activeMint(owner),
-    send: (mintUrl, sats, handoff) =>
-      executor.send(mintUrl, sats, () => coins.coins(owner, mintUrl), {
-        handoff,
-        track: !handoff,
-      }),
-    receive: async (token) =>
-      toSats(
-        total(await executor.receive(token)),
-        getTokenMetadata(token).unit
-      ),
+    send: async (mintUrl, sats, handoff) => {
+      const token = await executor.send(
+        mintUrl,
+        sats,
+        () => coins.coins(owner, mintUrl),
+        { handoff, track: !handoff }
+      );
+      note({ direction: "out", sats });
+      return token;
+    },
+    receive: async (token) => {
+      const got = await executor.receive(token);
+      const sats = toSats(total(got), getTokenMetadata(token).unit);
+      note({ direction: "in", sats });
+      return sats;
+    },
     peek,
+    subscribe: (listener) => coins.subscribe(owner, listener),
   };
 }

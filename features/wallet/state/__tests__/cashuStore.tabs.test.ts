@@ -96,3 +96,21 @@ it("gives the purse what another tab left, not this tab's old copy", async () =>
   const coins = await legacyCoins.coins("alice", "m");
   expect(coins.map((c) => c.secret).sort()).toEqual(["a", "c", "d"]);
 });
+
+it("tells the purse when coins change, never for a reload that finds the same", async () => {
+  const store = (await tab()).of("alice");
+  const { legacyCoins } = await import("@/features/wallet/hooks/purseBridge");
+  // a listener that reads the coins, as balances do (each read reloads the store)
+  const heard = vi.fn(() => void legacyCoins.coins("alice"));
+  const stop = legacyCoins.subscribe("alice", heard);
+  await legacyCoins.coins("alice");
+  expect(heard).not.toHaveBeenCalled();
+
+  store.getState().addProofs([coin("d", 32)], "ev2");
+  await new Promise((r) => setTimeout(r, 20));
+  expect(heard).toHaveBeenCalledTimes(1);
+  // and the listener's read never undid the change
+  expect(saved().map((p) => p.secret)).toContain("d");
+  expect(store.getState().proofs.map((p) => p.secret)).toContain("d");
+  stop();
+});

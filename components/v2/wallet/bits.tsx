@@ -48,7 +48,8 @@ export const toMs = (t?: number) => (!t ? 0 : t < 1e12 ? t * 1000 : t);
  *  change of the newest payment still waiting that paid at least as much. Replies run one after
  *  another, so the newest one is the one that just ended. Anything else coming in is a top-up. */
 export function pairChange<E extends { id: string; direction: string; amount: string | number; timestamp?: number }>(entries: E[]) {
-  const sorted = [...entries].sort((a, b) => toMs(a.timestamp) - toMs(b.timestamp));
+  // in the same second a payment comes before its change
+  const sorted = [...entries].sort((a, b) => toMs(a.timestamp) - toMs(b.timestamp) || (a.direction === b.direction ? 0 : a.direction === "out" ? -1 : 1));
   const changeOf = new Map<string, E>();
   const taken = new Set<string>();
   const waiting: E[] = [];

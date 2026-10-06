@@ -2,10 +2,10 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useObservableState } from "applesauce-react/hooks";
-import { useChat } from "@/context/ChatProvider";
 import { useAccountChat, useHeldCredit } from "@/features/chat/view";
 import { useAccountManager } from "@/features/session/view";
-import { useCashuStore, useTransactionHistoryStore } from "@/features/wallet";
+import { useCashuStore } from "@/features/wallet";
+import { useActivity, useWallet } from "@/features/wallet/view";
 import { useUnclaimedTokensStore } from "@/features/wallet/state/unclaimedTokensStore";
 import { useInvoiceSync } from "@/hooks/useInvoiceSync";
 import { useInvoiceChecker } from "@/hooks/useInvoiceChecker";
@@ -43,9 +43,9 @@ export const satsOf = (n: number, unit?: string) => (unit === "msat" ? Math.floo
 /** The active mint and what it holds (a token or a payment spends only from it). */
 export function useActiveMint() {
   const cashu = useCashuStore();
-  const { mintBalances, mintUnits } = useChat();
+  const { balances } = useWallet();
   const url = cashu.activeMintUrl ?? null;
-  const all = cashu.mints.map((m) => ({ url: m.url, name: mintLabel(m), bal: satsOf(mintBalances?.[m.url] ?? 0, mintUnits?.[m.url]) }));
+  const all = cashu.mints.map((m) => ({ url: m.url, name: mintLabel(m), bal: balances[m.url] ?? 0 }));
   const active = all.find((m) => m.url === url) ?? null;
   /** Another mint that could cover what the active one cannot. */
   const coverBy = (n: number) => all.find((m) => m.url !== url && m.bal >= n) ?? null;
@@ -182,7 +182,7 @@ export default function Wallet() {
 
 /* ── what waits: invoices not paid yet ───────────────────────────────────── */
 export function usePendingInvoices() {
-  const history = useTransactionHistoryStore();
+  const activity = useActivity();
   const { invoices } = useInvoiceSync();
   // deadlines are read against this clock, a minute at a time
   const [now, setNow] = useState(() => Date.now());
@@ -192,7 +192,7 @@ export function usePendingInvoices() {
   }, []);
   return useMemo(() => {
     const byQuote = new Map(invoices.map((i) => [i.quoteId, i]));
-    return history.pendingTransactions
+    return activity.pending
       .filter((p) => p.direction === "in")
       .map((p) => {
         const t = toMs(p.timestamp);
@@ -204,7 +204,7 @@ export function usePendingInvoices() {
       // list: the record stays, so a payment that raced the deadline still lands)
       .filter((x) => !x.expired || now - x.exp < 10 * 60_000)
       .sort((a, b) => b.t - a.t);
-  }, [history.pendingTransactions, invoices, now]);
+  }, [activity.pending, invoices, now]);
 }
 
 /* ── paid invoices whose ecash never came in ─────────────────────────────── */
@@ -246,7 +246,7 @@ function Home({ go, freeze, bloom }: { go: (v: View, o?: { reopen?: Reopen | nul
   const money = useMoney();
   const account = useAccountChat();
   const held = useHeldCredit();
-  const history = useTransactionHistoryStore();
+  const activity = useActivity();
   const tokens = useUnclaimedTokensStore((s) => s.unclaimedTokens);
   const invoices = usePendingInvoices();
   const paid = usePaidUnclaimed();
@@ -285,15 +285,15 @@ function Home({ go, freeze, bloom }: { go: (v: View, o?: { reopen?: Reopen | nul
   const [fresh, setFresh] = useState<string | null>(null);
   const seen = useRef<Set<string> | null>(null);
   useEffect(() => {
-    const ids = history.history.map((h) => h.id);
+    const ids = activity.entries.map((h) => h.id);
     if (!seen.current) {
       seen.current = new Set(ids);
       return;
     }
-    const n = history.history.find((h) => !seen.current!.has(h.id) && h.direction === "in");
+    const n = activity.entries.find((h) => !seen.current!.has(h.id) && h.direction === "in");
     ids.forEach((id) => seen.current!.add(id));
     if (n) setFresh(n.id);
-  }, [history.history]);
+  }, [activity.entries]);
 
   // held with providers: named, counted, one tap from coming home
   const [heldState, setHeldState] = useState<"idle" | "busy" | "done" | "part">("idle");
@@ -329,7 +329,7 @@ function Home({ go, freeze, bloom }: { go: (v: View, o?: { reopen?: Reopen | nul
   const [runs, setRuns] = useState<Set<string>>(new Set());
   // a reply is one line, what it really cost: its payment less the change that came back
   const items = useMemo(() => {
-    const { sorted, changeOf, taken } = pairChange(history.history);
+    const { sorted, changeOf, taken } = pairChange(activity.entries);
     return sorted
       .filter((h) => !taken.has(h.id))
       .map((h) => {
@@ -339,7 +339,7 @@ function Home({ go, freeze, bloom }: { go: (v: View, o?: { reopen?: Reopen | nul
       // a reply that was refunded in full cost nothing and needs no line
       .filter((h) => h.amount > 0)
       .sort((a, b) => b.t - a.t);
-  }, [history.history]);
+  }, [activity.entries]);
 
   if (money.loading && !money.node) {
     return (
