@@ -98,4 +98,31 @@ describe("the app's relay pool", () => {
       await kit.close();
     }
   }, 30_000);
+
+  it("finishes a NIP-77 sync that takes more than one round", async () => {
+    const kit = await startRelay();
+    try {
+      const secret = generateSecretKey();
+      const owner = getPublicKey(secret);
+      const events = Array.from({ length: 600 }, (_, i) =>
+        finalizeEvent({ kind: 1080, created_at: 1_700_000_000 + i, tags: [], content: `${i}` }, secret)
+      );
+      const pool = newRelayPool();
+      await Promise.all(events.map((event) => pool.relay(kit.url).publish(event)));
+      const theirs = events.slice(0, 10);
+      const extra = finalizeEvent({ kind: 1080, created_at: 1_700_001_000, tags: [], content: "ours" }, secret);
+      const ids = (list: { id: string }[]) => list.map((e) => e.id).sort();
+
+      const started = Date.now();
+      const got = await new Relays(poolPort(pool), memoryStorage(), `?relays=${kit.url}`)
+        .of(owner)
+        .fetch({ kinds: [1080], authors: [owner] }, [...events.slice(10), extra]);
+
+      // read page by page (the fallback after a stalled sync), all 600 would come back
+      expect(ids(got.events)).toEqual(ids(theirs));
+      expect(Date.now() - started).toBeLessThan(10_000);
+    } finally {
+      await kit.close();
+    }
+  }, 60_000);
 });
