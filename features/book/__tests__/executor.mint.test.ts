@@ -422,6 +422,45 @@ describe(`the book against a real mint (${PAY_STATE})`, () => {
     }
   );
 
+  it.skipIf(!SETTLED)(
+    "tells the mint only what it needs of each coin",
+    async () => {
+      // the app's store keeps more next to a coin: its NIP-60 event, its owner
+      const tagged = (ps: Proof[]) =>
+        ps.map((p) => ({ ...p, eventId: "e1", owner: "alice" }));
+      const sent: { inputs: object[] }[] = [];
+      const real = globalThis.fetch;
+      globalThis.fetch = (async (
+        input: RequestInfo | URL,
+        init?: RequestInit
+      ) => {
+        if (/\/v1\/(swap|melt\/bolt11)$/.test(String(input))) {
+          sent.push(JSON.parse(String(init?.body)));
+        }
+        return real(input, init);
+      }) as typeof fetch;
+      try {
+        const wallet = walletStore(tagged(await funded(64)));
+        await executorFor(wallet).send(MINT, 10, wallet.get());
+        const quote = await meltQuote(8);
+        await executorFor(wallet).pay(MINT, quote, tagged(wallet.get()));
+      } finally {
+        globalThis.fetch = real;
+      }
+      expect(sent.length).toBeGreaterThanOrEqual(2); // a swap and a melt
+      for (const { inputs } of sent) {
+        for (const input of inputs) {
+          expect(Object.keys(input).sort()).toEqual([
+            "C",
+            "amount",
+            "id",
+            "secret",
+          ]);
+        }
+      }
+    }
+  );
+
   it.skipIf(!SETTLED)("receives a token", async () => {
     const from = walletStore(await funded(32));
     const token = await executorFor(from, "bob").send(MINT, 16, from.get());
