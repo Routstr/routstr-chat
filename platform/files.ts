@@ -2,7 +2,12 @@ import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 import { finalizeEvent } from "nostr-tools";
-import type { FileStore, StoredFile } from "@/features/chat/ports";
+import {
+  DEFAULT_FILE_SERVERS,
+  type Files,
+  type FileSync,
+  type StoredFile,
+} from "@/features/chat/ports";
 import type { PnsKeys } from "@/lib/pns";
 import { decryptBlob, encryptBlob } from "@/utils/blobEncryption";
 
@@ -18,14 +23,11 @@ interface FilesDb extends DBSchema {
 const RECOVERED = "storage_id_mapping";
 const SYNC = "blossomSyncEnabled";
 const SERVERS = "blossomServers";
-const DEFAULT_SERVERS = [
-  "https://blossom.primal.net",
-  "https://cdn.nostr.build",
-];
 
-// A reply is saved once its images are kept, so a server that never answers
-// must not hold it (Stop ends the wait at once)
-const UPLOAD_WAIT_MS = 30_000;
+// A message is saved once its files are kept, so a server that never answers
+// must not hold it (Stop ends the wait at once). A copy the composer makes in
+// the background holds nothing, so it waits as long as the upload takes.
+const SAVE_WAIT_MS = 30_000;
 
 const trim = (server: string) => server.replace(/\/$/, "");
 
@@ -48,6 +50,17 @@ function fromDataUrl(url: string): {
   return { bytes, type: head.slice(5).replace(/;base64$/, "") };
 }
 
+/** A data URL's bytes, or undefined when it cannot be read: a message must
+ *  still be saved without that file. */
+function readable(dataUrl: string) {
+  try {
+    return fromDataUrl(dataUrl);
+  } catch (error) {
+    console.warn("Could not read a file to keep it", error);
+    return undefined;
+  }
+}
+
 /**
  * The one file store: files kept on this device, in main's `routstr-files`
  * database, and their copies on Blossom, encrypted with the account's history
@@ -57,8 +70,8 @@ export function createFileStore(deps: {
   /** The account's history keys, the one it writes with first; none while
    *  its history is locked. A copy opens with whichever key made it. */
   keys(): PnsKeys[];
-  settings: Pick<Storage, "getItem">;
-}): FileStore {
+  settings: Pick<Storage, "getItem" | "setItem">;
+}): Files {
   let db: Promise<IDBPDatabase<FilesDb>> | undefined;
   const database = () =>
     (db ??= openDB<FilesDb>("routstr-files", 1, {
@@ -77,6 +90,19 @@ export function createFileStore(deps: {
       return fallback;
     }
   };
+  const write = (key: string, value: unknown) => {
+    try {
+      deps.settings.setItem(key, JSON.stringify(value));
+    } catch (error) {
+      console.warn("Could not save a file setting", error);
+    }
+  };
+  const readSync = (): FileSync => ({
+    on: setting(SYNC, true),
+    servers: setting(SERVERS, DEFAULT_FILE_SERVERS),
+  });
+  let sync = readSync();
+  const listeners = new Set<() => void>();
   // Blossom only while sync is on and the account's history is open
   const syncKeys = () => (setting(SYNC, true) ? deps.keys() : []);
 
@@ -98,7 +124,7 @@ export function createFileStore(deps: {
     servers: string[],
     keys: PnsKeys[],
     signal: AbortSignal
-  ): Promise<string | undefined> {
+  ) {
     for (const server of servers) {
       try {
         const response = await fetch(`${trim(server)}/${hash}`, { signal });
@@ -106,7 +132,7 @@ export function createFileStore(deps: {
         const blob = new Uint8Array(await response.arrayBuffer());
         for (const { pnsKey } of keys) {
           const file = decryptBlob(blob, pnsKey);
-          if (file) return toDataUrl(file.data, file.mimeType);
+          if (file) return file;
         }
       } catch {
         if (signal.aborted) return undefined;
@@ -132,7 +158,8 @@ export function createFileStore(deps: {
   async function upload(
     bytes: Uint8Array,
     type: string,
-    signal: AbortSignal
+    signal: AbortSignal,
+    waitMs?: number
   ): Promise<StoredFile> {
     const [keys] = syncKeys();
     if (!keys) return {};
@@ -161,11 +188,11 @@ export function createFileStore(deps: {
     // the browsers the app builds for)
     const stop = new AbortController();
     const end = () => stop.abort();
-    const timer = setTimeout(end, UPLOAD_WAIT_MS);
+    const timer = waitMs === undefined ? undefined : setTimeout(end, waitMs);
     if (signal.aborted) end();
     else signal.addEventListener("abort", end, { once: true });
     const results = await Promise.allSettled(
-      setting(SERVERS, DEFAULT_SERVERS).map(async (server) => {
+      setting(SERVERS, DEFAULT_FILE_SERVERS).map(async (server) => {
         const response = await fetch(`${trim(server)}/upload`, {
           method: "PUT",
           headers: {
@@ -196,25 +223,67 @@ export function createFileStore(deps: {
       if (!blossomHash || !keys.length) return undefined;
       const servers = blossomServers?.length
         ? blossomServers
-        : setting(SERVERS, DEFAULT_SERVERS);
-      return loadFromBlossom(blossomHash, servers, keys, signal);
+        : setting(SERVERS, DEFAULT_FILE_SERVERS);
+      const file = await loadFromBlossom(blossomHash, servers, keys, signal);
+      if (!file) return undefined;
+      // kept here too, found next time under the message's own id
+      if (storageId) {
+        const bytes = new Uint8Array(file.data) as Uint8Array<ArrayBuffer>;
+        void keepHere(bytes, file.mimeType).then((id) => {
+          if (id) {
+            write(RECOVERED, {
+              ...setting<Record<string, string>>(RECOVERED, {}),
+              [storageId]: id,
+            });
+          }
+        });
+      }
+      return toDataUrl(file.data, file.mimeType);
     },
 
     async store(dataUrl, signal) {
-      let file: ReturnType<typeof fromDataUrl>;
-      try {
-        file = fromDataUrl(dataUrl);
-      } catch (error) {
-        // a reply must still be saved without it
-        console.warn("Could not read a file to keep it", error);
-        return {};
-      }
-      const { bytes, type } = file;
+      const file = readable(dataUrl);
+      if (!file) return {};
       const [storageId, copies] = await Promise.all([
-        keepHere(bytes, type),
-        upload(bytes, type, signal),
+        keepHere(file.bytes, file.type),
+        upload(file.bytes, file.type, signal, SAVE_WAIT_MS),
       ]);
       return storageId ? { storageId, ...copies } : copies;
+    },
+
+    async keep(dataUrl) {
+      const file = readable(dataUrl);
+      return file && keepHere(file.bytes, file.type);
+    },
+
+    async copy(dataUrl, signal) {
+      const file = readable(dataUrl);
+      return file ? upload(file.bytes, file.type, signal) : {};
+    },
+
+    sync: () => sync,
+
+    setSync(change) {
+      if (change.on !== undefined) write(SYNC, change.on);
+      if (change.servers) write(SERVERS, change.servers);
+      sync = readSync();
+      listeners.forEach((listener) => listener());
+    },
+
+    subscribe(listener) {
+      listeners.add(listener);
+      // changed in another tab
+      const heard = (event: StorageEvent) => {
+        if (event.key !== SYNC && event.key !== SERVERS) return;
+        sync = readSync();
+        listener();
+      };
+      const tab = typeof window === "undefined" ? undefined : window;
+      tab?.addEventListener("storage", heard);
+      return () => {
+        listeners.delete(listener);
+        tab?.removeEventListener("storage", heard);
+      };
     },
   };
 }

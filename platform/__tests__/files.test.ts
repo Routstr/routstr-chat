@@ -56,7 +56,10 @@ let keys: PnsKeys[];
 const store = () =>
   createFileStore({
     keys: () => keys,
-    settings: { getItem: (key) => settings.get(key) ?? null },
+    settings: {
+      getItem: (key) => settings.get(key) ?? null,
+      setItem: (key, value) => void settings.set(key, value),
+    },
   });
 const signal = () => new AbortController().signal;
 
@@ -104,6 +107,63 @@ describe("FileStore: this device", () => {
       {}
     );
     expect(blossom.fetch).not.toHaveBeenCalled();
+  });
+});
+
+describe("FileStore: what screens use", () => {
+  it("keeps a file here at once and copies it to Blossom on its own", async () => {
+    const files = store();
+    const storageId = await files.keep(PNG);
+    expect(blossom.uploads).toHaveLength(0);
+
+    const copies = await files.copy(PNG, signal());
+
+    expect(await files.load({ storageId: storageId! }, signal())).toBe(PNG);
+    expect(copies).toEqual({
+      blossomHash: expect.stringMatching(/^[0-9a-f]{64}$/),
+      blossomServers: [A, B],
+    });
+  });
+
+  it("keeps a copy fetched from Blossom here, found next time under the message's id", async () => {
+    const { blossomHash } = await store().copy(PNG, signal());
+    const files = store();
+
+    expect(
+      await files.load({ storageId: "elsewhere", blossomHash }, signal())
+    ).toBe(PNG);
+    await vi.waitFor(() =>
+      expect(
+        JSON.parse(settings.get("storage_id_mapping") ?? "{}")
+      ).toHaveProperty("elsewhere")
+    );
+    blossom.blobs.clear();
+    expect(
+      await files.load({ storageId: "elsewhere", blossomHash }, signal())
+    ).toBe(PNG);
+  });
+
+  it("reads and changes the sync setting in main's keys, and says when it changed", async () => {
+    vi.stubGlobal("window", new EventTarget());
+    const files = store();
+    const heard = vi.fn();
+    files.subscribe(heard);
+    expect(files.sync()).toEqual({ on: true, servers: [A, B] });
+
+    files.setSync({ on: false });
+
+    expect(settings.get("blossomSyncEnabled")).toBe("false");
+    expect(files.sync()).toEqual({ on: false, servers: [A, B] });
+    expect(heard).toHaveBeenCalledTimes(1);
+    expect(await files.copy(PNG, signal())).toEqual({});
+
+    // another tab turned it back on
+    settings.set("blossomSyncEnabled", "true");
+    window.dispatchEvent(
+      Object.assign(new Event("storage"), { key: "blossomSyncEnabled" })
+    );
+    expect(files.sync().on).toBe(true);
+    expect(heard).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -233,5 +293,18 @@ describe("FileStore: Blossom", () => {
     await vi.advanceTimersByTimeAsync(30_000);
 
     expect(await keeping).toEqual({ storageId: expect.any(String) });
+  });
+
+  it("lets the composer's own copy take as long as the upload takes", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    blossom.silent.add(A).add(B);
+    let done = false;
+
+    void store()
+      .copy(PNG, signal())
+      .then(() => (done = true));
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(done).toBe(false);
   });
 });

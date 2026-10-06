@@ -4,6 +4,7 @@ import { exportedKeysFor } from "@/features/keys/exported";
 import { oldCredit } from "@/features/keys/legacy";
 import { keysFor } from "@/features/keys/service";
 import { createFileStore } from "@/platform/files";
+import type { AccountChatView } from "@/features/chat/view";
 import { createAccountChat, type AccountChat } from "./chat";
 import { node } from "./node";
 import { activeHistory } from "./nostr";
@@ -16,10 +17,12 @@ import { purseFor } from "./wallet";
 // main's key; "x-cashu" pays each reply with a token, anything else with API keys
 const SPEND_MODE = "spendMode";
 
+type ActiveChat = AccountChat & Pick<AccountChatView, "files">;
+
 let current: {
   owner: string;
   history: ReturnType<typeof activeHistory.get>;
-  chat: AccountChat;
+  chat: ActiveChat;
 } | null = null;
 const listeners = new Set<() => void>();
 
@@ -35,38 +38,44 @@ export function startChat(
   current?.chat.dispose();
   current =
     owner && history && otherDevices
-      ? {
-          owner,
-          history,
-          chat: createAccountChat({
-            owner,
-            storage: window.localStorage,
-            history,
-            attachments: createAttachments(
-              createFileStore({
-                keys: () => history.readingKeys(),
-                settings: window.localStorage,
-              })
-            ),
-            keys: keysFor(owner),
-            purse: purseFor(owner),
-            sdk,
-            spending: () => ({
-              mode:
-                window.localStorage.getItem(SPEND_MODE)?.replace(/"/g, "") ===
-                "x-cashu"
-                  ? "xcashu"
-                  : "apikeys",
-              node: node.paysFor(owner) ?? undefined,
-            }),
-            oldCredit: oldCredit(() => node.paysFor(owner)?.url),
-            otherDevices,
-            adopt: (token, baseUrl) =>
-              exportedKeysFor(owner).adopt(token, baseUrl),
-          }),
-        }
+      ? { owner, history, chat: build(owner, history, sdk, otherDevices) }
       : null;
   listeners.forEach((listener) => listener());
+}
+
+function build(
+  owner: string,
+  history: NonNullable<ReturnType<typeof activeHistory.get>>,
+  sdk: Sdk,
+  otherDevices: OtherDevices
+): ActiveChat {
+  const files = createFileStore({
+    keys: () => history.readingKeys(),
+    settings: window.localStorage,
+  });
+  return {
+    ...createAccountChat({
+      owner,
+      storage: window.localStorage,
+      history,
+      attachments: createAttachments(files),
+      keys: keysFor(owner),
+      purse: purseFor(owner),
+      sdk,
+      spending: () => ({
+        mode:
+          window.localStorage.getItem(SPEND_MODE)?.replace(/"/g, "") ===
+          "x-cashu"
+            ? "xcashu"
+            : "apikeys",
+        node: node.paysFor(owner) ?? undefined,
+      }),
+      oldCredit: oldCredit(() => node.paysFor(owner)?.url),
+      otherDevices,
+      adopt: (token, baseUrl) => exportedKeysFor(owner).adopt(token, baseUrl),
+    }),
+    files,
+  };
 }
 
 export const activeChat = {
@@ -74,5 +83,5 @@ export const activeChat = {
     listeners.add(listener);
     return () => listeners.delete(listener);
   },
-  get: (): AccountChat | null => current?.chat ?? null,
+  get: (): ActiveChat | null => current?.chat ?? null,
 };

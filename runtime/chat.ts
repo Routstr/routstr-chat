@@ -35,7 +35,7 @@ interface AccountChatDeps {
 }
 
 /** Chat and its payments for one account, for as long as it is the one in use. */
-export interface AccountChat extends AccountChatView {
+export interface AccountChat extends Omit<AccountChatView, "files"> {
   /** Stops new work. Turns already paying settle into this account. */
   dispose(): void;
 }
