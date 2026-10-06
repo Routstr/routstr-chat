@@ -18,7 +18,9 @@ import { INDEX, SECTIONS, showConsole } from "../settings/Settings";
 import { peekLine, shownLine } from "./greet";
 import { useObservableState } from "applesauce-react/hooks";
 import { useAccountManager } from "@/components/ClientProviders";
+import { useConversations, useHistory, useHistoryLoaded } from "@/features/history/view";
 import { useDeviceRelays } from "@/features/relays/view";
+import { withCosts } from "@/hooks/useConversationState";
 
 /* ⌘K: one field that goes anywhere. A fixed frame (it never resizes while you
    type), the list on the left with one selection that glides between rows, and
@@ -55,7 +57,7 @@ interface Group {
   fallback?: boolean;
 }
 type Sync = "idle" | "running" | "done" | "fail" | "nokey" | "norelay" | "slow";
-type SyncOutcome = "ok" | "failed" | "skipped";
+type SyncOutcome = "ok" | "failed" | "offline";
 
 const MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 const phoneNow = () => typeof window !== "undefined" && window.matchMedia("(max-width: 760px)").matches;
@@ -230,17 +232,20 @@ function Body({ closing }: { closing: boolean }) {
   const room = useRoom();
   const money = useMoney();
   const {
-    conversations,
     activeConversationId,
     loadConversation,
     startNewConversation,
     setInputMessage,
-    syncWithNostr,
-    conversationsLoaded,
     models,
     selectedModel,
     isSidebarCollapsed,
+    replyCosts,
   } = useChat();
+  const history = useHistory();
+  const stored = useConversations();
+  const conversations = useMemo(() => withCosts(stored, replyCosts), [stored, replyCosts]);
+  const conversationsLoaded = useHistoryLoaded();
+  const [deviceRelays] = useDeviceRelays();
   const [phone, setPhone] = useState(phoneNow);
   useEffect(() => {
     const m = window.matchMedia("(max-width: 760px)");
@@ -789,7 +794,6 @@ function Body({ closing }: { closing: boolean }) {
   convRef.current = conversations;
   const { manager } = useAccountManager();
   const account = useObservableState(manager.active$);
-  const [deviceRelays] = useDeviceRelays();
   const syncCtx = useRef({ active: false, relays: 0 });
   syncCtx.current = { active: !!account, relays: deviceRelays.length };
   const finishSync = useCallback((outcome: SyncOutcome) => {
@@ -800,7 +804,7 @@ function Body({ closing }: { closing: boolean }) {
       window.setTimeout(() => {
         // a skipped sync says why, from what the app knows: no key, no relays, or a signer that did not answer
         const why = !syncCtx.current.active ? "nokey" : !syncCtx.current.relays ? "norelay" : "slow";
-        setSync(outcome === "ok" ? "done" : outcome === "skipped" ? why : "fail");
+        setSync(outcome === "ok" ? "done" : outcome === "offline" ? why : "fail");
         s.timers.push(
           window.setTimeout(() => {
             if (onSync.current) return void (idleLater.current = true);
@@ -831,7 +835,7 @@ function Body({ closing }: { closing: boolean }) {
     setSync("running");
     // the sync says how it ended; a relay that never answers counts as a failure after a while
     const late = new Promise<SyncOutcome>((r) => s.timers.push(window.setTimeout(() => r("failed"), 20_000)));
-    const outcome = await Promise.race([Promise.resolve(syncWithNostr()).then((o) => (o ?? "ok") as SyncOutcome), late]).catch(() => "failed" as const);
+    const outcome = await Promise.race([history?.sync() ?? Promise.resolve<SyncOutcome>("offline"), late]).catch(() => "failed" as const);
     finishSync(outcome);
   };
 

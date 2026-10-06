@@ -5,8 +5,11 @@
    pictures) without spending sats. Nothing here ships: app/lab renders only
    in development. */
 
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { ChatContext } from "@/context/ChatProvider";
+import { HistoryContext } from "@/features/history/view";
+import type { HistoryService } from "@/features/history/service";
+import { LabHistory } from "./labHistory";
 import type { Conversation, Message, MessageAttachment } from "@/types/chat";
 import type { Model } from "@/types/models";
 import { DEFAULT_MINT_URL } from "@/lib/utils";
@@ -144,6 +147,16 @@ export function FakeChatProvider({ children }: { children: React.ReactNode }) {
     );
     setSyncing(false);
   }, []);
+  // the screens read chats from history: the lab's chats stand behind it
+  const [lab] = useState(() => new LabHistory({ remove: (id) => setConversations((cs) => cs.filter((c) => c.id !== id)), sync: syncNow }));
+  useLayoutEffect(() => lab.update(conversations, syncing), [lab, conversations, syncing]);
+  // what the real bridge hands the screens: the branch shown, then the last request's notes
+  const slots = useSyncExternalStore(lab.subscribe, () => (activeId ? lab.getThread(activeId) : undefined), () => undefined);
+  const shown = useMemo(() => {
+    const branch = slots?.map((s) => s.displayed) ?? [];
+    const after = branch.at(-1)?._createdAt ?? 0;
+    return [...branch, ...messages.filter((m) => m.role === "system" && (m._createdAt ?? 0) > after)];
+  }, [slots, messages]);
   const [uploadedAttachments, setUploadedAttachments] = useState<MessageAttachment[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isPaymentProcessing, setIsPaymentProcessing] = useState(false);
@@ -230,7 +243,7 @@ export function FakeChatProvider({ children }: { children: React.ReactNode }) {
       conversations,
       conversationsLoaded: true,
       activeConversationId: activeId,
-      messages,
+      messages: shown,
       setMessages,
       editingMessageIndex,
       editingContent,
@@ -238,7 +251,7 @@ export function FakeChatProvider({ children }: { children: React.ReactNode }) {
       setEditingMessageIndex,
       startEditingMessage: (i: number) => {
         setEditingMessageIndex(i);
-        const m = messages[i];
+        const m = shown[i];
         setEditingContent(typeof m.content === "string" ? m.content : m.content.find((c) => c.type === "text")?.text ?? "");
       },
       cancelEditing: () => {
@@ -328,7 +341,7 @@ export function FakeChatProvider({ children }: { children: React.ReactNode }) {
           setActiveId(convId);
           convRef.current = convId;
         }
-        const last = [...messages].reverse().find((m) => m.role !== "system");
+        const last = [...shown].reverse().find((m) => m.role !== "system");
         const user = msg("user", inputMessage, Date.now(), { _prevId: last?._eventId });
         const next = [...messages, user];
         setInputMessage("");
@@ -337,16 +350,16 @@ export function FakeChatProvider({ children }: { children: React.ReactNode }) {
         void run(next, convId, user._eventId);
       },
       retryMessage: (index: number) => {
-        const target = messages[index];
-        const base = messages.slice(0, index);
+        const target = shown[index];
+        const base = shown.slice(0, index);
         setMessages(base);
         void run(base, activeId ?? "c1", target?._prevId);
       },
       saveInlineEdit: async () => {
         if (editingMessageIndex === null) return;
-        const old = messages[editingMessageIndex];
+        const old = shown[editingMessageIndex];
         const edited = msg("user", editingContent, Date.now(), { _prevId: old._prevId });
-        const base = [...messages.slice(0, editingMessageIndex + 1), edited];
+        const base = [...shown.slice(0, editingMessageIndex + 1), edited];
         setEditingMessageIndex(null);
         setEditingContent("");
         setMessages(base);
@@ -359,12 +372,15 @@ export function FakeChatProvider({ children }: { children: React.ReactNode }) {
         return () => undefined;
       },
     });
-  }, [conversations, activeId, messages, setMessages, editingMessageIndex, editingContent, selectedModel, balance, isLoginModalOpen, collapsed, configuredModels, inputMessage, uploadedAttachments, isLoading, isPaymentProcessing, streamingConversationId, stream, thinking, run, syncing, syncNow]);
+  }, [conversations, activeId, shown, setMessages, editingMessageIndex, editingContent, selectedModel, balance, isLoginModalOpen, collapsed, configuredModels, inputMessage, uploadedAttachments, isLoading, isPaymentProcessing, streamingConversationId, stream, thinking, run, syncing, syncNow]);
 
   const standIn = useMemo(() => ({ routes: labRoutes, picks: PICKS, currentKey }), [currentKey]);
   return (
     <ChatContext.Provider value={value as never}>
-      <CatalogStandInContext.Provider value={standIn}>{children}</CatalogStandInContext.Provider>
+      {/* the lab fills only what screens read of a history service */}
+      <HistoryContext.Provider value={lab as unknown as HistoryService}>
+        <CatalogStandInContext.Provider value={standIn}>{children}</CatalogStandInContext.Provider>
+      </HistoryContext.Provider>
     </ChatContext.Provider>
   );
 }

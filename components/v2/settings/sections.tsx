@@ -6,7 +6,7 @@ import { nip19 } from "nostr-tools";
 import { useObservableState } from "applesauce-react/hooks";
 import { useAuth } from "@/context/AuthProvider";
 import { useAccountManager } from "@/components/ClientProviders";
-import { useChatSync } from "@/hooks/useChatSync";
+import { useSyncSetting } from "@/features/history/view";
 import { useDeviceRelays } from "@/features/relays/view";
 import { useBlossomSync } from "@/hooks/useBlossomSync";
 import { useLogs } from "@/hooks/useLogs";
@@ -501,7 +501,7 @@ export function Account({ go }: { go: (id: SettingsSection) => void }) {
 
 /* ── Sync and storage ────────────────────────────────────────────────────── */
 export function Sync() {
-  const { chatSyncEnabled, setChatSyncEnabled } = useChatSync();
+  const [chatSyncEnabled, setChatSyncEnabled] = useSyncSetting();
   const { manager } = useAccountManager();
   const active = useObservableState(manager.active$);
   const [relays, updateRelays] = useDeviceRelays();

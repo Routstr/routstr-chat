@@ -3,6 +3,7 @@
 import React, { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useChat } from "@/context/ChatProvider";
 import { useAuth } from "@/context/AuthProvider";
+import { useConversations, useHistory, useHistoryLoaded } from "@/features/history/view";
 import { Icon, Mark } from "../icons";
 import { useUi } from "../ui";
 import { groupByDay, sats } from "../format";
@@ -118,17 +119,17 @@ const Row = memo(function Row({
 
 export default function Rail() {
   const {
-    conversations,
     activeConversationId,
     loadConversation,
     startNewConversation,
-    deleteConversation,
     isSidebarCollapsed,
     setIsSidebarCollapsed,
     isLoading,
     streamingConversationId,
-    conversationsLoaded,
   } = useChat();
+  const history = useHistory();
+  const conversations = useConversations();
+  const conversationsLoaded = useHistoryLoaded();
   const { isAuthenticated } = useAuth();
   const ui = useUi();
   const money = useMoney();
@@ -208,9 +209,9 @@ export default function Rail() {
     (id: string) => {
       if (finalised.current.has(id)) return;
       finalised.current.add(id);
-      void deleteConversation(id, { stopPropagation() {} } as React.MouseEvent);
+      history?.remove(id).catch((error) => console.error("Could not delete the chat:", error));
     },
-    [deleteConversation]
+    [history]
   );
   const commit = (id: string) => {
     rings.current.delete(id);

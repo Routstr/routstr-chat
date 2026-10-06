@@ -2,7 +2,7 @@
 
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useChat } from "@/context/ChatProvider";
-import { useChatSync } from "@/hooks/useChatSync";
+import { useSyncSetting } from "@/features/history/view";
 import { useObservableState } from "applesauce-react/hooks";
 import { useAccountManager } from "@/components/ClientProviders";
 import { useSdkUsageHistory } from "@/features/wallet/hooks/useSdkUsageHistory";
@@ -116,7 +116,7 @@ function Pager({ n, page, onPage }: { n: number; page: number; onPage: (p: numbe
 
 export default function Usage({ view: asked }: { view?: "wallet" } = {}) {
   const chat = useChat();
-  const { chatSyncEnabled } = useChatSync();
+  const [chatSyncEnabled] = useSyncSetting();
   const { manager } = useAccountManager();
   const active = useObservableState(manager.active$);
   // chats sync only with a key; then copies live on the relays too

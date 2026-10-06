@@ -3,6 +3,7 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useChat } from "@/context/ChatProvider";
+import { useConversations } from "@/features/history/view";
 import { useMoney } from "./useMoney";
 import { commitLine, peekLine } from "./palette/greet";
 import { lastActivity, timeAgo } from "./format";
@@ -110,7 +111,8 @@ function Pool({ gone }: { gone: boolean }) {
 /* Phone, a returning reader's new chat: one quiet way back to the latest
    chat, above the composer (the rail is a drawer away there). */
 export function Resume() {
-  const { conversations, loadConversation } = useChat();
+  const { loadConversation } = useChat();
+  const conversations = useConversations();
   const latest = useMemo(() => {
     let best: (typeof conversations)[number] | null = null;
     let at = 0;
@@ -151,7 +153,8 @@ export function Resume() {
 /* Four ways in, under the composer, until the first chat exists. Pointing at
    one shows it in the box before you choose it; choosing puts it there. */
 export function Ideas({ gone }: { gone: boolean }) {
-  const { conversations, inputMessage, setInputMessage } = useChat();
+  const { inputMessage, setInputMessage } = useChat();
+  const conversations = useConversations();
   const box = useRef<HTMLDivElement>(null);
   const [on, setOn] = useState<number | null>(null);
 
