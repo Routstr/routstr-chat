@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import { openDB as openIdb } from "idb";
 import { finalizeEvent, generateSecretKey, getPublicKey } from "nostr-tools";
 import { getEventTags, openDB } from "nostr-idb";
-import { useFreshIndexedDB } from "@/tests/kit/idb";
+import { freshIndexedDBPerTest } from "@/tests/kit/idb";
 import { memoryStorage } from "@/features/relays/__tests__/fakes";
 import { openEventLog } from "../eventLog";
 
-useFreshIndexedDB();
+freshIndexedDBPerTest();
 
 const secret = generateSecretKey();
 const author = getPublicKey(secret);
