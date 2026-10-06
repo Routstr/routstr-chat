@@ -12,7 +12,9 @@ export function useAutoReturn(walletLoaded: boolean) {
   const busy = useRef(false);
   // the latest action, so a new function identity (the chat context re-renders often) is not a new trigger
   const run = useRef(returnHeld);
-  run.current = returnHeld;
+  useEffect(() => {
+    run.current = returnHeld;
+  });
   useEffect(() => {
     if (!walletLoaded || isLoading || node || held <= 0 || busy.current) return;
     // a moment's grace: a reply that just ended may still be settling its change

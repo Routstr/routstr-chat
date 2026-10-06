@@ -50,7 +50,6 @@ export function useActions() {
         setIsLoginModalOpen,
         getActiveConversationId
       ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [chat.sendMessage, messages, setMessages, activeConversationId, selectedModel, forcedBaseUrl, isAuthenticated]
   );
 
@@ -65,7 +64,6 @@ export function useActions() {
         activeConversationId,
         getActiveConversationId
       ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [chat.retryMessage, messages, setMessages, selectedModel, forcedBaseUrl, activeConversationId]
   );
 
@@ -83,7 +81,6 @@ export function useActions() {
         activeConversationId,
         getActiveConversationId
       ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [chat.saveInlineEdit, editingMessageIndex, editingContent, messages, setMessages, selectedModel, forcedBaseUrl, activeConversationId]
   );
 
