@@ -17,6 +17,7 @@ const state = vi.hoisted(() => ({
 vi.mock("@/features/wallet/state/cashuStore", () => ({
   useCashuStore: {
     of: () => ({
+      persist: { rehydrate: async () => {} },
       getState: () => ({
         ...state.store,
         proofs: state.proofs,

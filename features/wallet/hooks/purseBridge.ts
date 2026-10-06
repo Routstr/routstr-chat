@@ -47,7 +47,11 @@ export const legacyCoins: CoinStore = {
     await commitFor(mintUrl)(add, remove);
   },
   async coins(owner, mintUrl) {
-    const { proofs, mints } = useCashuStore.of(owner).getState();
+    const store = useCashuStore.of(owner);
+    // another tab may have spent or added coins since this copy loaded; a
+    // send reads them under the account's lock, so what is saved is current
+    await store.persist.rehydrate();
+    const { proofs, mints } = store.getState();
     // a coin's mint and unit are its keyset's
     const keysets = new Map(
       mints.flatMap((m) =>

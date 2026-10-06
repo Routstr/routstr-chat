@@ -73,3 +73,26 @@ it("keeps another guest tab's coins after this tab opens an account's copy", asy
   guest.getState().addProofs([coin("g4", 4)], "ev3");
   expect(sum(saved("cashu"))).toBe(28);
 });
+
+it("gives the purse what another tab left, not this tab's old copy", async () => {
+  const first = await tab();
+  const { legacyCoins } = await import("@/features/wallet/hooks/purseBridge");
+  first.of("alice"); // loaded: a, b, c
+  const other = (await tab()).of("alice");
+  other.getState().removeProofs([coin("b", 16)]); // spent there
+  other.getState().addProofs([coin("d", 32)], "ev2");
+  storage.setItem(
+    "cashu:alice",
+    JSON.stringify({
+      ...JSON.parse(storage.getItem("cashu:alice")!),
+      state: {
+        ...JSON.parse(storage.getItem("cashu:alice")!).state,
+        mints: [
+          { url: "m", keysets: [{ _id: "00ad268c4d1f5826", _unit: "sat" }] },
+        ],
+      },
+    })
+  );
+  const coins = await legacyCoins.coins("alice", "m");
+  expect(coins.map((c) => c.secret).sort()).toEqual(["a", "c", "d"]);
+});
