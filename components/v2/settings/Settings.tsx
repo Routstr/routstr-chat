@@ -5,7 +5,7 @@ import { nip19 } from "nostr-tools";
 import { useObservableState } from "applesauce-react/hooks";
 import { useApiKeysSync } from "@/hooks/useApiKeysSync";
 import { useAccountManager } from "@/components/ClientProviders";
-import { useChatSync } from "@/hooks/useChatSync";
+import { useSyncSetting } from "@/features/history/view";
 import { useSdkUsageHistory } from "@/features/wallet/hooks/useSdkUsageHistory";
 import { loadRemoteNode } from "@/utils/storageUtils";
 import { useBitcoinConnectStatus } from "@/hooks/useBitcoinConnect";
@@ -132,7 +132,7 @@ function Layer({ leaving }: { leaving: boolean }) {
   const ui = useUi();
   const room = useRoom();
   const money = useMoney();
-  const { chatSyncEnabled } = useChatSync();
+  const [chatSyncEnabled] = useSyncSetting();
   const { manager } = useAccountManager();
   const active = useObservableState(manager.active$);
   const week = useMemo(() => Date.now() - 7 * 86_400_000, []);

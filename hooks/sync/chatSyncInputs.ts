@@ -2,35 +2,12 @@ import {
   BehaviorSubject,
   distinctUntilChanged,
   filter,
-  from,
   shareReplay,
 } from "rxjs";
 import { getStorageItem } from "@/utils/storageUtils";
-import { eventDatabaseReady } from "@/lib/eventDatabase";
 import type { NostrEvent } from "nostr-tools";
 
-// Emits once the IndexedDB persistence sidecar has finished opening,
-// migrating legacy data, and hydrating cached events into memory. Sync
-// pipelines gate on this so they never race ahead of cached history (see
-// hooks/sync/sync1081Keyring.ts).
-export const eventDatabaseReady$ = from(eventDatabaseReady).pipe(shareReplay(1));
-
-// Storage key for chat sync enabled (shared with [`hooks/useChatSync.ts`](hooks/useChatSync.ts:1))
-const CHAT_SYNC_ENABLED_KEY = "chatSyncEnabled";
 const WOT_PUBKEY_KEY = "wotPubkey";
-
-// Reactive chat sync enabled state - reads from localStorage
-export const chatSyncEnabled$ = new BehaviorSubject<boolean>(
-  typeof window !== "undefined"
-    ? getStorageItem<boolean>(CHAT_SYNC_ENABLED_KEY, true)
-    : true
-);
-
-// Function to update chatSyncEnabled$ when storage changes
-// This should be called from components that update the setting
-export function updateChatSyncEnabled(enabled: boolean) {
-  chatSyncEnabled$.next(enabled);
-}
 
 export function updateWotPubkey(pubkey: string | null) {
   wotPubkey$.next(pubkey);
@@ -39,11 +16,6 @@ export function updateWotPubkey(pubkey: string | null) {
 // Listen for storage events from other tabs (only in browser)
 if (typeof window !== "undefined") {
   window.addEventListener("storage", (e: StorageEvent) => {
-    if (e.key === CHAT_SYNC_ENABLED_KEY) {
-      const newValue = e.newValue ? JSON.parse(e.newValue) : true;
-      chatSyncEnabled$.next(newValue);
-    }
-
     if (e.key === WOT_PUBKEY_KEY) {
       const newValue = e.newValue ? JSON.parse(e.newValue) : null;
       wotPubkey$.next(newValue);
@@ -51,7 +23,7 @@ if (typeof window !== "undefined") {
   });
 }
 
-// Reactive relay URLs input - updated by [`useChatSync1081()`](hooks/useChatSync1081.ts:1)
+// Reactive relay URLs input - updated by the old sync hooks from the app config
 export const relayUrls$ = new BehaviorSubject<string[]>([]);
 export const relayUrlsDefined$ = relayUrls$.pipe(
   filter((urls): urls is string[] => urls.length > 0),
@@ -82,7 +54,7 @@ export const wotPubkeyDefined$ = wotPubkey$.pipe(
   shareReplay(1)
 );
 
-// User signer for encrypting/decrypting kind-1081 events
+// User signer for the old config sync (kind 30078)
 export interface UserSignerInfo {
   signer: {
     nip44: {

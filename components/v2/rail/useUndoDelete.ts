@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import type { useChat } from "@/context/ChatProvider";
+import { useHistory } from "@/features/history/view";
+import type { Conversation } from "@/types/chat";
 import { tokenMs } from "../motion";
 import { reduced } from "./helpers";
 import type { Gone } from "./Row";
@@ -15,23 +17,22 @@ export function useUndoDelete({
   activeConversationId,
   loadConversation,
   startNewConversation,
-  deleteConversation,
   hideTip,
   rollBack,
   say,
   setFocusId,
 }: {
   root: RefObject<HTMLElement | null>;
-  conversations: Chat["conversations"];
+  conversations: Conversation[];
   activeConversationId: Chat["activeConversationId"];
   loadConversation: Chat["loadConversation"];
   startNewConversation: Chat["startNewConversation"];
-  deleteConversation: Chat["deleteConversation"];
   hideTip: (now?: boolean) => void;
   rollBack: (only?: Element) => void;
   say: (t: string) => void;
   setFocusId: (id: string) => void;
 }) {
+  const history = useHistory();
   const [gone, setGone] = useState<Map<string, Gone>>(new Map());
   const wasActive = useRef(new Map<string, boolean>());
   const rings = useRef(new Map<string, Animation>());
@@ -75,9 +76,9 @@ export function useUndoDelete({
     (id: string) => {
       if (finalised.current.has(id)) return;
       finalised.current.add(id);
-      void deleteConversation(id, { stopPropagation() {} } as React.MouseEvent);
+      history?.remove(id).catch((error) => console.error("Could not delete the chat:", error));
     },
-    [deleteConversation]
+    [history]
   );
   const commit = (id: string) => {
     rings.current.delete(id);

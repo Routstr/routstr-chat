@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useObservableState } from "applesauce-react/hooks";
 import { useAccountManager } from "@/components/ClientProviders";
-import { useChatSync } from "@/hooks/useChatSync";
+import { useSyncSetting } from "@/features/history/view";
 import {
   loadAutoDeleteConversations,
   loadKeepAliveEnabled,
@@ -15,7 +15,7 @@ import Relays from "./Relays";
 import Files from "./Files";
 
 export default function Sync() {
-  const { chatSyncEnabled, setChatSyncEnabled } = useChatSync();
+  const [chatSyncEnabled, setChatSyncEnabled] = useSyncSetting();
   const { manager } = useAccountManager();
   const active = useObservableState(manager.active$);
   const [forget, setForget] = useState(false);

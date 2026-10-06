@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { useFreshIndexedDB } from "../idb";
+import { freshIndexedDBPerTest } from "../idb";
 
-useFreshIndexedDB();
+freshIndexedDBPerTest();
 
 const open = () =>
   new Promise<IDBDatabase>((resolve, reject) => {
@@ -21,7 +21,7 @@ const run = <T>(
     req.onerror = () => reject(req.error);
   });
 
-describe("useFreshIndexedDB", () => {
+describe("freshIndexedDBPerTest", () => {
   it("stores and reads back", async () => {
     const db = await open();
     await run(db, "readwrite", (s) => s.put("coins", "k"));

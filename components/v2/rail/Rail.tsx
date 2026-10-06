@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useChat } from "@/context/ChatProvider";
+import { useConversations, useHistoryLoaded } from "@/features/history/view";
 import { useAuth } from "@/context/AuthProvider";
 import { Icon } from "../icons";
 import { useUi } from "../ui";
@@ -39,17 +40,16 @@ import { useUnread } from "./useUnread";
 
 export default function Rail() {
   const {
-    conversations,
     activeConversationId,
     loadConversation,
     startNewConversation,
-    deleteConversation,
     isSidebarCollapsed,
     setIsSidebarCollapsed,
     isLoading,
     streamingConversationId,
-    conversationsLoaded,
   } = useChat();
+  const conversations = useConversations();
+  const conversationsLoaded = useHistoryLoaded();
   const { isAuthenticated } = useAuth();
   const ui = useUi();
   const money = useMoney();
@@ -88,7 +88,6 @@ export default function Rail() {
     activeConversationId,
     loadConversation,
     startNewConversation,
-    deleteConversation,
     hideTip,
     rollBack,
     say,

@@ -19,7 +19,7 @@ import {
   of,
   timeout,
 } from "rxjs";
-import { relayUrls$ } from "@/hooks/useChatSync1081";
+import { relayUrls$ } from "@/hooks/sync/chatSyncInputs";
 import { eventStore, relayPool } from "@/lib/applesauce-core";
 import { CASHU_EVENT_KINDS } from "@/lib/cashu";
 import type { NostrEvent } from "nostr-tools";

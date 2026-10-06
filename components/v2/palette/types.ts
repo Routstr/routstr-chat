@@ -32,7 +32,7 @@ export interface Group {
   fallback?: boolean;
 }
 export type Sync = "idle" | "running" | "done" | "fail" | "nokey" | "norelay" | "slow";
-export type SyncOutcome = "ok" | "failed" | "skipped";
+export type SyncOutcome = "ok" | "failed" | "offline";
 export type Exit = { keepRoom?: boolean; composer?: boolean; handoff?: boolean };
 export type Sel = { id?: string; at: number; q: string; page: string; list: Item[] };
 
