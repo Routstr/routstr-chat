@@ -1,6 +1,7 @@
 // How a person uses v2 (components/v2), by the names a screen reader would read. Every
 // step returns once the person would see its result.
 import { expect, type Page } from "@playwright/test";
+import { gone, shown, until } from "./wait";
 
 const composer = (page: Page) => page.getByRole("textbox", { name: "Message" });
 // the composer's own Send / Stop (the wallet has a Send too)
@@ -9,8 +10,7 @@ const composerButton = (page: Page, name: "Send" | "Stop") =>
 // the rail's balance button: "Open wallet. Balance 1,234 sats." (also when the rail is folded)
 const railWallet = (page: Page) =>
   page.getByRole("button", { name: /^Open wallet\./ }).first();
-const replies = (page: Page) => page.locator(".rd-msg.rd-ai");
-const lastReply = (page: Page) => replies(page).last();
+const REPLIES = ".rd-msg.rd-ai";
 // the wallet's panes are regions named after the place: Wallet, Add funds, Send
 const view = (page: Page, v: "home" | "add" | "send") =>
   page.getByRole("region", {
@@ -25,9 +25,9 @@ const walletShown = async (page: Page) =>
 
 async function openWallet(page: Page) {
   if (!(await walletShown(page))) await railWallet(page).click();
-  await expect(
+  await shown(
     view(page, "home").getByRole("button", { name: "Add", exact: true })
-  ).toBeVisible();
+  );
 }
 
 async function backToChats(page: Page) {
@@ -36,7 +36,7 @@ async function backToChats(page: Page) {
   });
   for (let i = 0; i < 4 && (await walletShown(page)); i++)
     await back.first().click();
-  await expect.poll(() => walletShown(page)).toBe(false);
+  await until(async () => !(await walletShown(page)), "the wallet to close");
 }
 
 /** Wallet → Send, past a payment or token Send still shows from last time (it keeps them). */
@@ -46,7 +46,10 @@ async function openSend(page: Page) {
     .getByRole("button", { name: "Send", exact: true })
     .click();
   const send = view(page, "send");
-  await expect(send).toHaveAttribute("data-pos", "here");
+  await until(
+    async () => (await send.getAttribute("data-pos")) === "here",
+    "Send to slide in"
+  );
   const finished = send.getByRole("button", {
     name: /^(Pay another invoice|Done)$/,
   });
@@ -73,10 +76,12 @@ export const v2 = {
   },
 
   async loaded(page: Page) {
-    await expect(page.locator(".pf-bootlayer")).toHaveCount(0, {
-      timeout: 30_000,
-    });
-    await expect(composer(page)).toBeVisible({ timeout: 30_000 });
+    await until(
+      async () =>
+        (await page.locator(".pf-bootlayer").count()) === 0 &&
+        (await composer(page).isVisible()),
+      "the boot mark to go and the composer to show"
+    );
   },
 
   ready: (page: Page) => v2.loaded(page),
@@ -85,9 +90,10 @@ export const v2 = {
   async fund(page: Page, appUrl: string, token: string) {
     const before = await v2.balance(page).catch(() => 0);
     await page.goto(`${appUrl}/?cashu=${encodeURIComponent(token)}`);
-    await expect
-      .poll(() => v2.balance(page).catch(() => before), { timeout: 30_000 })
-      .toBeGreaterThan(before);
+    await until(
+      async () => (await v2.balance(page)) > before,
+      "the balance to grow"
+    );
   },
 
   /** The wallet total the rail shows (its aria-label holds the true total at once). */
@@ -108,9 +114,7 @@ export const v2 = {
     await page.getByRole("button", { name: /^Secret key/ }).click();
     await page.getByLabel("Secret key").fill(nsec);
     await way.getByRole("button", { name: "Sign in" }).click();
-    await expect(page.getByRole("heading", { name: "You are in" })).toBeVisible(
-      { timeout: 30_000 }
-    );
+    await shown(page.getByRole("heading", { name: "You are in" }));
   },
 
   /** Wallet → Add → Cashu token, until it says received. */
@@ -126,9 +130,7 @@ export const v2 = {
     await add
       .getByRole("button", { name: /^Receive [\d,]+ sats$/ })
       .click({ timeout: 15_000 });
-    await expect(add.getByText("Added to your wallet")).toBeVisible({
-      timeout: 30_000,
-    });
+    await shown(add.getByText("Added to your wallet"));
     await backToChats(page);
   },
 
@@ -163,9 +165,7 @@ export const v2 = {
     await invoice.fill(bolt11);
     await invoice.press("Enter"); // typed text is a draft until Enter
     await send.getByRole("button", { name: /^Pay [\d,]+ sats$/ }).click();
-    await expect(
-      send.getByRole("button", { name: "Pay another invoice" })
-    ).toBeVisible({ timeout: 30_000 });
+    await shown(send.getByRole("button", { name: "Pay another invoice" }));
     await backToChats(page);
   },
 
@@ -175,10 +175,9 @@ export const v2 = {
     await send.getByRole("tab", { name: "Cashu token" }).click();
     await send.getByLabel("Amount in sats").fill(String(sats));
     await send.getByRole("button", { name: "Create token" }).click();
-    const token = await send
-      .locator(".wl-lnstr code")
-      .first()
-      .textContent({ timeout: 30_000 });
+    const code = send.locator(".wl-lnstr code").first();
+    await shown(code);
+    const token = await code.textContent();
     await backToChats(page);
     return token ?? "";
   },
@@ -188,17 +187,19 @@ export const v2 = {
     await composerButton(page, "Send").click();
   },
 
+  replies: REPLIES,
+
   replyText: async (page: Page) =>
-    (await replies(page).allTextContents()).at(-1) ?? "",
+    (await page.locator(REPLIES).allTextContents()).at(-1) ?? "",
 
   async waitReplyText(page: Page, text: string) {
-    await expect(lastReply(page)).toContainText(text, { timeout: 60_000 });
+    await expect(page.locator(REPLIES).last()).toContainText(text, {
+      timeout: 60_000,
+    });
   },
 
   async waitIdle(page: Page) {
-    await expect(composerButton(page, "Send")).toBeVisible({
-      timeout: 60_000,
-    });
+    await shown(composerButton(page, "Send"), 60_000);
   },
 
   async stop(page: Page) {
@@ -239,7 +240,7 @@ export const v2 = {
     });
     if (await give.isVisible()) {
       await give.click();
-      await expect(give).toBeHidden({ timeout: 60_000 });
+      await gone(give, 60_000);
     }
     await backToChats(page);
   },
@@ -255,9 +256,11 @@ export const v2 = {
 
   async waitChats(page: Page, n: number) {
     const list = page.getByRole("navigation", { name: "Chats" });
-    await expect
-      .poll(() => list.locator(".sb-go").count(), { timeout: 60_000 })
-      .toBeGreaterThanOrEqual(n);
+    await until(
+      async () => (await list.locator(".sb-go").count()) >= n,
+      `${n} chats listed`,
+      60_000
+    );
   },
 
   /** Settings → Account → Other keys → Switch, there and back, until each balance shows. */
@@ -272,12 +275,14 @@ export const v2 = {
         .click();
     };
     await other();
-    await expect
-      .poll(() => v2.balance(page).catch(() => -1), { timeout: 30_000 })
-      .toBe(0);
+    await until(
+      async () => (await v2.balance(page)) === 0,
+      "the other key's 0"
+    );
     await other();
-    await expect
-      .poll(() => v2.balance(page).catch(() => -1), { timeout: 30_000 })
-      .toBe(mine);
+    await until(
+      async () => (await v2.balance(page)) === mine,
+      `this key's ${mine} again`
+    );
   },
 };

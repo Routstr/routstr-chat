@@ -1,15 +1,14 @@
 // How a person uses main (the current app, commit 4a0dd2d), for baselines and parity. Every
 // step returns once the person would see its result.
 import { expect, type Page } from "@playwright/test";
+import { gone, shown, until } from "./wait";
 
 const composer = (page: Page) =>
   page.locator('textarea[data-tutorial="chat-input"]');
 // the header balance: "300.00 sats", "loading", or "Node"; anchored so it skips "N sats provider credit"
 const balanceButton = (page: Page) =>
   page.getByRole("button", { name: /^\d+(\.\d+)? sats$/ }).first();
-const replies = (page: Page) =>
-  page.locator(".flex.flex-col.items-start.mb-6 > .w-full.text-foreground");
-const lastReply = (page: Page) => replies(page).last();
+const REPLIES = ".flex.flex-col.items-start.mb-6 > .w-full.text-foreground";
 const popover = (page: Page) => page.getByRole("dialog").last();
 
 /**
@@ -21,14 +20,14 @@ async function dismissTopUp(page: Page, wait = false) {
   const prompt = page
     .getByRole("dialog")
     .filter({ has: page.getByRole("heading", { name: "Top up" }) });
-  const shown = wait
+  const open = wait
     ? await prompt.waitFor({ state: "visible", timeout: 2500 }).then(
         () => true,
         () => false
       )
     : await prompt.isVisible();
-  if (shown) await prompt.getByRole("button", { name: "Close" }).click();
-  await expect(prompt).toBeHidden();
+  if (open) await prompt.getByRole("button", { name: "Close" }).click();
+  await gone(prompt);
 }
 
 async function openBalance(page: Page, tab: "Receive" | "Send") {
@@ -38,6 +37,12 @@ async function openBalance(page: Page, tab: "Receive" | "Send") {
     .getByRole("button", { name: tab, exact: true })
     .first()
     .click();
+}
+
+/** Escape out of the balance popover, until it has closed. */
+async function closePopover(page: Page) {
+  await page.keyboard.press("Escape");
+  await gone(popover(page));
 }
 
 async function openSettings(page: Page) {
@@ -56,7 +61,7 @@ export const main = {
   },
 
   async loaded(page: Page) {
-    await expect(composer(page)).toBeVisible({ timeout: 30_000 });
+    await shown(composer(page));
   },
 
   async ready(page: Page) {
@@ -85,9 +90,9 @@ export const main = {
       .getByRole("dialog")
       .getByRole("button", { name: "Sign In", exact: true })
       .click();
-    await expect(
+    await shown(
       page.getByRole("button", { name: /^(\d+(\.\d+)? sats|loading)$/ })
-    ).toBeVisible({ timeout: 30_000 });
+    );
     await dismissTopUp(page);
   },
 
@@ -99,10 +104,8 @@ export const main = {
       .click();
     await page.getByPlaceholder("Paste a Cashu token here...").fill(token);
     await page.getByRole("button", { name: "Import Token" }).click();
-    await expect(
-      page.getByText(/^Received [\d,.]+ sats successfully!$/)
-    ).toBeVisible({ timeout: 30_000 });
-    await page.keyboard.press("Escape");
+    await shown(page.getByText(/^Received [\d,.]+ sats successfully!$/));
+    await closePopover(page);
   },
 
   /** Balance → the mint picker at the top → that mint. */
@@ -122,7 +125,7 @@ export const main = {
         .click();
       await expect(picker).toHaveAttribute("title", mintUrl);
     }
-    await page.keyboard.press("Escape");
+    await closePopover(page);
   },
 
   /** Balance → Send → Lightning → Pay Invoice, until it says paid. */
@@ -132,14 +135,10 @@ export const main = {
       .getByRole("button", { name: "Lightning", exact: true })
       .click();
     await page.getByPlaceholder("Paste lightning invoice here...").fill(bolt11);
-    await expect(page.getByText("Invoice Amount")).toBeVisible({
-      timeout: 30_000,
-    });
+    await shown(page.getByText("Invoice Amount"));
     await page.getByRole("button", { name: "Pay Invoice" }).click();
-    await expect(page.getByText(/^Paid [\d,.]+ sats!$/)).toBeVisible({
-      timeout: 30_000,
-    });
-    await page.keyboard.press("Escape");
+    await shown(page.getByText(/^Paid [\d,.]+ sats!$/));
+    await closePopover(page);
   },
 
   /** Balance → Send → eCash Token → Generate Token, until it is shown; returns it. */
@@ -147,11 +146,10 @@ export const main = {
     await openBalance(page, "Send");
     await popover(page).getByPlaceholder("0").fill(String(sats));
     await page.getByRole("button", { name: "Generate Token" }).click();
-    const token = await popover(page)
-      .locator(".font-mono.break-all")
-      .first()
-      .textContent({ timeout: 30_000 });
-    await page.keyboard.press("Escape");
+    const code = popover(page).locator(".font-mono.break-all").first();
+    await shown(code);
+    const token = await code.textContent();
+    await closePopover(page);
     return token ?? "";
   },
 
@@ -161,17 +159,19 @@ export const main = {
     await page.getByRole("button", { name: "Send message" }).click();
   },
 
+  replies: REPLIES,
+
   replyText: async (page: Page) =>
-    (await replies(page).allTextContents()).at(-1) ?? "",
+    (await page.locator(REPLIES).allTextContents()).at(-1) ?? "",
 
   async waitReplyText(page: Page, text: string) {
-    await expect(lastReply(page)).toContainText(text, { timeout: 60_000 });
+    await expect(page.locator(REPLIES).last()).toContainText(text, {
+      timeout: 60_000,
+    });
   },
 
   async waitIdle(page: Page) {
-    await expect(
-      page.getByRole("button", { name: "Send message" })
-    ).toBeVisible({ timeout: 60_000 });
+    await shown(page.getByRole("button", { name: "Send message" }), 60_000);
   },
 
   async stop(page: Page) {
@@ -205,7 +205,7 @@ export const main = {
     if (!(await credit.isVisible())) return;
     await credit.click();
     await page.getByRole("button", { name: "Refund All" }).click();
-    await expect(credit).toBeHidden({ timeout: 60_000 });
+    await gone(credit, 60_000);
   },
 
   async waitError(page: Page) {
@@ -221,12 +221,8 @@ export const main = {
   /** ?cashu= is taken by the top-up prompt, which opens by itself at a zero balance. */
   async fundByLink(page: Page, appUrl: string, token: string) {
     await page.goto(`${appUrl}/?cashu=${encodeURIComponent(token)}`);
-    await expect(page.getByText(/^Received [\d,]+ sats!$/)).toBeVisible({
-      timeout: 30_000,
-    });
-    await expect
-      .poll(() => main.balance(page).catch(() => 0), { timeout: 30_000 })
-      .toBeGreaterThan(0);
+    await shown(page.getByText(/^Received [\d,]+ sats!$/));
+    await until(async () => (await main.balance(page)) > 0, "a balance");
   },
 
   async waitChats(page: Page, n: number) {
@@ -234,9 +230,11 @@ export const main = {
     const expand = page.getByRole("button", { name: "Expand sidebar" });
     if (await expand.isVisible()) await expand.click();
     const items = page.locator("div.p-2.rounded.text-sm.cursor-pointer.group");
-    await expect
-      .poll(() => items.count(), { timeout: 60_000 })
-      .toBeGreaterThanOrEqual(n);
+    await until(
+      async () => (await items.count()) >= n,
+      `${n} chats listed`,
+      60_000
+    );
   },
 
   /** Settings → General → Switch Account → Use, there and back, until each balance shows. */
@@ -250,14 +248,16 @@ export const main = {
         .click();
     };
     await other();
-    await expect
-      .poll(() => main.balance(page).catch(() => -1), { timeout: 30_000 })
-      .toBe(0);
+    await until(
+      async () => (await main.balance(page)) === 0,
+      "the other key's 0"
+    );
     await page.keyboard.press("Escape");
     await other();
-    await expect
-      .poll(() => main.balance(page).catch(() => -1), { timeout: 30_000 })
-      .toBe(mine);
+    await until(
+      async () => (await main.balance(page)) === mine,
+      `this key's ${mine} again`
+    );
     await page.keyboard.press("Escape");
   },
 };
