@@ -46,7 +46,14 @@ export async function seal(
 ): Promise<Seal> {
   const state: Seal = { blocked: [], relays: new Set(), relayMessages: 0 };
   const ours = new Set(
-    [appUrl, env.mintUrl, env.invoiceMintUrl, env.relayUrl, env.coreUrl]
+    [
+      appUrl,
+      env.mintUrl,
+      env.invoiceMintUrl,
+      env.msatMintUrl,
+      env.relayUrl,
+      env.coreUrl,
+    ]
       .filter((u): u is string => !!u)
       .map((u) => new URL(u).host)
   );
