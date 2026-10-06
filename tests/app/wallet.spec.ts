@@ -1,4 +1,5 @@
 // The wallet and accounts the way a person uses them, checked against the mint's answers.
+import { getEncodedTokenV4, Mint, Wallet } from "@cashu/cashu-ts";
 import { generateSecretKey, nip19 } from "nostr-tools";
 import { expect, test } from "./fixtures";
 import { v2 } from "./drivers/v2";
@@ -145,4 +146,49 @@ test("pays the invoice Add hands over, never one quoted before", async ({
   ).toBeVisible({ timeout: 30_000 });
   // 8 left the wallet (and the network's fee, if any), not 20
   await expect.poll(() => v2.balance(page)).toBeGreaterThanOrEqual(40);
+});
+
+test("shows and pays an invoice in sats at a mint that counts in msat", async ({
+  page,
+  kit,
+  appUrl,
+}) => {
+  await v2.open(page, appUrl);
+  const mint = new Wallet(new Mint(kit.env.msatMintUrl), { unit: "msat" });
+  await mint.loadMint();
+  const quote = await mint.createMintQuote(50_000);
+  await expect
+    .poll(async () => (await mint.checkMintQuote(quote.quote)).state)
+    .toBe("PAID");
+  const proofs = await mint.mintProofs(50_000, quote.quote);
+  await v2.receive(
+    page,
+    getEncodedTokenV4({ mint: kit.env.msatMintUrl, unit: "msat", proofs })
+  );
+  await v2.useMint(page, kit.env.msatMintUrl);
+  expect(await v2.balance(page)).toBe(50);
+
+  // the invoice is for 8 sats: Send says 8, not 8,000, and does not say "not enough"
+  await page
+    .getByRole("button", { name: /^Open wallet\./ })
+    .first()
+    .click();
+  await page
+    .getByRole("region", { name: "Wallet", exact: true })
+    .getByRole("button", { name: "Send", exact: true })
+    .click();
+  const send = page.getByRole("region", { name: "Send", exact: true });
+  await send.getByRole("tab", { name: "Lightning" }).click();
+  const field = send.getByRole("textbox", { name: "Lightning invoice" });
+  await field.fill(await kit.invoice(8));
+  await field.press("Enter");
+  await send
+    .getByRole("button", { name: "Pay 8 sats" })
+    .click({ timeout: 30_000 });
+  await expect(
+    send.getByRole("button", { name: "Pay another invoice" })
+  ).toBeVisible({ timeout: 30_000 });
+  const left = await v2.balance(page);
+  expect(left).toBeLessThanOrEqual(42);
+  expect(left).toBeGreaterThanOrEqual(41); // the network may keep a few msat
 });

@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({
   mint: {} as any,
   updateProofs: vi.fn(),
+  createHistory: vi.fn(),
 }));
 
 vi.mock("react", () => ({
@@ -29,7 +30,7 @@ vi.mock("@/features/wallet/hooks/useCashuWallet", () => ({
   }),
 }));
 vi.mock("@/features/wallet/hooks/useCashuHistory", () => ({
-  useCashuHistory: () => ({ createHistory: vi.fn() }),
+  useCashuHistory: () => ({ createHistory: state.createHistory }),
 }));
 
 import { useCashuToken } from "@/features/wallet/hooks/useCashuToken";
@@ -152,6 +153,11 @@ describe("useCashuToken receive", () => {
       expect(proofs.every((proof) => proof.id === id)).toBe(true);
       expect(state.updateProofs).toHaveBeenCalledOnce();
       expect(journal.list("alice")).toEqual([]);
+      // activity is in sats: 4 msat is no whole sat
+      expect(state.createHistory).toHaveBeenCalledWith({
+        direction: "in",
+        amount: unit === "msat" ? "0" : "4",
+      });
     }
   );
 });

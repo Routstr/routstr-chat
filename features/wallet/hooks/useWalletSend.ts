@@ -13,7 +13,8 @@ import {
   type UnclaimedToken,
 } from "@/features/wallet";
 import { getCurrentMintBalance as utilGetCurrentMintBalance } from "@/utils/walletUtils";
-import { createMeltQuote } from "@/lib/cashuLightning";
+import { createMeltQuote, quoteInSats } from "@/lib/cashuLightning";
+import { toSats } from "../purse";
 import { dismissToken, useBook } from "./useBook";
 import { useCashuWithXYZ } from "@/hooks/useCashuWithXYZ";
 import { toast } from "sonner";
@@ -175,16 +176,18 @@ export function useWalletSend() {
         const meltQuote = await createMeltQuote(mintUrl, value);
         if (!current()) return;
         setNip60MeltQuoteId(meltQuote.quote);
-        setInvoiceAmount(meltQuote.amount);
-        setInvoiceFeeReserve(meltQuote.fee_reserve);
+        // what Send shows and checks is in sats; the quote paid stays in the mint's unit
+        const { amount, feeReserve } = quoteInSats(meltQuote);
+        setInvoiceAmount(amount);
+        setInvoiceFeeReserve(feeReserve);
         await addInvoice({
           type: "melt",
           mintUrl,
           quoteId: meltQuote.quote,
           paymentRequest: value,
-          amount: meltQuote.amount,
+          amount,
           state: MeltQuoteState.UNPAID,
-          fee: meltQuote.fee_reserve,
+          fee: feeReserve,
         });
       } catch (err) {
         if (!current()) return;
@@ -236,9 +239,10 @@ export function useWalletSend() {
       const mintUrl = cashuStore.activeMintUrl;
       const selectedProofs = await cashuStore.getMintProofs(mintUrl);
       const totalProofsAmount = selectedProofs.reduce((sum, p) => sum + p.amount, 0);
-      if (totalProofsAmount < invoiceAmount + (invoiceFeeReserve || 0)) {
+      const have = toSats(totalProofsAmount, currentMintUnit);
+      if (have < invoiceAmount + (invoiceFeeReserve || 0)) {
         setError(
-          `Insufficient balance: have ${formatBalance(totalProofsAmount, currentMintUnit)}s, need ${formatBalance(invoiceAmount + (invoiceFeeReserve || 0), currentMintUnit)}s`
+          `Insufficient balance: have ${formatBalance(have, "sat")}s, need ${formatBalance(invoiceAmount + (invoiceFeeReserve || 0), "sat")}s`
         );
         setIsNip60Processing(false);
         return;
@@ -247,7 +251,7 @@ export function useWalletSend() {
       if (!executor) throw new Error("User not logged in");
       const quote = cashuStore.getMeltQuote(mintUrl, nip60MeltQuoteId);
       const result = await executor.pay(mintUrl, quote, selectedProofs);
-      const amount = `${formatBalance(invoiceAmount, currentMintUnit)}s`;
+      const amount = `${formatBalance(invoiceAmount, "sat")}s`;
       if (result.state === "failed") {
         await updateInvoice(nip60MeltQuoteId, { state: MeltQuoteState.UNPAID });
         setError(
