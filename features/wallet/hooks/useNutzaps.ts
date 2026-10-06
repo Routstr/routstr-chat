@@ -7,7 +7,7 @@ import { relayPool } from "@/lib/applesauce-core";
 import { useNutzapStore, NutzapInformationalEvent } from "../state/nutzapStore";
 import { useCashuStore } from "../state/cashuStore";
 import { fetchNutzapInfo, getNutzapInfoEvent } from "./cashuSync";
-import { relayUrls$ } from "@/hooks/useChatSync1081";
+import { relayUrls$ } from "@/hooks/sync/chatSyncInputs";
 
 /**
  * Hook to fetch a nutzap informational event for a specific pubkey

@@ -12,6 +12,7 @@ const NAMES = [
   "cashu-history",
   "cashu-unclaimed-tokens",
   "lightning_invoices",
+  "api_keys",
   STORAGE_KEYS.LOCAL_CASHU_TOKENS,
   STORAGE_KEYS.TRANSACTION_HISTORY,
   "sats_spent_by_event",

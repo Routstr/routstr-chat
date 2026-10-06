@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef } from "react";
-import type { useChat } from "@/context/ChatProvider";
 import type { Conversation } from "@/types/chat";
 import { useObservableState } from "applesauce-react/hooks";
-import { useAccountManager } from "@/components/ClientProviders";
-import { useAppContext } from "@/hooks/useAppContext";
+import { useAccountManager } from "@/features/session/view";
+import { useHistory } from "@/features/history/view";
+import { useDeviceRelays } from "@/features/relays/view";
 import type { Item, Sync, SyncOutcome } from "./types";
 
 /* ── sync: the row turns its glyph, then says what came in ────────────── */
@@ -13,19 +13,19 @@ export function useSync({
   sync,
   setSync,
   setCame,
-  syncWithNostr,
 }: {
   it: Item | undefined;
   conversations: Conversation[];
   sync: Sync;
   setSync: (s: Sync) => void;
   setCame: React.Dispatch<React.SetStateAction<string[]>>;
-  syncWithNostr: ReturnType<typeof useChat>["syncWithNostr"];
 }) {
   const syncT = useRef({ start: 0, before: new Set<string>(), timers: [] as number[] });
   // the result stays while you look at it: it clears once the selection leaves Sync
   const onSync = useRef(false);
-  onSync.current = it?.id === "sync";
+  useLayoutEffect(() => {
+    onSync.current = it?.id === "sync";
+  });
   const idleLater = useRef(false);
   useEffect(() => {
     if (onSync.current || !idleLater.current) return;
@@ -33,13 +33,14 @@ export function useSync({
     setSync("idle");
     setCame([]);
   }, [it?.id]);
-  const convRef = useRef(conversations);
-  convRef.current = conversations;
   const { manager } = useAccountManager();
   const account = useObservableState(manager.active$);
-  const { config } = useAppContext();
+  const history = useHistory();
+  const [relays] = useDeviceRelays();
   const syncCtx = useRef({ active: false, relays: 0 });
-  syncCtx.current = { active: !!account, relays: config.relayUrls?.length ?? 0 };
+  useLayoutEffect(() => {
+    syncCtx.current = { active: !!account, relays: relays.length };
+  });
   const finishSync = useCallback((outcome: SyncOutcome) => {
     const s = syncT.current;
     // the glyph turns for a moment at least, so a quick sync still reads as one
@@ -48,7 +49,7 @@ export function useSync({
       window.setTimeout(() => {
         // a skipped sync says why, from what the app knows: no key, no relays, or a signer that did not answer
         const why = !syncCtx.current.active ? "nokey" : !syncCtx.current.relays ? "norelay" : "slow";
-        setSync(outcome === "ok" ? "done" : outcome === "skipped" ? why : "fail");
+        setSync(outcome === "ok" ? "done" : outcome === "offline" ? why : "fail");
         s.timers.push(
           window.setTimeout(() => {
             if (onSync.current) return void (idleLater.current = true);
@@ -79,7 +80,7 @@ export function useSync({
     setSync("running");
     // the sync says how it ended; a relay that never answers counts as a failure after a while
     const late = new Promise<SyncOutcome>((r) => s.timers.push(window.setTimeout(() => r("failed"), 20_000)));
-    const outcome = await Promise.race([Promise.resolve(syncWithNostr()).then((o) => (o ?? "ok") as SyncOutcome), late]).catch(() => "failed" as const);
+    const outcome = await Promise.race([history?.sync() ?? Promise.resolve<SyncOutcome>("offline"), late]).catch(() => "failed" as const);
     finishSync(outcome);
   };
   return runSync;

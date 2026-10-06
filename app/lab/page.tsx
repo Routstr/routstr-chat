@@ -5,6 +5,7 @@ import { AuthContext } from "@/context/AuthProvider";
 import { RoomProvider } from "@/components/v2/room/RoomProvider";
 import { UiProvider } from "@/components/v2/ui";
 import { FakeChatProvider } from "@/components/v2/lab/FakeChat";
+import { labHistory } from "./labHistory";
 import Shell from "@/components/v2/Shell";
 import Boot from "@/components/v2/Boot";
 import "@/components/v2/styles/index.css";
@@ -26,7 +27,7 @@ export default function Lab() {
     <Suspense>
       <RoomProvider>
         <AuthContext.Provider value={{ isAuthenticated: !signedOut, authChecked: true, logout: async () => {} }}>
-          <FakeChatProvider>
+          <FakeChatProvider history={labHistory}>
             <UiProvider>
               <Shell />
               <LabBoot />

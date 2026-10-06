@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { useChat } from "@/context/ChatProvider";
+import { useConversations, useHistoryLoaded } from "@/features/history/view";
 import { MARK_D } from "./icons";
 import { tokenMs } from "./motion";
 
@@ -22,7 +22,8 @@ const phoneNow = () => window.matchMedia("(max-width: 760px)").matches;
 const ease = (name: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim() || "ease";
 
 export default function Boot({ ready, onDone, first: forceFirst }: { ready: boolean; onDone: () => void; first?: boolean }) {
-  const { conversations, conversationsLoaded } = useChat();
+  const conversations = useConversations();
+  const conversationsLoaded = useHistoryLoaded();
   // a first visit waits dimmed, with a small light behind the mark. The page's head script marks
   // it on <html> before the first paint (layout.tsx), so the server's markup is the client's
   const first = useRef(false);

@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import type { MessageContent } from "@/types/chat";
 import { getFile, saveFile } from "@/utils/indexedDb";
 import { useBlossomSync } from "@/hooks/useBlossomSync";
-import { usePnsKeys } from "@/hooks/usePnsKeys";
+import { useHistoryKeys } from "@/features/history/view";
 import { storeStorageIdMapping } from "@/utils/storageUtils";
 import Picture, { Thumb } from "./Picture";
 
@@ -29,7 +29,7 @@ export default function StoredImage({
   const [url, setUrl] = useState<string | undefined>(() => ref?.url || cache.get(key));
   const [failed, setFailed] = useState(false);
   const { fetchFromBlossom, blossomSyncEnabled } = useBlossomSync();
-  const { pnsKeys } = usePnsKeys();
+  const pnsKeys = useHistoryKeys();
 
   useEffect(() => {
     if (url || !ref || !key) return;

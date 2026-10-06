@@ -76,6 +76,7 @@ const providerManager = new ProviderManager(discoveryAdapter, store, consoleLogg
 // Public API
 // ---------------------------------------------------------------------------
 export {
+  driver,
   store,
   hydrate,
   discoveryReady,

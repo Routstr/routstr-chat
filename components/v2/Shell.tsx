@@ -16,21 +16,16 @@ import Settings from "./settings/Settings";
 import Greeting, { Resume } from "./Greeting";
 import { useCountUp, useMoney } from "./useMoney";
 import { useAuth } from "@/context/AuthProvider";
+import { useConversations, useHistoryLoaded } from "@/features/history/view";
 import { sats } from "./format";
 import { useDrawerDrag, useKeyboardInset, usePhone } from "./phone";
 
 function Panel() {
   const searchParams = useSearchParams();
   const chatIdFromUrl = searchParams.get("chatId");
-  const {
-    messages,
-    activeConversationId,
-    conversations,
-    conversationsLoaded,
-    isSyncing,
-    isSidebarCollapsed,
-    startNewConversation,
-  } = useChat();
+  const { messages, activeConversationId, isSidebarCollapsed, startNewConversation } = useChat();
+  const conversations = useConversations();
+  const conversationsLoaded = useHistoryLoaded();
   const ui = useUi();
   const room = useRoom();
   const money = useMoney();
@@ -44,7 +39,7 @@ function Panel() {
   const loadingFromUrl =
     !!chatIdFromUrl &&
     !(chatIdFromUrl === activeConversationId && messages.length > 0) &&
-    (!conversationsLoaded || isSyncing);
+    !conversationsLoaded;
   const empty = messages.length === 0 && !loadingFromUrl;
   // whether this new page is a first visit is decided once, when the chats have loaded, and
   // kept for the page: chats that arrive later (a sync) fade the first-run extras, they do not
@@ -195,7 +190,8 @@ function Panel() {
 }
 
 export default function Shell() {
-  const { isSidebarCollapsed, setIsSidebarCollapsed, isLoading, startNewConversation, conversations } = useChat();
+  const { isSidebarCollapsed, setIsSidebarCollapsed, isLoading, startNewConversation } = useChat();
+  const conversations = useConversations();
   const ui = useUi();
   const room = useRoom();
   const roomEl = useRef<HTMLDivElement>(null);

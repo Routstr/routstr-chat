@@ -172,7 +172,7 @@ async function decryptConfig<T>(
 
 /**
  * Observable for API Keys config
- * Emits decrypted array of StoredApiKey
+ * Emits decrypted array of ExportedKey
  */
 export const apiKeys$ = createConfigObservable(CONFIG_TYPES.API_KEYS);
 

@@ -6,6 +6,7 @@ import { getDecodedToken } from "@cashu/cashu-ts";
 import { toast } from "sonner";
 import { AuthProvider, useAuth } from "@/context/AuthProvider";
 import { ChatProvider, useChat } from "@/context/ChatProvider";
+import { useConversations, useHistoryLoaded } from "@/features/history/view";
 import { KeepAliveProvider, useKeepAliveContext } from "@/components/pwa/KeepAliveProvider";
 import { QueryTimeoutModal } from "@/components/QueryTimeoutModal";
 import { useCashuToken, useCashuWallet } from "@/features/wallet";
@@ -29,11 +30,11 @@ function Behaviour() {
   const {
     balance,
     isLoading: isStreaming,
-    conversations,
-    conversationsLoaded,
     loadConversation,
     activeConversationId,
   } = useChat();
+  const conversations = useConversations();
+  const conversationsLoaded = useHistoryLoaded();
   const ui = useUi();
   const { startKeepAlive, stopKeepAlive, isEnabled: keepAliveEnabled } = useKeepAliveContext();
   const {

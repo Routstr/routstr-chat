@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { useObservableState } from "applesauce-react/hooks";
-import { useAccountManager } from "@/components/ClientProviders";
+import { useAccountManager } from "@/features/session/view";
 import { useBlossomSync } from "@/hooks/useBlossomSync";
 import { DEFAULT_BLOSSOM_SERVERS } from "@/lib/blossom";
 import { Btn, Fold, GoneRow, Grp, Ib, Row, Say, Sw, at, hostOf, useGone } from "./parts";

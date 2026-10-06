@@ -1,7 +1,7 @@
 "use client";
 
 import { useObservableState } from "applesauce-react/hooks";
-import { useAccountManager } from "@/components/ClientProviders";
+import { useAccountManager } from "@/features/session/view";
 import { Icon } from "../icons";
 import Light from "../light/Light";
 import { useLightLife } from "../light/useLightLife";

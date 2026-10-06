@@ -3,7 +3,7 @@ import type { MessageAttachment } from "@/types/chat";
 import { extractTextFromPdf } from "@/utils/pdfUtils";
 import { saveFile } from "@/utils/indexedDb";
 import { useBlossomSync } from "@/hooks/useBlossomSync";
-import { usePnsKeys } from "@/hooks/usePnsKeys";
+import { useHistoryKeys } from "@/features/history/view";
 
 /* Taking files into the composer: the same rules the old composer applied
    (images and PDFs, 10 MB each, no SVG, stored locally, PDF text extracted,
@@ -33,7 +33,7 @@ export function useAttachments(
   // PDFs whose text is still being read
   const [reading, setReading] = useState<ReadonlySet<string>>(new Set());
   const { uploadToBlossomAsync, blossomSyncEnabled } = useBlossomSync();
-  const { pnsKeys } = usePnsKeys();
+  const pnsKeys = useHistoryKeys();
 
   const patch = useCallback(
     (id: string, fn: (a: MessageAttachment) => MessageAttachment) =>

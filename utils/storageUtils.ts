@@ -338,20 +338,6 @@ export const saveBaseUrlsList = (baseUrls: string[]): void => {
 // Removed unused: loadNostrRelaysList, saveNostrRelaysList
 
 /**
- * Load configured Nostr relays from storage
- */
-export const loadRelays = (): string[] => {
-  return getStorageItem<string[]>(STORAGE_KEYS.RELAYS, []);
-};
-
-/**
- * Save Nostr relays to storage
- */
-export const saveRelays = (relays: string[]): void => {
-  setStorageItem(STORAGE_KEYS.RELAYS, relays);
-};
-
-/**
  * Default relays for reset-to-default action
  */
 export const DEFAULT_RELAYS: readonly string[] = [
@@ -487,7 +473,6 @@ export const STORAGE_KEYS = {
   LOCAL_CASHU_TOKENS: "local_cashu_tokens",
   CASHU_PROOFS: "cashu_proofs",
   WRAPPED_CASHU_TOKENS: "wrapped_cashu_tokens",
-  RELAYS: "nostr_relays",
   TOPUP_PROMPT_SEEN: "topup_prompt_seen",
   CREATED_EPHEMERAL_NSEC: "created_ephemeral_nsec",
   DISABLED_PROVIDERS: "disabled_providers",

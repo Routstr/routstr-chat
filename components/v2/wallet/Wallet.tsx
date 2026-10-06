@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useObservableState } from "applesauce-react/hooks";
 import { useChat } from "@/context/ChatProvider";
-import { useAccountManager } from "@/components/ClientProviders";
+import { useAccountManager } from "@/features/session/view";
 import { useCashuStore, useTransactionHistoryStore } from "@/features/wallet";
 import { useUnclaimedTokensStore } from "@/features/wallet/state/unclaimedTokensStore";
 import { useInvoiceSync } from "@/hooks/useInvoiceSync";

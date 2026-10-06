@@ -50,15 +50,6 @@ export {
   wotPubkeyDefined$,
   userSigner$,
   userSignerDefined$,
-  chatSyncEnabled$,
-  updateChatSyncEnabled,
   updateWotPubkey,
   type UserSignerInfo,
 } from "./chatSyncInputs";
-
-// Existing sync modules (for backwards compatibility)
-export {
-  sync1081Event$,
-  derivedPnsKeys$,
-  derivedPnsPubkeys$,
-} from "./sync1081Keyring";
