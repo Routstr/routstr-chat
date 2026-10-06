@@ -123,7 +123,8 @@ export function Odometer({ value }: { value: number }) {
   const [rollFrom, setRollFrom] = useState<string | null>(null);
   if (s !== last) {
     setLast(s);
-    setRollFrom(last);
+    // with reduced motion nothing rolls, so nothing would clear it
+    setRollFrom(reduced() ? null : last);
   }
   const [w, setW] = useState<number[] | null>(null);
   useLayoutEffect(() => {
