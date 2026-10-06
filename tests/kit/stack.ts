@@ -12,8 +12,8 @@ import { startUpstream } from "./services/upstream";
 
 export interface KitEnv {
   dir: string; // logs and databases of this run (kept until a later run finds its process gone)
-  mintUrl: string; // the wallet's mint; core accepts it; melts settle
-  invoiceMintUrl: string; // a second mint, for Lightning invoices to pay
+  mintUrl: string; // the wallet's mint; core accepts it; melts settle; v1 keyset ids by default
+  invoiceMintUrl: string; // a second mint with v2 keyset ids ("01…"): invoices to pay, tokens from another mint
   relayUrl: string;
   upstreamUrl: string;
   coreUrl: string | null; // routstr-core, with a trailing slash like the app stores it; null if not started
@@ -21,6 +21,8 @@ export interface KitEnv {
 
 export interface StackOptions {
   core?: boolean; // default true: routstr-core from KIT_CORE_DIR
+  /** keyset ids of the main mint: default KIT_KEYSETS, else "v1" (the second mint is always "v2") */
+  keysets?: "v1" | "v2";
   log?: (line: string) => void;
 }
 
@@ -64,6 +66,8 @@ export async function startStack(opts: StackOptions = {}): Promise<Stack> {
   const dir = fs.mkdtempSync(path.join(RUNS, "run-"));
   fs.writeFileSync(path.join(dir, "pid"), String(process.pid));
   const pidFile = path.join(dir, "pids");
+  const keysets =
+    opts.keysets ?? (process.env.KIT_KEYSETS === "v2" ? "v2" : "v1");
   const stops: (() => Promise<void>)[] = [];
   const stop = async () => {
     for (const s of stops.reverse()) await s().catch(() => {});
@@ -73,12 +77,14 @@ export async function startStack(opts: StackOptions = {}): Promise<Stack> {
     const started = await Promise.allSettled([
       startRelay().then((s) => (stops.push(s.close), s)),
       startUpstream().then((s) => (stops.push(s.close), s)),
-      startMint({ dir: path.join(dir, "mint"), pidFile }).then(
+      startMint({ dir: path.join(dir, "mint"), pidFile, keysets }).then(
         (s) => (stops.push(s.stop), s)
       ),
-      startMint({ dir: path.join(dir, "invoice-mint"), pidFile }).then(
-        (s) => (stops.push(s.stop), s)
-      ),
+      startMint({
+        dir: path.join(dir, "invoice-mint"),
+        pidFile,
+        keysets: "v2",
+      }).then((s) => (stops.push(s.stop), s)),
     ]);
     const failed = started.find((r) => r.status === "rejected");
     if (failed) throw (failed as PromiseRejectedResult).reason;
