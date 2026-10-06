@@ -25,26 +25,6 @@ export {
   getConfigEvent,
 } from "./genericConfigSync";
 
-// Tagged non-replaceable sync (kind 1018 + #e)
-export {
-  KIND_1018,
-  KIND_0,
-  type Kind0Profile,
-  kind1018ETag$,
-  updateKind1018ETag,
-  kind1018ETagDefined$,
-  kind1018SyncEose$,
-  kind1018EventReceived$,
-  kind1018TrustScores$,
-  kind1018Sync$,
-  getKind1018Events,
-  kind1018Events$,
-  kind0SyncEose$,
-  kind0EventReceived$,
-  kind0Sync$,
-  kind0Profiles$,
-} from "./taggedEventSync";
-
 // Publishing helpers
 export { publishConfig, deleteConfig, canPublish } from "./configPublish";
 

@@ -5,7 +5,7 @@ import { normalizeURL } from "applesauce-core/helpers/url";
 import { useAppContext } from "@/hooks/useAppContext";
 import { relayPool } from "@/lib/applesauce-core";
 import { Icon } from "../icons";
-import { Btn, GoneRow, Grp, Ib, at, hostOf, useGone } from "./parts";
+import { Btn, GoneRow, Grp, Ib, at, hostOf, plural, useGone } from "./parts";
 
 export default function Relays() {
   const { config, updateConfig } = useAppContext();
@@ -19,12 +19,14 @@ export default function Relays() {
   }, []);
   const relays = config.relayUrls;
   // read without opening one (relay() would create it, and a fresh relay is not yet connected): a
-  // relay is 'bad' only after it has tried and failed, until then it is connecting
-  const stateOf = (u: string): "ok" | "bad" | "wait" => {
+  // relay is 'bad' only after it has tried and failed, until then it is connecting. One nothing has
+  // opened (signed out, nothing syncs) is idle
+  const stateOf = (u: string): "ok" | "bad" | "wait" | "idle" => {
     const r = relayPool.relays.get(normalizeURL(u));
-    return !r ? "wait" : r.connected ? "ok" : r.error$.value || r.attempts$.value > 0 ? "bad" : "wait";
+    return !r ? "idle" : r.connected ? "ok" : r.error$.value || r.attempts$.value > 0 ? "bad" : "wait";
   };
   const ok = relays.filter((u) => stateOf(u) === "ok").length;
+  const idle = relays.every((u) => stateOf(u) === "idle");
   const addRelay = () => {
     const v = relayIn.trim();
     if (!/^wss?:\/\/[^\s]+\.[^\s]+/i.test(v))
@@ -53,7 +55,9 @@ export default function Relays() {
       kv={
         !relays.length
           ? "None"
-          : ok === relays.length
+          : idle
+            ? plural(relays.length, "relay")
+            : ok === relays.length
             ? `${relays.length} connected`
             : `${ok} of ${relays.length} connected`
       }
@@ -84,7 +88,7 @@ export default function Relays() {
                       "Not reachable"
                     ) : s === "wait" ? (
                       "Connecting"
-                    ) : (
+                    ) : s === "idle" ? null : (
                       <span className="sr">Connected</span>
                     )}
                   </span>
