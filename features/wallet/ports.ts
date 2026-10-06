@@ -23,4 +23,12 @@ export interface CoinStore {
   coins(owner: string, mintUrl?: string): Promise<Coin[]>;
   /** The mint this owner pays from by default. */
   activeMint(owner: string): string;
+  /** Runs when this owner's coins may have changed: by this tab, or when this
+   *  tab reads what another tab saved. */
+  subscribe(owner: string, listener: () => void): () => void;
+}
+
+/** Where an account's activity is written: each send and receive, in sats. */
+export interface ActivityLog {
+  record(owner: string, entry: { direction: "in" | "out"; sats: number }): void;
 }

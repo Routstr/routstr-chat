@@ -1,5 +1,5 @@
 import fc from "fast-check";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { getEncodedToken } from "@cashu/cashu-ts";
 import { Journal, memoryStorage } from "@/features/book/journal";
 import { balancesOf, createPurse } from "../purse";
@@ -52,13 +52,16 @@ describe("balancesOf", () => {
 });
 
 describe("createPurse", () => {
-  it("reads a token's mint and sats without its mint", () => {
+  it("reads a token's mint and sats without its mint, and listens to its own account", () => {
+    const subscribe = vi.fn(() => () => undefined);
     const purse = createPurse("alice", {
       coins: {
         change: async () => {},
         coins: async () => [],
         activeMint: () => "m1",
+        subscribe,
       },
+      activity: { record: () => undefined },
       journal: new Journal(memoryStorage()),
     });
     const proofs = [
@@ -74,5 +77,8 @@ describe("createPurse", () => {
       sats: 2,
     });
     expect(purse.activeMint()).toBe("m1");
+    const listener = () => undefined;
+    purse.subscribe(listener);
+    expect(subscribe).toHaveBeenCalledWith("alice", listener);
   });
 });

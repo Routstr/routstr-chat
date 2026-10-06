@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { useCashuHistory } from "@/features/wallet";
 import { useWalletSend } from "@/features/wallet/hooks/useWalletSend";
 import { usePurse } from "@/features/wallet/view";
 import { useUnclaimedTokensStore, type UnclaimedToken } from "@/features/wallet/state/unclaimedTokensStore";
@@ -54,7 +53,6 @@ export default function Send({
 }) {
   const s = useWalletSend();
   const purse = usePurse();
-  const { createHistory } = useCashuHistory();
   const tokens = useUnclaimedTokensStore((x) => x.unclaimedTokens);
   const mint = useActiveMint();
   const { copied, copy } = useCopy(say);
@@ -89,7 +87,6 @@ export default function Send({
     try {
       // no handoff: the token stays listed until it is taken back or let go
       await from.send(mint.active.url, n);
-      createHistory({ direction: "out", amount: String(n) });
       s.setSendAmount("");
     } catch (e) {
       s.setError(e instanceof Error ? e.message : String(e));

@@ -8,6 +8,7 @@ const state = vi.hoisted(() => ({
     setKeysets: vi.fn(),
     setKeys: vi.fn(),
   },
+  local: [] as object[],
   activateMint: vi.fn(async () => ({
     mintInfo: {},
     keysets: [{ id: "k-new", unit: "sat" }],
@@ -31,13 +32,28 @@ vi.mock("@/features/wallet/state/cashuStore", () => ({
     }),
   },
 }));
+vi.mock("@/features/wallet/state/transactionHistoryStore", () => ({
+  useTransactionHistoryStore: {
+    of: (owner: string) => ({
+      getState: () => ({
+        addHistoryEntry: (entry: object) =>
+          state.local.push({ owner, ...entry }),
+      }),
+    }),
+  },
+}));
 vi.mock("@/features/wallet/core/services/MintService", () => ({
   MintService: class {
     activateMint = state.activateMint;
   },
 }));
 
-import { legacyCoins, registerCommitter } from "../purseBridge";
+import {
+  legacyActivity,
+  legacyCoins,
+  registerCommitter,
+  registerRecorder,
+} from "../purseBridge";
 
 const proof = (id: string, secret: string) => ({
   id,
@@ -98,5 +114,18 @@ it("lists a mint or keyset it does not know before storing coins there", async (
   state.activateMint.mockRejectedValueOnce(new Error("offline"));
   await legacyCoins.change("alice", "m4", [proof("k-x", "d")], []);
   expect(commit).toHaveBeenCalledTimes(4);
+  close();
+});
+
+it("writes activity through the open wallet, and on this device for any other account", () => {
+  const record = vi.fn();
+  const close = registerRecorder("alice", record);
+  legacyActivity.record("alice", { direction: "out", sats: 15 });
+  expect(record).toHaveBeenCalledWith({ direction: "out", amount: "15" });
+
+  legacyActivity.record("bob", { direction: "in", sats: 40 });
+  expect(state.local).toMatchObject([
+    { owner: "bob", direction: "in", amount: "40" },
+  ]);
   close();
 });

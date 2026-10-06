@@ -1,6 +1,6 @@
 // A purse moving real coins at the kit's mints: every amount in sats, every coin through the book.
 import type { Proof } from "@cashu/cashu-ts";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { getKit } from "@/tests/kit";
 import { Journal, memoryStorage } from "@/features/book/journal";
 import { RecoveryHost } from "@/features/book/recovery";
@@ -8,6 +8,12 @@ import { createPurse } from "../purse";
 import type { Coin, CoinStore } from "../ports";
 
 const kit = getKit();
+// what the purse wrote to the account's activity
+let written: { direction: string; sats: number }[] = [];
+const activity = {
+  record: (_: string, e: (typeof written)[number]) => void written.push(e),
+};
+beforeEach(() => void (written = []));
 
 /** an account's coins in memory, matched by secret */
 function memoryCoins(unitOf: (mintUrl: string) => string) {
@@ -29,6 +35,7 @@ function memoryCoins(unitOf: (mintUrl: string) => string) {
         (c) => c.owner === owner && (!mintUrl || c.mintUrl === mintUrl)
       ),
     activeMint: () => kit.env.mintUrl,
+    subscribe: () => () => undefined,
   };
   return { store, all: () => coins };
 }
@@ -43,6 +50,7 @@ describe.each([
     const journal = new Journal(memoryStorage());
     const purse = createPurse("alice", {
       coins: store,
+      activity,
       journal,
       locks: navigator.locks,
     });
@@ -59,10 +67,34 @@ describe.each([
     expect(handed).toBe(sent);
     expect(await kit.redeem(sent)).toBe(15);
     expect(await purse.balances()).toEqual({ [mint]: 25 });
+    expect(written).toEqual([
+      { direction: "in", sats: 40 },
+      { direction: "out", sats: 15 },
+    ]);
     // the book holds nothing once the handoff resolved
     expect(journal.list("alice")).toEqual([]);
     const states = await kit.coinStates(all() as Proof[], mint);
     expect(states).toEqual(all().map(() => "UNSPENT"));
+  });
+
+  it("receives even when the activity cannot be written", async () => {
+    const mint = mintUrl();
+    const { store } = memoryCoins(() => "sat");
+    const full = {
+      record: () => {
+        throw new Error("storage full");
+      },
+    };
+    const purse = createPurse("alice", {
+      coins: store,
+      activity: full,
+      journal: new Journal(memoryStorage()),
+      locks: navigator.locks,
+    });
+    const token = await kit.mintToken(12, {
+      otherMint: mint !== kit.env.mintUrl,
+    });
+    expect(await purse.receive(token)).toBe(12);
   });
 
   it("makes two tokens at once, the second from the coins the first left", async () => {
@@ -71,6 +103,7 @@ describe.each([
     const journal = new Journal(memoryStorage());
     const purse = createPurse("alice", {
       coins: store,
+      activity,
       journal,
       locks: navigator.locks,
     });
@@ -105,7 +138,12 @@ describe.each([
     };
     const journal = new Journal(memoryStorage());
     const locks = navigator.locks;
-    const purse = createPurse("alice", { coins: closed, journal, locks });
+    const purse = createPurse("alice", {
+      coins: closed,
+      activity,
+      journal,
+      locks,
+    });
 
     const token = await kit.mintToken(40, {
       otherMint: mint !== kit.env.mintUrl,

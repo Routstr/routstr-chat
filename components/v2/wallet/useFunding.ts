@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useChat } from "@/context/ChatProvider";
-import { useCashuHistory, useCashuStore } from "@/features/wallet";
-import { peek, usePurse } from "@/features/wallet/view";
+import { useCashuStore } from "@/features/wallet";
+import { peek, usePurse, useWallet } from "@/features/wallet/view";
 import { useWalletReceive } from "@/features/wallet/hooks/useWalletReceive";
 import { DEFAULT_MINT_URL } from "@/lib/utils";
 import { useEnsureAccount } from "../useEnsureAccount";
@@ -14,10 +13,9 @@ export type FundStatus = "idle" | "creating" | "waiting" | "paid" | "error";
    the background checker if this surface closes), tokens through the
    account's purse. This file only sequences and describes. */
 export function useFunding() {
-  const { balance } = useChat();
+  const { total: balance } = useWallet();
   const cashuStore = useCashuStore();
   const purse = usePurse();
-  const { createHistory } = useCashuHistory();
   const ensureAccount = useEnsureAccount();
   const [status, setStatus] = useState<FundStatus>("idle");
   const [amount, setAmount] = useState(0);
@@ -126,7 +124,6 @@ export function useFunding() {
         // what the mint gave back, after any input fee; the token's face
         // value is only a promise until the swap
         const landed = await into.receive(token);
-        createHistory({ direction: "in", amount: String(landed) });
         done(landed);
         return landed;
       } catch (e) {
@@ -137,7 +134,7 @@ export function useFunding() {
         setTokenBusy(false);
       }
     },
-    [ensureAccount, purse, createHistory, done]
+    [ensureAccount, purse, done]
   );
 
   const payFromWallet = useCallback(async () => {

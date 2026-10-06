@@ -1,19 +1,26 @@
 import { useEffect, useRef } from "react";
 import type { MeltOutcome } from "@/features/book/settle";
 import { recovery } from "@/runtime/book";
-import { registerCommitter } from "./purseBridge";
+import {
+  registerCommitter,
+  registerRecorder,
+  setWalletLoading,
+} from "./purseBridge";
 import { useBook } from "./useBook";
+import { useCashuHistory } from "./useCashuHistory";
 
 /**
  * Settles what the signed-in account's operations left behind: on start, when
  * the tab comes back, and every minute. Mount it once for the app; the
  * recovery host already keeps it to one pass per account across tabs. While
- * mounted, the account's purse stores coins through its wallet.
+ * mounted, the account's purse stores coins and writes activity through its
+ * wallet, and the wallet view hears whether its coins are still loading.
  */
 export function useRecovery(
   onMeltSettled: (quoteId: string, outcome: MeltOutcome) => void
 ) {
-  const { owner, commitFor } = useBook();
+  const { owner, commitFor, isLoading } = useBook();
+  const { createHistory } = useCashuHistory();
   const report = useRef(onMeltSettled);
   useEffect(() => {
     report.current = onMeltSettled;
@@ -22,6 +29,12 @@ export function useRecovery(
   useEffect(() => {
     if (owner) return registerCommitter(owner, commitFor(owner));
   }, [owner, commitFor]);
+  useEffect(() => {
+    if (owner) return registerRecorder(owner, createHistory);
+  }, [owner, createHistory]);
+  useEffect(() => {
+    setWalletLoading(owner ?? null, isLoading);
+  }, [owner, isLoading]);
 
   useEffect(() => {
     if (!owner) return;

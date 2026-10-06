@@ -16,4 +16,13 @@ describe("pairChange", () => {
     const cost = entries.filter((e) => e.direction === "out").map((e) => e.amount - (changeOf.get(e.id)?.amount ?? 0));
     expect(cost).toEqual([50, 100, 95, 0, 0, 0, 0, 0, 0]);
   });
+
+  it("pairs a payment with change written in the same second, whichever was listed first", () => {
+    const t = Date.parse("2026-10-07T12:00:00Z") / 1000;
+    const entries = [
+      { id: "in", direction: "in", amount: "49", timestamp: t },
+      { id: "out", direction: "out", amount: "50", timestamp: t },
+    ];
+    expect(pairChange(entries).changeOf.get("out")?.id).toBe("in");
+  });
 });

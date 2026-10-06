@@ -1,8 +1,9 @@
 import type { Proof } from "@cashu/cashu-ts";
 import type { CommitProofs } from "@/features/book/settle";
 import { MintService } from "../core/services/MintService";
-import type { Coin, CoinStore } from "../ports";
+import type { ActivityLog, Coin, CoinStore } from "../ports";
 import { useCashuStore } from "../state/cashuStore";
+import { useTransactionHistoryStore } from "../state/transactionHistoryStore";
 
 /*
  * Until the wallet layer has its own coin store, an account's coins are the old
@@ -68,6 +69,29 @@ export const legacyCoins: CoinStore = {
     });
   },
   activeMint: (owner) => useCashuStore.of(owner).getState().activeMintUrl ?? "",
+  subscribe(owner, listener) {
+    const store = useCashuStore.of(owner);
+    // only what balances read: a reload with the same coins is no change
+    // (reading coins reloads the store, so anything more would loop)
+    const what = () => {
+      const { proofs, mints } = store.getState();
+      const ids = mints.flatMap((m) =>
+        (m.keysets ?? []).map((k) => `${m.url}:${keysetOf(k).id}`)
+      );
+      return `${proofs.map((p) => p.secret).sort()}|${ids.sort()}`;
+    };
+    let last = what();
+    // after the save: zustand tells listeners first, and a listener that reads
+    // (and so reloads) the coins then would reload them without this change
+    return store.subscribe(() =>
+      queueMicrotask(() => {
+        const now = what();
+        if (now === last) return;
+        last = now;
+        listener();
+      })
+    );
+  },
 };
 
 /** Coins of a mint or keyset the store does not list are stored but never
@@ -90,3 +114,50 @@ async function listMint(owner: string, mintUrl: string, add: Proof[]) {
     console.error(`Could not list ${mintUrl} yet:`, error);
   }
 }
+
+type Recorder = (entry: { direction: "in" | "out"; amount: string }) => void;
+const recorders = new Map<string, Recorder>();
+
+/** Lets purses write `owner`'s activity through its open wallet, which also
+ *  publishes it (NIP-60); the returned function takes it back. */
+export function registerRecorder(owner: string, record: Recorder): () => void {
+  recorders.set(owner, record);
+  return () => recorders.delete(owner);
+}
+
+export const legacyActivity: ActivityLog = {
+  record(owner, { direction, sats }) {
+    const amount = String(sats);
+    const record = recorders.get(owner);
+    if (record) return record({ direction, amount });
+    // an account whose wallet is not open has no signer here: this device only
+    useTransactionHistoryStore
+      .of(owner)
+      .getState()
+      .addHistoryEntry({
+        id: crypto.randomUUID(),
+        direction,
+        amount,
+        timestamp: Math.floor(Date.now() / 1000),
+      });
+  },
+};
+
+// the open account's NIP-60 wallet still loading from relays: coins may yet arrive
+let loading: { owner: string | null; is: boolean } = { owner: null, is: false };
+const loadingListeners = new Set<() => void>();
+
+/** Set by the app's one recovery hook, which holds the open wallet. */
+export function setWalletLoading(owner: string | null, is: boolean): void {
+  if (loading.owner === owner && loading.is === is) return;
+  loading = { owner, is };
+  loadingListeners.forEach((listener) => listener());
+}
+
+export const walletLoading = {
+  subscribe(listener: () => void): () => void {
+    loadingListeners.add(listener);
+    return () => loadingListeners.delete(listener);
+  },
+  of: (owner: string | null): boolean => loading.owner === owner && loading.is,
+};

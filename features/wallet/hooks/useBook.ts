@@ -16,7 +16,7 @@ import { useCashuWallet } from "./useCashuWallet";
  * for it.
  */
 export function useBook() {
-  const { owner, updateProofs } = useCashuWallet();
+  const { owner, updateProofs, isLoading } = useCashuWallet();
   const latest = useRef({ owner, updateProofs });
   // after useCashuWallet's own effects, which hand updateProofs its account
   useEffect(() => {
@@ -61,7 +61,7 @@ export function useBook() {
     });
   }, [commitFor]);
 
-  return { owner, activeExecutor, commitFor };
+  return { owner, activeExecutor, commitFor, isLoading };
 }
 
 /** The secrets of the coins saved for this account. What is saved, not the
