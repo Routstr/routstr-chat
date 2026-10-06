@@ -35,6 +35,10 @@ export interface ExecutorDeps {
 
 const newId = () => crypto.randomUUID();
 
+/** The coins to spend, or how to read them once this account's lock is held:
+ *  coins read before it may already be spent by the operation ahead. */
+type Coins = Proof[] | (() => Promise<Proof[]>);
+
 export interface SendOptions {
   track?: boolean;
   includeFees?: boolean;
@@ -176,11 +180,16 @@ export class WalletExecutor {
   send(
     mintUrl: string,
     sats: number,
-    proofs: Proof[],
+    coins: Coins,
     options: SendOptions = {}
   ): Promise<string> {
-    return this.locked(() =>
-      this.sendLocked(mintUrl, sats, bare(proofs), options)
+    return this.locked(async () =>
+      this.sendLocked(
+        mintUrl,
+        sats,
+        bare(typeof coins === "function" ? await coins() : coins),
+        options
+      )
     );
   }
 

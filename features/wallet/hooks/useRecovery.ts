@@ -1,12 +1,14 @@
 import { useEffect, useRef } from "react";
 import type { MeltOutcome } from "@/features/book/settle";
 import { recovery } from "@/runtime/book";
+import { registerCommitter } from "./purseBridge";
 import { useBook } from "./useBook";
 
 /**
  * Settles what the signed-in account's operations left behind: on start, when
  * the tab comes back, and every minute. Mount it once for the app; the
- * recovery host already keeps it to one pass per account across tabs.
+ * recovery host already keeps it to one pass per account across tabs. While
+ * mounted, the account's purse stores coins through its wallet.
  */
 export function useRecovery(
   onMeltSettled: (quoteId: string, outcome: MeltOutcome) => void
@@ -16,6 +18,10 @@ export function useRecovery(
   useEffect(() => {
     report.current = onMeltSettled;
   });
+
+  useEffect(() => {
+    if (owner) return registerCommitter(owner, commitFor(owner));
+  }, [owner, commitFor]);
 
   useEffect(() => {
     if (!owner) return;
