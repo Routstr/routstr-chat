@@ -1,4 +1,5 @@
 import React from "react";
+import type { Conversation } from "@/types/chat";
 
 export const MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 export const phoneNow = () => typeof window !== "undefined" && window.matchMedia("(max-width: 760px)").matches;
@@ -6,6 +7,13 @@ export const reduced = () => typeof window !== "undefined" && window.matchMedia(
 export const F_WD = typeof Intl !== "undefined" ? new Intl.DateTimeFormat("en-US", { weekday: "short" }) : null;
 const F_DAY = typeof Intl !== "undefined" ? new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }) : null;
 export const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString("en-US")} ${n === 1 ? one : many}`;
+/** Chats with what each reply cost, for the panes that sum it. */
+export const withCosts = (conversations: Conversation[], costs: Record<string, number>): Conversation[] =>
+  conversations.map((c) =>
+    c.messages.some((m) => m._eventId && costs[m._eventId] !== undefined)
+      ? { ...c, messages: c.messages.map((m) => (m._eventId && costs[m._eventId] !== undefined ? { ...m, satsSpent: costs[m._eventId] } : m)) }
+      : c
+  );
 export const focusComposer = () =>
   requestAnimationFrame(() =>
     requestAnimationFrame(() => {

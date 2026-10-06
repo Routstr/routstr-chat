@@ -30,15 +30,15 @@ export default function ModelPicker() {
   // card mounts on each open
   const cat = useCatalog();
   const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    if (ui.picker) setMounted(true);
-  }, [ui.picker]);
-  const close = useCallback(() => ui.setPicker(false), [ui]);
   // details pushed in on a phone take the sheet to its full height
   const [tall, setTall] = useState(false);
-  useEffect(() => {
-    if (!ui.picker) setTall(false);
-  }, [ui.picker]);
+  const [was, setWas] = useState(false);
+  if (ui.picker !== was) {
+    setWas(ui.picker);
+    if (ui.picker) setMounted(true);
+    else setTall(false);
+  }
+  const close = useCallback(() => ui.setPicker(false), [ui]);
 
   if (phone) {
     return (

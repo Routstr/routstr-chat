@@ -10,7 +10,7 @@ const TRASH =
 /* ── the tip: a long title's rest, or a folded tool's name ──────────── */
 export function useRailTip({
   root,
-  tip,
+  tip: tipRef,
   list,
   folded,
   K,
@@ -30,7 +30,7 @@ export function useRailTip({
   const hideTip = (now?: boolean) => {
     window.clearTimeout(tipTimer.current);
     root.current?.querySelectorAll(".sb-grp-t.is-under").forEach((n) => n.classList.remove("is-under"));
-    tip.current?.classList.remove("is-on");
+    tipRef.current?.classList.remove("is-on");
     tipFor.current = null;
     window.clearTimeout(tipCool.current);
     tipCool.current = window.setTimeout(() => (tipWarm.current = false), now ? 0 : 320);
@@ -45,7 +45,7 @@ export function useRailTip({
     return null;
   };
   const showTip = (el: HTMLElement, kind: string) => {
-    const t = tip.current;
+    const t = tipRef.current;
     const rail = root.current;
     if (!t || !rail) return;
     const rr = rail.getBoundingClientRect();

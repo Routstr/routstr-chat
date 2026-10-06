@@ -112,3 +112,6 @@
 .rd-img:is(:hover, :focus-within) .rd-img-save { opacity: 1; transform: none; transition-duration: var(--d-fast); }
 .rd-img-save:hover { background: rgb(var(--surface-hero)); }
 .rd-img-save:active { transform: scale(.94); }
+/* a picture on another server, not loaded until it is clicked */
+.rd-remote { margin-top: var(--s3); text-align: left; transition: background-color var(--d-fast); }
+.rd-remote:hover { background: var(--fill-2); }

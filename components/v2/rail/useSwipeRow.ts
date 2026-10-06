@@ -131,7 +131,6 @@ export function useSwipeRow(ui: ReturnType<typeof useUi>) {
     };
     window.addEventListener("pointerdown", down, true);
     return () => window.removeEventListener("pointerdown", down, true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   return { swDown, swMove, swEnd, openRow, closeOpen, justSwiped };
 }

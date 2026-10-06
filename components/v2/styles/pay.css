@@ -61,7 +61,9 @@ html[data-room="night"] .island, html[data-room="meridian"][data-face="dusk"] .i
 .pa-inwrap { min-height: 0; display: flex; flex-direction: column; }
 /* the view scrolls inside the card only when the room runs out (cap() in the script);
    6px of padding keeps focus rings and the code's lift from being clipped */
-.pa-stage { position: relative; flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; margin: -6px; padding: 6px; }
+/* only ever up and down: the sign-in rows bleed a few px past the text edge for their hover fill, and a
+   sideways scrollbar (which also forced a vertical one) is never wanted */
+.pa-stage { position: relative; flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; margin: -6px; padding: 6px; }
 .pa-foot { flex: none; }
 .pa-view { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s5); }
 /* the space between the head and the foot: its parts keep one 12px rhythm */
@@ -489,14 +491,12 @@ a.prime[aria-disabled="true"] { opacity: .45; pointer-events: none; }
   .pa-out { inset: 6px; }
   .pa-cur { flex: 1 0 auto; display: flex; flex-direction: column; }
 
-  /* the greeting stays in the room above the card, smaller and quieter; its sub line leaves */
+  /* the greeting stays in the room above the card, smaller and quieter */
   .panel[data-state="empty"]:has(.island:not([data-face="write"])) .stage { opacity: .4; }
   .panel[data-state="empty"] .stage-in { transition: transform var(--d-slow) var(--e-out); transform-origin: 50% 60%; }
   .panel[data-state="empty"]:has(.island:not([data-face="write"])) .stage-in { transform: scale(.7); }
   /* a new chat is left-set on a phone: it shrinks toward its own text edge */
   .panel[data-state="empty"] .stage-in { transform-origin: 0 60%; }
-  .panel[data-state="empty"] .pf-sub { transition: opacity var(--d-fast) var(--e-out); }
-  .panel[data-state="empty"]:has(.island:not([data-face="write"])) .pf-sub { animation: none; opacity: 0; }
 
   /* amounts: a keypad of four keys that fills the space between the words and the foot.
      A faint resting fill says "press me" on a touch screen; the picked key is a step deeper */

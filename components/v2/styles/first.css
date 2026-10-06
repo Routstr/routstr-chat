@@ -33,18 +33,9 @@ html[data-room="meridian"] { --pf-accent: var(--ink); }
   .pf-gw, .pf-sync-bar i { animation: none !important; }
 }
 
-/* ══ first run: one line, one sentence, the composer, four ideas ═══════════ */
+/* ══ first run: one line and the composer ══════════════════════════════════ */
 /* a first visit is marked by the room's light and the words' arrival, not a size of its own:
    the greeting keeps its one display step (58, 44.8 on a phone) */
-/* the gloss on "sats" is never split across two lines */
-.pf-sub .nobr { white-space: nowrap; }
-.pf-sub-l { display: block; }
-.pf-sub {
-  margin-top: var(--s4); max-width: 42em; font-family: var(--f-body); font-size: 15.5px; line-height: 1.55;
-  color: var(--ink); text-align: center; text-wrap: balance;
-  animation: fadeUp var(--d-slow) calc(var(--d-slow) * .9) var(--e-out) both;
-}
-
 /* the room's light over the place you write, on a first visit: the backdrop's
    own brightest tone, so every room lights itself in its own way */
 .pf-pool {
@@ -55,88 +46,21 @@ html[data-room="meridian"] { --pf-accent: var(--ink); }
   animation: pfFade var(--d-slow) var(--e-out) both;
 }
 
-/* ideas: one block of four plain lines, centred under the composer. The kind
-   (a small mono word, like the thread's speaker labels) right-aligned in a
-   column as wide as the widest kind, then the words on one left edge. Each
-   idea is a real button spanning both columns (subgrid). */
-/* as wide as the composer above them, so a line never cuts where the composer has room */
-.pf-ideas {
-  width: min(100% - 2 * var(--s5), var(--column) - 2 * (var(--label-col) + var(--s5))); padding: 0;
-  display: grid; transition: opacity var(--d-fast) var(--e-out), transform var(--d-fast) var(--e-out);
-}
-/* the clip folds the row away on a phone once your own words are in (below) */
-.pf-ideas-clip { display: grid; grid-template-rows: 1fr; min-height: 0; }
-.pf-ideas-in { min-height: 0; overflow: hidden; display: grid; grid-template-columns: max-content minmax(0, max-content); justify-content: center; column-gap: 10px; row-gap: 0; }
-.pf-ideas[data-hidden] { opacity: 0; transform: translateY(-4px); pointer-events: none; transition-duration: var(--d-quick); }
-.pf-idea {
-  position: relative; grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: baseline;
-  min-height: 40px; padding: 9px 6px; text-align: left; border-radius: var(--r-xs);
-  font-family: var(--f-body); font-size: 15.5px; line-height: 1.35;
-  /* on the room itself, not on furniture: a step darker than --ink-2 (4.5:1 on meridian's ground) */
-  color: color-mix(in oklab, var(--ink) 55%, var(--ink-2));
-  transition: color var(--d-fast) var(--e-out);
-  animation: fadeUp var(--d-move) var(--e-out) both;
-  animation-delay: calc(var(--d-slow) * 1.25 + var(--i, 0) * var(--d-quick) * .67);
-}
-.pf-idea-k {
-  justify-self: end; font-family: var(--f-mono); font-size: 12px; line-height: 1; letter-spacing: .01em;
-  color: color-mix(in oklab, var(--ink) 25%, var(--ink-2)); transition: color var(--d-fast) var(--e-out); white-space: nowrap;
-}
-.pf-idea-t { position: relative; justify-self: start; min-width: 0; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.pf-idea-t::after {
-  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: var(--pf-accent);
-  opacity: 0; transform: scaleX(.4); transform-origin: left;
-  transition: opacity var(--d-fast) var(--e-out), transform var(--d-mid) var(--e-out);
-}
-.pf-idea:hover, .pf-idea:focus-visible, .pf-idea[data-on] { color: var(--ink); }
-.pf-idea:hover .pf-idea-k, .pf-idea:focus-visible .pf-idea-k, .pf-idea[data-on] .pf-idea-k { color: var(--ink); }
-.pf-idea:hover .pf-idea-t::after, .pf-idea[data-on] .pf-idea-t::after { opacity: .8; transform: none; }
-/* keyboard focus reads like hover (ink and the hairline under the words), with no box round the
-   whole row; forced colours still draw an outline */
-.pf-idea:focus-visible { box-shadow: none; outline: 2px solid transparent; outline-offset: 2px; }
-.pf-idea:focus-visible .pf-idea-t::after { opacity: .8; transform: none; }
-.pf-idea:active .pf-idea-t { transform: translateY(1px); }
-
-/* the composer shows the idea you are pointing at, before you choose it */
-.island .fw { position: relative; }
-.pf-ph {
-  position: absolute; pointer-events: none; color: var(--ink-3); white-space: nowrap; overflow: hidden;
-  text-overflow: ellipsis; opacity: 0; transform: translateY(3px);
-  transition: opacity var(--d-fast) var(--e-out), transform var(--d-mid) var(--e-out);
-}
-.island[data-preview] .pf-ph { opacity: .95; transform: none; }
-.island[data-preview] .field::placeholder { color: transparent; }
-
 @media (max-width: 760px) {
-  .pf-ideas { padding: 0; }
   /* a phone's pool is round and a little wider than the screen: a pool of light, not a shaft */
   .pf-pool { width: 150vw; height: 150vw; margin: -75vw 0 0 -75vw; }
-  /* a phone's ideas sit above the composer: once they leave, their room goes too */
-  .pf-ideas-clip { transition: grid-template-rows var(--d-fast) var(--e-out); }
-  .pf-ideas[data-hidden] .pf-ideas-clip { grid-template-rows: 0fr; transition-duration: var(--d-quick); }
-  /* a left-set list; the kind column starts at the composer's text edge (measured) */
-  .pf-ideas-in { grid-template-columns: 48px minmax(0, 1fr); justify-content: stretch; column-gap: 0; }
-  .pf-idea { min-height: 44px; padding: 12px 0 0; font-size: 15.5px; }
-  .pf-idea-k { justify-self: start; }
-  /* a narrow phone wraps an idea rather than cutting it to half a sentence */
-  .pf-idea-t { padding-bottom: 10px; white-space: normal; text-wrap: balance; }
-  .pf-idea-t::after { bottom: 8px; }
-  .pf-sub { font-size: 14.5px; margin-top: var(--s3); }
   .panel[data-first] .stage-tail { padding-top: 0; }
-  /* one axis: the greeting and its line are left-set on the composer's text
-     edge and sit just above the ideas; the free space falls at the top */
-  .panel[data-first] .stage { align-content: end; padding: 0 var(--s3) var(--s8) var(--pf-edge, 30px); }
+  /* one axis: the greeting is left-set on the composer's text edge; the free space falls at the top */
+  .panel[data-first] .stage { align-content: end; padding: 0 var(--s3) var(--s8) 30px; }
   /* every new chat on a phone keeps that one axis: the greeting on the composer's text edge, like
      the Continue line under it */
-  .panel[data-state="empty"] .stage { justify-items: start; align-content: end; padding-left: var(--pf-edge, 30px); padding-bottom: var(--s8); }
+  .panel[data-state="empty"] .stage { justify-items: start; align-content: end; padding-left: 30px; padding-bottom: var(--s8); }
   .panel[data-state="empty"] .stage-in { justify-items: start; }
-  .panel[data-state="empty"] .greet, .panel[data-first] .pf-sub { text-align: left; }
-  .panel[data-first] .pf-sub { max-width: 30em; text-wrap: balance; }
+  .panel[data-state="empty"] .greet { text-align: left; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pf-ph { transition: opacity var(--d-fast) linear; transform: none !important; }
-  .pf-idea, .pf-sub, .pf-pool { animation-duration: 1ms; }
+  .pf-pool { animation-duration: 1ms; }
 }
 
 /* ══ boot and first light: the room paints first, then one mark, never a flash ══ */
@@ -189,12 +113,5 @@ html[data-woke] .room { animation: none; }
   .pf-boot .pf-mark { animation-name: pfFade; }
 }
 
-/* chats arrived while the first page was up (a sync): its first-run extras leave quietly,
-   then their space closes, so the greeting settles onto the composer instead of floating */
-.pf-sub[data-gone], .pf-pool[data-gone] { animation: pfFadeOut var(--d-fast) var(--e-out) forwards; }
-.pf-sub-clip { display: grid; grid-template-rows: 1fr; transition: grid-template-rows var(--d-move) var(--e-out) var(--d-fast); }
-/* never wider than the composer under it: its measured width (Greeting.tsx), whatever the sidebar */
-.pf-sub-clip { max-width: min(42em, var(--measure), var(--isl-w, 100%)); }
-.pf-sub-clip > div { min-height: 0; overflow: hidden; }
-.pf-sub-clip[data-gone], .pf-ideas[data-gone] .pf-ideas-clip { grid-template-rows: 0fr; }
-.pf-ideas[data-gone] .pf-ideas-clip { transition: grid-template-rows var(--d-move) var(--e-out) var(--d-fast); }
+/* chats arrived while the first page was up (a sync): the room's light leaves quietly */
+.pf-pool[data-gone] { animation: pfFadeOut var(--d-fast) var(--e-out) forwards; }

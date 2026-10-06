@@ -9,9 +9,10 @@ export function useUnread(liveId: string | null, activeConversationId: string | 
     lastLive.current = liveId;
     if (was && !liveId && was !== activeConversationId) setUnread((s) => new Set(s).add(was));
   }, [liveId, activeConversationId]);
-  useEffect(() => {
-    if (!activeConversationId) return;
-    setUnread((s) => (s.has(activeConversationId) ? new Set([...s].filter((x) => x !== activeConversationId)) : s));
-  }, [activeConversationId]);
+  const [active, setActive] = useState(activeConversationId);
+  if (activeConversationId !== active) {
+    setActive(activeConversationId);
+    if (activeConversationId) setUnread((s) => (s.has(activeConversationId) ? new Set([...s].filter((x) => x !== activeConversationId)) : s));
+  }
   return unread;
 }

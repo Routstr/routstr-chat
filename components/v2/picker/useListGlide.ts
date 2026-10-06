@@ -23,8 +23,8 @@ export function useListGlide({
   cat,
   makerLabel,
   say,
-  listEl,
-  glide,
+  listEl: listElRef,
+  glide: glideRef,
   lay,
 }: {
   flat: Row[];
@@ -53,7 +53,6 @@ export function useListGlide({
     if (activeKey !== null && idxOf.has(activeKey)) return;
     const cur = flat.findIndex(isCurrent);
     setActiveKey(flat[filtering || cur < 0 ? 0 : cur].key);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flat]);
 
   const [detailKey, setDetailKey] = useState<string | null>(null);
@@ -71,7 +70,7 @@ export function useListGlide({
   useEffect(() => {
     if (lastSig.current === filterSig) return;
     lastSig.current = filterSig;
-    if (listEl.current) listEl.current.scrollTop = 0;
+    if (listElRef.current) listElRef.current.scrollTop = 0;
     setActiveKey(flat[0]?.key ?? null);
     const host = only ? cat.hosts.find((h) => h.base === only)?.host ?? only : "";
     const words = `${flat.length} ${nounFor(flat.length, !!q.trim(), scope, makerLabel)}${host ? ` on ${host}` : ""}`;
@@ -79,15 +78,16 @@ export function useListGlide({
     if (lastQ.current === q) return say(words);
     lastQ.current = q;
     sayT.current = window.setTimeout(() => say(words), tokenMs("--d-slow"));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterSig]);
   useEffect(() => () => window.clearTimeout(sayT.current), []);
 
   /* ── the tile under the active row ──────────────────────────────────── */
+  const settleTries = useRef(0);
+  const placeGlideRef = useRef<(scrollTo: boolean, instant?: boolean) => void>(() => {});
   const placeGlide = useCallback(
     (scrollTo: boolean, instant = false) => {
-      const g = glide.current;
-      const list = listEl.current;
+      const g = glideRef.current;
+      const list = listElRef.current;
       const el = list?.querySelector<HTMLElement>(`[data-i="${activeIdx}"]`);
       if (!g || !list) return;
       if (!el) {
@@ -129,9 +129,9 @@ export function useListGlide({
     },
     [activeIdx]
   );
-  const settleTries = useRef(0);
-  const placeGlideRef = useRef(placeGlide);
-  placeGlideRef.current = placeGlide;
+  useLayoutEffect(() => {
+    placeGlideRef.current = placeGlide;
+  }, [placeGlide]);
   const scrollNext = useRef(true);
   const glideInstant = useRef(true);
   const glideSig = useRef(filterSig);

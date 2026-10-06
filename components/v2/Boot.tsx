@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { useChat } from "@/context/ChatProvider";
+import { useConversations, useHistoryLoaded } from "@/features/history/view";
 import { MARK_D } from "./icons";
 import { tokenMs } from "./motion";
 
@@ -22,7 +22,8 @@ const phoneNow = () => window.matchMedia("(max-width: 760px)").matches;
 const ease = (name: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim() || "ease";
 
 export default function Boot({ ready, onDone, first: forceFirst }: { ready: boolean; onDone: () => void; first?: boolean }) {
-  const { conversations, conversationsLoaded } = useChat();
+  const conversations = useConversations();
+  const conversationsLoaded = useHistoryLoaded();
   // a first visit waits dimmed, with a small light behind the mark. The page's head script marks
   // it on <html> before the first paint (layout.tsx), so the server's markup is the client's
   const first = useRef(false);
@@ -32,20 +33,18 @@ export default function Boot({ ready, onDone, first: forceFirst }: { ready: bool
   const bloom = useRef<HTMLDivElement>(null);
   const dim = useRef<HTMLDivElement>(null);
   const done = useRef(onDone);
-  done.current = onDone;
-  const convN = useRef(conversations.length);
-  convN.current = conversations.length;
+  useEffect(() => {
+    done.current = onDone;
+  });
   // first light waits for the chats to load (a returning reader must not get
   // the first visit), but never long: after a moment it goes as it is
   const [settled, setSettled] = useState(false);
+  if (ready && conversationsLoaded && !settled) setSettled(true);
   useEffect(() => {
-    if (!ready) return;
-    if (conversationsLoaded) return setSettled(true);
+    if (!ready || conversationsLoaded) return;
     const t = window.setTimeout(() => setSettled(true), 1500);
     return () => window.clearTimeout(t);
   }, [ready, conversationsLoaded]);
-  const loaded = useRef(conversationsLoaded);
-  loaded.current = conversationsLoaded;
 
   // the furniture waits hidden until first light sets it down
   useEffect(() => {
@@ -89,7 +88,7 @@ export default function Boot({ ready, onDone, first: forceFirst }: { ready: bool
       done.current();
     };
     const reduced = reducedNow();
-    const full = !!first.current && loaded.current && convN.current === 0 && !reduced;
+    const full = !!first.current && conversationsLoaded && conversations.length === 0 && !reduced;
 
     // wait two frames: the app has mounted and laid out behind the veil
     raf = requestAnimationFrame(() =>
@@ -214,15 +213,11 @@ export default function Boot({ ready, onDone, first: forceFirst }: { ready: bool
             easing: E,
           })
         );
-        A(document.querySelector(".panel .pf-sub"), [{ opacity: 0, transform: "translateY(6px)" }, { opacity: 1, transform: "none" }], { duration: 640, delay: full ? 760 : 200, easing: E });
         A(document.querySelector(".panel .island"), [{ opacity: 0, transform: "translateY(14px) scale(.985)" }, { opacity: 1, transform: "none" }], {
           duration: full ? 620 : 360,
           delay: full ? 520 : 80,
           easing: S,
         });
-        document.querySelectorAll(".panel .pf-idea").forEach((el, i) =>
-          A(el, [{ opacity: 0, transform: "translateY(5px)" }, { opacity: 1, transform: "none" }], { duration: 520, delay: (full ? 860 : 260) + i * 60, easing: E })
-        );
         window.addEventListener("keydown", hurry, true);
         window.addEventListener("pointerdown", hurry, true);
         Promise.all(anims.map((x) => x.finished.catch(() => undefined))).then(end);

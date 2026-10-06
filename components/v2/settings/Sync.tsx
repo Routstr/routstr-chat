@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { useObservableState } from "applesauce-react/hooks";
 import { useAccountManager } from "@/components/ClientProviders";
-import { useChatSync } from "@/hooks/useChatSync";
+import { useSyncSetting } from "@/features/history/view";
 import {
   loadAutoDeleteConversations,
   loadKeepAliveEnabled,
@@ -15,18 +15,13 @@ import Relays from "./Relays";
 import Files from "./Files";
 
 export default function Sync() {
-  const { chatSyncEnabled, setChatSyncEnabled } = useChatSync();
+  const [chatSyncEnabled, setChatSyncEnabled] = useSyncSetting();
   const { manager } = useAccountManager();
   const active = useObservableState(manager.active$);
-  const [forget, setForget] = useState(false);
-  const [awake, setAwake] = useState(false);
+  const [forget, setForget] = useState(loadAutoDeleteConversations);
+  const [awake, setAwake] = useState(loadKeepAliveEnabled);
   // the reload note shows only while the switch differs from what the app loaded with
-  const [awakeLoaded, setAwakeLoaded] = useState<boolean | null>(null);
-  useEffect(() => {
-    setForget(loadAutoDeleteConversations());
-    setAwake(loadKeepAliveEnabled());
-    setAwakeLoaded(loadKeepAliveEnabled());
-  }, []);
+  const [awakeLoaded] = useState(loadKeepAliveEnabled);
   return (
     <>
       <Head
@@ -79,7 +74,7 @@ export default function Sync() {
             }}
           />
         </Row>
-        <Fold id="f-awake" open={awakeLoaded !== null && awake !== awakeLoaded}>
+        <Fold id="f-awake" open={awake !== awakeLoaded}>
           <div className="st-note-row st-tintrow">
             <p className="st-rn">
               Takes effect after the app reloads. Your chat and your draft are

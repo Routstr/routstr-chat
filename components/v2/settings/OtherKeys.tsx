@@ -6,6 +6,7 @@ import type { Account } from "@/features/session/service";
 import { useAccountManager } from "@/components/ClientProviders";
 import { holdsRecords, useCashuStore } from "@/features/wallet";
 import { useSwitchAccount } from "../useSwitchAccount";
+import Light from "../light/Light";
 import { Btn, Fold, Grp, Ib, Say, narrow, short } from "./parts";
 
 // Another key's coins stay on this device when it is removed, but only that
@@ -20,7 +21,7 @@ export default function OtherKeys({ others }: { others: Account[] }) {
   return (
     <Grp id="g-others" k="Other keys">
       <div className="st-items">
-        {others.map((o, i) => {
+        {others.map((o) => {
           let n = o.pubkey;
           try {
             n = nip19.npubEncode(o.pubkey);
@@ -30,13 +31,7 @@ export default function OtherKeys({ others }: { others: Account[] }) {
           return (
             <React.Fragment key={o.id}>
               <div className="st-it">
-                <span
-                  className="st-av"
-                  style={
-                    { "--av-a": `${40 + i * 90}deg` } as React.CSSProperties
-                  }
-                  aria-hidden="true"
-                />
+                <Light pubkey={o.pubkey} size={28} />
                 <div className="st-it-m">
                   <span className="st-it-t mono">
                     {narrow() ? short(n, 8, 4) : short(n, 12, 6)}

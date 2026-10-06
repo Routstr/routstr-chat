@@ -1,9 +1,8 @@
 "use client";
 
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useChat } from "@/context/ChatProvider";
-import type { Message } from "@/types/chat";
-import { buildThreadSlots } from "@/utils/messageThread";
+import { useHistory, useThread, type ThreadSlot } from "@/features/history/view";
 import { getTextFromContent } from "@/utils/messageUtils";
 import { useActions } from "../useActions";
 import { shortModelName } from "../format";
@@ -16,37 +15,11 @@ import { Tips } from "./Tips";
 import Live from "./Live";
 import Trouble, { DECLINED, isStopped } from "./Trouble";
 
-type Groups = Map<number, { firstMessage: Message; count: number }>;
-
-const standalone = (m: Message) => {
-  if (m.role !== "system") return false;
-  const t = getTextFromContent(m.content).trim();
-  return t.startsWith("ATTENTION") || t.startsWith("Uncaught Error") || t.startsWith("Unknown Error");
-};
-
-function systemGroups(messages: Message[]): Groups {
-  const map: Groups = new Map();
-  let start: number | null = null;
-  let count = 0;
-  messages.forEach((m, i) => {
-    if (m.role === "system" && !standalone(m)) {
-      if (start === null) {
-        start = i;
-        count = 1;
-      } else count++;
-    } else if (start !== null) {
-      map.set(start, { firstMessage: messages[start], count });
-      start = null;
-    }
-  });
-  if (start !== null) map.set(start, { firstMessage: messages[start], count });
-  return map;
-}
+const NO_SLOTS: ThreadSlot[] = [];
 
 /* ══ the thread ════════════════════════════════════════════════════════════ */
 export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) {
   const {
-    messages,
     models,
     selectedModel,
     isLoading,
@@ -55,27 +28,15 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
     getStreamingContentFor,
     editingMessageIndex,
     startEditingMessage,
+    messages,
   } = useChat();
-  const [selected, setSelected] = useState<Map<number, string>>(new Map());
-  const groups = useMemo(() => systemGroups(messages), [messages]);
-  const { slots, allKeys } = useMemo(() => buildThreadSlots(messages, groups, selected), [messages, groups, selected]);
-
-  // forget selections that no longer point at a message
-  useEffect(() => {
-    if (!selected.size) return;
-    const stale = [...selected].filter(([, k]) => !allKeys.has(k));
-    if (!stale.length) return;
-    setSelected((prev) => {
-      const n = new Map(prev);
-      stale.forEach(([d]) => n.delete(d));
-      return n;
-    });
-  }, [allKeys, selected]);
-
-  // a new request always continues the newest branch
-  useEffect(() => {
-    if (isLoading) setSelected((p) => (p.size ? new Map() : p));
-  }, [isLoading]);
+  // the versions picked live in history, so the model is sent the branch shown here
+  const history = useHistory();
+  const slots = useThread(activeConversationId) ?? NO_SLOTS;
+  // messages: the same branch with what each reply cost, then the last request's notes
+  const notes = messages.slice(slots.length);
+  // a stop after some words belongs to that answer
+  const stoppedAnswer = notes.length === 1 && isStopped(notes[0]) && slots.at(-1)?.displayed.role === "assistant";
 
   const modelOf = useCallback(
     (id?: string) => (id ? models.find((x) => x.id === id) ?? (selectedModel?.id === id ? selectedModel : undefined) : undefined),
@@ -91,16 +52,27 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
 
   // stable handlers, so memoised messages do not re-render on every token
   const slotsRef = useRef(slots);
-  slotsRef.current = slots;
-  const onVersion = useCallback<Go>((depth, d) => {
-    const slot = slotsRef.current[depth];
-    if (!slot) return;
-    const next = Math.min(slot.keys.length - 1, Math.max(0, slot.displayedIndex + d));
-    setSelected((p) => new Map(p).set(depth, slot.keys[next]));
-  }, []);
+  useLayoutEffect(() => {
+    slotsRef.current = slots;
+  });
+  // another version is another message, so the turn remounts: the arrow you pressed keeps the keyboard
+  const refocus = useRef<{ depth: number; label: string } | null>(null);
+  const onVersion = useCallback<Go>(
+    (depth, d) => {
+      const slot = slotsRef.current[depth];
+      if (!slot || !activeConversationId) return;
+      const next = Math.min(slot.keys.length - 1, Math.max(0, slot.displayedIndex + d));
+      const a = document.activeElement;
+      if (a?.closest(".rd-vers")) refocus.current = { depth, label: a.getAttribute("aria-label") ?? "" };
+      history?.selectVersion(activeConversationId, depth, slot.keys[next]);
+    },
+    [history, activeConversationId]
+  );
   const actions = useActions();
   const latest = useRef({ retry: actions.retry, edit: startEditingMessage });
-  latest.current = { retry: actions.retry, edit: startEditingMessage };
+  useLayoutEffect(() => {
+    latest.current = { retry: actions.retry, edit: startEditingMessage };
+  });
   const onRetry = useCallback((i: number) => latest.current.retry(i), []);
   const onEdit = useCallback((i: number) => latest.current.edit(i), []);
 
@@ -108,6 +80,13 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
         and any scroll by you wins ─────────────────────────────────────────── */
   const scroller = useRef<HTMLDivElement>(null);
   const inner = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const r = refocus.current;
+    if (!r) return;
+    refocus.current = null;
+    // a turn's index is its depth
+    scroller.current?.querySelector<HTMLElement>(`[data-index="${r.depth}"] .rd-vers [aria-label="${r.label}"]`)?.focus({ preventScroll: true });
+  });
   const [reserve, setReserve] = useState(0);
   const follow = useRef(false);
   const userScrolled = useRef(false);
@@ -117,8 +96,9 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
   const convRef = useRef<string | null | undefined>(undefined);
 
   const lastSlot = slots[slots.length - 1];
-  const lastUser = [...slots].reverse().find((s) => s.displayed.role === "user");
-  const userKey = lastUser ? `${messages.indexOf(lastUser.displayed)}:${lastUser.displayed._createdAt ?? ""}` : null;
+  const lastUserDepth = slots.findLastIndex((s) => s.displayed.role === "user");
+  const lastUser = slots[lastUserDepth];
+  const userKey = lastUser ? `${lastUserDepth}:${lastUser.displayed._createdAt}` : null;
 
   // a chat opened: straight to its end, no animation
   useLayoutEffect(() => {
@@ -130,7 +110,6 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
     pinned.current = true;
     const el = scroller.current;
     if (el) el.scrollTop = el.scrollHeight;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeConversationId, loadingFromUrl, slots.length > 0]);
 
   // you sent something: make room under it and bring it to the top
@@ -139,7 +118,7 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
     lastUserKey.current = userKey;
     if (!isLoading) return;
     const el = scroller.current;
-    const q = el?.querySelector<HTMLElement>(`.rd-me[data-index="${messages.indexOf(lastUser!.displayed)}"]`);
+    const q = el?.querySelector<HTMLElement>(`.rd-me[data-index="${lastUserDepth}"]`);
     if (!el || !q) return;
     const h = q.offsetHeight;
     setReserve(Math.max(0, el.clientHeight - h - 120));
@@ -151,9 +130,10 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
       if (h2 !== h) setReserve(Math.max(0, el.clientHeight - h2 - 120));
       requestAnimationFrame(() => el.scrollTo({ top: q.offsetTop - 28, behavior: "smooth" }));
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userKey, isLoading]);
 
+  // a fold already handed its space back
+  const folding = useRef(false);
   // the answer outgrew the room we made: follow its tail, until you scroll
   useEffect(() => {
     const el = scroller.current;
@@ -188,6 +168,8 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
         follow.current = true;
         el.scrollTop += tailBelow + 8;
       }
+      // the answer grows below someone reading further up: the way back appears without a scroll
+      else setAway(el.scrollHeight - reserve - (el.scrollTop + el.clientHeight) > 240);
     });
     ro.observe(box);
     return () => ro.disconnect();
@@ -266,7 +248,6 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
     return () => ro.disconnect();
   }, [reserve]);
 
-  const folding = useRef(false);
   const onFold = useCallback((h: number, ms: number) => {
     if (!h) return;
     folding.current = true;
@@ -312,27 +293,27 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
   const hideStoredTail =
     liveHere && lastSlot?.displayed.role === "assistant" && streamingText && getTextFromContent(lastSlot.displayed.content) === streamingText;
 
-  // messages already here when a chat opens arrive still; new ones rise in
-  const born = useRef<{ conv: string | null | undefined; keys: Set<string> }>({ conv: undefined, keys: new Set() });
-  const slotKeys = slots.map((s, d) => s.displayed._eventId ?? `${d}-${messages.indexOf(s.displayed)}`);
-  if (born.current.conv !== activeConversationId) born.current = { conv: activeConversationId, keys: new Set(slotKeys) };
+  // messages already here when a chat opens arrive still; new ones rise in,
+  // once: after its rise a turn is known, so a remount (another version) stays still
+  const slotKeys = slots.map((s) => s.displayed._eventId);
+  const [known, setKnown] = useState({ conv: activeConversationId, keys: new Set(slotKeys) });
+  if (known.conv !== activeConversationId) setKnown({ conv: activeConversationId, keys: new Set(slotKeys) });
+  const keyList = slotKeys.join(" ");
   useEffect(() => {
-    slotKeys.forEach((k) => born.current.keys.add(k));
-  });
+    if (slotKeys.every((k) => known.keys.has(k))) return;
+    const t = window.setTimeout(() => setKnown((k) => ({ ...k, keys: new Set([...k.keys, ...slotKeys]) })), tokenMs("--d-move"));
+    return () => window.clearTimeout(t);
+  }, [keyList, known]);
 
   // one polite line for screen readers when an answer lands (trouble says
   // itself: it mounts as a status or an alert)
   const [said, setSaid] = useState("");
-  const wasLive = useRef(false);
-  useEffect(() => {
-    if (wasLive.current && !liveHere) {
-      const last = slots[slots.length - 1]?.displayed;
-      const prev = slots[slots.length - 2]?.displayed;
-      if (last?.role === "assistant") setSaid(`${fullName(last._modelId)} answered.`);
-      else if (last && isStopped(last) && prev?.role === "assistant") setSaid(`${fullName(prev._modelId)} stopped part way.`);
-    }
-    wasLive.current = liveHere;
-  }, [liveHere, slots, fullName]);
+  const [wasLive, setWasLive] = useState(liveHere);
+  if (wasLive !== liveHere) {
+    setWasLive(liveHere);
+    const last = slots[slots.length - 1]?.displayed;
+    if (!liveHere && last?.role === "assistant") setSaid(`${fullName(last._modelId)} ${stoppedAnswer ? "stopped part way" : "answered"}.`);
+  }
 
   return (
     <div className="thread-wrap" ref={wrap}>
@@ -349,33 +330,27 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
           </div>
         ) : (
           slots.map((slot, depth) => {
-            const msg = slot.displayed;
-            // "Generation stopped" right after an answer belongs to that answer
-            if (isStopped(msg) && slots[depth - 1]?.displayed.role === "assistant") return null;
-            const stopped = msg.role === "assistant" && !!slots[depth + 1] && isStopped(slots[depth + 1].displayed);
-            const index = messages.indexOf(msg);
+            const msg = messages[depth];
             const isLast = depth === slots.length - 1 && !liveHere;
             if (hideStoredTail && depth === slots.length - 1) return null;
             const v = { depth, vAt: slot.displayedIndex + 1, vOf: slot.keys.length };
-            const key = msg._eventId ?? `${depth}-${index}`;
+            const key = slot.displayed._eventId;
             if (msg.role === "user")
               return (
-                <Mine key={key} msg={msg} index={index} {...v} isLast={isLast} busy={isLoading}
-                  editing={editingMessageIndex === index} fresh={!born.current.keys.has(key)}
+                <Mine key={key} msg={msg} index={depth} {...v} isLast={isLast} busy={isLoading}
+                  editing={editingMessageIndex === depth} fresh={!known.keys.has(key)}
                   onVersion={onVersion} onEdit={onEdit} />
               );
-            if (msg.role === "system") {
-              const g = groups.get(index);
-              const list = g ? messages.slice(index, index + g.count) : [msg];
-              return <Trouble key={key} msgs={list} index={index} isLast={isLast} label={modelName(selectedModel?.id)} model={fullName(selectedModel?.id)} />;
-            }
             if (DECLINED.test(getTextFromContent(msg.content)))
-              return <Trouble key={key} msgs={[msg]} index={index} isLast={isLast} label={modelName(msg._modelId)} model={fullName(msg._modelId)} />;
+              return <Trouble key={key} msgs={[msg]} index={depth} isLast={isLast} label={modelName(msg._modelId)} model={fullName(msg._modelId)} />;
             return (
-              <Answer key={key} msg={msg} index={index} {...v} isLast={isLast} busy={isLoading}
-                label={modelName(msg._modelId)} full={fullName(msg._modelId)} stopped={stopped} onVersion={onVersion} onRetry={onRetry} />
+              <Answer key={key} msg={msg} index={depth} {...v} isLast={isLast} busy={isLoading}
+                label={modelName(msg._modelId)} full={fullName(msg._modelId)} stopped={stoppedAnswer && depth === slots.length - 1} onVersion={onVersion} onRetry={onRetry} />
             );
           })
+        )}
+        {!liveHere && notes.length > 0 && !stoppedAnswer && (
+          <Trouble msgs={notes} index={slots.length} isLast label={modelName(selectedModel?.id)} model={fullName(selectedModel?.id)} />
         )}
         {liveHere && (
           <Live

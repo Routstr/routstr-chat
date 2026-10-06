@@ -1,6 +1,7 @@
 import { SessionService } from "@/features/session/service";
 import { bindOwner } from "./owner";
 import { bindBook } from "./book";
+import { bindHistory } from "./nostr";
 
 /* The composition root: built once per tab, before the first render. */
 
@@ -13,6 +14,7 @@ if (typeof window !== "undefined") {
     const { pubkey } = session.getSnapshot();
     bindOwner(pubkey, window.localStorage);
     bindBook(pubkey);
+    bindHistory(session.accounts.active$.value);
   };
   bind();
   session.subscribe(bind);

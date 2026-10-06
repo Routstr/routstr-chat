@@ -2,9 +2,9 @@ import { useLayoutEffect, type RefObject } from "react";
 
 // a phone bubble hugs its widest line: wrapped text leaves the box at the
 // width it had before wrapping, which strands an empty band on the right
-export function useHug(wrap: RefObject<HTMLDivElement | null>, text: string) {
+export function useHug(wrapRef: RefObject<HTMLDivElement | null>, text: string) {
   useLayoutEffect(() => {
-    const w = wrap.current;
+    const w = wrapRef.current;
     if (!w) return;
     const hug = () => {
       w.style.width = "";

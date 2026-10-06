@@ -8,8 +8,8 @@ export function useRoomPreview({
   it,
   quiet,
   room,
-  roomTimer,
-  roomSeq,
+  roomTimer: roomTimerRef,
+  roomSeq: roomSeqRef,
 }: {
   page: "root" | "rooms";
   it: Item | undefined;
@@ -22,13 +22,12 @@ export function useRoomPreview({
     if (page !== "rooms" || !it?.room) return;
     if (it.room.id === "auto" && quiet.current) return;
     const id = it.room.id;
-    window.clearTimeout(roomTimer.current);
-    const seq = ++roomSeq.current;
+    window.clearTimeout(roomTimerRef.current);
+    const seq = ++roomSeqRef.current;
     // only after the selection rests: the cross-dissolve is the one heavy moment
-    roomTimer.current = window.setTimeout(() => {
-      if (seq === roomSeq.current) room.setRoom(id);
+    roomTimerRef.current = window.setTimeout(() => {
+      if (seq === roomSeqRef.current) room.setRoom(id);
     }, 110);
-    return () => window.clearTimeout(roomTimer.current);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => window.clearTimeout(roomTimerRef.current);
   }, [page, it?.id]);
 }
