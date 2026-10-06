@@ -47,7 +47,8 @@ const LOST_ANSWER_WAIT_MS = 2000;
 const afterLostAnswer = () =>
   new Promise((resolve) => setTimeout(resolve, LOST_ANSWER_WAIT_MS));
 
-// tokens carry only what a receiver needs
+// tokens and mint requests carry only what the other side needs: never what
+// the store keeps next to a coin (its NIP-60 event, its owner)
 const bare = (proofs: Proof[]) =>
   proofs.map(({ id, amount, secret, C }) => ({ id, amount, secret, C }));
 
@@ -70,7 +71,7 @@ export class WalletExecutor {
     quote: MeltQuoteBolt11Response,
     proofs: Proof[]
   ): Promise<{ state: MeltOutcome; fee: number; change: Proof[] }> {
-    return this.locked(() => this.payLocked(mintUrl, quote, proofs));
+    return this.locked(() => this.payLocked(mintUrl, quote, bare(proofs)));
   }
 
   private async payLocked(
@@ -178,7 +179,9 @@ export class WalletExecutor {
     proofs: Proof[],
     options: SendOptions = {}
   ): Promise<string> {
-    return this.locked(() => this.sendLocked(mintUrl, sats, proofs, options));
+    return this.locked(() =>
+      this.sendLocked(mintUrl, sats, bare(proofs), options)
+    );
   }
 
   private async sendLocked(
