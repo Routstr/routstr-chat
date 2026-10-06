@@ -16,12 +16,18 @@ test("A4 two keys on one device keep their money apart", async ({
   await seedAccounts(context, [newKey(), newKey()]);
   await driver.open(page, appUrl);
   await driver.receive(page, await kit.mintToken(40));
-  await driver.switchAccount(page); // to the other key (0 sats) and back
+  // the other key holds nothing; back on this key, its 40 again, also after a reload
+  const shows = (sats: number) =>
+    expect
+      .poll(() => driver.balance(page).catch(() => -1), { timeout: 30_000 })
+      .toBe(sats);
+  await driver.switchAccount(page);
+  await shows(0);
+  await driver.switchAccount(page);
+  await shows(40);
   await page.reload();
   await driver.ready(page);
-  await expect
-    .poll(() => driver.balance(page).catch(() => -1), { timeout: 30_000 })
-    .toBe(40);
+  await shows(40);
 });
 
 test("H2 chats follow the key to a second device", async ({

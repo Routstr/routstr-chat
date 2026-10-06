@@ -66,6 +66,10 @@ export async function seedAccounts(
   );
 }
 
+/** The id of the device's active account, as both apps keep it. */
+export const activeAccount = (page: Page) =>
+  page.evaluate(() => localStorage.getItem("activeAccount"));
+
 /** Adds a key to the device's account list (not made active) and reloads, as if it had been
  *  signed in earlier. Neither app can add a second key from its screens while signed in. */
 export async function addAccount(page: Page, nsec: string): Promise<void> {

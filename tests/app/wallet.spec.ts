@@ -49,6 +49,16 @@ test("switches between two keys on one device, each with its own money", async (
   await seedAccounts(context, [newKey(), newKey()]);
   await v2.open(page, appUrl);
   await v2.receive(page, await kit.mintToken(40));
-  await v2.switchAccount(page); // to the other key (0 sats) and back (40)
-  expect(await v2.balance(page)).toBe(40);
+  // the other key holds nothing; back on this key, its 40 again, also after a reload
+  const shows = (sats: number) =>
+    expect
+      .poll(() => v2.balance(page).catch(() => -1), { timeout: 30_000 })
+      .toBe(sats);
+  await v2.switchAccount(page);
+  await shows(0);
+  await v2.switchAccount(page);
+  await shows(40);
+  await page.reload();
+  await v2.ready(page);
+  await shows(40);
 });
