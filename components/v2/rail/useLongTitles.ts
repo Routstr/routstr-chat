@@ -3,18 +3,21 @@ import type { groupByDay } from "../format";
 
 /* ── titles: cut ones fade; measured once per render of the list ────── */
 export function useLongTitles(
-  list: RefObject<HTMLElement | null>,
+  listRef: RefObject<HTMLElement | null>,
   groups: ReturnType<typeof groupByDay>,
   activeConversationId: string | null,
   phone: boolean
 ) {
   const [long, setLong] = useState<Set<string>>(new Set());
   const measure = useCallback(() => {
-    const out = new Set<string>();
-    list.current?.querySelectorAll<HTMLElement>(".sb-row").forEach((r) => {
-      const t = r.querySelector<HTMLElement>(".sb-t");
-      if (t && t.scrollWidth > t.clientWidth - 34) out.add(r.dataset.id!);
-    });
+    const out = new Set(
+      Array.from(listRef.current?.querySelectorAll<HTMLElement>(".sb-row") ?? [])
+        .filter((r) => {
+          const t = r.querySelector<HTMLElement>(".sb-t");
+          return t && t.scrollWidth > t.clientWidth - 34;
+        })
+        .map((r) => r.dataset.id!)
+    );
     setLong((s) => (s.size === out.size && [...out].every((x) => s.has(x)) ? s : out));
   }, []);
   useLayoutEffect(measure, [groups, activeConversationId, phone, measure]);

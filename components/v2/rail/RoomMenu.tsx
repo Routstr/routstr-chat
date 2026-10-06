@@ -54,16 +54,23 @@ export function RoomsMenu({ onClose }: { onClose: (refocus: boolean) => void }) 
   const here = room.room === "meridian" && room.hourName ? `Meridian · ${room.hourName}` : nameOf(room.room);
   const [line, setLine] = useState(here);
 
-  const close = (refocus: boolean) => {
+  const leave = (refocus: boolean) => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return onClose(refocus);
-    setClosing(true);
     window.setTimeout(() => onClose(refocus), tokenMs("--d-fast"));
+  };
+  const close = (refocus: boolean) => {
+    setClosing(true);
+    leave(refocus);
   };
 
   // the palette opening over it closes it: nothing stays open behind the veil
+  const [palette, setPalette] = useState(false);
+  if (ui.palette !== palette) {
+    setPalette(ui.palette);
+    if (ui.palette) setClosing(true);
+  }
   useEffect(() => {
-    if (ui.palette) close(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (ui.palette) leave(false);
   }, [ui.palette]);
 
   // the room you are in takes focus; the others are one arrow away
@@ -91,7 +98,6 @@ export function RoomsMenu({ onClose }: { onClose: (refocus: boolean) => void }) 
       window.removeEventListener("pointerdown", down);
       window.removeEventListener("keydown", key, true);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ui.palette]);
 
   const pick = (id: RoomId) => {

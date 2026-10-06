@@ -29,7 +29,7 @@ export default function List({
   came,
   q,
   flat,
-  sel,
+  sel: selRef,
   setActive,
   run,
 }: {
@@ -69,7 +69,7 @@ export default function List({
         const i = Number(row.dataset.i);
         setActive(i);
         // chosen on purpose: a list rebuilt by what it runs (Sync) must not pull it back
-        sel.current = { ...sel.current, id: flat[i].id };
+        selRef.current = { ...selRef.current, id: flat[i].id };
         run(flat[i]);
       }}
     >

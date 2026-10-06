@@ -205,6 +205,5 @@ export function useGroups({
       });
     }
     return out;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q, page, conversations, conversationsLoaded, activeConversationId, glyph, modelWords, isSidebarCollapsed, sync, came, phone, room.room]);
 }

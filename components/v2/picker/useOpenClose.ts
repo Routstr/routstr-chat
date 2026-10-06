@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
-import { chipAnchor } from "../composer/Composer";
 import { LEAVE_MS } from "./helpers";
+import { useChipRef } from "../ui";
 
 const HINTS_KEY = "routstr.picker.opens";
 
@@ -23,10 +23,16 @@ export function useOpenClose({
   onClose: () => void;
   setMenu: (m: boolean) => void;
 }) {
+  const chipRef = useChipRef();
   const [shown, setShown] = useState(false);
   const [entering, setEntering] = useState(true);
   const [hints, setHints] = useState(false);
   const counted = useRef(false);
+  const [was, setWas] = useState(open);
+  if (open !== was) {
+    setWas(open);
+    if (!open) setShown(false);
+  }
 
   // open: rise in, the thread steps back, focus goes to the search
   useEffect(() => {
@@ -73,7 +79,6 @@ export function useOpenClose({
   // close: fall back, then leave
   useEffect(() => {
     if (open) return;
-    setShown(false);
     setMenu(false);
     if (phone) return;
     const t = window.setTimeout(onGone, LEAVE_MS);
@@ -85,7 +90,7 @@ export function useOpenClose({
     if (phone || !open) return;
     const away = (e: Event) => {
       const t = e.target as Node;
-      if (card.current?.contains(t) || chipAnchor.el?.contains(t)) return;
+      if (card.current?.contains(t) || chipRef.current?.contains(t)) return;
       onClose();
     };
     window.addEventListener("pointerdown", away);
@@ -98,7 +103,7 @@ export function useOpenClose({
 
   const leaveCard = () => {
     onClose();
-    chipAnchor.el?.focus({ preventScroll: true });
+    chipRef.current?.focus({ preventScroll: true });
   };
   return { shown, entering, hints, setHints, leaveCard };
 }

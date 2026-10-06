@@ -19,18 +19,20 @@ export default function Palette() {
   const [closing, setClosing] = useState(false);
   // each open is a fresh palette, so ⌘K twice fast opens it again cleanly
   const [n, setN] = useState(0);
-  useEffect(() => {
+  const [was, setWas] = useState(false);
+  if (ui.palette !== was) {
+    setWas(ui.palette);
     if (ui.palette) {
       setMounted(true);
       setClosing(false);
       setN((x) => x + 1);
-    } else if (mounted) {
-      setClosing(true);
-      const t = window.setTimeout(() => setMounted(false), tokenMs(phoneNow() ? "--d-mid" : "--d-fast"));
-      return () => window.clearTimeout(t);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ui.palette]);
+    } else if (mounted) setClosing(true);
+  }
+  useEffect(() => {
+    if (!closing) return;
+    const t = window.setTimeout(() => setMounted(false), tokenMs(phoneNow() ? "--d-mid" : "--d-fast"));
+    return () => window.clearTimeout(t);
+  }, [closing]);
   if (!mounted) return null;
   return <Body closing={closing} key={n} />;
 }
