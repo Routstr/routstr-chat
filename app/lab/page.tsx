@@ -26,12 +26,20 @@ export default function Lab() {
     () => false
   );
   const signedOut = ready && new URLSearchParams(window.location.search).has("signedout");
-  const { manager } = useAccountManager();
+  const { manager, session: real } = useAccountManager();
+  // who is signed in is made up; everything else (a key made on first money) is the real session
   const account = useMemo(() => {
     const now = { accountId: signedOut ? null : "lab", pubkey: signedOut ? null : LAB_PUBKEY, generation: 1 };
-    const session = { subscribe: () => () => {}, getSnapshot: () => now, remove: () => {} };
-    return { manager, session: session as unknown as SessionService };
-  }, [manager, signedOut]);
+    const session = new Proxy(real, {
+      get(target, key) {
+        if (key === "getSnapshot") return () => now;
+        if (key === "subscribe") return () => () => {};
+        const value: unknown = Reflect.get(target, key);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    return { manager, session: session as SessionService };
+  }, [manager, real, signedOut]);
   if (process.env.NODE_ENV !== "development" || !ready) return null;
   return (
     <Suspense>
