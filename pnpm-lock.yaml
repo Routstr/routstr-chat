@@ -57,8 +57,8 @@ importers:
         specifier: ^1.1.11
         version: 1.1.15(@types/react-dom@19.2.2(@types/react@19.2.2))(@types/react@19.2.2)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       '@routstr/sdk':
-        specifier: ^0.4.8
-        version: 0.4.8(@libsql/client@0.15.15)(@noble/curves@1.9.7)(@tursodatabase/database-wasm@0.2.2(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0))(@tursodatabase/database@0.2.2)(@types/react@19.2.2)(react@19.2.0)(supports-color@8.1.1)(typescript@5.9.3)(zod@4.4.3)
+        specifier: ^0.4.9
+        version: 0.4.9(@libsql/client@0.15.15)(@noble/curves@1.9.7)(@tursodatabase/database-wasm@0.2.2(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0))(@tursodatabase/database@0.2.2)(@types/react@19.2.2)(react@19.2.0)(supports-color@8.1.1)(typescript@5.9.3)(zod@4.4.3)
       '@tailwindcss/typography':
         specifier: ^0.5.16
         version: 0.5.20(tailwindcss@4.3.1)
@@ -2304,8 +2304,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@routstr/sdk@0.4.8':
-    resolution: {integrity: sha512-ThcV9OM4vang6V4L61bIwQCsP3yvWWoHv3MPmgLeR0PUbot3UiWl7tmRAGe66CzGDy9UUd1z/ACSjUtmpb6GfQ==}
+  '@routstr/sdk@0.4.9':
+    resolution: {integrity: sha512-kmqgpL6HpwRoritwR5s42B8h6fC6FzOjJgFzi1ath0v+tC4ppRWxeOloe3IaoHAovmh2GosRbN1rFPpb1wIXSw==}
     peerDependencies:
       typescript: '>=5.0.0'
 
@@ -7110,15 +7110,15 @@ snapshots:
     dependencies:
       '@noble/curves': 1.9.7
 
-  '@freedomofpress/crypto-browser@0.1.7(@noble/curves@2.2.0)':
+  '@freedomofpress/crypto-browser@0.1.7(@noble/curves@2.4.0)':
     dependencies:
-      '@noble/curves': 2.2.0
+      '@noble/curves': 2.4.0
 
   '@freedomofpress/sigstore-browser@0.1.14':
     dependencies:
-      '@freedomofpress/crypto-browser': 0.1.7(@noble/curves@2.2.0)
-      '@freedomofpress/tuf-browser': 0.1.11(@noble/curves@2.2.0)
-      '@noble/curves': 2.2.0
+      '@freedomofpress/crypto-browser': 0.1.7(@noble/curves@2.4.0)
+      '@freedomofpress/tuf-browser': 0.1.11(@noble/curves@2.4.0)
+      '@noble/curves': 2.4.0
 
   '@freedomofpress/tuf-browser@0.1.11(@noble/curves@1.9.7)':
     dependencies:
@@ -7126,9 +7126,9 @@ snapshots:
     transitivePeerDependencies:
       - '@noble/curves'
 
-  '@freedomofpress/tuf-browser@0.1.11(@noble/curves@2.2.0)':
+  '@freedomofpress/tuf-browser@0.1.11(@noble/curves@2.4.0)':
     dependencies:
-      '@freedomofpress/crypto-browser': 0.1.7(@noble/curves@2.2.0)
+      '@freedomofpress/crypto-browser': 0.1.7(@noble/curves@2.4.0)
     transitivePeerDependencies:
       - '@noble/curves'
 
@@ -7597,7 +7597,7 @@ snapshots:
   '@panva/hpke-noble@1.1.2(hpke@1.1.2)':
     dependencies:
       '@noble/ciphers': 2.2.0
-      '@noble/curves': 2.2.0
+      '@noble/curves': 2.4.0
       '@noble/hashes': 2.2.0
       '@noble/post-quantum': 0.6.1
       hpke: 1.1.2
@@ -8065,7 +8065,7 @@ snapshots:
   '@rollup/rollup-win32-x64-msvc@4.62.2':
     optional: true
 
-  '@routstr/sdk@0.4.8(@libsql/client@0.15.15)(@noble/curves@1.9.7)(@tursodatabase/database-wasm@0.2.2(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0))(@tursodatabase/database@0.2.2)(@types/react@19.2.2)(react@19.2.0)(supports-color@8.1.1)(typescript@5.9.3)(zod@4.4.3)':
+  '@routstr/sdk@0.4.9(@libsql/client@0.15.15)(@noble/curves@1.9.7)(@tursodatabase/database-wasm@0.2.2(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0))(@tursodatabase/database@0.2.2)(@types/react@19.2.2)(react@19.2.0)(supports-color@8.1.1)(typescript@5.9.3)(zod@4.4.3)':
     dependencies:
       '@cashu/cashu-ts': 4.11.0
       applesauce-core: 5.2.0(supports-color@8.1.1)(typescript@5.9.3)
