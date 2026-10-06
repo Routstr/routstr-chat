@@ -1,5 +1,6 @@
 // The account menu at the foot of the rail: every key on this device, the one in use ticked,
-// a switch that brings each key's own money, Add account and Settings.
+// a switch that brings each key's own money, Add account, Settings, and the warning before a
+// key with sats is removed.
 import type { Page } from "@playwright/test";
 import { generateSecretKey, nip19 } from "nostr-tools";
 import { expect, test } from "./fixtures";
@@ -88,6 +89,34 @@ test("adds an account through the sign-in card, and opens Settings", async ({
   await expect(keys(page).nth(1)).toHaveAttribute("aria-checked", "true");
   await menu(page).getByRole("menuitem", { name: "Settings" }).click();
   await expect(page.getByRole("dialog", { name: "Settings" })).toBeVisible();
+});
+
+test("says how many sats a key holds, and that its key was never saved, before removing it", async ({
+  page,
+  context,
+  kit,
+  appUrl,
+}) => {
+  await seedAccounts(context, [newKey(), newKey()]);
+  await v2.open(page, appUrl);
+  await v2.receive(page, await kit.mintToken(40));
+  await pick(page, 1);
+  await expect.poll(() => v2.balance(page).catch(() => -1)).toBe(0);
+
+  await chip(page).click();
+  await menu(page).getByRole("menuitem", { name: "Settings" }).click();
+  await page.locator("#nav-account").click();
+  const others = page.locator("#g-others");
+  await others.getByRole("button", { name: "Remove this key" }).click();
+  await expect(others).toContainText("It still holds 40 sats here");
+  await expect(others).toContainText("no record of its secret key being saved");
+
+  // signing out of a key with no saved record says so too
+  const signOut = page.locator("#g-signout");
+  await signOut.getByRole("button", { name: "Sign out" }).first().click();
+  await expect(signOut).toContainText(
+    "no record of your secret key being saved"
+  );
 });
 
 test("a switch picked during a reply waits for it, and the reply's change lands in the key that paid", async ({

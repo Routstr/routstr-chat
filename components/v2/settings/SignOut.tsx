@@ -2,10 +2,13 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useObservableState } from "applesauce-react/hooks";
 import { useAuth } from "@/context/AuthProvider";
+import { useAccountManager } from "@/features/session/view";
 import { useUnclaimedTokensStore } from "@/features/wallet/state/unclaimedTokensStore";
 import { useUi } from "../ui";
 import { useMoney } from "../useMoney";
+import { readKeyFlag } from "../wallet/bits";
 import { satUnit } from "../format";
 import { Btn, Fold, Grp, Row, Say, n0, plural } from "./parts";
 
@@ -17,6 +20,10 @@ export default function SignOut() {
   const unclaimed = useUnclaimedTokensStore((s) => s.unclaimedTokens);
   const [signout, setSignout] = useState(false);
   const risk = money.total > 0 || unclaimed.length > 0;
+  const { manager } = useAccountManager();
+  const active = useObservableState(manager.active$);
+  const unsaved =
+    active?.type === "nsec" && readKeyFlag(active.pubkey) !== "saved";
   return (
     <Grp id="g-signout" k="Sign out">
       <Row
@@ -34,7 +41,7 @@ export default function SignOut() {
       </Row>
       <Fold id="f-signout" open={signout}>
         <Say
-          warn={risk}
+          warn={risk || unsaved}
           acts={
             <>
               <Btn onClick={() => setSignout(false)}>Keep me signed in</Btn>
@@ -73,6 +80,12 @@ export default function SignOut() {
               </b>
               . They stay here for this key, and only this key opens them
               again. Back up your key or send the sats out first.
+            </p>
+          ) : unsaved ? (
+            <p>
+              This device has no record of your secret key being saved. If it is
+              not saved somewhere, nothing can sign back in to this account once
+              you sign out. Copy it under Backup first.
             </p>
           ) : (
             <p>
