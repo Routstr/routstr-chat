@@ -92,3 +92,47 @@ test("keeps a token another tab made when this tab makes one next", async ({
     page.getByRole("button", { name: /not claimed yet/ })
   ).toContainText("2 tokens not claimed yet15 sats you can still take back");
 });
+
+test("pays the invoice Add hands over, never one quoted before", async ({
+  page,
+  kit,
+  appUrl,
+}) => {
+  await v2.open(page, appUrl);
+  await v2.receive(page, await kit.mintToken(50));
+  await v2.useMint(page, kit.env.mintUrl);
+  const home = page.getByRole("region", { name: "Wallet", exact: true });
+  const send = page.getByRole("region", { name: "Send", exact: true });
+  const add = page.getByRole("region", { name: "Add funds", exact: true });
+
+  // Send quotes an invoice for 20, and the person leaves without paying it
+  await page
+    .getByRole("button", { name: /^Open wallet\./ })
+    .first()
+    .click();
+  await home.getByRole("button", { name: "Send", exact: true }).click();
+  await send.getByRole("tab", { name: "Lightning" }).click();
+  const field = send.getByRole("textbox", { name: "Lightning invoice" });
+  await field.fill(await kit.invoice(20));
+  await field.press("Enter");
+  await expect(send.getByRole("button", { name: /^Pay 20 sats$/ })).toBeVisible(
+    { timeout: 30_000 }
+  );
+  await page.getByRole("button", { name: "Back to wallet" }).first().click();
+
+  // Add gets an invoice for 8 pasted and hands it to Send
+  await home.getByRole("button", { name: "Add", exact: true }).click();
+  await add.getByRole("tab", { name: "Cashu token" }).click();
+  await add
+    .getByRole("textbox", { name: "Cashu token" })
+    .fill(await kit.invoice(8));
+  await add.getByRole("button", { name: "Pay this invoice instead" }).click();
+  await send
+    .getByRole("button", { name: /^Pay 8 sats$/ })
+    .click({ timeout: 30_000 });
+  await expect(
+    send.getByRole("button", { name: "Pay another invoice" })
+  ).toBeVisible({ timeout: 30_000 });
+  // 8 left the wallet (and the network's fee, if any), not 20
+  await expect.poll(() => v2.balance(page)).toBeGreaterThanOrEqual(40);
+});

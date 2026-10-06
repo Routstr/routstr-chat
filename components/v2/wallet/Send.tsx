@@ -144,6 +144,7 @@ export default function Send({
       setTab(0);
       setDir("l");
       setLn(bare(prefill));
+      setLnPaid(null);
     }
   }
   useEffect(() => {
