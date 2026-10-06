@@ -15,7 +15,7 @@ import { bytesToHex } from "@noble/hashes/utils.js";
 export function useCreateCashuWallet() {
   const { manager } = useAccountManager();
   const activeAccount = useObservableState(manager.active$);
-  const { createWallet } = useCashuWallet();
+  const { createWalletAsync } = useCashuWallet();
   const cashuStore = useCashuStore();
 
   return useMutation({
@@ -33,7 +33,8 @@ export function useCreateCashuWallet() {
         // add default mints
         mints.push(...defaultMints);
 
-        createWallet({
+        // awaited: whoever made this call holds the account's lock until it is out
+        await createWalletAsync({
           privkey,
           mints,
         });

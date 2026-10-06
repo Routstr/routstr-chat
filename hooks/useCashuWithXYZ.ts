@@ -24,7 +24,6 @@ import {
   loadTransactionHistory,
   saveTransactionHistory,
 } from "@/utils/storageUtils";
-import { DEFAULT_MINT_URL } from "@/lib/utils";
 import { TransactionHistory } from "@/types/chat";
 import { Proof } from "@cashu/cashu-ts";
 import { useAuth } from "@/context/AuthProvider";
@@ -103,18 +102,6 @@ export function useCashuWithXYZ() {
     return calculateBalanceByMint(cashuStore.proofs, cashuStore.mints);
   }, [cashuStore.proofs, cashuStore.mints]);
 
-  // Ensure default mint is set on initialization
-  useEffect(() => {
-    if (!cashuStore.activeMintUrl) {
-      // Add default mint if not already in the store
-      if (!cashuStore.mints.find((m) => m.url === DEFAULT_MINT_URL)) {
-        cashuStore.addMint(DEFAULT_MINT_URL);
-      } else {
-        cashuStore.setActiveMintUrl(DEFAULT_MINT_URL);
-      }
-    }
-  }, [cashuStore]);
-
   useEffect(() => {
     setCurrentMintUnit(mintUnits[cashuStore.activeMintUrl ?? ""]);
   }, [mintUnits, cashuStore.activeMintUrl]);
@@ -177,77 +164,6 @@ export function useCashuWithXYZ() {
       window.removeEventListener("storage", updatePendingAmount);
     };
   }, []); // Remove pendingCashuAmountState from deps to avoid stale closure
-
-  // Set active mint URL based on wallet and current mint URL
-  useEffect(() => {
-    if (activeAccount) {
-      if (wallet) {
-        const currentActiveMintUrl = cashuStore.getActiveMintUrl();
-
-        // Only set active mint URL if it's not already set or if current one is not in wallet mints
-        if (
-          !currentActiveMintUrl ||
-          !wallet.mints?.includes(currentActiveMintUrl)
-        ) {
-          if (wallet.mints?.includes(DEFAULT_MINT_URL)) {
-            cashuStore.setActiveMintUrl(DEFAULT_MINT_URL);
-          } else if (wallet.mints && wallet.mints.length > 0) {
-            cashuStore.setActiveMintUrl(wallet.mints[0]);
-          }
-        }
-      }
-
-      if (!isWalletLoading) {
-        if (didRelaysTimeout) {
-          console.log("rdlogs: Skipping wallet creation due to relay timeout");
-          return;
-        }
-
-        if (wallet) {
-          // Call cleanSpentProofs for each mint in the wallet
-          wallet.mints?.forEach((mint) => {
-            cleanSpentProofs(mint);
-          });
-        } else {
-          console.log("rdlogs: No wallet found, creating new wallet");
-          handleCreateWallet();
-        }
-      }
-    }
-  }, [wallet, isWalletLoading, handleCreateWallet, didRelaysTimeout]);
-
-  // Auto-switch active mint to one that has balance if current has zero (NIP-60 only)
-  useEffect(() => {
-    if (!usingNip60) return;
-
-    const activeUrl =
-      cashuStore.getActiveMintUrl?.() ?? cashuStore.activeMintUrl;
-    const activeBalance = activeUrl ? (mintBalances[activeUrl] ?? 0) : 0;
-
-    // Respect user manual selection, even if empty
-    if (
-      cashuStore.userSelectedMintUrl &&
-      cashuStore.userSelectedMintUrl === activeUrl
-    ) {
-      return;
-    }
-
-    // If current active has balance, keep it
-    if (activeBalance > 0) return;
-
-    // Find mint with highest non-zero balance
-    const candidates = Object.entries(mintBalances).filter(
-      ([, balance]) => (balance ?? 0) > 0
-    );
-    if (candidates.length === 0) return;
-    const [bestMint] = candidates.sort(
-      (a, b) => (b[1] as number) - (a[1] as number)
-    )[0];
-
-    if (bestMint && bestMint !== activeUrl) {
-      cashuStore.setActiveMintUrl(bestMint);
-    }
-  }, [usingNip60, mintBalances, cashuStore.activeMintUrl]);
 
   const setTransactionHistory = useCallback(
     (value: React.SetStateAction<TransactionHistory[]>) => {

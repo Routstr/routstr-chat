@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { formatBalance } from "@/features/wallet";
 import { MeltQuoteState } from "@cashu/cashu-ts";
 import { useRecovery } from "@/features/wallet/hooks/useRecovery";
+import { useWalletBinder } from "@/features/wallet/hooks/useWalletBinder";
 
 interface InvoiceRecoveryProviderProps {
   children: React.ReactNode;
@@ -17,6 +18,8 @@ export const InvoiceRecoveryProvider: React.FC<
 > = ({ children }) => {
   const { invoices, getPendingInvoices, updateInvoice } = useInvoiceSync();
   const { triggerCheck } = useInvoiceChecker();
+  // the account's wallet kept in order: made once, spent coins out, an active mint
+  useWalletBinder();
 
   // a payment the wallet book settled later shows its outcome on its invoice
   useRecovery((quoteId, outcome) => {
