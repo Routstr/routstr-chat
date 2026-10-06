@@ -9,14 +9,24 @@
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ApiKeyEntry } from "@routstr/sdk/wallet";
+import {
+  BalanceManager,
+  type ApiKeyEntry,
+  type StorageAdapter,
+  type WalletAdapter,
+} from "@routstr/sdk/wallet";
+import { ExportedKeys } from "@/features/keys/exported";
 import {
   FakeHistory,
   memoryStorage,
   passThroughAttachments,
 } from "@/features/chat/__tests__/fakes";
-import { emptyDevice, fakeKeys } from "@/features/payments/__tests__/fakes";
-import type { Purse } from "@/features/payments/ports";
+import {
+  emptyDevice,
+  fakeKeys,
+  noAdopt,
+} from "@/features/payments/__tests__/fakes";
+import type { Adopt, Purse } from "@/features/payments/ports";
 import { getKit } from "@/tests/kit";
 import { createAccountChat } from "../chat";
 import { createRouting } from "../routing";
@@ -47,7 +57,7 @@ function spendAll(key: string) {
 
 /** An account whose wallet only takes refunds in. `others` are keys a lost
  *  device made; forgetting them succeeds unless `relayDown` is set. */
-async function account(others: ApiKeyEntry[] = []) {
+async function account(others: ApiKeyEntry[] = [], adopt: Adopt = noAdopt) {
   const received: number[] = [];
   const state = { mintDown: false, relayDown: false };
   const purse: Purse = {
@@ -80,6 +90,7 @@ async function account(others: ApiKeyEntry[] = []) {
     sdk: payments,
     spending: () => ({ mode: "apikeys" }),
     oldCredit: emptyDevice().oldCredit,
+    adopt,
     otherDevices: {
       keys: () => others,
       drop: async (keys) => {
@@ -176,20 +187,35 @@ describe("the Refund button against this node's core", () => {
     const others: ApiKeyEntry[] = [
       { baseUrl: kit.coreUrl, key, balance: 40, lastUsed: null },
     ];
-    const { chat, received, state } = await account(others);
+    // the account's exported keys, which ask core about a spent payout
+    const exported = new ExportedKeys(
+      "alice",
+      memoryStorage(),
+      new BalanceManager({} as WalletAdapter, {} as StorageAdapter),
+      {
+        get: async () => undefined,
+        put: async () => {},
+        delete: async () => {},
+      }
+    );
+    const { chat, received, state } = await account(others, (token, baseUrl) =>
+      exported.adopt(token, baseUrl)
+    );
     vi.spyOn(console, "warn").mockImplementation(() => {});
 
     state.relayDown = true;
     await chat.refund();
     await vi.waitFor(() => expect(console.warn).toHaveBeenCalled());
     state.relayDown = false;
-    // core replays the payout this wallet already took: the mint refuses it
+    // core replays the payout this wallet already took: the mint refuses it,
+    // core says the token is spent, and the key is done
     expect(await chat.refund()).toEqual([
-      { baseUrl: kit.coreUrl, success: false },
+      { baseUrl: kit.coreUrl, success: true },
     ]);
 
     expect(received).toHaveLength(1);
-    expect(others).toHaveLength(1);
+    await vi.waitFor(() => expect(others).toHaveLength(0));
+    expect(exported.list()).toEqual([]);
   }, 30_000);
 
   it("forgets a lost device's key the node does not know, without a refund call", async () => {

@@ -13,6 +13,9 @@ interface PayDeps {
   live(): boolean;
 }
 
+// NUT error code: the mint saw these proofs spent already
+const ALREADY_SPENT = 11001;
+
 const sourceChanged = () =>
   new DOMException(
     "Account or payment source changed. Send again.",
@@ -28,7 +31,8 @@ const sourceChanged = () =>
 export function sdkWallet(
   purse: Purse,
   canSpend: () => boolean,
-  node: boolean
+  node: boolean,
+  recover?: (token: string) => Promise<number | undefined>
 ): WalletAdapter {
   const check = () => {
     if (!canSpend()) throw sourceChanged();
@@ -56,6 +60,21 @@ export function sdkWallet(
           unit: "sat",
         };
       } catch (error) {
+        // The mint says it is spent: `recover` asks the provider what it holds
+        // for it. Spent elsewhere (a payout this wallet already took), or now
+        // an exported key: the wallet received nothing either way.
+        if ((error as { code?: number }).code === ALREADY_SPENT && recover) {
+          try {
+            if ((await recover(token)) !== undefined) {
+              return { success: true, amount: 0, unit: "sat" };
+            }
+          } catch (adoptError) {
+            console.warn(
+              "The provider did not say what it holds yet",
+              adoptError
+            );
+          }
+        }
         // The SDK keeps the key or the X-Cashu token and claims it again later
         return {
           success: false,

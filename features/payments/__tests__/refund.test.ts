@@ -15,6 +15,7 @@ import {
   fakeSdk,
   tabKeys,
   tokenOf,
+  noAdopt,
 } from "./fakes";
 
 const SMALL = "https://small.example/";
@@ -68,6 +69,7 @@ async function setup(shared?: Awaited<ReturnType<typeof device>>) {
       keys: () => others,
       drop: vi.fn(async (_keys: string[]) => {}),
     },
+    adopt: noAdopt,
     live: () => true,
   };
   return {
@@ -509,5 +511,63 @@ describe("refundCredit", () => {
       [tokenOf(11), tokenOf(22)].sort()
     );
     expect(locks.held).toBe(0);
+  });
+});
+
+describe("refundCredit: a payout the mint calls spent", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  // the provider pays a key out again, and the mint says that payout is spent
+  async function replayed() {
+    provider({ [LARGE]: 0 });
+    const account = await setup();
+    account.others.push({
+      baseUrl: LARGE,
+      key: "sk-lost-device",
+      balance: 0,
+      lastUsed: null,
+    });
+    account.wallet.purse.receive.mockRejectedValue(
+      Object.assign(new Error("Token already spent"), { code: 11001 })
+    );
+    return account;
+  }
+
+  it("is done when the provider says the token was spent: this wallet already took it", async () => {
+    const { deps } = await replayed();
+    const adopt = vi.fn(async () => 0);
+
+    const results = await refundCredit({ ...deps, adopt }, true);
+
+    expect(adopt).toHaveBeenCalledWith(`refund-${LARGE}`, LARGE);
+    expect(results).toContainEqual({ baseUrl: LARGE, success: true });
+    expect(deps.otherDevices.drop).toHaveBeenCalledWith(["sk-lost-device"]);
+  });
+
+  it("keeps the key when the provider does not say", async () => {
+    const { deps } = await replayed();
+
+    const results = await refundCredit(deps, true);
+
+    expect(results).toContainEqual({ baseUrl: LARGE, success: false });
+    expect(deps.otherDevices.drop).not.toHaveBeenCalled();
+  });
+
+  it("asks only about a payout: a spent token outside one does not reach the provider", async () => {
+    const { deps, wallet } = await setup();
+    const adopt = vi.fn(async () => 0);
+    wallet.purse.receive.mockRejectedValue(
+      Object.assign(new Error("Token already spent"), { code: 11001 })
+    );
+
+    const result = await sdkWallet(
+      wallet.purse,
+      () => true,
+      false
+    ).receiveToken(tokenOf(5));
+    await refundCredit({ ...deps, adopt }, true);
+
+    expect(result.success).toBe(false);
+    expect(adopt).not.toHaveBeenCalled();
   });
 });

@@ -54,6 +54,12 @@ export interface OldCredit {
   lock(): Promise<() => void>;
 }
 
+/** Takes over what a provider holds for a token it spent, as a key of this
+ *  account (keys' adopt). Resolves with the sats the key holds, 0 when the
+ *  provider says the token was spent elsewhere; throws when it does not
+ *  answer, so the token is kept and asked about again. */
+export type Adopt = (token: string, baseUrl: string) => Promise<number>;
+
 /** This account's keys that its other devices made (the relay backup). */
 export interface OtherDevices {
   keys(): ApiKeyEntry[];
