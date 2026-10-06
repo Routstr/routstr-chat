@@ -44,7 +44,7 @@ export const legacyCoins: CoinStore = {
     if (!commitFor) {
       throw new Error("This account's wallet is not open; this waits for it.");
     }
-    await listMint(owner, mintUrl, add);
+    await listMint(useCashuStore.of(owner).getState(), mintUrl, add);
     await commitFor(mintUrl)(add, remove);
   },
   async coins(owner, mintUrl) {
@@ -95,13 +95,17 @@ export const legacyCoins: CoinStore = {
 };
 
 /** Coins of a mint or keyset the store does not list are stored but never
- *  counted: list the mint and its keysets first. The coins are stored either
- *  way; a mint that does not answer is listed by the wallet's next refresh. */
-async function listMint(owner: string, mintUrl: string, add: Proof[]) {
-  const store = useCashuStore.of(owner).getState();
+ *  counted: list the mint and its keysets first (also for a mint about to be
+ *  paid into). The coins are stored either way; a mint that does not answer is
+ *  listed by the wallet's next refresh. */
+export async function listMint(
+  store: ReturnType<typeof useCashuStore.getState>,
+  mintUrl: string,
+  add: Proof[] = []
+) {
   const listed = store.mints.find((m) => m.url === mintUrl);
   const ids = new Set(listed?.keysets?.map((k) => keysetOf(k).id));
-  if (add.every((p) => ids.has(p.id))) return;
+  if (ids.size && add.every((p) => ids.has(p.id))) return;
   try {
     const { mintInfo, keysets, keys } = await new MintService().activateMint(
       mintUrl

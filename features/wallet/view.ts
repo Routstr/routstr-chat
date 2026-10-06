@@ -8,9 +8,12 @@ import {
 } from "react";
 import { currentOwner } from "@/features/session/owned";
 import { useSession } from "@/features/session/view";
+import { DEFAULT_MINT_URL } from "@/lib/utils";
 import { saveTransactionHistory } from "@/utils/storageUtils";
-import { walletLoading } from "./hooks/purseBridge";
+import { depositMint } from "./depositMint";
+import { listMint, walletLoading } from "./hooks/purseBridge";
 import type { Purse } from "./purse";
+import { useCashuStore } from "./state/cashuStore";
 import { useTransactionHistoryStore } from "./state/transactionHistoryStore";
 
 export { peek } from "./purse";
@@ -96,4 +99,33 @@ export function useActivity() {
     saveTransactionHistory([]);
   }, [clearHistory]);
   return { entries, pending, clear };
+}
+
+/** The mints the provider about to be paid takes, read when money is added;
+ *  filled by the composition root from the catalog, empty while none is known.
+ *  The wallet never imports chat. */
+export const AcceptedMintsContext = createContext<() => string[]>(() => []);
+
+/** Where new money should go, so the provider can take it (see
+ *  depositMint), given the account's sats per mint. The wallet lists that mint
+ *  and its keysets too, so what lands there counts at once. */
+export function useDepositMint(): (balances: Record<string, number>) => string {
+  const accepted = useContext(AcceptedMintsContext);
+  return useCallback(
+    (balances) => {
+      const { activeMintUrl, userSelectedMintUrl, mints } =
+        useCashuStore.getState();
+      const url = depositMint({
+        active: activeMintUrl,
+        picked: !!activeMintUrl && activeMintUrl === userSelectedMintUrl,
+        known: mints.map((m) => m.url),
+        balances,
+        accepted: accepted(),
+        fallback: DEFAULT_MINT_URL,
+      });
+      void listMint(useCashuStore.getState(), url);
+      return url;
+    },
+    [accepted]
+  );
 }

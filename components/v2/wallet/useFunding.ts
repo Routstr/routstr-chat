@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useCashuStore } from "@/features/wallet";
-import { peek, usePurse, useWallet } from "@/features/wallet/view";
+import { peek, useDepositMint, usePurse, useWallet } from "@/features/wallet/view";
 import { useWalletReceive } from "@/features/wallet/hooks/useWalletReceive";
-import { DEFAULT_MINT_URL } from "@/lib/utils";
 import { useEnsureAccount } from "../useEnsureAccount";
 
 export type FundStatus = "idle" | "creating" | "waiting" | "paid" | "error";
@@ -13,7 +12,7 @@ export type FundStatus = "idle" | "creating" | "waiting" | "paid" | "error";
    the background checker if this surface closes), tokens through the
    account's purse. This file only sequences and describes. */
 export function useFunding() {
-  const { total: balance } = useWallet();
+  const { total: balance, balances } = useWallet();
   const cashuStore = useCashuStore();
   const purse = usePurse();
   const ensureAccount = useEnsureAccount();
@@ -58,12 +57,15 @@ export function useFunding() {
     }
   }
 
+  // new money goes where the provider about to be paid can take it
+  const depositTo = useDepositMint();
+  const [mint, setMint] = useState<string | null>(null);
   const ensureMint = useCallback(() => {
-    if (cashuStore.activeMintUrl) return;
-    const url = cashuStore.mints[0]?.url || DEFAULT_MINT_URL;
+    const url = depositTo(balances);
     if (!cashuStore.mints.find((m) => m.url === url)) cashuStore.addMint(url);
-    cashuStore.setActiveMintUrl(url);
-  }, [cashuStore]);
+    if (cashuStore.activeMintUrl !== url) cashuStore.setActiveMintUrl(url);
+    setMint(url);
+  }, [cashuStore, depositTo, balances]);
 
   // The invoice is created on the render after the mint is set, so the
   // receive hook sees the active mint it needs. Each request is made once.
@@ -149,6 +151,8 @@ export function useFunding() {
   return {
     status,
     amount,
+    // where the invoice's sats land (the active mint can move on after)
+    mint,
     message,
     invoice: receive.nip60Invoice,
     expiresAt: receive.nip60ExpiresAt,
