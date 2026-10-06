@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  BalanceManager,
+  type StorageAdapter,
+  type WalletAdapter,
+} from "@routstr/sdk/wallet";
+import {
   ExportedKeys,
   type ExportedKey,
   type Provider,
@@ -429,5 +434,74 @@ describe("ExportedKeys", () => {
     await settle();
 
     expect(keys.list().map((k) => k.key)).toEqual(["sk-1"]);
+  });
+});
+
+// Ported from GitHub #215 (Abdou). A provider with routstr-core #779 answers a
+// key it does not know with key_not_found, in detail.error, in the top-level
+// error, or in both; the SDK reads all three.
+describe("refresh, as the SDK reads the provider's answer", () => {
+  const notFound = {
+    message:
+      "Key not found. Deposit first via /v1/wallet/create to get a key on this node.",
+    type: "invalid_request_error",
+    code: "key_not_found",
+  };
+  const refreshed = async (status: number, body: unknown, was = key()) => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify(body), { status }))
+    );
+    const storage = memory();
+    storage.setItem("api_keys:alice", JSON.stringify([was]));
+    const sdk = new BalanceManager({} as WalletAdapter, {} as StorageAdapter);
+    const keys = new ExportedKeys("alice", storage, sdk, kept());
+    await keys.refresh(was);
+    return keys.list()[0];
+  };
+
+  it.each([
+    ["detail.error", { detail: { error: notFound } }],
+    ["the top-level error", { error: notFound }],
+    ["both", { detail: { error: notFound }, error: notFound }],
+  ])(
+    "marks a key the provider does not know invalid, from %s",
+    async (_, body) => {
+      expect(await refreshed(401, body)).toMatchObject({
+        isInvalid: true,
+        balance: 1000,
+      });
+    }
+  );
+
+  it.each([
+    "insufficient_balance",
+    "internal_server_error",
+    "unauthorized",
+    // an older provider's answer to any unknown key: the SDK trusts it only
+    // for spent proofs, so the last balance stays
+    "invalid_api_key",
+  ])("keeps the last balance on %s", async (code) => {
+    const error = { message: "Refused", type: "invalid_request_error", code };
+    for (const body of [{ error }, { detail: { error } }]) {
+      expect((await refreshed(401, body)).isInvalid).toBeUndefined();
+    }
+  });
+
+  it("keeps the last balance when the answer carries no code", async () => {
+    for (const body of [{}, { error: {} }, { detail: { error: {} } }]) {
+      expect((await refreshed(401, body)).isInvalid).toBeUndefined();
+    }
+  });
+
+  it("never marks a funded key invalid, and clears an old mark", async () => {
+    const answer = { api_key: "sk-1", balance: 7000, reserved: 0 };
+    expect(await refreshed(200, answer)).toMatchObject({
+      isInvalid: false,
+      balance: 7000,
+    });
+    expect(
+      await refreshed(200, answer, key({ isInvalid: true }))
+    ).toMatchObject({ isInvalid: false, balance: 7000 });
   });
 });
