@@ -5,7 +5,6 @@ import { useAppContext } from "@/hooks/useAppContext";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { filter } from "rxjs";
-import { DEFAULT_MINT_URL } from "@/lib/utils";
 import { CASHU_EVENT_KINDS } from "@/lib/cashu";
 import { Wallet as CashuWalletStruct } from "../core/domain/Wallet";
 import { CashuToken } from "../core/domain/Token";
@@ -195,20 +194,8 @@ export function useCashuWallet() {
         const mintService = new MintService();
         await initiateMints(walletData.mints, mintService, cashuStore);
 
+        // the active mint is useWalletBinder's: set only when there is none
         cashuStore.setPrivkey(walletData.privkey);
-
-        const currentActiveMintUrl = cashuStore.getActiveMintUrl();
-        // Only set active mint URL if it's not already set or if current one is not in wallet mints
-        if (
-          !currentActiveMintUrl ||
-          !walletData.mints?.includes(currentActiveMintUrl)
-        ) {
-          if (walletData.mints?.includes(DEFAULT_MINT_URL)) {
-            cashuStore.setActiveMintUrl(DEFAULT_MINT_URL);
-          } else if (walletData.mints && walletData.mints.length > 0) {
-            cashuStore.setActiveMintUrl(walletData.mints[0]);
-          }
-        }
 
         // trigger getNip60TokensQuery refetch without awaiting to avoid circular dependency
         getNip60TokensQuery.refetch();
@@ -574,6 +561,8 @@ export function useCashuWallet() {
     tokens: getNip60TokensQuery.data || [],
     isLoading: walletQuery.isLoading || getNip60TokensQuery.isLoading,
     createWallet: createWalletMutation.mutate,
+    // resolves once the wallet event is published
+    createWalletAsync: createWalletMutation.mutateAsync,
     updateProofs: updateProofsMutation.mutateAsync,
     showQueryTimeoutModal,
     setShowQueryTimeoutModal,

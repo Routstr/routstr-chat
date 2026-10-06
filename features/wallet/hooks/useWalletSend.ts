@@ -3,7 +3,6 @@
 import { useState, useCallback, useRef } from "react";
 import { MeltQuoteState } from "@cashu/cashu-ts";
 import { useInvoiceSync } from "@/hooks/useInvoiceSync";
-import { useChat } from "@/context/ChatProvider";
 import {
   useCashuToken,
   useCashuStore,
@@ -15,18 +14,19 @@ import {
 import { getCurrentMintBalance as utilGetCurrentMintBalance } from "@/utils/walletUtils";
 import { createMeltQuote, quoteInSats } from "@/lib/cashuLightning";
 import { toSats } from "../purse";
+import { usePurse } from "../view";
+import { useActiveMintUnit } from "./useActiveMintUnit";
 import { dismissToken, useBook } from "./useBook";
-import { useCashuWithXYZ } from "@/hooks/useCashuWithXYZ";
 import { toast } from "sonner";
 
 export function useWalletSend() {
-  const { currentMintUnit } = useChat();
+  const currentMintUnit = useActiveMintUnit();
   const { addInvoice, updateInvoice } = useInvoiceSync();
   const { receiveToken } = useCashuToken();
   const cashuStore = useCashuStore();
   const unclaimedTokensStore = useUnclaimedTokensStore();
   const { activeExecutor } = useBook();
-  const { spendCashu } = useCashuWithXYZ();
+  const purse = usePurse();
 
   // Send tab state
   const [sendTab, setSendTab] = useState<"token" | "lightning">("token");
@@ -99,21 +99,20 @@ export function useWalletSend() {
       setSuccessMessage("");
       setWarningMessage("");
       setIsGeneratingSendToken(true);
-      const amountValue =
-        currentMintUnit === "msat" ? parseInt(sendAmount) / 1000 : parseInt(sendAmount);
-      const result = await spendCashu(mintUrl, amountValue, "");
-      if (result.status === "success" && result.token) {
-        setSendAmount("");
-        setSuccessMessage(`Token generated for ${formatBalance(amountValue, currentMintUnit)}`);
-      } else {
-        setError(result.error || "Failed to generate token");
-      }
+      // typed in the mint's unit
+      const sats = toSats(parseInt(sendAmount), currentMintUnit);
+      const from = purse();
+      if (!from) throw new Error("There is no account to send from.");
+      // no handoff: the token stays listed until it is taken back or let go
+      await from.send(mintUrl, sats);
+      setSendAmount("");
+      setSuccessMessage(`Token generated for ${formatBalance(sats, "sat")}s`);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setIsGeneratingSendToken(false);
     }
-  }, [sendAmount, cashuStore.activeMintUrl, currentMintUnit, spendCashu]);
+  }, [sendAmount, cashuStore.activeMintUrl, currentMintUnit, purse]);
 
   const reclaimUnclaimedToken = useCallback(
     async (entry: UnclaimedToken) => {
