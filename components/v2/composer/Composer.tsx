@@ -560,7 +560,6 @@ export default function Composer({ centred }: { centred: boolean }) {
 
         <div className="fw" data-cut={cut || undefined} ref={band}>
           {/* an idea pointed at on the first page shows here first (Greeting) */}
-          <span className="pf-ph" aria-hidden="true" />
           <textarea
             ref={field}
             className="field"

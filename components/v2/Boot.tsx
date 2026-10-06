@@ -214,7 +214,6 @@ export default function Boot({ ready, onDone, first: forceFirst }: { ready: bool
             easing: E,
           })
         );
-        A(document.querySelector(".panel .pf-sub"), [{ opacity: 0, transform: "translateY(6px)" }, { opacity: 1, transform: "none" }], { duration: 640, delay: full ? 760 : 200, easing: E });
         A(document.querySelector(".panel .island"), [{ opacity: 0, transform: "translateY(14px) scale(.985)" }, { opacity: 1, transform: "none" }], {
           duration: full ? 620 : 360,
           delay: full ? 520 : 80,

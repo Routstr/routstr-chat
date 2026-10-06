@@ -13,7 +13,7 @@ import { land } from "./composer/landing";
 import ModelPicker from "./picker/ModelPicker";
 import Palette from "./palette/Palette";
 import Settings from "./settings/Settings";
-import Greeting, { Ideas, Resume } from "./Greeting";
+import Greeting, { Resume } from "./Greeting";
 import { useCountUp, useMoney } from "./useMoney";
 import { useAuth } from "@/context/AuthProvider";
 import { sats } from "./format";
@@ -189,7 +189,6 @@ function Panel() {
 
       {empty && (
         <div className="stage-tail">
-          {firstPage && <Ideas gone={firstGone} />}
           {firstPage === false && <Resume />}
         </div>
       )}

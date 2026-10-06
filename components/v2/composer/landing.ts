@@ -91,9 +91,7 @@ export function takeFlight(isl: HTMLElement) {
     from: isl.getBoundingClientRect(),
     fromH: isl.offsetHeight,
     words: takeWords(isl),
-    ghosts: [takeGhost(panel?.querySelector(".stage-in") ?? null), takeGhost(panel?.querySelector(".pf-ideas:not([data-hidden])") ?? null)].filter(
-      (g): g is Ghost => !!g
-    ),
+    ghosts: [takeGhost(panel?.querySelector(".stage-in") ?? null)].filter((g): g is Ghost => !!g),
     pool: takePool(),
   };
 }

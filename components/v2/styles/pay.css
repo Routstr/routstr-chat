@@ -495,8 +495,6 @@ a.prime[aria-disabled="true"] { opacity: .45; pointer-events: none; }
   .panel[data-state="empty"]:has(.island:not([data-face="write"])) .stage-in { transform: scale(.7); }
   /* a new chat is left-set on a phone: it shrinks toward its own text edge */
   .panel[data-state="empty"] .stage-in { transform-origin: 0 60%; }
-  .panel[data-state="empty"] .pf-sub { transition: opacity var(--d-fast) var(--e-out); }
-  .panel[data-state="empty"]:has(.island:not([data-face="write"])) .pf-sub { animation: none; opacity: 0; }
 
   /* amounts: a keypad of four keys that fills the space between the words and the foot.
      A faint resting fill says "press me" on a touch screen; the picked key is a step deeper */

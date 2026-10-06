@@ -328,7 +328,6 @@
 
 /* ══ the new-chat stage around it ════════════════════════════════════════ */
 /* the ideas step aside while the card is turned (a payment, sign in) */
-.panel[data-state="empty"]:has(.island:not([data-face="write"])) .pf-ideas { opacity: 0; pointer-events: none; }
 /* the greeting and ideas a first send leaves behind (landing.ts) */
 .ghost-out { will-change: transform, opacity; }
 

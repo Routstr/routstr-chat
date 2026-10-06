@@ -238,7 +238,6 @@
   html[data-kb] .room[data-drawer] :is(.sb-new, .sb-foot) { display: none; }
   /* a first page with the keyboard up: too little height for the sentence, so only the greeting
      stays, above the ideas, and never climbs into the header */
-  html[data-kb-p] .panel[data-first] .pf-sub-clip { display: none; }
   html[data-kb-p] .panel[data-first] .stage { overflow: hidden; }
 
   /* a returning reader's new chat: one quiet way back to the latest chat, above the composer */
