@@ -1,8 +1,9 @@
-// For *.mint.test.ts files: the running stack and its client.
+// For *.mint.test.ts files: the running stack and its client. (Not a React hook, so no
+// "use" prefix.)
 import { inject } from "vitest";
 import { kitClient, type KitClient } from "./client";
 
-export function useKit(): KitClient {
+export function getKit(): KitClient {
   return kitClient(inject("kit"));
 }
 
