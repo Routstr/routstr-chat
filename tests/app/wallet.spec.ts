@@ -61,3 +61,34 @@ test("receives a token from the second mint", async ({ page, kit, appUrl }) => {
   expect(await v2.balance(page)).toBe(30);
   expect(new Set(await kit.tokenStates(token))).toEqual(new Set(["SPENT"]));
 });
+
+// each made token is its own record in the wallet book, so a tab that saves after another
+// tab made a token cannot write over it
+test("keeps a token another tab made when this tab makes one next", async ({
+  page,
+  context,
+  kit,
+  appUrl,
+}) => {
+  await seedAccounts(context, [newKey()]);
+  await v2.open(page, appUrl);
+  await v2.receive(page, await kit.mintToken(50));
+  await v2.useMint(page, kit.env.mintUrl);
+
+  const other = await context.newPage();
+  await v2.open(other, appUrl);
+  await expect.poll(() => v2.balance(other)).toBe(50);
+  await v2.makeToken(other, 10);
+  // the first tab, which has not seen that token, makes one next
+  await v2.makeToken(page, 5);
+
+  await page.reload();
+  await v2.ready(page);
+  await page
+    .getByRole("button", { name: /^Open wallet\./ })
+    .first()
+    .click();
+  await expect(
+    page.getByRole("button", { name: /not claimed yet/ })
+  ).toContainText("2 tokens not claimed yet15 sats you can still take back");
+});
