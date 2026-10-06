@@ -2,8 +2,7 @@
 
 import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
 
-/* What the furniture is doing right now. Nothing here is data; the data lives
-   in useChat(). */
+/* What the furniture is doing right now. Nothing here is account data. */
 
 export type ComposerFace = "write" | "pay" | "auth";
 export type RailSide = "chats" | "wallet";
@@ -38,9 +37,22 @@ interface UiValue {
   /** Send the held draft as soon as money arrives. */
   sendWhenFunded: boolean;
   setSendWhenFunded: (v: boolean) => void;
+  /** The rail folded away on a wide screen; remembered on this device. */
+  isSidebarCollapsed: boolean;
+  setIsSidebarCollapsed: (collapsed: boolean) => void;
 }
 
 const UiContext = createContext<UiValue | null>(null);
+
+// main's key and default, so the rail stays as it was left in either app
+const FOLD_KEY = "sidebar_collapsed";
+const readFold = () => {
+  try {
+    return localStorage.getItem(FOLD_KEY) !== "false";
+  } catch {
+    return true;
+  }
+};
 
 export const useUi = () => {
   const v = useContext(UiContext);
@@ -62,6 +74,7 @@ export function UiProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<SettingsSection | null>(null);
   const [settingsDeep, setSettingsDeep] = useState(false);
   const [sendWhenFunded, setSendWhenFunded] = useState(false);
+  const [isSidebarCollapsed, setCollapsed] = useState(readFold);
   const chipRef = useRef<HTMLButtonElement>(null);
 
   const openSettings = useCallback((section?: SettingsSection) => {
@@ -72,14 +85,22 @@ export function UiProvider({ children }: { children: React.ReactNode }) {
     setSettings(section ?? "look");
   }, []);
   const closeSettings = useCallback(() => setSettings(null), []);
+  const setIsSidebarCollapsed = useCallback((collapsed: boolean) => {
+    setCollapsed(collapsed);
+    try {
+      localStorage.setItem(FOLD_KEY, JSON.stringify(collapsed));
+    } catch {
+      // storage full or blocked: it holds for this visit
+    }
+  }, []);
 
   const value = useMemo(
     () => ({
       drawer, setDrawer, side, setSide, face, setFace, picker, setPicker,
       palette, setPalette, settings, settingsDeep, openSettings, closeSettings,
-      sendWhenFunded, setSendWhenFunded,
+      sendWhenFunded, setSendWhenFunded, isSidebarCollapsed, setIsSidebarCollapsed,
     }),
-    [drawer, side, face, picker, palette, settings, settingsDeep, openSettings, closeSettings, sendWhenFunded]
+    [drawer, side, face, picker, palette, settings, settingsDeep, openSettings, closeSettings, sendWhenFunded, isSidebarCollapsed, setIsSidebarCollapsed]
   );
   return (
     <UiContext.Provider value={value}>

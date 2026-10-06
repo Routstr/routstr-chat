@@ -186,10 +186,6 @@ export function FakeChatProvider({ children, history }: { children: React.ReactN
     const t = window.setTimeout(() => setBalance((b) => b + 1000), Number(params.get("bump")) || 4000);
     return () => window.clearTimeout(t);
   }, []);
-  const [collapsed, setCollapsed] = useState(false);
-  const [editingMessageIndex, setEditingMessageIndex] = useState<number | null>(null);
-  const [editingContent, setEditingContent] = useState("");
-  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const abort = useRef(false);
   const convRef = useRef(activeId);
   useLayoutEffect(() => {
@@ -263,19 +259,6 @@ export function FakeChatProvider({ children, history }: { children: React.ReactN
       activeConversationId: activeId,
       messages: shown,
       setMessages,
-      editingMessageIndex,
-      editingContent,
-      setEditingContent,
-      setEditingMessageIndex,
-      startEditingMessage: (i: number) => {
-        setEditingMessageIndex(i);
-        const m = shown[i];
-        setEditingContent(typeof m.content === "string" ? m.content : m.content.find((c) => c.type === "text")?.text ?? "");
-      },
-      cancelEditing: () => {
-        setEditingMessageIndex(null);
-        setEditingContent("");
-      },
       startNewConversation: () => {
         setActiveId(null);
         setMessagesState([]);
@@ -301,10 +284,6 @@ export function FakeChatProvider({ children, history }: { children: React.ReactN
       lowBalanceWarningForModel: balance <= 0,
       isSettingsOpen: false,
       setIsSettingsOpen: () => {},
-      isLoginModalOpen,
-      setIsLoginModalOpen,
-      isSidebarCollapsed: collapsed,
-      setIsSidebarCollapsed: setCollapsed,
       isSidebarOpen: false,
       setIsSidebarOpen: () => {},
       isMobile: false,
@@ -365,19 +344,18 @@ export function FakeChatProvider({ children, history }: { children: React.ReactN
         setMessages(base);
         void run(base, activeId ?? "c1", target?._prevId);
       },
-      saveInlineEdit: async () => {
-        if (editingMessageIndex === null) return;
-        const old = shown[editingMessageIndex];
-        const edited = msg("user", editingContent, Date.now(), { _prevId: old._prevId });
-        const base = [...shown.slice(0, editingMessageIndex + 1), edited];
-        setEditingMessageIndex(null);
-        setEditingContent("");
+      saveInlineEdit: async (index: number | null, text: string, _m: Message[], _s: unknown, setIndex: (i: number | null) => void) => {
+        if (index === null) return;
+        const old = shown[index];
+        const edited = msg("user", text, Date.now(), { _prevId: old._prevId });
+        const base = [...shown.slice(0, index + 1), edited];
+        setIndex(null);
         setMessages(base);
         void run(base, activeId ?? "c1", edited._eventId);
       },
     };
     return base;
-  }, [conversations, activeId, shown, setMessages, editingMessageIndex, editingContent, selectedModel, balance, late, isLoginModalOpen, collapsed, configuredModels, inputMessage, uploadedAttachments, isLoading, isPaymentProcessing, streamingConversationId, stream, thinking, run]);
+  }, [conversations, activeId, shown, setMessages, selectedModel, balance, late, configuredModels, inputMessage, uploadedAttachments, isLoading, isPaymentProcessing, streamingConversationId, stream, thinking, run]);
 
   const standIn = useMemo(() => ({ routes: labRoutes, picks: PICKS, currentKey }), [currentKey]);
   return (

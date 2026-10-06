@@ -52,14 +52,17 @@ export default function Trouble({
   isLast,
   label,
   model,
+  onEdit,
 }: {
   msgs: Message[];
   index: number;
   isLast: boolean;
   label: string;
   model: string;
+  /** Opens one of your messages for editing. */
+  onEdit: (index: number) => void;
 }) {
-  const { isLoading, startEditingMessage, messages } = useChat();
+  const { isLoading, messages } = useChat();
   const { retry } = useActions();
   const money = useMoney();
   const ui = useUi();
@@ -153,7 +156,7 @@ export default function Trouble({
       return -1;
     })();
     prime = canAct && mine >= 0 && (
-      <button type="button" className="la-act la-prime" onClick={() => startEditingMessage(mine)}>
+      <button type="button" className="la-act la-prime" onClick={() => onEdit(mine)}>
         <Icon name="edit" />
         Edit message
       </button>

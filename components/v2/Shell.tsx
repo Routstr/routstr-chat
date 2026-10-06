@@ -23,10 +23,11 @@ import { useDrawerDrag, useKeyboardInset, usePhone } from "./phone";
 function Panel() {
   const searchParams = useSearchParams();
   const chatIdFromUrl = searchParams.get("chatId");
-  const { messages, activeConversationId, isSidebarCollapsed, startNewConversation } = useChat();
+  const { messages, activeConversationId, startNewConversation } = useChat();
   const conversations = useConversations();
   const conversationsLoaded = useHistoryLoaded();
   const ui = useUi();
+  const { isSidebarCollapsed } = ui;
   const room = useRoom();
   const money = useMoney();
   // a title too long for the header fades at its end, as the drawer's titles do (never dots)
@@ -190,9 +191,10 @@ function Panel() {
 }
 
 export default function Shell() {
-  const { isSidebarCollapsed, setIsSidebarCollapsed, isLoading, startNewConversation } = useChat();
+  const { isLoading, startNewConversation } = useChat();
   const conversations = useConversations();
   const ui = useUi();
+  const { isSidebarCollapsed, setIsSidebarCollapsed } = ui;
   const room = useRoom();
   const roomEl = useRef<HTMLDivElement>(null);
   const phone = usePhone();

@@ -154,8 +154,6 @@ export default function Composer({ centred }: { centred: boolean }) {
     selectedModel,
     lowBalanceWarningForModel,
     messages,
-    isLoginModalOpen,
-    setIsLoginModalOpen,
   } = chat;
   const { isAuthenticated } = useAuth();
   const ui = useUi();
@@ -253,13 +251,6 @@ export default function Composer({ centred }: { centred: boolean }) {
   );
   // "loading" lasts until the app has made its own pick, not just until models arrive
   const modelState = selectedModel ? "ready" : isAuthenticated && (busy || !hasPickedModel) ? "loading" : "none";
-
-  // something in the logic asked for a sign in: the composer answers it
-  useEffect(() => {
-    if (!isLoginModalOpen) return;
-    setIsLoginModalOpen(false);
-    ui.setFace("auth");
-  }, [isLoginModalOpen, setIsLoginModalOpen, ui]);
 
   // grow with the words, instantly; never animate the box a caret lives in.
   // Past the cap it scrolls, and only the edge that hides words dissolves.

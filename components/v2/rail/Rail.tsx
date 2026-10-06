@@ -44,8 +44,6 @@ export default function Rail() {
     activeConversationId,
     loadConversation,
     startNewConversation,
-    isSidebarCollapsed,
-    setIsSidebarCollapsed,
     isLoading,
     streamingConversationId,
   } = useChat();
@@ -53,6 +51,7 @@ export default function Rail() {
   const conversationsLoaded = useHistoryLoaded();
   const { isAuthenticated } = useAuth();
   const ui = useUi();
+  const { isSidebarCollapsed, setIsSidebarCollapsed } = ui;
   const money = useMoney();
   const shown = useCountUp(money.total);
 

@@ -26,8 +26,6 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
     streamingConversationId,
     activeConversationId,
     getStreamingContentFor,
-    editingMessageIndex,
-    startEditingMessage,
     messages,
   } = useChat();
   // the versions picked live in history, so the model is sent the branch shown here
@@ -69,12 +67,18 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
     [history, activeConversationId]
   );
   const actions = useActions();
-  const latest = useRef({ retry: actions.retry, edit: startEditingMessage });
+  const latest = useRef(actions.retry);
   useLayoutEffect(() => {
-    latest.current = { retry: actions.retry, edit: startEditingMessage };
+    latest.current = actions.retry;
   });
-  const onRetry = useCallback((i: number) => latest.current.retry(i), []);
-  const onEdit = useCallback((i: number) => latest.current.edit(i), []);
+  const onRetry = useCallback((i: number) => latest.current(i), []);
+  // which of your messages is open for editing; opening another chat closes it
+  const [editing, setEditing] = useState<number | null>(null);
+  const [editingIn, setEditingIn] = useState(activeConversationId);
+  if (editingIn !== activeConversationId) {
+    setEditingIn(activeConversationId);
+    setEditing(null);
+  }
 
   /* ── scrolling: the question rides at the top, the answer grows under it,
         and any scroll by you wins ─────────────────────────────────────────── */
@@ -338,11 +342,11 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
             if (msg.role === "user")
               return (
                 <Mine key={key} msg={msg} index={depth} {...v} isLast={isLast} busy={isLoading}
-                  editing={editingMessageIndex === depth} fresh={!known.keys.has(key)}
-                  onVersion={onVersion} onEdit={onEdit} />
+                  editing={editing === depth} fresh={!known.keys.has(key)}
+                  onVersion={onVersion} onEdit={setEditing} />
               );
             if (DECLINED.test(textOf(msg.content)))
-              return <Trouble key={key} msgs={[msg]} index={depth} isLast={isLast} label={modelName(msg._modelId)} model={fullName(msg._modelId)} />;
+              return <Trouble key={key} msgs={[msg]} index={depth} isLast={isLast} label={modelName(msg._modelId)} model={fullName(msg._modelId)} onEdit={setEditing} />;
             return (
               <Answer key={key} msg={msg} index={depth} {...v} isLast={isLast} busy={isLoading}
                 label={modelName(msg._modelId)} full={fullName(msg._modelId)} stopped={stoppedAnswer && depth === slots.length - 1} onVersion={onVersion} onRetry={onRetry} />
@@ -350,7 +354,7 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
           })
         )}
         {!liveHere && notes.length > 0 && !stoppedAnswer && (
-          <Trouble msgs={notes} index={slots.length} isLast label={modelName(selectedModel?.id)} model={fullName(selectedModel?.id)} />
+          <Trouble msgs={notes} index={slots.length} isLast label={modelName(selectedModel?.id)} model={fullName(selectedModel?.id)} onEdit={setEditing} />
         )}
         {liveHere && (
           <Live

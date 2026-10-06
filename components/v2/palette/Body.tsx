@@ -37,9 +37,9 @@ export default function Body({ closing }: { closing: boolean }) {
     setInputMessage,
     models,
     selectedModel,
-    isSidebarCollapsed,
     replyCosts,
   } = useChat();
+  const { isSidebarCollapsed } = ui;
   const stored = useConversations();
   const conversations = useMemo(() => withCosts(stored, replyCosts), [stored, replyCosts]);
   const conversationsLoaded = useHistoryLoaded();

@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import { useChat } from "@/context/ChatProvider";
+import { useUi } from "./ui";
 import { useAuth } from "@/context/AuthProvider";
 import { normalizeBaseUrl, parseModelKey } from "@/utils/modelUtils";
 import { loadLastUsedModel } from "@/utils/storageUtils";
@@ -12,18 +13,15 @@ import { isTorContext } from "@/utils/torUtils";
 export function useActions() {
   const chat = useChat();
   const { isAuthenticated } = useAuth();
-  const {
-    messages,
-    setMessages,
-    activeConversationId,
-    getActiveConversationId,
-    selectedModel,
-    setIsLoginModalOpen,
-    editingMessageIndex,
-    editingContent,
-    setEditingMessageIndex,
-    setEditingContent,
-  } = chat;
+  const { setFace } = useUi();
+  const { messages, setMessages, activeConversationId, getActiveConversationId, selectedModel } = chat;
+  // the logic asks for a sign in when there is no key yet: the composer turns to it
+  const askSignIn = useCallback(
+    (open: boolean) => {
+      if (open) setFace("auth");
+    },
+    [setFace]
+  );
 
   const forcedBaseUrl = useCallback(() => {
     if (!selectedModel) return "";
@@ -47,10 +45,10 @@ export function useActions() {
         selectedModel,
         forcedBaseUrl(),
         isAuthenticated,
-        setIsLoginModalOpen,
+        askSignIn,
         getActiveConversationId
       ),
-    [chat.sendMessage, messages, setMessages, activeConversationId, selectedModel, forcedBaseUrl, isAuthenticated]
+    [chat.sendMessage, messages, setMessages, activeConversationId, selectedModel, forcedBaseUrl, isAuthenticated, askSignIn]
   );
 
   const retry = useCallback(
@@ -67,21 +65,24 @@ export function useActions() {
     [chat.retryMessage, messages, setMessages, selectedModel, forcedBaseUrl, activeConversationId]
   );
 
+  // the edit box closes once the new version is in
   const saveEdit = useCallback(
-    () =>
+    (index: number, text: string, close: () => void) =>
       chat.saveInlineEdit(
-        editingMessageIndex,
-        editingContent,
+        index,
+        text,
         messages,
         setMessages,
-        (i) => editingMessageIndex !== null && setEditingMessageIndex(i),
-        setEditingContent,
+        (i) => {
+          if (i === null) close();
+        },
+        () => {},
         selectedModel,
         forcedBaseUrl(),
         activeConversationId,
         getActiveConversationId
       ),
-    [chat.saveInlineEdit, editingMessageIndex, editingContent, messages, setMessages, selectedModel, forcedBaseUrl, activeConversationId]
+    [chat.saveInlineEdit, messages, setMessages, selectedModel, forcedBaseUrl, activeConversationId]
   );
 
   return { send, retry, saveEdit };

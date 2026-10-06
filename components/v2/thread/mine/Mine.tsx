@@ -38,7 +38,7 @@ export const Mine = memo(function Mine({
   editing: boolean;
   fresh: boolean;
   onVersion: Go;
-  onEdit: (index: number) => void;
+  onEdit: (index: number | null) => void;
 }) {
   const parsed = useMemo(() => parseContent(msg.content), [msg.content]);
   const text = textOf(msg.content);
@@ -82,7 +82,7 @@ export const Mine = memo(function Mine({
         )}
       </div>
       {editing ? (
-        <Edit />
+        <Edit index={index} initial={text} onClose={() => onEdit(null)} />
       ) : (
         <>
           <div
