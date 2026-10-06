@@ -41,7 +41,7 @@ export function runItem(
     runSync: () => Promise<void>;
     cancelPreview: () => void;
     close: (how?: Exit) => void;
-  } & Pick<ReturnType<typeof useChat>, "loadConversation" | "startNewConversation" | "setInputMessage">
+  } & Pick<ReturnType<typeof useChat>, "loadConversation" | "startNewConversation"> & { setInputMessage: (text: string) => void }
 ) {
   if (!x) return;
   if (x.kind === "action" && x.act === "room") {

@@ -3,6 +3,7 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useChat } from "@/context/ChatProvider";
+import { useAnswering } from "@/features/chat/view";
 import { Icon } from "./icons";
 import { useUi } from "./ui";
 import { useRoom } from "./room/RoomProvider";
@@ -12,6 +13,7 @@ import Composer from "./composer/Composer";
 import { land } from "./composer/landing";
 import ModelPicker from "./picker/ModelPicker";
 import Palette from "./palette/Palette";
+import { ChatModelProvider } from "./useChatModel";
 import Settings from "./settings/Settings";
 import Greeting, { Resume } from "./Greeting";
 import { useCountUp, useMoney } from "./useMoney";
@@ -191,7 +193,8 @@ function Panel() {
 }
 
 export default function Shell() {
-  const { isLoading, startNewConversation } = useChat();
+  const { startNewConversation } = useChat();
+  const answering = useAnswering() !== null;
   const conversations = useConversations();
   const ui = useUi();
   const { isSidebarCollapsed, setIsSidebarCollapsed } = ui;
@@ -254,25 +257,27 @@ export default function Shell() {
 
   // the room holds still while words arrive
   useEffect(() => {
-    if (!isLoading) room.setPhase("idle");
-  }, [isLoading, room]);
+    if (!answering) room.setPhase("idle");
+  }, [answering, room]);
 
   return (
-    <div className="v2">
-      <div
-        className="room"
-        ref={roomEl}
-        data-drawer={ui.drawer ? "open" : undefined}
-        // a phone: a sheet over the panel lets the panel step back into the room
-        data-back={phone && (ui.picker || ui.palette) ? "" : undefined}
-      >
-        <Rail />
-        <div className="drawer-veil" onClick={() => ui.setDrawer(false)} aria-hidden="true" />
-        <Panel />
+    <ChatModelProvider>
+      <div className="v2">
+        <div
+          className="room"
+          ref={roomEl}
+          data-drawer={ui.drawer ? "open" : undefined}
+          // a phone: a sheet over the panel lets the panel step back into the room
+          data-back={phone && (ui.picker || ui.palette) ? "" : undefined}
+        >
+          <Rail />
+          <div className="drawer-veil" onClick={() => ui.setDrawer(false)} aria-hidden="true" />
+          <Panel />
+        </div>
+        <ModelPicker />
+        <Palette />
+        <Settings />
       </div>
-      <ModelPicker />
-      <Palette />
-      <Settings />
-    </div>
+    </ChatModelProvider>
   );
 }

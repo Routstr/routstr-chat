@@ -11,6 +11,8 @@ import type { ReplyCosts } from "./costs";
 import { RequestRun, type Transport } from "./run";
 
 const ROOT_ID = "0".repeat(64);
+// a signer that never answers must not hold a turn: main gave up after 5 s
+const SAVE_WAIT_MS = 10_000;
 
 interface ChatDeps {
   history: ChatHistory;
@@ -81,6 +83,9 @@ export class ChatService {
 
   /** A turn of this conversation has not saved its answer yet. */
   asking = (conversationId: string): boolean => this.claims.has(conversationId);
+
+  /** The conversation whose turn started last, until it has saved its answer. */
+  answering = (): string | null => [...this.claims.keys()].at(-1) ?? null;
 
   /** A turn of this account has not finished paying yet. */
   busy = (): boolean => this.open.size > 0;
@@ -154,10 +159,12 @@ export class ChatService {
         { role: "user", content },
         claim.signal
       );
-      question = await this.deps.history.save(conversationId, {
-        ...kept,
-        _prevId: parentAt(branch, depth),
-      });
+      question = await saving(
+        this.deps.history.save(conversationId, {
+          ...kept,
+          _prevId: parentAt(branch, depth),
+        })
+      );
     } catch (error) {
       this.release(conversationId);
       throw error;
@@ -180,7 +187,7 @@ export class ChatService {
     history: Message[],
     parentId: string
   ): Turn {
-    const run = new RequestRun();
+    const run = new RequestRun(parentId);
     if (claim.signal.aborted) run.stop();
     this.runs.set(conversationId, run);
     const settled = run.start(this.transport(history, model));
@@ -233,11 +240,13 @@ export class ChatService {
     try {
       // Stop ends a slow file upload; the copy on this device is kept
       const kept = await this.deps.attachments.forSave(message, claim.signal);
-      const saved = await this.deps.history.save(conversationId, {
-        ...kept,
-        _prevId: parentId,
-        _modelId: model.id,
-      });
+      const saved = await saving(
+        this.deps.history.save(conversationId, {
+          ...kept,
+          _prevId: parentId,
+          _modelId: model.id,
+        })
+      );
       run.saved(saved);
       return saved;
     } catch (error) {
@@ -268,6 +277,18 @@ export class ChatService {
   private notify(): void {
     this.listeners.forEach((listener) => listener());
   }
+}
+
+/** A save, given up after SAVE_WAIT_MS. Stop does not end it: what was
+ *  written is kept. It may still land later; the turn is not held for it. */
+function saving<T>(save: Promise<T>): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error("the signer did not answer")),
+      SAVE_WAIT_MS
+    );
+    save.then(resolve, reject).finally(() => clearTimeout(timer));
+  });
 }
 
 /** The parent of a new version at `depth`: the replaced message's own

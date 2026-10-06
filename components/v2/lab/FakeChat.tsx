@@ -7,22 +7,22 @@
 
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { ChatContext } from "@/context/ChatProvider";
+import { CatalogContext } from "@/features/catalog/view";
+import { AccountChatContext, type AccountChatView } from "@/features/chat/view";
 import { HistoryContext, type HistoryService } from "@/features/history/view";
-import type { Conversation, Message, MessageAttachment } from "@/types/chat";
-import type { Model } from "@/types/models";
+import type { Conversation, Message } from "@/types/chat";
 import { DEFAULT_MINT_URL } from "@/lib/utils";
 import { CatalogStandInContext } from "../picker/useCatalog";
-import { LAB_MODELS, PICKS, labRoutes } from "./catalog";
+import { PICKS, labRoutes } from "./catalog";
 
 const now = Date.now();
 const H = 3_600_000;
 const D = 24 * H;
 
-export const MODELS: Model[] = LAB_MODELS;
 
 const ANSWER_1 = `A **Cashu mint** is a server that issues ecash: signed tokens that stand in for sats, which you hold on your own device. It can see that a token is valid when you spend it, but not which issuance it came from.`;
 
-const ANSWER_2 = `## Blind signatures, briefly
+export const ANSWER_2 = `## Blind signatures, briefly
 
 A blind signature lets the mint sign a token it never sees. Your wallet picks a random secret, maps it to a point on the curve, then hides it behind a blinding factor. The mint signs that blinded point and hands it back; your wallet strips the factor off, leaving a valid signature on the untouched secret.
 
@@ -48,7 +48,7 @@ When you spend that token, the mint checks its own key over a secret it has neve
 
 The math is the Diffie-Hellman equality $C = kY$, checked without ever learning how $Y$ was hidden.[1]`;
 
-const THINKING = `**Clarifying the scheme**
+export const THINKING = `**Clarifying the scheme**
 The user wants ecash blinding explained and then shown in Python. Cashu uses BDHKE (blind Diffie-Hellman key exchange), not RSA blind signatures, so the example should use curve points.
 
 **Planning the example**
@@ -57,7 +57,7 @@ Show hash_to_curve, the blinding factor r, the mint's signature C_ = k*B_, and t
 **Checking the claim**
 Unlinkability comes from r being uniformly random: B_ reveals nothing about Y. Worth a one-line table on who sees what.`;
 
-const STREAM_3 = `Good question. The **blinding factor** is what makes the mint's view useless for tracking.
+export const STREAM_3 = `Good question. The **blinding factor** is what makes the mint's view useless for tracking.
 
 1. Your wallet picks \`r\` fresh for every token, uniformly at random.
 2. \`B_ = Y + rG\` is then a uniformly random point too, whatever \`Y\` is.
@@ -125,14 +125,25 @@ export type FakeHistory = HistoryService & { update(chats: Conversation[]): void
 export interface FakeHistoryHooks {
   remove(id: string): void;
   sync(): Promise<void>;
+  /** A message saved into a chat; a new id starts a chat. */
+  append(id: string, message: Message): void;
 }
 
-export function FakeChatProvider({ children, history }: { children: React.ReactNode; history: (hooks: FakeHistoryHooks) => FakeHistory }) {
+export function FakeChatProvider({
+  children,
+  history,
+  chat,
+  catalog,
+}: {
+  children: React.ReactNode;
+  history: (hooks: FakeHistoryHooks) => FakeHistory;
+  /** The real engine over the lab's chats (app/lab/labChat.ts). */
+  chat: (history: FakeHistory) => AccountChatView;
+  catalog: React.ContextType<typeof CatalogContext>;
+}) {
   const params = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : new URLSearchParams();
   const [conversations, setConversations] = useState<Conversation[]>(() => (params.get("fresh") ? [] : seed()));
   const [activeId, setActiveId] = useState<string | null>(() => (params.get("fresh") ? null : params.get("chat") ?? "c1"));
-  const [messages, setMessagesState] = useState<Message[]>(() => (params.get("fresh") ? [] : (seed().find((c) => c.id === (params.get("chat") ?? "c1"))?.messages ?? [])));
-  const [inputMessage, setInputMessage] = useState("");
   // Sync in the lab: busy for a moment, and one chat arrives from "another device"
   const syncNow = useCallback(async () => {
     await sleep(1600);
@@ -152,26 +163,20 @@ export function FakeChatProvider({ children, history }: { children: React.ReactN
           ]
     );
   }, []);
+  const append = useCallback((id: string, message: Message) => {
+    setConversations((cs) =>
+      cs.some((c) => c.id === id)
+        ? cs.map((c) => (c.id === id ? { ...c, messages: [...c.messages, message] } : c))
+        : [{ id, title: typeof message.content === "string" ? message.content.slice(0, 48) : "New chat", messages: [message] }, ...cs]
+    );
+  }, []);
   // the screens read chats from history: the lab's chats stand behind it
-  const [lab] = useState(() => history({ remove: (id) => setConversations((cs) => cs.filter((c) => c.id !== id)), sync: syncNow }));
+  const [lab] = useState(() => history({ remove: (id) => setConversations((cs) => cs.filter((c) => c.id !== id)), sync: syncNow, append }));
   useLayoutEffect(() => lab.update(conversations), [lab, conversations]);
-  // what the real bridge hands the screens: the branch shown, then the last request's notes
+  const [account] = useState(() => chat(lab));
+  // what the bridge hands the screens: the branch shown
   const slots = useSyncExternalStore(lab.subscribe, () => (activeId ? lab.getThread(activeId) : undefined), () => undefined);
-  const shown = useMemo(() => {
-    const branch = slots?.map((s) => s.displayed) ?? [];
-    const after = branch.at(-1)?._createdAt ?? 0;
-    return [...branch, ...messages.filter((m) => m.role === "system" && (m._createdAt ?? 0) > after)];
-  }, [slots, messages]);
-  const [uploadedAttachments, setUploadedAttachments] = useState<MessageAttachment[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isPaymentProcessing, setIsPaymentProcessing] = useState(false);
-  const [stream, setStream] = useState("");
-  const [thinking, setThinking] = useState("");
-  const [streamingConversationId, setStreamingConversationId] = useState<string | null>(null);
-  const [selectedModel, setSelectedModel] = useState<Model | null>(() => MODELS.find((m) => m.id === "anthropic/claude-sonnet-5") ?? null);
-  const [currentKey, setCurrentKey] = useState<string | null>("anthropic/claude-sonnet-5");
-  const loadingModels = !!params.get("loading");
-  const [configuredModels, setConfiguredModels] = useState<string[]>(["anthropic/claude-sonnet-5", "openai/gpt-5", "deepseek/deepseek-v3.2@@https://api.nonkycai.com/"]);
+  const shown = useMemo(() => slots?.map((s) => s.displayed) ?? [], [slots]);
   const [balance, setBalance] = useState(() => Number(params.get("balance") ?? 2140));
   // ?late=<ms>: the balance arrives a moment after the page, as a wallet loading from its mint and relays does
   const [late, setLate] = useState(() => params.has("late"));
@@ -186,124 +191,25 @@ export function FakeChatProvider({ children, history }: { children: React.ReactN
     const t = window.setTimeout(() => setBalance((b) => b + 1000), Number(params.get("bump")) || 4000);
     return () => window.clearTimeout(t);
   }, []);
-  const abort = useRef(false);
   const convRef = useRef(activeId);
   useLayoutEffect(() => {
     convRef.current = activeId;
   });
 
-  const setMessages = useCallback((m: Message[]) => {
-    setMessagesState(m);
-    setConversations((cs) => cs.map((c) => (c.id === convRef.current ? { ...c, messages: m } : c)));
-  }, []);
-
-  const run = useCallback(
-    async (base: Message[], convId: string, prevId?: string) => {
-      abort.current = false;
-      setIsLoading(true);
-      setStreamingConversationId(convId);
-      setIsPaymentProcessing(true);
-      await sleep(700);
-      if (params.get("fail")) {
-        setIsPaymentProcessing(false);
-        await sleep(2400);
-        const err = msg("system", "The provider did not respond to this request.", Date.now(), { _prevId: prevId });
-        setMessages([...base, err]);
-        setIsLoading(false);
-        setStreamingConversationId(null);
-        return;
-      }
-      await sleep(1600);
-      setIsPaymentProcessing(false);
-      const reasons = !params.get("nothink");
-      if (reasons) {
-        const words = THINKING.split(/(\s+)/);
-        let acc = "";
-        for (let i = 0; i < words.length && !abort.current; i += 3) {
-          acc += words.slice(i, i + 3).join("");
-          setThinking(acc);
-          await sleep(40 + Math.random() * 40);
-        }
-      }
-      const answer = base.length > 3 ? STREAM_3 : ANSWER_2;
-      let acc = "";
-      const parts = answer.split(/(\s+)/);
-      for (let i = 0; i < parts.length && !abort.current; ) {
-        // bursty: the network hands over a few words, then pauses
-        const n = 2 + Math.floor(Math.random() * 10);
-        acc += parts.slice(i, i + n).join("");
-        i += n;
-        setStream(acc);
-        await sleep(40 + Math.random() * 160);
-      }
-      const final = msg("assistant", acc, Date.now(), {
-        _modelId: selectedModel?.id,
-        satsSpent: 18 + Math.round(Math.random() * 20),
-        _prevId: prevId,
-      });
-      // as the real app: a stop keeps the words that came, and only those
-      const stopped = msg("system", "Generation stopped.", Date.now() + 1);
-      const out = !abort.current ? [...base, final] : acc.trim() ? [...base, final, stopped] : [...base, stopped];
-      setMessages(out);
-      setIsLoading(false);
-      setStream("");
-      setThinking("");
-      setStreamingConversationId(null);
-    },
-    [setMessages, selectedModel]
-  );
-
-  const value = useMemo(() => {
-    const base = {
+  const value = useMemo(
+    () => ({
       __proto__: UNFAKED,
       activeConversationId: activeId,
       messages: shown,
-      setMessages,
-      startNewConversation: () => {
-        setActiveId(null);
-        setMessagesState([]);
-      },
-      loadConversation: (id: string) => {
-        setActiveId(id);
-        setMessagesState(conversations.find((c) => c.id === id)?.messages ?? []);
-      },
+      startNewConversation: () => setActiveId(null),
+      loadConversation: (id: string) => setActiveId(id),
       clearConversations: () => setConversations([]),
       getActiveConversationId: () => convRef.current,
-      models: loadingModels ? [] : MODELS,
-      selectedModel,
-      setSelectedModel,
-      isLoadingModels: loadingModels,
-      hasPickedModel: !loadingModels,
-      fetchModels: async () => {},
-      handleModelChange: (id: string, key?: string) => {
-        const m = MODELS.find((x) => x.id === id);
-        if (!m) return;
-        setSelectedModel(m);
-        setCurrentKey(key ?? id);
-      },
-      lowBalanceWarningForModel: balance <= 0,
       isSettingsOpen: false,
       setIsSettingsOpen: () => {},
       isSidebarOpen: false,
       setIsSidebarOpen: () => {},
       isMobile: false,
-      configuredModels,
-      setConfiguredModels,
-      toggleConfiguredModel: (k: string) => setConfiguredModels((c) => (c.includes(k) ? c.filter((x) => x !== k) : [...c, k])),
-      modelProviderMap: {},
-      setModelProviderFor: () => {},
-      inputMessage,
-      setInputMessage,
-      uploadedAttachments,
-      setUploadedAttachments,
-      isLoading,
-      setIsLoading,
-      isPaymentProcessing,
-      streamingConversationId,
-      getStreamingContentFor: (id: string | null) => (id === streamingConversationId ? stream : ""),
-      getThinkingContentFor: (id: string | null) => (id === streamingConversationId ? thinking : ""),
-      streamingContent: stream,
-      thinkingContent: thinking,
       balance: late ? 0 : balance,
       setBalance,
       isBalanceLoading: late,
@@ -315,53 +221,19 @@ export function FakeChatProvider({ children, history }: { children: React.ReactN
       transactionHistory: [],
       setTransactionHistory: () => {},
       messagesEndRef: { current: null },
-      stopGeneration: () => {
-        abort.current = true;
-      },
-      returnHeld: async () => {},
-      refundAllApiKeys: async () => ({ totalRefunded: 0, totalFailed: 0, results: [] }),
-      sendMessage: async () => {
-        if (!inputMessage.trim()) return;
-        let convId = activeId;
-        if (!convId) {
-          convId = `n${Date.now()}`;
-          const title = inputMessage.slice(0, 48);
-          setConversations((cs) => [{ id: convId!, title, messages: [] }, ...cs]);
-          setActiveId(convId);
-          convRef.current = convId;
-        }
-        const last = [...shown].reverse().find((m) => m.role !== "system");
-        const user = msg("user", inputMessage, Date.now(), { _prevId: last?._eventId });
-        const next = [...messages, user];
-        setInputMessage("");
-        setUploadedAttachments([]);
-        setMessages(next);
-        void run(next, convId, user._eventId);
-      },
-      retryMessage: (index: number) => {
-        const target = shown[index];
-        const base = shown.slice(0, index);
-        setMessages(base);
-        void run(base, activeId ?? "c1", target?._prevId);
-      },
-      saveInlineEdit: async (index: number | null, text: string, _m: Message[], _s: unknown, setIndex: (i: number | null) => void) => {
-        if (index === null) return;
-        const old = shown[index];
-        const edited = msg("user", text, Date.now(), { _prevId: old._prevId });
-        const base = [...shown.slice(0, index + 1), edited];
-        setIndex(null);
-        setMessages(base);
-        void run(base, activeId ?? "c1", edited._eventId);
-      },
-    };
-    return base;
-  }, [conversations, activeId, shown, setMessages, selectedModel, balance, late, configuredModels, inputMessage, uploadedAttachments, isLoading, isPaymentProcessing, streamingConversationId, stream, thinking, run]);
+    }),
+    [activeId, shown, balance, late]
+  );
 
-  const standIn = useMemo(() => ({ routes: labRoutes, picks: PICKS, currentKey }), [currentKey]);
+  const standIn = useMemo(() => ({ routes: labRoutes, picks: PICKS }), []);
   return (
     <ChatContext.Provider value={value as never}>
       <HistoryContext.Provider value={lab}>
-        <CatalogStandInContext.Provider value={standIn}>{children}</CatalogStandInContext.Provider>
+        <AccountChatContext.Provider value={account}>
+          <CatalogContext.Provider value={catalog}>
+            <CatalogStandInContext.Provider value={standIn}>{children}</CatalogStandInContext.Provider>
+          </CatalogContext.Provider>
+        </AccountChatContext.Provider>
       </HistoryContext.Provider>
     </ChatContext.Provider>
   );

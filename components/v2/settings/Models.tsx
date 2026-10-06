@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { useChat } from "@/context/ChatProvider";
+import { useCatalogModels, useCatalogService } from "@/features/catalog/view";
 import { renderCompanyIcon } from "@/components/v2/picker/display";
 import { getModelCompanyId } from "@/components/v2/picker/modelCompanies";
 import { useDisabledProviders } from "@/hooks/useDisabledProviders";
@@ -18,6 +18,7 @@ import {
 import type { Model } from "@/types/models";
 import { Icon } from "../icons";
 import { shortModelName } from "../format";
+import { useModelPick } from "../pick";
 import {
   Btn,
   Fold,
@@ -102,7 +103,9 @@ function useProviders() {
 }
 
 export default function Models() {
-  const chat = useChat();
+  const pick = useModelPick();
+  const { models } = useCatalogModels();
+  const catalog = useCatalogService();
   const toast = useToast();
   const tor = isTorContext();
   const {
@@ -118,9 +121,9 @@ export default function Models() {
   /* ── favorites ─────────────────────────────────────────────────────────── */
   const favs = useMemo(
     () =>
-      chat.configuredModels.map((key) => {
+      pick.configured.map((key) => {
         const { id, base } = parseModelKey(key);
-        let model = chat.models.find((m) => m.id === id);
+        let model = models.find((m) => m.id === id);
         if (!model && base) {
           try {
             model = (getCachedProviderModels(base) as Model[] | null)?.find(
@@ -132,26 +135,26 @@ export default function Models() {
         }
         return { key, id, base, model };
       }),
-    [chat.configuredModels, chat.models]
+    [pick.configured, models]
   );
   const goneFavs = useGone();
   const star = (key: string, label?: string) => {
-    const i = chat.configuredModels.indexOf(key);
-    chat.toggleConfiguredModel(key);
+    const i = pick.configured.indexOf(key);
+    pick.toggle(key);
     // unstarred from the list above: its row stays a moment with the way back
     if (i > -1 && label)
       goneFavs.drop(
         key,
         label,
         favs.findIndex((f) => f.key === key),
-        () => chat.toggleConfiguredModel(key)
+        () => pick.toggle(key)
       );
   };
   const [clearAsk, setClearAsk] = useState(false);
 
   /* ── providers ─────────────────────────────────────────────────────────── */
   const refresh = () =>
-    window.setTimeout(() => void chat.fetchModels(0).catch(() => {}), 0);
+    window.setTimeout(() => void catalog?.refresh(), 0);
   const toggleProv = (url: string) => {
     const n = norm(url);
     if (!n) return;
@@ -199,8 +202,8 @@ export default function Models() {
                     : f.id;
                   const base =
                     f.base ??
-                    chat.modelProviderMap[f.key] ??
-                    chat.modelProviderMap[f.id] ??
+                    pick.pins[f.key] ??
+                    pick.pins[f.id] ??
                     null;
                   return (
                     <div className="st-it" key={f.key}>
@@ -255,14 +258,14 @@ export default function Models() {
                         <Btn onClick={() => setClearAsk(false)}>Keep them</Btn>
                         <Btn
                           onClick={() => {
-                            const was = chat.configuredModels;
-                            chat.setConfiguredModels([]);
+                            const was = pick.configured;
+                            pick.setConfigured([]);
                             setClearAsk(false);
                             goneFavs.drop(
                               "__all",
                               plural(was.length, "favorite"),
                               0,
-                              () => chat.setConfiguredModels(was)
+                              () => pick.setConfigured(was)
                             );
                           }}
                         >
@@ -357,21 +360,23 @@ export default function Models() {
 
 /* Star a model without leaving settings: type a few letters, star a match. */
 function FavAdder() {
-  const chat = useChat();
+  const pick = useModelPick();
+  const { models } = useCatalogModels();
+  const catalog = useCatalogService();
   const [q, setQ] = useState("");
-  const favIds = useMemo(() => new Set(chat.configuredModels.map((k) => parseModelKey(k).id)), [chat.configuredModels]);
+  const favIds = useMemo(() => new Set(pick.configured.map((k) => parseModelKey(k).id)), [pick.configured]);
   const matches = useMemo(() => {
     const qq = q.trim().toLowerCase();
     if (!qq) return [];
     const seen = new Set<string>();
-    return chat.models
+    return models
       .filter((m) => {
         if (seen.has(m.id) || favIds.has(m.id)) return false;
         seen.add(m.id);
         return `${shortModelName(m.name, m.id)} ${m.id}`.toLowerCase().includes(qq);
       })
       .slice(0, 6);
-  }, [q, chat.models, favIds]);
+  }, [q, models, favIds]);
 
   return (
     <>
@@ -407,7 +412,7 @@ function FavAdder() {
                       aria-pressed="false"
                       aria-label={`Add ${name} to favorites`}
                       title="Add to favorites"
-                      onClick={() => chat.toggleConfiguredModel(m.id)}
+                      onClick={() => pick.toggle(m.id)}
                     >
                       <Icon name="star" size={16} />
                     </button>

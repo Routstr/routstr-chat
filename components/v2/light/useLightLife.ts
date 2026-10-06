@@ -1,14 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import { useChat } from "@/context/ChatProvider";
+import { useAsking, useRun } from "@/features/chat/view";
+import { useDraft } from "../ui";
 import { useMoney } from "../useMoney";
-import { isStopped } from "../thread/Trouble";
 import type { LightPulse, LightState } from "./Light";
 
 /** What the app is doing, as your light's state and its pulses (one ring each). */
 export function useLightLife(): { state: LightState; pulse: LightPulse } {
-  const { isLoading, inputMessage, messages, activeConversationId, getStreamingContentFor } = useChat();
+  const { activeConversationId } = useChat();
+  const asking = useAsking(activeConversationId);
+  const run = useRun(activeConversationId);
+  const { text } = useDraft();
   const money = useMoney();
-  const streaming = isLoading ? getStreamingContentFor(activeConversationId) : "";
+  const streaming = asking ? run?.text ?? "" : "";
   const [after, setAfter] = useState<"done" | "error" | null>(null);
   const [online, setOnline] = useState(true);
   const [pulse, setPulse] = useState<LightPulse>(null);
@@ -30,17 +34,16 @@ export function useLightLife(): { state: LightState; pulse: LightPulse } {
   const wasLoading = useRef(false);
   const endedAt = useRef(0);
   useEffect(() => {
-    if (isLoading && !wasLoading.current) ring("send");
-    if (!isLoading && wasLoading.current) {
+    if (asking && !wasLoading.current) ring("send");
+    if (!asking && wasLoading.current) {
       endedAt.current = Date.now();
-      const last = messages[messages.length - 1];
-      setAfter(last?.role === "system" && !isStopped(last) ? "error" : "done");
+      setAfter(run?.phase === "failed" ? "error" : "done");
       const t = window.setTimeout(() => setAfter(null), 2000);
-      wasLoading.current = isLoading;
+      wasLoading.current = asking;
       return () => window.clearTimeout(t);
     }
-    wasLoading.current = isLoading;
-  }, [isLoading]);
+    wasLoading.current = asking;
+  }, [asking]);
 
   // words arriving ring softly, at most one every 600 ms
   const lastWord = useRef(0);
@@ -65,16 +68,16 @@ export function useLightLife(): { state: LightState; pulse: LightPulse } {
   useEffect(() => {
     const d = money.total - lastTotal.current;
     lastTotal.current = money.total;
-    if (!settled.current || d < 1 || isLoading || Date.now() - endedAt.current < 15000) return;
+    if (!settled.current || d < 1 || asking || Date.now() - endedAt.current < 15000) return;
     ring("gold");
   }, [money.total]);
 
   const state: LightState = !online
     ? "offline"
-    : isLoading
+    : asking
       ? streaming
         ? "stream"
         : "waiting"
-      : after ?? (inputMessage.trim() ? "typing" : "idle");
+      : after ?? (text.trim() ? "typing" : "idle");
   return { state, pulse };
 }

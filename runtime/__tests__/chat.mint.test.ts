@@ -233,6 +233,35 @@ describe("chat with real money", () => {
     chat.dispose();
   });
 
+
+  it("shows a key stopped as its token was made as held, and a refund brings all of it back", async () => {
+    const { chat, wallet } = await account();
+    const send = wallet.purse.send;
+    // Stop lands the moment the top-up token exists, before the provider answered
+    wallet.purse.send = async (mint, sats, handoff) => {
+      const token = await send(mint, sats, handoff);
+      chat.chat.stop("c");
+      return token;
+    };
+    const turn = await chat.chat.send("c", "go [kit:slow=3000]", model());
+    await turn.reply;
+    await turn.settled;
+
+    expect(turn.run.getSnapshot().phase).toBe("stopped");
+    expect(wallet.sats).toBeLessThan(300);
+    expect(chat.held.get()).toBe(300 - wallet.sats);
+    await vi.waitFor(
+      async () => {
+        await chat.refund();
+        expect(wallet.sats).toBe(300);
+      },
+      { timeout: 20_000, interval: 1000 }
+    );
+    expect(chat.held.get()).toBe(0);
+    await settledAndUnspent(wallet);
+    chat.dispose();
+  });
+
   it("loses nothing when the account is put away mid-reply", async () => {
     const alice = await account("alice");
 

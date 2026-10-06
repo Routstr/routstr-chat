@@ -7,12 +7,12 @@ import { toast } from "sonner";
 import { AuthProvider } from "@/context/AuthProvider";
 import { useSession } from "@/features/session/view";
 import { ChatProvider, useChat } from "@/context/ChatProvider";
+import { useAccountChat, useAnswering } from "@/features/chat/view";
 import { useConversations, useHistoryLoaded } from "@/features/history/view";
 import { KeepAliveProvider, useKeepAliveContext } from "@/components/pwa/KeepAliveProvider";
 import { QueryTimeoutModal } from "@/components/QueryTimeoutModal";
 import { useCashuToken, useCashuWallet } from "@/features/wallet";
 import { useAutoRefill } from "@/hooks/useAutoRefill";
-import { useAutoReturn } from "./wallet/useAutoReturn";
 import { RoomProvider } from "./room/RoomProvider";
 import { UiProvider, useUi } from "./ui";
 import { useEnsureAccount } from "./useEnsureAccount";
@@ -29,12 +29,9 @@ function Behaviour() {
   const searchParams = useSearchParams();
   const { pubkey, ready: authChecked } = useSession();
   const isAuthenticated = pubkey !== null;
-  const {
-    balance,
-    isLoading: isStreaming,
-    loadConversation,
-    activeConversationId,
-  } = useChat();
+  const { balance, loadConversation, activeConversationId } = useChat();
+  const isStreaming = useAnswering() !== null;
+  const accountChat = useAccountChat();
   const conversations = useConversations();
   const conversationsLoaded = useHistoryLoaded();
   const ui = useUi();
@@ -58,7 +55,9 @@ function Behaviour() {
 
   // only once the wallet has loaded, so a zero on boot is not mistaken for empty
   useAutoRefill({ balance, isWalletLoaded: !isWalletLoading });
-  useAutoReturn(!isWalletLoading);
+
+  // leaving a chat hands back what providers still hold for this account
+  useEffect(() => accountChat?.viewing(activeConversationId), [accountChat, activeConversationId]);
 
   const qs = searchParams.toString();
   const chatIdFromUrl = searchParams.get("chatId");

@@ -2,19 +2,20 @@
 
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useChat } from "@/context/ChatProvider";
+import { useAccountChat, useAsking, useHeldCredit } from "@/features/chat/view";
+import { useCatalogService } from "@/features/catalog/view";
+import { useThread } from "@/features/history/view";
 import { useSession } from "@/features/session/view";
 import { getModelCompanyId } from "@/components/v2/picker/modelCompanies";
 import { renderCompanyIcon } from "@/components/v2/picker/display";
 import { normalizeModality } from "@/components/v2/picker/modality";
-import { providerManager } from "@/sdk/sharedStore";
-import { isTorContext } from "@/utils/torUtils";
 import type { MessageAttachment } from "@/types/chat";
 import type { Model } from "@/types/models";
-import { normalizeBaseUrl, parseModelKey } from "@/utils/modelUtils";
-import { loadLastUsedModel } from "@/utils/storageUtils";
+import { isModelAvailable } from "@/utils/modelUtils";
 import { Icon } from "../icons";
-import { useChipRef, useUi } from "../ui";
+import { useChipRef, useDraft, useUi } from "../ui";
 import { useActions } from "../useActions";
+import { useChatModel } from "../useChatModel";
 import { useMoney } from "../useMoney";
 import { sats, satUnit, shortModelName, textOf } from "../format";
 import { useAttachments } from "./useAttachments";
@@ -34,6 +35,7 @@ const reduced = () => window.matchMedia("(prefers-reduced-motion: reduce)").matc
  *  length. It holds still while you type (settling) and settles 600ms after
  *  the last key; a model or a file change re-rolls it at once. */
 function useEstimate(model: Model | null, draft: string, history: string, files: string) {
+  const catalog = useCatalogService();
   const [value, setValue] = useState<number | null>(null);
   const [settling, setSettling] = useState(false);
   const lastDraft = useRef<string | null>(null);
@@ -48,14 +50,14 @@ function useEstimate(model: Model | null, draft: string, history: string, files:
     lastDraft.current = draft;
     if (typed) setSettling(true);
     const t = window.setTimeout(() => {
-      const ranked = providerManager.getProviderPriceRankingForModel(model.id, { torMode: isTorContext() });
+      const ranked = catalog?.routes(model.id) ?? [];
       const priced = (ranked[0]?.model as unknown as Model | undefined) ?? model;
       const v = estimateSats(priced, promptTokens(`${history} ${files}`, draft));
       setValue(v > 0 ? v : null);
       setSettling(false);
     }, typed ? 600 : 0);
     return () => window.clearTimeout(t);
-  }, [model, draft, history, files]);
+  }, [model, draft, history, files, catalog]);
   return { value, settling };
 }
 
@@ -140,24 +142,22 @@ function Tile({ a, reading, onRemove, onTip }: { a: MessageAttachment; reading: 
 }
 
 export default function Composer({ centred }: { centred: boolean }) {
-  const chat = useChat();
-  const {
-    inputMessage,
-    setInputMessage,
-    uploadedAttachments,
-    setUploadedAttachments,
-    isLoading,
-    isLoadingModels,
-    hasPickedModel,
-    isWalletLoading,
-    stopGeneration,
-    selectedModel,
-    lowBalanceWarningForModel,
-    messages,
-  } = chat;
+  const { activeConversationId, isWalletLoading } = useChat();
+  const { text: inputMessage, setText: setInputMessage, attachments: uploadedAttachments, setAttachments: setUploadedAttachments } = useDraft();
+  const { model: selectedModel, chosen, loading: isLoadingModels } = useChatModel();
+  const catalog = useCatalogService();
+  const chat = useAccountChat()?.chat;
+  const isLoading = useAsking(activeConversationId);
+  const stopGeneration = useCallback(() => {
+    if (activeConversationId) chat?.stop(activeConversationId);
+  }, [chat, activeConversationId]);
+  const slots = useThread(activeConversationId);
   const isAuthenticated = useSession().pubkey !== null;
   const ui = useUi();
   const money = useMoney();
+  // what a provider holds for you pays the next reply first
+  const held = useHeldCredit();
+  const lowBalanceWarningForModel = !!selectedModel && !isModelAvailable(selectedModel, money.total + held);
   const { send } = useActions();
   const field = useRef<HTMLTextAreaElement>(null);
   const island = useRef<HTMLDivElement>(null);
@@ -191,7 +191,7 @@ export default function Composer({ centred }: { centred: boolean }) {
   }, [problem]);
   const { addFiles, remove, reading } = useAttachments(setUploadedAttachments, say);
 
-  const history = useMemo(() => messages.map((m) => textOf(m.content)).join(" "), [messages]);
+  const history = useMemo(() => (slots ?? []).map((s) => textOf(s.displayed.content)).join(" "), [slots]);
   const fileText = useMemo(() => uploadedAttachments.map((a) => a.textContent ?? "").join(" "), [uploadedAttachments]);
   const estimate = useEstimate(selectedModel, inputMessage, history, fileText);
 
@@ -250,7 +250,7 @@ export default function Composer({ centred }: { centred: boolean }) {
     (m) => normalizeModality(m) === "image"
   );
   // "loading" lasts until the app has made its own pick, not just until models arrive
-  const modelState = selectedModel ? "ready" : isAuthenticated && (busy || !hasPickedModel) ? "loading" : "none";
+  const modelState = selectedModel ? "ready" : isAuthenticated && busy ? "loading" : "none";
 
   // grow with the words, instantly; never animate the box a caret lives in.
   // Past the cap it scrolls, and only the edge that hides words dissolves.
@@ -292,7 +292,7 @@ export default function Composer({ centred }: { centred: boolean }) {
   // focus the field whenever it is the thing to type into
   useEffect(() => {
     if (face === "write" && !isTouch()) field.current?.focus({ preventScroll: true });
-  }, [face, centred, chat.activeConversationId]);
+  }, [face, centred, activeConversationId]);
 
   // the tray says which side has more files to see
   const measureTray = useCallback(() => {
@@ -460,17 +460,16 @@ export default function Composer({ centred }: { centred: boolean }) {
   const routeTip = useMemo(() => {
     if (modelState === "loading") return "Asking providers what they serve";
     if (!selectedModel) return "Choose a model to send";
-    const key = loadLastUsedModel();
-    if (key?.includes("@@") && parseModelKey(key).id === selectedModel.id) {
+    if (chosen?.provider && chosen.id === selectedModel.id) {
       try {
-        return `Pinned to ${new URL(normalizeBaseUrl(parseModelKey(key).base) || "").host}`;
+        return `Pinned to ${new URL(chosen.provider).host}`;
       } catch {
         return "";
       }
     }
-    const n = providerManager.getProviderPriceRankingForModel(selectedModel.id, { torMode: isTorContext() }).length;
+    const n = catalog?.routes(selectedModel.id).length ?? 0;
     return n > 1 ? `Cheapest of ${n} providers` : "";
-  }, [selectedModel, modelState]);
+  }, [selectedModel, modelState, chosen, catalog]);
 
   // the chip's mark and name arrive when the model changes, not on first draw.
   // The spans are keyed by model; the flag stays on for that model, so a later

@@ -15,6 +15,8 @@ import { CatalogContext } from "@/features/catalog/view";
 import { AccountContext } from "@/features/session/view";
 import { activeHistory, relays } from "@/runtime/nostr";
 import { HistoryContext } from "@/features/history/view";
+import { activeChat } from "@/runtime/accountChat";
+import { AccountChatContext } from "@/features/chat/view";
 import { RelaysContext } from "@/features/relays/view";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -46,6 +48,11 @@ export default function ClientProviders({ children }: { children: ReactNode }) {
     activeHistory.subscribe,
     activeHistory.get,
     activeHistory.get
+  );
+  const chat = useSyncExternalStore(
+    activeChat.subscribe,
+    activeChat.get,
+    activeChat.get
   );
   // Run storage migration on app startup
   useEffect(() => {
@@ -80,9 +87,11 @@ export default function ClientProviders({ children }: { children: ReactNode }) {
           <AppProvider>
             <QueryClientProvider client={queryClient}>
               <HistoryContext.Provider value={history}>
-                <InvoiceRecoveryProvider key={generation}>
-                  {children}
-                </InvoiceRecoveryProvider>
+                <AccountChatContext.Provider value={chat}>
+                  <InvoiceRecoveryProvider key={generation}>
+                    {children}
+                  </InvoiceRecoveryProvider>
+                </AccountChatContext.Provider>
               </HistoryContext.Provider>
             </QueryClientProvider>
           </AppProvider>

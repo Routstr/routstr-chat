@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useChat } from "@/context/ChatProvider";
+import { useCatalogModels, useCatalogService } from "@/features/catalog/view";
 import { useSession } from "@/features/session/view";
 import { getStorageItem, setStorageItem } from "@/utils/storageUtils";
 import { Icon } from "../icons";
 import { useUi } from "../ui";
+import { useModelPick } from "../pick";
 import Details, { type Lay } from "./Details";
 import type { Catalog } from "./useCatalog";
 import { SORTS, type Scope, type SortKey } from "./catalog";
@@ -51,7 +52,10 @@ export default function Picker({
   onDetail?: () => void;
   onList?: () => void;
 }) {
-  const chat = useChat();
+  const pick = useModelPick();
+  const catalog = useCatalogService();
+  const { loading: modelsLoading } = useCatalogModels();
+  const refresh = useCallback(() => void catalog?.refresh(), [catalog]);
   const isAuthenticated = useSession().pubkey !== null;
   const ui = useUi();
 
@@ -90,11 +94,11 @@ export default function Picker({
     requestAnimationFrame(() => (s.textContent = t));
   }, []);
 
-  const { favKeys, favIds, liveFavs, makerLabel, routeOf, searching, filtering, sections, flat, idxOf, isCurrent, isFavRow } = useSections({ chat, cat, q, f, only, sort, dir, scope });
+  const { favKeys, favIds, liveFavs, makerLabel, routeOf, searching, filtering, sections, flat, idxOf, isCurrent, isFavRow } = useSections({ configured: pick.configured, cat, q, f, only, sort, dir, scope });
   const { activeIdx, detailKey, setActive } = useListGlide({ flat, idxOf, filtering, isCurrent, activeKey, setActiveKey, q, scope, f, only, sort, dir, cat, makerLabel, say, listEl, glide, lay });
   const { strip, railItems, railOrder, edges, stripEdges, pickScope, railKey } = useMakerRail({ lay, cat, liveFavs, makerLabel, scope, setScope, setActiveKey, railScroll, railGlide });
   const { commit, choose, toggleStar, fund, clearAll, allOn, push } = useChoose({
-    chat, cat, ui, phone, only, draft, setDraft, say, onClose, favKeys, favIds, isFavRow, setQ, setF, setOnly, input, card, setView, onDetail, onList,
+    pick, refresh, cat, ui, phone, only, draft, setDraft, say, onClose, favKeys, favIds, isFavRow, setQ, setF, setOnly, input, card, setView, onDetail, onList,
   });
 
   /* ── open, place, close ─────────────────────────────────────────────── */
@@ -113,7 +117,7 @@ export default function Picker({
   const favN = scope === "favorites" && !searching ? flat.filter(isFavRow).length : total;
   const noun = nounFor(favN, searching, scope, makerLabel);
   const onlyHost = only ? cat.hosts.find((h) => h.base === only)?.host ?? only : null;
-  const loading = chat.isLoadingModels && cat.models.length === 0;
+  const loading = modelsLoading && cat.models.length === 0;
   const bal = (
     <>
       <Icon name="wallet" size={14} />

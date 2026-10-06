@@ -2,10 +2,12 @@
 
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useChat } from "@/context/ChatProvider";
+import { useReplyCosts } from "@/features/chat/view";
 import { useConversations, useHistoryLoaded } from "@/features/history/view";
 import type { Conversation } from "@/types/chat";
 import type { Model } from "@/types/models";
-import { useUi } from "../ui";
+import { useDraft, useUi } from "../ui";
+import { useChatModel } from "../useChatModel";
 import { useRoom, type RoomId } from "../room/RoomProvider";
 import { useMoney } from "../useMoney";
 import { phoneNow, withCosts } from "./helpers";
@@ -30,15 +32,10 @@ export default function Body({ closing }: { closing: boolean }) {
   const ui = useUi();
   const room = useRoom();
   const money = useMoney();
-  const {
-    activeConversationId,
-    loadConversation,
-    startNewConversation,
-    setInputMessage,
-    models,
-    selectedModel,
-    replyCosts,
-  } = useChat();
+  const { activeConversationId, loadConversation, startNewConversation } = useChat();
+  const { setText: setInputMessage } = useDraft();
+  const { models, model: selectedModel } = useChatModel();
+  const replyCosts = useReplyCosts();
   const { isSidebarCollapsed } = ui;
   const stored = useConversations();
   const conversations = useMemo(() => withCosts(stored, replyCosts), [stored, replyCosts]);
@@ -153,7 +150,7 @@ export default function Body({ closing }: { closing: boolean }) {
                   glyph,
                   perReply,
                   byId,
-                  selectedModel: selectedModel as Model | null,
+                  selectedModel,
                   total: money.total,
                   railOff: isSidebarCollapsed,
                 }}

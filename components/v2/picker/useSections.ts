@@ -1,5 +1,4 @@
 import { useCallback, useMemo, useState } from "react";
-import type { useChat } from "@/context/ChatProvider";
 import { getCompanyMeta } from "@/components/v2/picker/modelCompanies";
 import { normalizeBaseUrl } from "@/utils/modelUtils";
 import type { Catalog } from "./useCatalog";
@@ -12,7 +11,7 @@ export interface Section {
 }
 
 export function useSections({
-  chat,
+  configured,
   cat,
   q,
   f,
@@ -21,7 +20,8 @@ export function useSections({
   dir,
   scope,
 }: {
-  chat: ReturnType<typeof useChat>;
+  /** Your models, as main keys them. */
+  configured: string[];
   cat: Catalog;
   q: string;
   f: Filters;
@@ -31,11 +31,11 @@ export function useSections({
   scope: Scope;
 }) {
   /* ── rows ───────────────────────────────────────────────────────────── */
-  const favKeys = chat.configuredModels;
+  const favKeys = configured;
   const favIds = useMemo(() => new Set(favKeys.map((k) => parseKey(k).id)), [favKeys]);
   // the list is grouped as it was when the picker opened: starring fills the
   // star in place and the row only moves on the next open
-  const [groupKeys] = useState(() => chat.configuredModels);
+  const [groupKeys] = useState(() => configured);
   const groupIds = useMemo(() => new Set(groupKeys.map((k) => parseKey(k).id)), [groupKeys]);
   const byId = useMemo(() => new Map(cat.models.map((m) => [m.id, m])), [cat.models]);
   const rowsOf = useCallback(

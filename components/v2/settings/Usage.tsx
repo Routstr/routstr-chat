@@ -2,6 +2,7 @@
 
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useChat } from "@/context/ChatProvider";
+import { useCatalogModels } from "@/features/catalog/view";
 import { useConversations, useSyncSetting } from "@/features/history/view";
 import { useObservableState } from "applesauce-react/hooks";
 import { useAccountManager } from "@/features/session/view";
@@ -116,6 +117,7 @@ function Pager({ n, page, onPage }: { n: number; page: number; onPage: (p: numbe
 
 export default function Usage({ view: asked }: { view?: "wallet" } = {}) {
   const chat = useChat();
+  const { models } = useCatalogModels();
   const [chatSyncEnabled] = useSyncSetting();
   const { manager } = useAccountManager();
   const active = useObservableState(manager.active$);
@@ -150,11 +152,11 @@ export default function Usage({ view: asked }: { view?: "wallet" } = {}) {
   const after = period === "all" ? undefined : pickedAt - (period === "1d" ? D : period === "7d" ? 7 * D : 30 * D);
   const u = useSdkUsageHistory({ after, modelId: model || undefined, baseUrl: provider || undefined });
   const modelName = (id: string) => {
-    const m = chat.models.find((x) => x.id === id || x.id.endsWith(`/${id}`));
+    const m = models.find((x) => x.id === id || x.id.endsWith(`/${id}`));
     return m ? shortModelName(m.name, m.id) : id.split("/").pop() ?? id;
   };
   const modelIcon = (id: string) => {
-    const m = chat.models.find((x) => x.id === id || x.id.endsWith(`/${id}`));
+    const m = models.find((x) => x.id === id || x.id.endsWith(`/${id}`));
     return m ? renderCompanyIcon(getModelCompanyId(m), "co-ico") : null;
   };
 

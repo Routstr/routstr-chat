@@ -115,6 +115,20 @@ export class KeysService {
       if (state.apiKeys !== previous.apiKeys) listener();
     });
   }
+
+  /** Calls `listener` when the credit held at providers may have changed:
+   *  the keys, X-Cashu tokens, or refunds not taken in yet. */
+  subscribeCredit(listener: () => void): () => void {
+    return this.of("direct").store.subscribe((state, previous) => {
+      if (
+        state.apiKeys !== previous.apiKeys ||
+        state.xcashuTokens !== previous.xcashuTokens ||
+        state.cachedReceiveTokens !== previous.cachedReceiveTokens
+      ) {
+        listener();
+      }
+    });
+  }
 }
 
 const services = new Map<string, KeysService>();

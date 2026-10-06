@@ -18,7 +18,9 @@ test("pays for a reply through routstr-core and keeps the change", async ({
   await v2.waitReplyText(page, "Echo: hello kit");
   expect((await kit.upstream.requests()).map((r) => r.outcome)).toEqual(["ok"]);
 
-  // the change came back: 299, not 300 minus the whole token the reply carried
+  // the change is kept: 299, not 300 minus the whole token the reply carried
+  // (with an API key, the default, it waits on the key until it is returned)
+  await v2.returnCredit(page);
   await expect.poll(() => v2.balance(page), { timeout: 20_000 }).toBe(299);
   // and it is spendable money, not a number: all of it redeems at the mint
   await v2.useMint(page, kit.env.mintUrl);

@@ -64,7 +64,9 @@ export function fakeKeys() {
     flush: vi.fn(async (source: PaySource = "direct") => {
       await stores[source].storage.flush?.();
     }),
-  } satisfies Keys;
+    subscribeCredit: (listener: () => void) =>
+      stores.direct.store.subscribe(() => listener()),
+  } satisfies Keys & { subscribeCredit(listener: () => void): () => void };
   return {
     keys,
     stores,

@@ -3,15 +3,16 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useObservableState } from "applesauce-react/hooks";
 import { useChat } from "@/context/ChatProvider";
+import { useAccountChat, useHeldCredit } from "@/features/chat/view";
 import { useAccountManager } from "@/features/session/view";
 import { useCashuStore, useTransactionHistoryStore } from "@/features/wallet";
 import { useUnclaimedTokensStore } from "@/features/wallet/state/unclaimedTokensStore";
 import { useInvoiceSync } from "@/hooks/useInvoiceSync";
 import { useInvoiceChecker } from "@/hooks/useInvoiceChecker";
-import { readSdkCachedBalance, useSdkCachedBalance } from "@/hooks/useSdkCachedBalance";
 import { Icon } from "../icons";
 import { useUi } from "../ui";
 import { shortModelName } from "../format";
+import { useChatModel } from "../useChatModel";
 import { estimateSats, promptTokens } from "../price";
 import { useMoney } from "../useMoney";
 import { tokenMs } from "../motion";
@@ -31,7 +32,7 @@ const HOUR = 3_600_000;
 
 /** What one ordinary reply costs with the chosen model. */
 export function usePerReply() {
-  const { selectedModel } = useChat();
+  const { model: selectedModel } = useChatModel();
   const per = estimateSats(selectedModel, promptTokens("", ""));
   return { per, name: shortModelName(selectedModel?.name, selectedModel?.id) };
 }
@@ -237,8 +238,8 @@ function usePaidUnclaimed() {
 /* ── home ────────────────────────────────────────────────────────────────── */
 function Home({ go, freeze, bloom }: { go: (v: View, o?: { reopen?: Reopen | null }) => void; freeze: number | null; bloom: number }) {
   const money = useMoney();
-  const { refundAllApiKeys } = useChat();
-  const held = useSdkCachedBalance();
+  const account = useAccountChat();
+  const held = useHeldCredit();
   const history = useTransactionHistoryStore();
   const tokens = useUnclaimedTokensStore((s) => s.unclaimedTokens);
   const invoices = usePendingInvoices();
@@ -297,14 +298,16 @@ function Home({ go, freeze, bloom }: { go: (v: View, o?: { reopen?: Reopen | nul
   // the note says what moved, measured: held before the call less held after
   // (the call resolves once the store has re-read what the providers hold)
   const giveBack = async () => {
-    const before = readSdkCachedBalance();
+    if (!account) return;
+    const before = account.held.get();
     setHeldState("busy");
     try {
-      const r = await refundAllApiKeys();
-      const moved = Math.max(0, before - readSdkCachedBalance());
+      const r = await account.refund();
+      const moved = Math.max(0, before - account.held.get());
+      const back = r.some((x) => x.success);
       setHeldBack(moved);
-      setSomeBack(r.totalRefunded > 0);
-      setHeldState((moved > 0 || r.totalRefunded > 0) && r.totalFailed === 0 ? "done" : "part");
+      setSomeBack(back);
+      setHeldState((moved > 0 || back) && r.every((x) => x.success) ? "done" : "part");
     } catch {
       setHeldState("part");
     }

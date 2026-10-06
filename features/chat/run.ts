@@ -66,6 +66,9 @@ export class RequestRun {
   private notifyScheduled = false;
   private resolveEnded!: () => void;
 
+  /** `parentId`: the message the answer hangs off, the question it answers. */
+  constructor(readonly parentId?: string) {}
+
   /** Resolves at the first end state (done, stopped or failed); the answer
    *  is then the snapshot's `message`. */
   readonly ended = new Promise<void>((resolve) => {
