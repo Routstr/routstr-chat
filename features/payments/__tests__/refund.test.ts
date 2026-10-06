@@ -146,6 +146,26 @@ describe("refundCredit", () => {
     expect(direct.getAllApiKeys()).toEqual([]);
   });
 
+  it("keeps the last known balance when the provider cannot say, and still asks for a refund", async () => {
+    const asked: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        asked.push(String(url));
+        return new Response("busy", { status: 503 });
+      })
+    );
+    const { deps, credit, direct } = await setup();
+    direct.setApiKey(LARGE, "sk-large");
+    direct.updateApiKeyBalance(LARGE, 50, 0);
+    lastUsed(credit, 0);
+
+    await refundCredit(deps, false);
+
+    expect(direct.getApiKey(LARGE)?.balance).toBe(50);
+    expect(asked.some((u) => u.endsWith("v1/wallet/refund"))).toBe(true);
+  });
+
   it("clears a key the provider no longer knows", async () => {
     const notFound = JSON.stringify({
       detail: {
