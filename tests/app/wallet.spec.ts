@@ -53,31 +53,11 @@ test("switches between two keys on one device, each with its own money", async (
   expect(await v2.balance(page)).toBe(40);
 });
 
-// KNOWN V2 GAP, owned by the wallet thread, pinned as it is today: the paste preview decodes
-// without the mint's keysets, and cashu-ts 3.7 cannot read a token whose keyset id is
-// new-style ("01…") without them. When the wallet thread fixes it this fails: then expect
-// the 30 sats to arrive instead.
-test("cannot read a token from a mint with new-style keyset ids (known gap)", async ({
-  page,
-  kit,
-  appUrl,
-}) => {
+// the second mint always serves new-style keyset ids ("01…"), which a token carries short
+test("receives a token from the second mint", async ({ page, kit, appUrl }) => {
   await v2.open(page, appUrl);
-  await page
-    .getByRole("button", { name: /^Open wallet\./ })
-    .first()
-    .click();
-  await page
-    .locator('section[data-v="home"]')
-    .getByRole("button", { name: "Add", exact: true })
-    .click();
-  const add = page.locator('section[data-v="add"]');
-  await add.getByRole("tab", { name: "Cashu token" }).click();
-  await add
-    .getByRole("textbox", { name: "Cashu token" })
-    .fill(await kit.mintToken(30, { otherMint: true }));
-  await expect(
-    add.getByText("That does not look like a Cashu token")
-  ).toBeVisible();
-  await expect(add.getByRole("button", { name: /^Receive/ })).toBeDisabled();
+  const token = await kit.mintToken(30, { otherMint: true });
+  await v2.receive(page, token);
+  expect(await v2.balance(page)).toBe(30);
+  expect(new Set(await kit.tokenStates(token))).toEqual(new Set(["SPENT"]));
 });
