@@ -13,7 +13,7 @@ export interface RefundResult {
   success: boolean;
 }
 
-export interface RefundDeps {
+interface RefundDeps {
   keys: Keys;
   purse: Purse;
   sdk: Sdk;

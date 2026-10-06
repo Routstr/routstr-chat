@@ -4,7 +4,7 @@ import { withNodeModeError } from "@/lib/remoteNode";
 import { lockedAfter } from "./lateWrites";
 import type { Keys, Purse, Sdk, Spending } from "./ports";
 
-export interface PayDeps {
+interface PayDeps {
   keys: Keys;
   purse: Purse;
   sdk: Sdk;
@@ -16,7 +16,7 @@ export interface PayDeps {
 // NUT error code: the mint saw these proofs spent already
 const ALREADY_SPENT = 11001;
 
-const changed = () =>
+const sourceChanged = () =>
   new DOMException(
     "Account or payment source changed. Send again.",
     "AbortError"
@@ -34,7 +34,7 @@ export function sdkWallet(
   node: boolean
 ): WalletAdapter {
   const check = () => {
-    if (!canSpend()) throw changed();
+    if (!canSpend()) throw sourceChanged();
   };
   return {
     getBalances: async () => {
@@ -105,7 +105,7 @@ export function createPay(deps: PayDeps): Pay {
     try {
       await deps.keys.reload(source);
       if (signal.aborted) return;
-      if (!sameSource()) throw changed();
+      if (!sameSource()) throw sourceChanged();
       const storage = lockedAfter(
         deps.keys.storage(source),
         () => released,
@@ -119,7 +119,7 @@ export function createPay(deps: PayDeps): Pay {
           storage.replaceApiKey!(node.url, node.apiKey);
           await deps.keys.flush("node");
         }
-        if (!sameSource()) throw changed();
+        if (!sameSource()) throw sourceChanged();
       }
       const wallet = sdkWallet(
         purse,

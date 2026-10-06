@@ -12,7 +12,7 @@ import { RequestRun, type Transport } from "./run";
 
 const ROOT_ID = "0".repeat(64);
 
-export interface ChatDeps {
+interface ChatDeps {
   history: ChatHistory;
   attachments: Attachments;
   pay: Pay;

@@ -15,7 +15,7 @@ import { refundCredit } from "@/features/payments/refund";
 import { createPay } from "@/features/payments/request";
 import { owned } from "@/features/session/owned";
 
-export interface AccountChatDeps {
+interface AccountChatDeps {
   owner: string;
   /** Where reply costs are kept (localStorage). */
   storage: Pick<Storage, "getItem" | "setItem">;
@@ -39,7 +39,7 @@ export interface AccountChat extends AccountChatView {
 export function createAccountChat(deps: AccountChatDeps): AccountChat {
   let live = true;
   const payments = { ...deps, live: () => live };
-  // main kept one unowned map; the move to its owner comes with the screens
+  // the same owned key the old screens read, in main's format
   const costs = new ReplyCosts(
     deps.storage,
     owned("sats_spent_by_event", deps.owner),
