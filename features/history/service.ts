@@ -13,17 +13,10 @@ import {
 import { HistoryStore } from "./store";
 import type { StoredMessage, ThreadSlot } from "./thread";
 import { forgetSavedConversations, readSavedConversations } from "./legacy";
+import type { EventLog } from "./ports";
 
 const KIND_DELETE = 5;
 const FORGET_AFTER_S = 7 * 24 * 60 * 60;
-
-/** This device's copy of Nostr events (platform/nostr/eventLog.ts). */
-export interface EventLog {
-  query(filter: Filter): Promise<NostrEvent[]>;
-  /** Resolves only once the events are on disk. */
-  put(events: NostrEvent[]): Promise<void>;
-  remove(ids: string[]): Promise<void>;
-}
 
 type KeyValueStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 

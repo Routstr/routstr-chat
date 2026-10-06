@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useChat } from "@/context/ChatProvider";
-import { useHistory, useThread } from "@/features/history/view";
+import { useHistory, useThread, type ThreadSlot } from "@/features/history/view";
 import { getTextFromContent } from "@/utils/messageUtils";
 import { useActions } from "../useActions";
 import { shortModelName } from "../format";
@@ -13,7 +13,6 @@ import type { Go } from "./atoms/helpers";
 import { Mine } from "./mine/Mine";
 import { Tips } from "./Tips";
 import Live from "./Live";
-import type { ThreadSlot } from "@/features/history/thread";
 import Trouble, { DECLINED, isStopped } from "./Trouble";
 
 const NO_SLOTS: ThreadSlot[] = [];

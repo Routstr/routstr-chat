@@ -9,8 +9,11 @@ import {
 } from "./service";
 import type { ThreadSlot } from "./thread";
 
+export type { HistoryService } from "./service";
+export type { ThreadSlot } from "./thread";
+
 /** The active account's history; null while no account is signed in.
- *  Filled by the composition root (/lab fills it over in-memory ports). */
+ *  Filled by the composition root (/lab fills it with its simulated chats). */
 export const HistoryContext = createContext<HistoryService | null>(null);
 
 export const useHistory = (): HistoryService | null =>

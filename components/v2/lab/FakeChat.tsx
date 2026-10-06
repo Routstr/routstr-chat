@@ -7,9 +7,7 @@
 
 import React, { useCallback, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { ChatContext } from "@/context/ChatProvider";
-import { HistoryContext } from "@/features/history/view";
-import type { HistoryService } from "@/features/history/service";
-import { LabHistory } from "./labHistory";
+import { HistoryContext, type HistoryService } from "@/features/history/view";
 import type { Conversation, Message, MessageAttachment } from "@/types/chat";
 import type { Model } from "@/types/models";
 import { DEFAULT_MINT_URL } from "@/lib/utils";
@@ -119,7 +117,14 @@ function seed(): Conversation[] {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-export function FakeChatProvider({ children }: { children: React.ReactNode }) {
+/** The lab's chats behind the history view; app/lab builds it (labHistory.ts). */
+export type FakeHistory = HistoryService & { update(chats: Conversation[], syncing: boolean): void };
+export interface FakeHistoryHooks {
+  remove(id: string): void;
+  sync(): Promise<void>;
+}
+
+export function FakeChatProvider({ children, history }: { children: React.ReactNode; history: (hooks: FakeHistoryHooks) => FakeHistory }) {
   const params = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : new URLSearchParams();
   const [conversations, setConversations] = useState<Conversation[]>(() => (params.get("fresh") ? [] : seed()));
   const [activeId, setActiveId] = useState<string | null>(() => (params.get("fresh") ? null : params.get("chat") ?? "c1"));
@@ -148,7 +153,7 @@ export function FakeChatProvider({ children }: { children: React.ReactNode }) {
     setSyncing(false);
   }, []);
   // the screens read chats from history: the lab's chats stand behind it
-  const [lab] = useState(() => new LabHistory({ remove: (id) => setConversations((cs) => cs.filter((c) => c.id !== id)), sync: syncNow }));
+  const [lab] = useState(() => history({ remove: (id) => setConversations((cs) => cs.filter((c) => c.id !== id)), sync: syncNow }));
   useLayoutEffect(() => lab.update(conversations, syncing), [lab, conversations, syncing]);
   // what the real bridge hands the screens: the branch shown, then the last request's notes
   const slots = useSyncExternalStore(lab.subscribe, () => (activeId ? lab.getThread(activeId) : undefined), () => undefined);
@@ -240,8 +245,6 @@ export function FakeChatProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo(() => {
     const base = {
-      conversations,
-      conversationsLoaded: true,
       activeConversationId: activeId,
       messages: shown,
       setMessages,
@@ -266,16 +269,8 @@ export function FakeChatProvider({ children }: { children: React.ReactNode }) {
         setActiveId(id);
         setMessagesState(conversations.find((c) => c.id === id)?.messages ?? []);
       },
-      deleteConversation: async (id: string) => {
-        setConversations((cs) => cs.filter((c) => c.id !== id));
-      },
       clearConversations: () => setConversations([]),
       getActiveConversationId: () => convRef.current,
-      isSyncing: syncing,
-      syncWithNostr: async () => {
-        await syncNow();
-        return "ok" as const;
-      },
       models: loadingModels ? [] : MODELS,
       selectedModel,
       setSelectedModel,
@@ -377,8 +372,7 @@ export function FakeChatProvider({ children }: { children: React.ReactNode }) {
   const standIn = useMemo(() => ({ routes: labRoutes, picks: PICKS, currentKey }), [currentKey]);
   return (
     <ChatContext.Provider value={value as never}>
-      {/* the lab fills only what screens read of a history service */}
-      <HistoryContext.Provider value={lab as unknown as HistoryService}>
+      <HistoryContext.Provider value={lab}>
         <CatalogStandInContext.Provider value={standIn}>{children}</CatalogStandInContext.Provider>
       </HistoryContext.Provider>
     </ChatContext.Provider>

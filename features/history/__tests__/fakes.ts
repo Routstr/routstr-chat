@@ -7,7 +7,7 @@ import {
   type Filter,
   type NostrEvent,
 } from "nostr-tools";
-import type { EventLog } from "../service";
+import type { EventLog } from "../ports";
 import type { HistorySigner } from "../keyring";
 
 /** An account's key and a signer over it, like applesauce's. */

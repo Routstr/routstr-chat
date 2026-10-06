@@ -1,4 +1,5 @@
 import type { Conversation } from "@/types/chat";
+import type { FakeHistory, FakeHistoryHooks } from "@/components/v2/lab/FakeChat";
 import type { HistoryStatus, SyncOutcome } from "@/features/history/service";
 import type { Stored } from "@/features/history/codec";
 import { buildThread, type ThreadSlot } from "@/features/history/thread";
@@ -8,16 +9,14 @@ import { buildThread, type ThreadSlot } from "@/features/history/thread";
 
 const NONE = new Map<number, string>();
 
-export class LabHistory {
+class LabHistory {
   private listeners = new Set<() => void>();
   private chats: Conversation[] = [];
   private status: HistoryStatus = "ready";
   private selected = new Map<string, Map<number, string>>();
   private views = new Map<string, { messages: Conversation["messages"]; picks: Map<number, string>; slots: ThreadSlot[] }>();
 
-  constructor(
-    private hooks: { remove(id: string): void; sync(): Promise<void> }
-  ) {}
+  constructor(private hooks: FakeHistoryHooks) {}
 
   /** The lab's state changed: screens read it again. */
   update(chats: Conversation[], syncing: boolean): void {
@@ -52,5 +51,8 @@ export class LabHistory {
     return "ok";
   };
   writingKeys = () => undefined;
-
 }
+
+/** It fills only what screens read of a history service. */
+export const labHistory = (hooks: FakeHistoryHooks) =>
+  new LabHistory(hooks) as unknown as FakeHistory;

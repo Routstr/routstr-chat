@@ -1,27 +1,19 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import { Conversation, Message } from "@/types/chat";
+import { Message } from "@/types/chat";
 import { stripImageDataFromSingleMessage } from "@/utils/messageUtils";
 import { loadSatsSpentMap, saveSatsSpent } from "@/utils/storageUtils";
 import { ROOT_ID } from "@/features/history/codec";
-import type { SyncOutcome } from "@/features/history/service";
 import { textOf } from "@/features/history/thread";
-import {
-  useConversations,
-  useHistory,
-  useHistoryLoaded,
-  useThread,
-} from "@/features/history/view";
+import { useHistory, useThread } from "@/features/history/view";
 
-/* A bridge for the old chat engine (useChatActions) and /classic: the chats
-   themselves live in features/history. It goes with useChatActions when the
+/* A bridge for the old chat engine (useChatActions): the chats themselves
+   live in features/history. It goes with useChatActions when the
    fresh chat pipeline replaces it. `messages` is the branch on screen, so an
    index into it is a depth in the thread, with what each reply cost and,
    after it, the last request's notes (an error, "Generation stopped."):
    those are not history, they stay here for the screens to show. */
 
 export interface UseConversationStateReturn {
-  conversations: Conversation[];
-  conversationsLoaded: boolean;
   activeConversationId: string | null;
   messages: Message[];
   editingMessageIndex: number | null;
@@ -31,10 +23,6 @@ export interface UseConversationStateReturn {
   setEditingContent: (content: string) => void;
   startNewConversation: () => void;
   loadConversation: (conversationId: string) => void;
-  deleteConversation: (
-    conversationId: string,
-    e: React.MouseEvent
-  ) => Promise<void>;
   clearConversations: () => void;
   startEditingMessage: (index: number) => void;
   cancelEditing: () => void;
@@ -47,8 +35,6 @@ export interface UseConversationStateReturn {
     conversationId: string,
     satsSpent: number
   ) => void;
-  isSyncing: boolean;
-  syncWithNostr: () => Promise<SyncOutcome>;
   /** What each reply cost, by event id (main's sats_spent_by_event). */
   replyCosts: Record<string, number>;
   createAndStoreChatEvent: (
@@ -68,8 +54,6 @@ export const useConversationState = (): UseConversationStateReturn => {
   historyRef.current = history;
   // the reply a cost belongs to, whatever version is shown when it lands
   const lastReply = useRef(new Map<string, string>());
-  const conversations = useConversations();
-  const conversationsLoaded = useHistoryLoaded();
   const [activeConversationId, setActive] = useState<string | null>(null);
   const activeRef = useRef(activeConversationId);
   activeRef.current = activeConversationId;
@@ -156,8 +140,6 @@ export const useConversationState = (): UseConversationStateReturn => {
   );
 
   return {
-    conversations,
-    conversationsLoaded,
     activeConversationId,
     messages,
     editingMessageIndex,
@@ -167,11 +149,6 @@ export const useConversationState = (): UseConversationStateReturn => {
     setEditingContent,
     startNewConversation: () => open(null),
     loadConversation: open,
-    deleteConversation: async (conversationId, e) => {
-      e.stopPropagation();
-      if (activeRef.current === conversationId) open(null);
-      await history?.remove(conversationId);
-    },
     clearConversations: () => {
       open(null);
       history?.forgetHere().catch((error) => console.error(error));
@@ -197,8 +174,6 @@ export const useConversationState = (): UseConversationStateReturn => {
       saveSatsSpent(reply, satsSpent);
       setReplyCosts((costs) => ({ ...costs, [reply]: satsSpent }));
     },
-    isSyncing: !conversationsLoaded,
-    syncWithNostr: () => history?.sync() ?? Promise.resolve("offline"),
     replyCosts,
     createAndStoreChatEvent,
   };

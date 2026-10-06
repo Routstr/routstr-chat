@@ -1,6 +1,6 @@
 import { matchFilter, type NostrEvent } from "nostr-tools";
 import { Observable, Subject, filter as where } from "rxjs";
-import type { RelayPort } from "../service";
+import type { RelayPort } from "../ports";
 
 interface FakeRelay {
   events: Map<string, NostrEvent>;

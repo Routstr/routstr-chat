@@ -25,16 +25,13 @@ const LEGACY = [
   "./features/wallet/state/transactionHistoryStore.ts",
   "./features/wallet/state/unclaimedTokensStore.ts",
   "./hooks/useApiKeysSync.ts",
-  "./hooks/useAppContext.ts",
   "./hooks/useAutoRefill.ts",
   "./hooks/useBitcoinConnect.tsx",
   "./hooks/useBlossomSync.ts",
-  "./hooks/useChatSync.ts",
   "./hooks/useDisabledProviders.ts",
   "./hooks/useInvoiceChecker.ts",
   "./hooks/useInvoiceSync.ts",
   "./hooks/useLogs.ts",
-  "./hooks/usePnsKeys.ts",
   "./hooks/useRemoteNode.ts",
   "./hooks/useSdkCachedBalance.ts",
   "./lib/applesauce-core.ts",
@@ -47,7 +44,6 @@ const LEGACY = [
   "./utils/cashuUtils.ts",
   "./utils/download.ts",
   "./utils/indexedDb.ts",
-  "./utils/messageThread.ts",
   "./utils/messageUtils.ts",
   "./utils/modelUtils.ts",
   "./utils/pdfUtils.ts",
@@ -92,12 +88,11 @@ const RELAY = { name: "applesauce-relay", message: "Relays go through history's 
 const COINS = { name: "@cashu/cashu-ts", message: "Read and move coins through the wallet layer (its Purse), which knows each mint's keysets." };
 const REACT = ["react", "react-dom"].map((name) => ({ name, message: "Services and rules stay framework-free; React lives in view.ts." }));
 const restrict = (...paths) => ({ "no-restricted-imports": ["error", ...paths.flat()] });
-// what still breaks those rules until its module is wired; each list goes with the old hooks
-const LEGACY_RELAY_USERS = ["lib/applesauce-core.ts", "hooks/useDeletionSync.ts", "hooks/sync/**"];
+// what still breaks those rules until its module is wired; the list goes with the old hooks
 const LEGACY_DECODERS = ["components/v2/App.tsx", "components/v2/composer/back/usePay.tsx", "components/v2/wallet/useFunding.ts", "components/v2/wallet/Add.tsx"];
 const TESTS = ["**/__tests__/**", "**/*.test.ts"];
 const packages = [
-  { files: ["**/*.{ts,tsx}"], ignores: ["platform/nostr/**", ...LEGACY_RELAY_USERS], rules: restrict(RELAY) },
+  { files: ["**/*.{ts,tsx}"], ignores: ["platform/nostr/**"], rules: restrict(RELAY) },
   {
     files: ["components/v2/**/*.{ts,tsx}", "features/**/*.{ts,tsx}", "runtime/**/*.{ts,tsx}"],
     ignores: ["features/wallet/**", "features/book/**", ...TESTS, ...LEGACY_DECODERS],

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useChat } from "@/context/ChatProvider";
-import { useSyncSetting } from "@/features/history/view";
+import { useConversations, useSyncSetting } from "@/features/history/view";
 import { useObservableState } from "applesauce-react/hooks";
 import { useAccountManager } from "@/components/ClientProviders";
 import { useSdkUsageHistory } from "@/features/wallet/hooks/useSdkUsageHistory";
@@ -228,7 +228,7 @@ export default function Usage({ view: asked }: { view?: "wallet" } = {}) {
 
   /* ── clearing ──────────────────────────────────────────────────────────── */
   const [ask, setAsk] = useState<"" | "log" | "pay" | "chats">("");
-  const chats = chat.conversations.length;
+  const chats = useConversations().length;
 
   return (
     <>

@@ -1,6 +1,6 @@
 import { RelayPool, completeOnEose, onlyEvents } from "applesauce-relay";
 import { endWith, map } from "rxjs";
-import type { RelayPort } from "@/features/relays/service";
+import type { RelayPort } from "@/features/relays/ports";
 
 /** The app's relay pool. applesauce answers a silent relay with a made-up
  *  EOSE after `eoseTimeout`; ours is longer than the relay layer's own 10 s

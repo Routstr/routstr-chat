@@ -4,7 +4,7 @@ import { WebSocketServer, type WebSocket } from "ws";
 import { Relays } from "@/features/relays/service";
 import { generateSecretKey, getPublicKey } from "nostr-tools";
 import { memoryStorage } from "@/features/relays/__tests__/fakes";
-import { newRelayPool, poolPort } from "../pool";
+import { newRelayPool, poolPort } from "@/platform/nostr/pool";
 
 const servers: (WebSocketServer | Server)[] = [];
 afterEach(() => servers.splice(0).forEach((server) => server.close()));

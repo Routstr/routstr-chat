@@ -3,7 +3,6 @@ import { openDB as openIdb } from "idb";
 import { finalizeEvent, generateSecretKey, getPublicKey } from "nostr-tools";
 import { getEventTags, openDB } from "nostr-idb";
 import { freshIndexedDBPerTest } from "@/tests/kit/idb";
-import { memoryStorage } from "@/features/relays/__tests__/fakes";
 import { openEventLog } from "../eventLog";
 
 freshIndexedDBPerTest();
@@ -17,6 +16,14 @@ const event = (kind: number, at: number) =>
   );
 
 const MIGRATED = "routstr:eventdb:migrated:v1";
+
+const memoryStorage = (initial: Record<string, string> = {}) => {
+  const map = new Map(Object.entries(initial));
+  return {
+    getItem: (key: string) => map.get(key) ?? null,
+    setItem: (key: string, value: string) => void map.set(key, value),
+  };
+};
 
 async function writeLegacyBlob(events: ReturnType<typeof event>[]) {
   const db = await openIdb("zustand-event-store", 1, {

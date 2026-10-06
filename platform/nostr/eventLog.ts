@@ -8,7 +8,7 @@ import {
 } from "nostr-idb";
 import { readLegacyEvents } from "@/lib/eventDatabase/legacyMigration";
 import { getEventReplaceableKey } from "@/lib/eventDatabase/replaceables";
-import type { EventLog } from "@/features/history/service";
+import type { EventLog } from "@/features/history/ports";
 
 /** Where main keeps every Nostr event it has seen, one row per event. */
 const DB_NAME = "routstr-event-store";
