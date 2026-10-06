@@ -169,10 +169,14 @@ function run(
     stopped = sig;
     child.kill(sig);
   };
-  process.on("SIGINT", forward).on("SIGTERM", forward);
+  // SIGHUP too: a closed terminal must still restore files and release locks
+  process.on("SIGINT", forward).on("SIGTERM", forward).on("SIGHUP", forward);
   return new Promise((resolve, reject) =>
     child.on("exit", (code, signal) => {
-      process.off("SIGINT", forward).off("SIGTERM", forward);
+      process
+        .off("SIGINT", forward)
+        .off("SIGTERM", forward)
+        .off("SIGHUP", forward);
       if (stopped) reject(new Error(`stopped by ${stopped}`));
       else resolve(code ?? (signal ? 1 : 0));
     })
