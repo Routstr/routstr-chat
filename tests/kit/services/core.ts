@@ -1,20 +1,19 @@
 // Real routstr-core from a local checkout (KIT_CORE_DIR, with its .venv), on a free port,
 // paid through the kit mint and answering from the kit's fake upstream.
-import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { killGroup } from "./mint";
+import { spawnService, stopService } from "./procs";
 import { API_KEY } from "./upstream";
 import { freePort, waitFor } from "./util";
 
 export interface CoreOptions {
   coreDir: string;
   dir: string; // database and log
+  pidFile: string; // the run's list of processes to end if it dies
   mintUrls: string[];
   upstreamUrl: string;
   relayUrls: string[];
   nsec: string; // the node's Nostr key, for its provider announcement
-  env?: Record<string, string>;
 }
 
 export interface CoreProcess {
@@ -40,33 +39,36 @@ export async function startCore(opts: CoreOptions): Promise<CoreProcess> {
     fs.symlinkSync(path.join(opts.coreDir, name), path.join(opts.dir, name));
   const log = path.join(opts.dir, "core.log");
   const out = fs.openSync(log, "w");
-  const child = spawn(python, [LAUNCHER], {
-    cwd: opts.dir,
-    stdio: ["ignore", out, out],
-    detached: true,
-    env: {
-      ...process.env,
-      PYTHONPATH: opts.coreDir,
-      KIT_CORE_PORT: String(port),
-      KIT_UPSTREAM_URL: opts.upstreamUrl,
-      DATABASE_URL: `sqlite+aiosqlite:///${path.join(opts.dir, "core.db")}`,
-      ROUTSTR_SECRET_KEY: "",
-      UPSTREAM_BASE_URL: `${opts.upstreamUrl}/v1`,
-      UPSTREAM_API_KEY: API_KEY,
-      CASHU_MINTS: opts.mintUrls.join(","),
-      NAME: "Kit Node",
-      DESCRIPTION: "routstr-core run by the chat test kit",
-      HTTP_URL: url,
-      NSEC: opts.nsec,
-      RELAYS: opts.relayUrls.join(","),
-      ENABLE_ANALYTICS_SHARING: "false",
-      LITELLM_LOCAL_MODEL_COST_MAP: "True",
-      MIN_PAYOUT_SAT: "100000000",
-      LOG_LEVEL: "INFO",
-      ...opts.env,
+  const child = spawnService(
+    python,
+    [LAUNCHER],
+    {
+      cwd: opts.dir,
+      stdio: ["ignore", out, out],
+      env: {
+        ...process.env,
+        PYTHONPATH: opts.coreDir,
+        KIT_CORE_PORT: String(port),
+        KIT_UPSTREAM_URL: opts.upstreamUrl,
+        DATABASE_URL: `sqlite+aiosqlite:///${path.join(opts.dir, "core.db")}`,
+        ROUTSTR_SECRET_KEY: "",
+        UPSTREAM_BASE_URL: `${opts.upstreamUrl}/v1`,
+        UPSTREAM_API_KEY: API_KEY,
+        CASHU_MINTS: opts.mintUrls.join(","),
+        NAME: "Kit Node",
+        DESCRIPTION: "routstr-core run by the chat test kit",
+        HTTP_URL: url,
+        NSEC: opts.nsec,
+        RELAYS: opts.relayUrls.join(","),
+        ENABLE_ANALYTICS_SHARING: "false",
+        LITELLM_LOCAL_MODEL_COST_MAP: "True",
+        MIN_PAYOUT_SAT: "100000000",
+        LOG_LEVEL: "INFO",
+      },
     },
-  });
-  const stop = () => killGroup(child);
+    opts.pidFile
+  );
+  const stop = () => stopService(child);
   try {
     await waitFor(
       `routstr-core (log: ${log})`,

@@ -4,7 +4,7 @@
 //
 // How a reply behaves is picked, first match wins, by:
 //   1. a directive in the last user message, e.g. "[kit:slow=1500] hi" (see Behaviour below)
-//   2. the next queued behaviour (queue(), or POST /_kit/queue from another process)
+//   2. the next queued behaviour (POST /_kit/queue, see ../client.ts)
 //   3. a normal streamed echo
 import http from "node:http";
 
@@ -17,8 +17,6 @@ export interface Behaviour {
   fail?: number;
   /** send this many content chunks, then cut the connection (no usage, no [DONE]) */
   cut?: number;
-  /** never answer */
-  hang?: boolean;
   /** send reasoning chunks before the answer */
   think?: boolean;
   /** the reply text; defaults to an echo of the question */
@@ -32,8 +30,6 @@ export interface UpstreamRequest {
   model: string;
   stream: boolean;
   behaviour: Behaviour;
-  firstByteAt?: number;
-  endedAt?: number;
   outcome?: "ok" | "failed" | "cut" | "aborted";
 }
 
@@ -69,7 +65,6 @@ export function parseDirectives(text: string): Behaviour | undefined {
     else if (name === "chunk") found.chunkMs = Number(value ?? 50);
     else if (name === "fail") found.fail = Number(value ?? 500);
     else if (name === "cut") found.cut = Number(value ?? 2);
-    else if (name === "hang") found.hang = true;
     else if (name === "think") found.think = true;
     else if (name === "text") found.text = value ?? "";
     else if (name === "usage") {
@@ -97,12 +92,10 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export interface Upstream {
   url: string; // http://127.0.0.1:<port>  (core's UPSTREAM_BASE_URL is url + "/v1")
-  queue(...behaviours: Behaviour[]): void;
-  requests: UpstreamRequest[];
   close(): Promise<void>;
 }
 
-export async function startUpstream(port = 0): Promise<Upstream> {
+export async function startUpstream(): Promise<Upstream> {
   const queued: Behaviour[] = [];
   const requests: UpstreamRequest[] = [];
   const sockets = new Set<import("node:net").Socket>();
@@ -138,7 +131,6 @@ export async function startUpstream(port = 0): Promise<Upstream> {
     requests.push(record);
     res.on("close", () => (record.outcome ??= "aborted"));
 
-    if (behaviour.hang) return;
     if (behaviour.slowMs) await sleep(behaviour.slowMs);
     if (behaviour.fail) {
       record.outcome = "failed";
@@ -170,7 +162,6 @@ export async function startUpstream(port = 0): Promise<Upstream> {
     };
 
     if (!body.stream) {
-      record.firstByteAt = record.endedAt = Date.now();
       record.outcome = "ok";
       return json(res, 200, {
         id,
@@ -197,7 +188,6 @@ export async function startUpstream(port = 0): Promise<Upstream> {
       res.write(
         `data: ${JSON.stringify({ id, object: "chat.completion.chunk", created, model: body.model, choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`
       );
-    record.firstByteAt = Date.now();
     chunk({ role: "assistant", content: "" });
     for (const r of reasoning) {
       if (behaviour.chunkMs) await sleep(behaviour.chunkMs);
@@ -217,7 +207,6 @@ export async function startUpstream(port = 0): Promise<Upstream> {
         `data: ${JSON.stringify({ id, object: "chat.completion.chunk", created, model: body.model, choices: [], usage: usageOut })}\n\n`
       );
     res.end("data: [DONE]\n\n");
-    record.endedAt = Date.now();
     record.outcome = "ok";
   }
 
@@ -311,14 +300,10 @@ export async function startUpstream(port = 0): Promise<Upstream> {
     "connection",
     (s) => (sockets.add(s), s.on("close", () => sockets.delete(s)))
   );
-  await new Promise<void>((resolve) =>
-    server.listen(port, "127.0.0.1", resolve)
-  );
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const { port: bound } = server.address() as { port: number };
   return {
     url: `http://127.0.0.1:${bound}`,
-    queue: (...b) => void queued.push(...b),
-    requests,
     close: () =>
       new Promise<void>(
         (resolve) => (

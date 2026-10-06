@@ -1,6 +1,7 @@
 // Real routstr-core through the kit: what a paid reply costs, what comes back, and that
 // every sat is accounted for at the mint. These pin the provider behaviour the chat
-// pipeline relies on, so a core or kit change that breaks it shows up here first.
+// pipeline relies on, so a core or kit change that breaks it shows up here first. Every
+// token core hands back is redeemed at the mint: that is what proves it real.
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { useKit, type Behaviour } from "..";
@@ -40,7 +41,6 @@ async function chat(
     text,
     change: res.headers.get("x-cashu"),
     costMsats,
-    body,
   };
 }
 
@@ -59,11 +59,10 @@ describe("X-Cashu", () => {
     expect(r.text).toBe("Echo: hello kit");
     expect(r.costMsats).toBeGreaterThan(0);
     // core rounds the charge up to a whole sat on a sat mint
-    expect(kit.tokenSats(r.change!)).toBe(200 - Math.ceil(r.costMsats / 1000));
-    expect(new Set(await kit.tokenStates(token))).toEqual(new Set(["SPENT"])); // core took the coins
-    expect(new Set(await kit.tokenStates(r.change!))).toEqual(
-      new Set(["UNSPENT"])
+    expect(await kit.redeem(r.change!)).toBe(
+      200 - Math.ceil(r.costMsats / 1000)
     );
+    expect(new Set(await kit.tokenStates(token))).toEqual(new Set(["SPENT"])); // core took the coins
   });
 
   it.each([500, 429])(
@@ -72,40 +71,32 @@ describe("X-Cashu", () => {
       const token = await kit.mintToken(100);
       const r = await chat({ "X-Cashu": token }, `[kit:fail=${status}] hi`);
       expect(r.status).not.toBe(200);
-      expect(kit.tokenSats(r.change!)).toBe(100);
-      expect(new Set(await kit.tokenStates(r.change!))).toEqual(
-        new Set(["UNSPENT"])
-      );
+      expect(await kit.redeem(r.change!)).toBe(100);
     }
   );
 
-  // Known core gap (core df89c0a5): after a cut stream core answers 500, keeps the coins and
-  // never writes the refund, so the claim says 425 "pending" forever. The SDK keeps retrying
-  // and the reply's sats stay at the provider. This test turns red when core fixes it.
-  it.fails(
-    "lets the client claim its money back after the stream is cut mid-way",
-    async () => {
-      const token = await kit.mintToken(150);
-      const r = await chat(
-        { "X-Cashu": token },
-        "[kit:cut=2] one two three four"
-      );
-      expect(r.status).toBe(500);
-      let claim!: Response;
-      for (let i = 0; i < 5; i++) {
-        claim = await fetch(`${kit.coreUrl}v1/wallet/refund`, {
-          method: "POST",
-          headers: { "X-Cashu": token },
-        });
-        if (claim.status !== 425) break;
-        await new Promise((res) => setTimeout(res, 1000));
-      }
-      expect(claim.status).toBe(200);
-      expect(
-        kit.tokenSats(((await claim.json()) as { token: string }).token)
-      ).toBe(150);
+  // KNOWN CORE GAP (core df89c0a5), pinned as it is today: after a cut stream core answers
+  // 500, keeps the coins and never writes the refund, so the claim answers 425 "pending"
+  // for good. The SDK keeps retrying and the reply's sats stay at the provider. When core
+  // fixes it this test fails: then change it to expect the 150 sats back.
+  it("keeps the money when the stream is cut mid-way (known core gap)", async () => {
+    const token = await kit.mintToken(150);
+    const r = await chat(
+      { "X-Cashu": token },
+      "[kit:cut=2] one two three four"
+    );
+    expect(r.status).toBe(500);
+    expect(r.change).toBeNull();
+    expect(new Set(await kit.tokenStates(token))).toEqual(new Set(["SPENT"]));
+    for (let i = 0; i < 3; i++) {
+      const claim = await fetch(`${kit.coreUrl}v1/wallet/refund`, {
+        method: "POST",
+        headers: { "X-Cashu": token },
+      });
+      expect(claim.status).toBe(425);
+      await new Promise((res) => setTimeout(res, 1000));
     }
-  );
+  });
 
   // a property over many paid replies: whatever the upstream does, paid = change + charge,
   // a failed reply is never charged, and no reply costs more than the model's max
@@ -136,15 +127,11 @@ describe("X-Cashu", () => {
           await kit.upstream.queue(b);
           const token = await kit.mintToken(sats);
           const r = await chat({ "X-Cashu": token }, "property check", model);
-          const back = r.change ? kit.tokenSats(r.change) : 0;
+          const back = r.change ? await kit.redeem(r.change) : 0;
           const charged = sats - back;
           if (r.status !== 200) expect(charged).toBe(0);
           else expect(charged).toBe(Math.ceil(r.costMsats / 1000));
           expect(charged).toBeLessThanOrEqual(Math.ceil(maxCost[model]));
-          if (r.change)
-            expect(new Set(await kit.tokenStates(r.change))).toEqual(
-              new Set(["UNSPENT"])
-            );
         }
       ),
       fcParams({ numRuns: 12 })
@@ -154,6 +141,12 @@ describe("X-Cashu", () => {
 
 describe("API key", () => {
   it("creates a key from a token, charges replies, tops up and refunds, losing nothing but rounding", async () => {
+    const models = (await (await fetch(`${kit.coreUrl}v1/models`)).json()) as {
+      data: { id: string; sats_pricing: { max_cost: number } }[];
+    };
+    const maxMsats =
+      models.data.find((m) => m.id === "kit-echo")!.sats_pricing.max_cost *
+      1000;
     const created = await info(await kit.mintToken(300));
     expect(created.balance).toBe(300_000);
     const key = created.api_key;
@@ -162,8 +155,10 @@ describe("API key", () => {
     const r = await chat({ authorization: `Bearer ${key}` }, "hi");
     expect(r.status).toBe(200);
     expect(r.text).toBe("Echo: hi");
+    // core sends no cost header for API keys: the charge is what left the key's balance
     const afterChat = (await info(key)).balance;
-    expect(afterChat).toBeLessThan(300_000);
+    expect(300_000 - afterChat).toBeGreaterThan(0);
+    expect(300_000 - afterChat).toBeLessThanOrEqual(maxMsats);
 
     const top = await fetch(`${kit.coreUrl}v1/wallet/topup`, {
       method: "POST",
@@ -181,10 +176,8 @@ describe("API key", () => {
         headers: { authorization: `Bearer ${key}` },
       })
     ).json()) as { token: string };
-    const refunded = kit.tokenSats(refund.token);
-    expect(refunded).toBe(Math.floor((afterChat + 50_000) / 1000));
-    expect(new Set(await kit.tokenStates(refund.token))).toEqual(
-      new Set(["UNSPENT"])
+    expect(await kit.redeem(refund.token)).toBe(
+      Math.floor((afterChat + 50_000) / 1000)
     );
   });
 });
