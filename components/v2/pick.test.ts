@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Model } from "@/types/models";
-import { ModelPick, choiceOf, defaultModel, keyOf, modelFor } from "./pick";
+import { ModelPick, choiceOf, defaultModel, keyOf, modelFor, pickedModel } from "./pick";
 
 function memory(seed: Record<string, string> = {}) {
   const items = new Map(Object.entries(seed));
@@ -19,11 +19,18 @@ describe("ModelPick: main's keys", () => {
     expect(new ModelPick(memory()).getSnapshot().chosen).toBeNull();
   });
 
-  it("lets a ?model= link choose for this visit without saving it", () => {
+  it("lets a ?model= link pick for this visit, keeping your choice under it", () => {
     const storage = memory({ lastUsedModel: '"gpt-5"' });
     const pick = new ModelPick(storage, "?model=openai%2Fgpt-4o");
-    expect(pick.getSnapshot().chosen).toEqual({ id: "openai/gpt-4o" });
+    expect(pick.getSnapshot()).toMatchObject({ link: { id: "openai/gpt-4o" }, chosen: { id: "gpt-5" } });
     expect(storage.items.get("lastUsedModel")).toBe('"gpt-5"');
+    const list = [model("gpt-4o"), model("gpt-5")];
+    expect(pickedModel(list, pick.getSnapshot())?.id).toBe("gpt-4o");
+    // a link to a model nobody serves falls back to your choice, not to the default
+    expect(pickedModel([model("gpt-5")], pick.getSnapshot())?.id).toBe("gpt-5");
+    // choosing ends the link's turn
+    pick.choose({ id: "gpt-5" });
+    expect(pick.getSnapshot().link).toBeNull();
   });
 
   it("saves a choice as main does and tells listeners", () => {
@@ -61,7 +68,7 @@ describe("ModelPick: main's keys", () => {
   it("still works when storage is blocked", () => {
     const blocked = { getItem: () => { throw new Error("blocked"); }, setItem: () => { throw new Error("blocked"); } };
     const pick = new ModelPick(blocked);
-    expect(pick.getSnapshot()).toEqual({ chosen: null, configured: [], pins: {} });
+    expect(pick.getSnapshot()).toEqual({ chosen: null, link: null, configured: [], pins: {} });
     pick.choose({ id: "gpt-5" });
     expect(pick.getSnapshot().chosen).toEqual({ id: "gpt-5" });
   });

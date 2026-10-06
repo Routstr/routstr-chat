@@ -18,7 +18,10 @@ export interface Choice {
 }
 
 export interface PickState {
+  /** Your choice, kept on this device. */
   chosen: Choice | null;
+  /** A "?model=" link's model, for this visit only, until you choose. */
+  link: Choice | null;
   /** Your models, as main keys them: an id, or "id@@base" with a pin. */
   configured: string[];
   /** The provider you last picked for a model. */
@@ -49,6 +52,11 @@ export function modelFor(models: Model[], choice: Choice | null): Model | null {
   return models.find((m) => m.id === choice.id) ?? models.find((m) => m.id === short) ?? null;
 }
 
+/** The model in use: a link's when the list has it, else your choice's.
+ *  Null means neither is in the list: take `defaultModel`. */
+export const pickedModel = (models: Model[], pick: Pick<PickState, "chosen" | "link">) =>
+  modelFor(models, pick.link) ?? modelFor(models, pick.chosen);
+
 /** With nothing chosen, or the choice gone: the first of Routstr's picks you
  *  can afford, else the costliest you can afford, as main picked. `need` is
  *  what one message may take, in sats; a model whose need is unknown is skipped. */
@@ -70,7 +78,7 @@ export class ModelPick {
   private state: PickState;
   private listeners = new Set<() => void>();
 
-  /** `search`: the page's query; "?model=" chooses for this visit, as a link does in main. */
+  /** `search`: the page's query; a "?model=" link picks for this visit without replacing your choice. */
   constructor(
     private storage: KeyValueStorage,
     search = ""
@@ -84,7 +92,8 @@ export class ModelPick {
       if (configured.length) this.write(MINE, configured);
     }
     this.state = {
-      chosen: fromLink ? { id: fromLink } : last ? choiceOf(last) : null,
+      chosen: last ? choiceOf(last) : null,
+      link: fromLink ? { id: fromLink } : null,
       configured,
       pins: this.read<Record<string, string>>(PINS, {}),
     };
@@ -99,7 +108,7 @@ export class ModelPick {
 
   choose = (choice: Choice): void => {
     this.write(LAST, keyOf(choice));
-    this.set({ chosen: choice });
+    this.set({ chosen: choice, link: null });
   };
 
   toggle = (key: string): void => {
