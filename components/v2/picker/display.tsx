@@ -12,7 +12,7 @@ import {
 import {
   COMPANY_ICON_COMPONENTS,
   getCompanyMeta,
-} from "@/components/chat/modelCompanies";
+} from "./modelCompanies";
 
 // Prices are held per-token; every surface displays them per 1M tokens.
 function computeSatsPer1M(satsPerToken?: number): number | null {

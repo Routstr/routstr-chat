@@ -1,8 +1,8 @@
 "use client";
 
 import React, { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { renderCompanyIcon } from "@/components/chat/model-selector/display";
-import { getCompanyMeta } from "@/components/chat/modelCompanies";
+import { renderCompanyIcon } from "@/components/v2/picker/display";
+import { getCompanyMeta } from "@/components/v2/picker/modelCompanies";
 import { Icon } from "../icons";
 import { satUnit, shortModelName } from "../format";
 import type { Catalog } from "./useCatalog";

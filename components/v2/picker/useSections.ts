@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import type { useChat } from "@/context/ChatProvider";
-import { getCompanyMeta } from "@/components/chat/modelCompanies";
+import { getCompanyMeta } from "@/components/v2/picker/modelCompanies";
 import { normalizeBaseUrl } from "@/utils/modelUtils";
 import type { Catalog } from "./useCatalog";
 import type { Filters } from "./helpers";

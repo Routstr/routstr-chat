@@ -14,7 +14,7 @@ import {
   PerplexityIcon,
   QwenIcon,
   ZAIIcon,
-} from "@/components/icons/companyIcons";
+} from "./companyIcons";
 import { Model } from "@/types/models";
 
 type ModelCompanyDefinition = {

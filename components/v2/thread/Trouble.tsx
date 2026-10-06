@@ -3,11 +3,11 @@
 import React, { useState } from "react";
 import { useChat } from "@/context/ChatProvider";
 import type { Message } from "@/types/chat";
-import { getTextFromContent } from "@/utils/messageUtils";
 import { useActions } from "../useActions";
 import { useMoney } from "../useMoney";
 import { useUi } from "../ui";
 import { Icon } from "../icons";
+import { textOf } from "./content";
 
 /* Where it stopped, what happened in plain words, and the one thing to do.
    The caret that carried the wait becomes the seam; the raw text only shows
@@ -16,7 +16,7 @@ import { Icon } from "../icons";
 type Kind = "stopped" | "noanswer" | "funds" | "declined" | "unknown";
 
 export const DECLINED = /denied due to content filtering/i;
-export const isStopped = (m: Message) => m.role === "system" && /^Generation stopped/i.test(getTextFromContent(m.content).trim());
+export const isStopped = (m: Message) => m.role === "system" && /^Generation stopped/i.test(textOf(m.content).trim());
 
 const kindOf = (raw: string): Kind => {
   const t = raw.trim();
@@ -35,7 +35,7 @@ const spell = (n: number) => WORDS[n] ?? String(n);
 function tries(msgs: Message[]) {
   const rows: { from: number; to: number; label: string; raw: string }[] = [];
   msgs.forEach((m, i) => {
-    const raw = getTextFromContent(m.content).trim();
+    const raw = textOf(m.content).trim();
     const k = kindOf(raw);
     const label = k === "noanswer" ? (/time/i.test(raw) ? "Timed out" : "No answer") : "Error";
     const prev = rows[rows.length - 1];
@@ -66,7 +66,7 @@ export default function Trouble({
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const last = msgs[msgs.length - 1];
-  const raw = getTextFromContent(last.content).trim();
+  const raw = textOf(last.content).trim();
   const kind = kindOf(raw);
   const canAct = isLast && !isLoading;
   const many = msgs.length > 1;

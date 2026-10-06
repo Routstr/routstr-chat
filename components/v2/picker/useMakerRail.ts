@@ -1,5 +1,5 @@
 import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { MODEL_COMPANIES } from "@/components/chat/modelCompanies";
+import { MODEL_COMPANIES } from "@/components/v2/picker/modelCompanies";
 import type { IconName } from "../icons";
 import type { Lay } from "./Details";
 import type { Catalog } from "./useCatalog";

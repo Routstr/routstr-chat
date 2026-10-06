@@ -6,10 +6,7 @@ import prettier from "eslint-config-prettier/flat";
 // goes away with the old hooks, and the rule below then has no exceptions.
 const LEGACY = [
   "./components/QueryTimeoutModal.tsx",
-  "./components/chat/model-selector/display.tsx",
-  "./components/chat/model-selector/modality.ts",
   "./components/chat/model-selector/useModelPricing.ts",
-  "./components/chat/modelCompanies.ts",
   "./components/pwa/KeepAliveProvider.tsx",
   "./context/AuthProvider.tsx",
   "./context/ChatProvider.tsx",
@@ -39,9 +36,7 @@ const LEGACY = [
   "./utils/cashuUtils.ts",
   "./utils/download.ts",
   "./utils/indexedDb.ts",
-  "./utils/messageUtils.ts",
   "./utils/modelUtils.ts",
-  "./utils/pdfUtils.ts",
   "./utils/storageUtils.ts",
   "./utils/torUtils.ts",
 ];

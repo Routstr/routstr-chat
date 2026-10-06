@@ -2,9 +2,8 @@
 
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import type { Message } from "@/types/chat";
-import { getTextFromContent } from "@/utils/messageUtils";
 import { Icon } from "../../icons";
-import { parseContent } from "../content";
+import { parseContent, textOf } from "../content";
 import { CopyTool } from "../atoms/CopyTool";
 import { reduced, stamp, type Go } from "../atoms/helpers";
 import { Roll } from "../atoms/Roll";
@@ -42,7 +41,7 @@ export const Mine = memo(function Mine({
   onEdit: (index: number) => void;
 }) {
   const parsed = useMemo(() => parseContent(msg.content), [msg.content]);
-  const text = getTextFromContent(msg.content);
+  const text = textOf(msg.content);
   const blocks = useMemo(() => qBlocks(text), [text]);
   const lines = text.split("\n").length;
   const long = text.length > 900 || lines > 12;

@@ -3,9 +3,9 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useChat } from "@/context/ChatProvider";
 import { useAuth } from "@/context/AuthProvider";
-import { getModelCompanyId } from "@/components/chat/modelCompanies";
-import { renderCompanyIcon } from "@/components/chat/model-selector/display";
-import { normalizeModality } from "@/components/chat/model-selector/modality";
+import { getModelCompanyId } from "@/components/v2/picker/modelCompanies";
+import { renderCompanyIcon } from "@/components/v2/picker/display";
+import { normalizeModality } from "@/components/v2/picker/modality";
 import { providerManager } from "@/sdk/sharedStore";
 import { isTorContext } from "@/utils/torUtils";
 import type { MessageAttachment } from "@/types/chat";

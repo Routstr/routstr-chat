@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import type { MessageAttachment } from "@/types/chat";
-import { extractTextFromPdf } from "@/utils/pdfUtils";
+import { extractTextFromPdf } from "@/components/v2/composer/pdfUtils";
 import { saveFile } from "@/utils/indexedDb";
 import { useBlossomSync } from "@/hooks/useBlossomSync";
 import { useHistoryKeys } from "@/features/history/view";

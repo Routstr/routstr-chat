@@ -2,8 +2,8 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useChat } from "@/context/ChatProvider";
-import { renderCompanyIcon } from "@/components/chat/model-selector/display";
-import { getModelCompanyId } from "@/components/chat/modelCompanies";
+import { renderCompanyIcon } from "@/components/v2/picker/display";
+import { getModelCompanyId } from "@/components/v2/picker/modelCompanies";
 import { useDisabledProviders } from "@/hooks/useDisabledProviders";
 import {
   getCachedProviderModels,

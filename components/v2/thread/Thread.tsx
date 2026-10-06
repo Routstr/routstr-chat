@@ -3,7 +3,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useChat } from "@/context/ChatProvider";
 import { useHistory, useThread, type ThreadSlot } from "@/features/history/view";
-import { getTextFromContent } from "@/utils/messageUtils";
 import { useActions } from "../useActions";
 import { shortModelName } from "../format";
 import { Icon } from "../icons";
@@ -14,6 +13,7 @@ import { Mine } from "./mine/Mine";
 import { Tips } from "./Tips";
 import Live from "./Live";
 import Trouble, { DECLINED, isStopped } from "./Trouble";
+import { textOf } from "./content";
 
 const NO_SLOTS: ThreadSlot[] = [];
 
@@ -291,7 +291,7 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
   }, [away]);
 
   const hideStoredTail =
-    liveHere && lastSlot?.displayed.role === "assistant" && streamingText && getTextFromContent(lastSlot.displayed.content) === streamingText;
+    liveHere && lastSlot?.displayed.role === "assistant" && streamingText && textOf(lastSlot.displayed.content) === streamingText;
 
   // messages already here when a chat opens arrive still; new ones rise in,
   // once: after its rise a turn is known, so a remount (another version) stays still
@@ -341,7 +341,7 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
                   editing={editingMessageIndex === depth} fresh={!known.keys.has(key)}
                   onVersion={onVersion} onEdit={onEdit} />
               );
-            if (DECLINED.test(getTextFromContent(msg.content)))
+            if (DECLINED.test(textOf(msg.content)))
               return <Trouble key={key} msgs={[msg]} index={depth} isLast={isLast} label={modelName(msg._modelId)} model={fullName(msg._modelId)} />;
             return (
               <Answer key={key} msg={msg} index={depth} {...v} isLast={isLast} busy={isLoading}
@@ -356,7 +356,7 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
           <Live
             key={userKey ?? "live"}
             label={modelName(selectedModel?.id)}
-            prompt={lastUser ? getTextFromContent(lastUser.displayed.content) : ""}
+            prompt={lastUser ? textOf(lastUser.displayed.content) : ""}
             onFold={onFold}
           />
         )}

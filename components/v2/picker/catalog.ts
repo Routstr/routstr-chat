@@ -1,6 +1,6 @@
 import type { Model } from "@/types/models";
-import { normalizeModality } from "@/components/chat/model-selector/modality";
-import { getModelCompanyId } from "@/components/chat/modelCompanies";
+import { normalizeModality } from "@/components/v2/picker/modality";
+import { getModelCompanyId } from "@/components/v2/picker/modelCompanies";
 import { shortModelName } from "../format";
 
 /* The picker's words and orderings, kept free of React so they can be tested.

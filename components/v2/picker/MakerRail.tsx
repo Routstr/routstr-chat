@@ -1,7 +1,7 @@
 "use client";
 
 import React, { memo } from "react";
-import { renderCompanyIcon } from "@/components/chat/model-selector/display";
+import { renderCompanyIcon } from "@/components/v2/picker/display";
 import { Icon } from "../icons";
 import type { useMakerRail } from "./useMakerRail";
 import type { Scope } from "./catalog";

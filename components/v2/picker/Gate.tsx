@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { renderCompanyIcon } from "@/components/chat/model-selector/display";
+import { renderCompanyIcon } from "@/components/v2/picker/display";
 import type { useUi } from "../ui";
 import type { Catalog } from "./useCatalog";
 

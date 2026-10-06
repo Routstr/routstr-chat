@@ -62,6 +62,10 @@ export function parseContent(content: Message["content"]): Parsed {
   };
 }
 
+/** A message's own words: the text, or its first shown text part. */
+export const textOf = (content: Message["content"]) =>
+  typeof content === "string" ? content : (content.find((c) => c.type === "text" && !c.hidden)?.text ?? "");
+
 /** The SDK wraps reasoning in literal <thinking> markers. */
 export const cleanThinking = (s: string) =>
   s.replace(/<\/?thinking>\s?/g, "").replace(/^\s+/, "");
