@@ -64,14 +64,13 @@ export class RequestRun {
   private controller = new AbortController();
   private thinkingStartedAt: number | undefined;
   private notifyScheduled = false;
-  private resolveEnded!: (snapshot: RunSnapshot) => void;
+  private resolveEnded!: () => void;
 
-  /** The first end state: done, stopped or failed. */
-  readonly ended = new Promise<RunSnapshot>((resolve) => {
+  /** Resolves at the first end state (done, stopped or failed); the answer
+   *  is then the snapshot's `message`. */
+  readonly ended = new Promise<void>((resolve) => {
     this.resolveEnded = resolve;
   });
-
-  constructor(private transport: Transport) {}
 
   subscribe = (listener: () => void): (() => void) => {
     this.listeners.add(listener);
@@ -80,12 +79,14 @@ export class RequestRun {
 
   getSnapshot = (): RunSnapshot => this.snapshot;
 
-  /** Resolves when the payment is settled. It never rejects: a failure before
-   *  the answer ends fails the run, one after it becomes a warning. */
-  async start(): Promise<void> {
+  /** Makes the request and resolves when its payment is settled. It never
+   *  rejects: a failure before the answer ends fails the run, one after it
+   *  becomes a warning. The run keeps no hold on `transport`, so the files it
+   *  sends are let go once the request is over. */
+  async start(transport: Transport): Promise<void> {
     if (this.controller.signal.aborted) return;
     try {
-      await this.transport(
+      await transport(
         { ...this.callbacks, onWarning: (warning) => this.warn(warning) },
         this.controller.signal
       );
@@ -107,6 +108,12 @@ export class RequestRun {
     if (isTerminal(this.snapshot.phase)) return;
     this.controller.abort();
     this.finish("stopped", {});
+  }
+
+  /** The answer is on disk: the run keeps that copy, which holds no file
+   *  bytes, in place of the one it was sent. */
+  saved(message: Message): void {
+    this.update({ message });
   }
 
   warn(warning: string): void {
@@ -152,7 +159,7 @@ export class RequestRun {
         ? { message: this.withThinking({ role: "assistant", content: text }) }
         : {};
     this.update({ phase, ...this.thinkingDuration(), ...partial, ...result });
-    this.resolveEnded(this.snapshot);
+    this.resolveEnded();
   }
 
   private thinkingDuration(): Pick<RunSnapshot, "thinkingMs"> {

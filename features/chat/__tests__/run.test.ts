@@ -32,8 +32,8 @@ function manualTransport() {
 
 function startRun() {
   const wire = manualTransport();
-  const run = new RequestRun(wire.transport);
-  const settled = run.start();
+  const run = new RequestRun();
+  const settled = run.start(wire.transport);
   return { wire, run, settled };
 }
 
@@ -106,7 +106,8 @@ describe("RequestRun", () => {
     wire.cb.onMessageAppend({ role: "system", content: "Generation stopped." });
 
     expect(wire.signal.aborted).toBe(true);
-    expect(await run.ended).toMatchObject({
+    await run.ended;
+    expect(run.getSnapshot()).toMatchObject({
       phase: "stopped",
       text: "Blind signatures let a mint",
       message: { role: "assistant", content: "Blind signatures let a mint" },
@@ -126,10 +127,10 @@ describe("RequestRun", () => {
 
   it("never reaches the transport when stopped before it started", async () => {
     const wire = manualTransport();
-    const run = new RequestRun(wire.transport);
+    const run = new RequestRun();
 
     run.stop();
-    await run.start();
+    await run.start(wire.transport);
 
     expect(wire.transport).not.toHaveBeenCalled();
     expect(run.getSnapshot()).toMatchObject({ phase: "stopped" });
@@ -190,7 +191,8 @@ describe("RequestRun", () => {
     wire.settle();
     await settled;
 
-    expect(await run.ended).toMatchObject({ phase: "failed" });
+    await run.ended;
+    expect(run.getSnapshot()).toMatchObject({ phase: "failed" });
   });
 
   it("warns, and keeps the answer, when settling breaks after it", async () => {
@@ -270,10 +272,10 @@ describe("RequestRun", () => {
     vi.stubGlobal("requestAnimationFrame", (flush: () => void) =>
       frames.push(flush)
     );
-    const run = new RequestRun(wire.transport);
+    const run = new RequestRun();
     const listener = vi.fn();
     run.subscribe(listener);
-    void run.start();
+    void run.start(wire.transport);
 
     wire.cb.onStreamingUpdate("a");
     wire.cb.onStreamingUpdate("a b");

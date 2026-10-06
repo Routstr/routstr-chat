@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Message } from "@/types/chat";
+import { createAttachments } from "../attachments";
 import { ChatService } from "../service";
 import {
   contents,
@@ -225,6 +227,29 @@ describe("ChatService: what the model is sent", () => {
     expect(turn.run.getSnapshot().warning).toContain("left out");
   });
 
+  it("saves a question without its inline files, and still sends them as attached", async () => {
+    const kept = [
+      { type: "image_url" as const, image_url: { url: "", storageId: "kept" } },
+    ];
+    vi.mocked(attachments.forSave).mockImplementationOnce(async (message) => ({
+      ...message,
+      content: kept,
+    }));
+    const image = [
+      {
+        type: "image_url" as const,
+        image_url: { url: "data:image/png;base64,AA", storageId: "kept" },
+      },
+    ];
+
+    await chat.send("c", image, model);
+    await flush();
+
+    expect(history.saves[0].message.content).toEqual(kept);
+    const [sent] = vi.mocked(attachments.forRequest).mock.calls[0];
+    expect(sent.at(-1)?.content).toEqual(image);
+  });
+
   it("pays nothing when the question's attachments cannot be loaded", async () => {
     vi.mocked(attachments.forRequest).mockResolvedValueOnce([
       { role: "user", content: "" },
@@ -238,6 +263,75 @@ describe("ChatService: what the model is sent", () => {
 
     expect(provider.pay).not.toHaveBeenCalled();
     expect(turn.run.getSnapshot().error).toContain("could not be loaded");
+  });
+});
+
+describe("ChatService: files", () => {
+  const IMAGE = "data:image/png;base64,iVBORw0KGgo=";
+
+  it("keeps no file bytes in history or in the finished run", async () => {
+    const files = {
+      load: vi.fn(async () => IMAGE),
+      store: vi.fn(async () => ({ storageId: "kept" })),
+    };
+    chat = new ChatService({
+      history,
+      attachments: createAttachments(files),
+      pay: provider.pay,
+      costs,
+    });
+    const question = [
+      { type: "text" as const, text: "draw it again" },
+      { type: "image_url" as const, image_url: { url: IMAGE, storageId: "q" } },
+    ];
+
+    const turn = await chat.send("c", question, model);
+    await flush();
+    provider.last.callbacks.onMessageAppend({
+      role: "assistant",
+      content: [{ type: "image_url", image_url: { url: IMAGE } }],
+    });
+    provider.last.settle();
+    await turn.reply;
+
+    expect(JSON.stringify(history.saves)).not.toContain("data:");
+    expect(JSON.stringify(turn.run.getSnapshot())).not.toContain("data:");
+  });
+
+  // a save that waits on a file server until Stop
+  const slowUntilStopped = (message: Message, signal: AbortSignal) =>
+    new Promise<Message>((resolve) =>
+      signal.addEventListener("abort", () => resolve(message))
+    );
+
+  it("saves the answer at once when Stop ends a slow upload", async () => {
+    vi.mocked(attachments.forSave)
+      .mockImplementationOnce(async (message) => message)
+      .mockImplementationOnce(slowUntilStopped);
+    const turn = await chat.send("c", "draw a cat", model);
+    await flush();
+    provider.answer("a cat");
+    await flush();
+    expect(chat.asking("c")).toBe(true);
+
+    chat.stop("c");
+
+    expect(await turn.reply).toMatchObject({ content: "a cat" });
+    expect(chat.asking("c")).toBe(false);
+  });
+
+  it("pays nothing when Stop ends a slow upload of the question", async () => {
+    vi.mocked(attachments.forSave).mockImplementationOnce(slowUntilStopped);
+    const asking = chat.send("c", "draw a cat", model);
+    await flush();
+
+    chat.stop("c");
+    const turn = await asking;
+    await Promise.all([turn.reply, turn.settled]);
+
+    expect(history.saves).toHaveLength(1);
+    expect(provider.pay).not.toHaveBeenCalled();
+    expect(chat.asking("c")).toBe(false);
   });
 });
 

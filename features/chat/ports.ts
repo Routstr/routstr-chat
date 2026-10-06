@@ -19,13 +19,33 @@ export interface ChatHistory {
   ): Promise<StoredMessage>;
 }
 
-/** Stored attachments (the files service). */
+/** Stored attachments, over the file store. */
 export interface Attachments {
   /** A missing attachment is left out, never failed on. Settles soon after
    *  `signal` aborts, so Stop never waits on a slow file server. */
   forRequest(history: Message[], signal: AbortSignal): Promise<ApiMessage[]>;
-  /** Stores the images a reply carries; returns the message to save. */
-  forSave(reply: Message): Promise<Message>;
+  /** Stores the files a message carries inline; returns the message to save,
+   *  which carries none. `signal` (Stop) ends a slow upload at once. */
+  forSave(message: Message, signal: AbortSignal): Promise<Message>;
+}
+
+/** Where a message's attachment is kept, as main stores it. */
+export interface StoredFile {
+  /** Its id in this device's file store. */
+  storageId?: string;
+  /** Its encrypted copy on Blossom, for the account's other devices. */
+  blossomHash?: string;
+  blossomServers?: string[];
+}
+
+/** The device's file store and the account's Blossom copies. */
+export interface FileStore {
+  /** The file as a data URL, or undefined when no copy can be reached.
+   *  Settles soon after `signal` aborts. */
+  load(file: StoredFile, signal: AbortSignal): Promise<string | undefined>;
+  /** Keeps a data URL's file here and, while file sync is on, on Blossom
+   *  until `signal` aborts. Returns only the copies made; never rejects. */
+  store(dataUrl: string, signal: AbortSignal): Promise<StoredFile>;
 }
 
 export interface ChatModel {

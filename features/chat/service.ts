@@ -150,20 +150,25 @@ export class ChatService {
     const branch = this.deps.history.branch(conversationId);
     let question: StoredMessage;
     try {
+      const kept = await this.deps.attachments.forSave(
+        { role: "user", content },
+        claim.signal
+      );
       question = await this.deps.history.save(conversationId, {
-        role: "user",
-        content,
+        ...kept,
         _prevId: parentAt(branch, depth),
       });
     } catch (error) {
       this.release(conversationId, claim);
       throw error;
     }
+    // sent as attached: nothing is read back, and a file this device could
+    // not keep still goes out once
     return this.answer(
       conversationId,
       claim,
       model,
-      [...branch.slice(0, depth), question],
+      [...branch.slice(0, depth), { ...question, content }],
       question._eventId
     );
   }
@@ -175,14 +180,12 @@ export class ChatService {
     history: Message[],
     parentId: string
   ): Turn {
-    const run = new RequestRun(this.transport(history, model));
+    const run = new RequestRun();
     if (claim.signal.aborted) run.stop();
     this.runs.set(conversationId, run);
-    const settled = run.start();
+    const settled = run.start(this.transport(history, model));
     const reply = run.ended
-      .then((end) =>
-        this.saveReply(conversationId, run, end.message, parentId, model)
-      )
+      .then(() => this.saveReply(conversationId, run, parentId, model, claim))
       .finally(() => this.release(conversationId, claim));
     const turn = Promise.all([settled, reply]);
     this.open.add(turn);
@@ -221,18 +224,22 @@ export class ChatService {
   private async saveReply(
     conversationId: string,
     run: RequestRun,
-    message: Message | undefined,
     parentId: string,
-    model: ChatModel
+    model: ChatModel,
+    claim: AbortController
   ): Promise<StoredMessage | undefined> {
+    const { message } = run.getSnapshot();
     if (!message) return undefined;
     try {
-      const kept = await this.deps.attachments.forSave(message);
-      return await this.deps.history.save(conversationId, {
+      // Stop ends a slow file upload; the copy on this device is kept
+      const kept = await this.deps.attachments.forSave(message, claim.signal);
+      const saved = await this.deps.history.save(conversationId, {
         ...kept,
         _prevId: parentId,
         _modelId: model.id,
       });
+      run.saved(saved);
+      return saved;
     } catch (error) {
       run.warn(
         `The answer could not be saved: ${error instanceof Error ? error.message : String(error)}`
