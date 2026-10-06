@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { getDecodedToken } from "@cashu/cashu-ts";
+import { getTokenMetadata } from "@cashu/cashu-ts";
 import { useChat } from "@/context/ChatProvider";
 import { useAuth } from "@/context/AuthProvider";
 import { getRequiredSatsForModel } from "@/utils/modelUtils";
@@ -62,9 +62,8 @@ export function usePay(say: (t: string) => void) {
     if (!t) return { kind: "empty" as const };
     if (/^cashu[AB]/.test(t)) {
       try {
-        const d = getDecodedToken(t);
-        const total = d.proofs.reduce((s, p) => s + p.amount, 0);
-        const sats = d.unit === "msat" ? Math.floor(total / 1000) : total;
+        const d = getTokenMetadata(t);
+        const sats = d.unit === "msat" ? Math.floor(d.amount / 1000) : d.amount;
         let host = d.mint;
         try {
           host = new URL(d.mint).host;

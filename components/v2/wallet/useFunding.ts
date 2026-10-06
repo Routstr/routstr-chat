@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getDecodedToken } from "@cashu/cashu-ts";
+import { getTokenMetadata } from "@cashu/cashu-ts";
 import { useChat } from "@/context/ChatProvider";
 import { useCashuStore, useCashuToken } from "@/features/wallet";
 import { useWalletReceive } from "@/features/wallet/hooks/useWalletReceive";
@@ -115,9 +115,8 @@ export function useFunding(onPaid?: (sats: number) => void) {
       setMessage("");
       let sats = 0;
       try {
-        const decoded = getDecodedToken(token);
-        const total = decoded.proofs.reduce((s, p) => s + p.amount, 0);
-        sats = decoded.unit === "msat" ? Math.floor(total / 1000) : total;
+        const { unit, amount } = getTokenMetadata(token);
+        sats = unit === "msat" ? Math.floor(amount / 1000) : amount;
       } catch {
         setMessage("That does not look like a Cashu token.");
         return 0;
@@ -130,7 +129,7 @@ export function useFunding(onPaid?: (sats: number) => void) {
         // value is only a promise until the swap
         const got = await receiveToken(token);
         const back = got.reduce((s, p) => s + p.amount, 0);
-        const unit = getDecodedToken(token).unit;
+        const { unit } = getTokenMetadata(token);
         const landed = got.length ? (unit === "msat" ? Math.floor(back / 1000) : back) : sats;
         done(landed);
         return landed;
