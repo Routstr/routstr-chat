@@ -272,3 +272,14 @@ describe("CatalogService", () => {
     expect(catalog.warm()).toMatchObject({ modelManager: expect.anything() });
   });
 });
+
+describe("CatalogService.listedAt", () => {
+  it("gives what one provider lists for a model, even when it no longer routes it", () => {
+    const { catalog, cache } = setup();
+    cache[PUBLIC] = [model("a"), model("b")];
+
+    expect(catalog.listedAt(PUBLIC, "b")?.id).toBe("b");
+    expect(catalog.listedAt(PUBLIC, "c")).toBeUndefined();
+    expect(catalog.listedAt("https://gone.example/", "a")).toBeUndefined();
+  });
+});

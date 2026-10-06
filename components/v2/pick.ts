@@ -1,6 +1,6 @@
 import { createContext, useContext, useSyncExternalStore } from "react";
 import type { Model } from "@/types/models";
-import { parseKey } from "./picker/catalog";
+import { baseKey, parseKey } from "./picker/catalog";
 
 /* Which model you talk to, the ones you keep at hand, and the provider you
    pinned for each. Device-wide, in main's keys, so a choice made in either
@@ -30,15 +30,10 @@ export interface PickState {
 
 type KeyValueStorage = Pick<Storage, "getItem" | "setItem">;
 
-const baseUrl = (base: string) => {
-  const url = base.startsWith("http") ? base : `https://${base}`;
-  return url.endsWith("/") ? url : `${url}/`;
-};
-
 /** A choice from main's key for it. */
 export function choiceOf(key: string): Choice {
   const { id, base } = parseKey(key);
-  return base ? { id, provider: baseUrl(base) } : { id };
+  return base ? { id, provider: baseKey(base) } : { id };
 }
 
 /** Main's key for a choice. */
