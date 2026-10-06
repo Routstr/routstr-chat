@@ -24,10 +24,14 @@ export function kitPurse(kit: KitClient, owner: string, mintUrl: string) {
     coins: async (who, mint) =>
       coins.filter((c) => c.owner === who && (!mint || c.mintUrl === mint)),
     activeMint: () => mintUrl,
+    // one tab, nothing else changes these coins
+    subscribe: () => () => {},
   };
   const journal = new Journal(memoryStorage());
   const purse = createPurse(owner, {
     coins: store,
+    // the tests count coins, not the activity list
+    activity: { record() {} },
     journal,
     locks: navigator.locks,
   });
