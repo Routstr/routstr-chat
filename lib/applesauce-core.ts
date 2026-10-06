@@ -1,6 +1,6 @@
 import { EventStore } from "applesauce-core";
-import { RelayPool } from "applesauce-relay";
 import { NostrConnectSigner } from "applesauce-signers";
+import { pool } from "@/runtime/nostr";
 import { getEventDatabaseInstance } from "./eventDatabase";
 
 /**
@@ -15,8 +15,8 @@ const eventDatabase = getEventDatabaseInstance();
 // Central event storage with persistent database backend
 export const eventStore = new EventStore({ database: eventDatabase });
 
-// Relay pool for managing connections
-export const relayPool = new RelayPool();
+// The app's one relay pool (runtime/nostr.ts)
+export const relayPool = pool;
 
 // Setup nostr connect signer
 if (typeof window !== "undefined") {

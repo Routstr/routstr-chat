@@ -18,7 +18,7 @@ import { INDEX, SECTIONS, showConsole } from "../settings/Settings";
 import { peekLine, shownLine } from "./greet";
 import { useObservableState } from "applesauce-react/hooks";
 import { useAccountManager } from "@/components/ClientProviders";
-import { useAppContext } from "@/hooks/useAppContext";
+import { useDeviceRelays } from "@/features/relays/view";
 
 /* ⌘K: one field that goes anywhere. A fixed frame (it never resizes while you
    type), the list on the left with one selection that glides between rows, and
@@ -789,9 +789,9 @@ function Body({ closing }: { closing: boolean }) {
   convRef.current = conversations;
   const { manager } = useAccountManager();
   const account = useObservableState(manager.active$);
-  const { config } = useAppContext();
+  const [deviceRelays] = useDeviceRelays();
   const syncCtx = useRef({ active: false, relays: 0 });
-  syncCtx.current = { active: !!account, relays: config.relayUrls?.length ?? 0 };
+  syncCtx.current = { active: !!account, relays: deviceRelays.length };
   const finishSync = useCallback((outcome: SyncOutcome) => {
     const s = syncT.current;
     // the glyph turns for a moment at least, so a quick sync still reads as one

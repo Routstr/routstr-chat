@@ -7,7 +7,7 @@ import { useObservableState } from "applesauce-react/hooks";
 import { useAuth } from "@/context/AuthProvider";
 import { useAccountManager } from "@/components/ClientProviders";
 import { useChatSync } from "@/hooks/useChatSync";
-import { useAppContext } from "@/hooks/useAppContext";
+import { useDeviceRelays } from "@/features/relays/view";
 import { useBlossomSync } from "@/hooks/useBlossomSync";
 import { useLogs } from "@/hooks/useLogs";
 import { relayPool } from "@/lib/applesauce-core";
@@ -504,7 +504,7 @@ export function Sync() {
   const { chatSyncEnabled, setChatSyncEnabled } = useChatSync();
   const { manager } = useAccountManager();
   const active = useObservableState(manager.active$);
-  const { config, updateConfig } = useAppContext();
+  const [relays, updateRelays] = useDeviceRelays();
   const {
     blossomSyncEnabled,
     setBlossomSyncEnabled,
@@ -530,7 +530,6 @@ export function Sync() {
     const id = window.setInterval(() => tick((n) => n + 1), 3000);
     return () => window.clearInterval(id);
   }, []);
-  const relays = config.relayUrls;
   // read without opening one (relay() would create it, and a fresh relay is not yet connected): a
   // relay is 'bad' only after it has tried and failed, until then it is connecting
   const stateOf = (u: string): "ok" | "bad" | "wait" => {
@@ -544,7 +543,7 @@ export function Sync() {
       return setRelayErr("Relay addresses look like wss://relay.example.com");
     if (relays.includes(v))
       return setRelayErr("That relay is already in your list.");
-    updateConfig((c) => ({ ...c, relayUrls: [...c.relayUrls, v] }));
+    updateRelays((urls) => [...urls, v]);
     setRelayIn("");
     setRelayErr("");
   };
@@ -554,14 +553,9 @@ export function Sync() {
   const goneRelays = useGone();
   const goneServers = useGone();
   const removeRelay = (u: string) => {
-    const i = config.relayUrls.indexOf(u);
-    updateConfig((c) => ({
-      ...c,
-      relayUrls: c.relayUrls.filter((x) => x !== u),
-    }));
-    goneRelays.drop(u, hostOf(u), i, () =>
-      updateConfig((c) => ({ ...c, relayUrls: at(c.relayUrls, u, i) }))
-    );
+    const i = relays.indexOf(u);
+    updateRelays((urls) => urls.filter((x) => x !== u));
+    goneRelays.drop(u, hostOf(u), i, () => updateRelays((urls) => at(urls, u, i)));
   };
   const addServer = () => {
     const v = serverIn.trim();
