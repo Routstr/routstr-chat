@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { getTokenMetadata } from "@cashu/cashu-ts";
+import { peek } from "@/features/wallet/view";
 import { Icon } from "../icons";
 import { useMoney } from "../useMoney";
 import { useFunding } from "./useFunding";
@@ -154,8 +154,8 @@ export default function Add({
     if (!t) return null;
     if (isLn(t)) return { kind: "ln" as const };
     try {
-      const d = getTokenMetadata(t);
-      return { kind: "token" as const, sats: d.unit === "msat" ? Math.floor(d.amount / 1000) : d.amount, mint: d.mint };
+      const { sats, mint } = peek(t);
+      return { kind: "token" as const, sats, mint };
     } catch {
       return t.length >= 12 ? { kind: "junk" as const } : null;
     }

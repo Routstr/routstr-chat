@@ -89,7 +89,7 @@ const COINS = { name: "@cashu/cashu-ts", message: "Read and move coins through t
 const REACT = ["react", "react-dom"].map((name) => ({ name, message: "Services and rules stay framework-free; React lives in view.ts." }));
 const restrict = (...paths) => ({ "no-restricted-imports": ["error", ...paths.flat()] });
 // what still breaks those rules until its module is wired; the list goes with the old hooks
-const LEGACY_DECODERS = ["components/v2/App.tsx", "components/v2/composer/back/usePay.tsx", "components/v2/wallet/useFunding.ts", "components/v2/wallet/Add.tsx"];
+const LEGACY_DECODERS = ["components/v2/App.tsx", "components/v2/composer/back/usePay.tsx"];
 const TESTS = ["**/__tests__/**", "**/*.test.ts"];
 const packages = [
   { files: ["**/*.{ts,tsx}"], ignores: ["platform/nostr/**", ...TESTS], rules: restrict(RELAY) },

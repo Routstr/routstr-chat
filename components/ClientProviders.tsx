@@ -16,8 +16,10 @@ import { migrateStorageItems } from "@/utils/storageUtils";
 import { InvoiceRecoveryProvider } from "@/components/InvoiceRecoveryProvider";
 import { session } from "@/runtime";
 import { activeHistory, relays } from "@/runtime/nostr";
+import { purseFor } from "@/runtime/wallet";
 import { HistoryContext } from "@/features/history/view";
 import { RelaysContext } from "@/features/relays/view";
+import { PurseContext } from "@/features/wallet/view";
 import type { Accounts, SessionService } from "@/features/session/service";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -96,9 +98,11 @@ export default function ClientProviders({ children }: { children: ReactNode }) {
           <AppProvider presetRelays={presetRelays}>
             <QueryClientProvider client={queryClient}>
               <HistoryContext.Provider value={history}>
-                <InvoiceRecoveryProvider key={generation}>
-                  {children}
-                </InvoiceRecoveryProvider>
+                <PurseContext.Provider value={purseFor}>
+                  <InvoiceRecoveryProvider key={generation}>
+                    {children}
+                  </InvoiceRecoveryProvider>
+                </PurseContext.Provider>
               </HistoryContext.Provider>
             </QueryClientProvider>
           </AppProvider>
