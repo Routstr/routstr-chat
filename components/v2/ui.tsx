@@ -5,7 +5,7 @@ import React, { createContext, useCallback, useContext, useMemo, useRef, useStat
 /* What the furniture is doing right now. Nothing here is data; the data lives
    in useChat(). */
 
-export type ComposerFace = "write" | "pay" | "auth";
+export type ComposerFace = "write" | "pay" | "auth" | "who";
 export type RailSide = "chats" | "wallet";
 export type SettingsSection =
   | "look"

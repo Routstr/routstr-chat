@@ -33,7 +33,7 @@ export default function PayToken({ pay }: { pay: Pay }) {
     <div className="pa-view" data-view="tok">
       <header className="pa-head">
         <h2 className="pa-t">{head.t}</h2>
-        <p className="pa-sub">{head.s}</p>
+        {head.s && <p className="pa-sub">{head.s}</p>}
       </header>
       <div className="pa-mid">
         <div className="pa-tokbody">
