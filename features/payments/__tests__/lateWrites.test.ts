@@ -79,6 +79,26 @@ describe("lockedAfter", () => {
     expect(disk.storage().getApiKey(PROVIDER)?.key).toBe("sk-real");
   });
 
+  it("lands the balance the SDK writes right after changing the key late", async () => {
+    const { keys, reader } = await tab();
+    keys.storage().setApiKey(PROVIDER, "cashuBootstrap");
+    await keys.flush();
+    const late = lockedAfter(keys.storage(), () => true, keys, "direct");
+
+    // its update after Stop: the key's real id, then what it holds
+    late.replaceApiKey!(PROVIDER, "sk-real");
+    late.updateApiKeyBalance(PROVIDER, 6.9);
+    late.touchApiKeyLastUsed(PROVIDER);
+    await late.flush?.();
+
+    const disk = reader();
+    await disk.ready();
+    expect(disk.storage().getApiKey(PROVIDER)).toMatchObject({
+      key: "sk-real",
+      balance: 6.9,
+    });
+  });
+
   it("makes no change after one that failed, and says so on flush", async () => {
     const { keys, reader } = await tab();
     const token = tokenOf(33);

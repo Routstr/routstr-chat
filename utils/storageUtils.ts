@@ -566,33 +566,6 @@ export const removeLocalCashuToken = (baseUrl: string): void => {
 };
 
 /**
- * Load disabled providers from localStorage.
- *
- * @deprecated The SDK store (`@/sdk/sharedStore`) is now the single source
- * of truth. Use `useDisabledProviders()` (React) or `getDisabledProvidersSync()`
- * (`@/utils/disabledProviders`) instead. Retained only for the one-time
- * migration in `migrateDisabledProvidersToSdk()`.
- *
- * @returns Array of disabled provider base URLs
- */
-export const loadDisabledProviders = (): string[] => {
-  return getStorageItem<string[]>(STORAGE_KEYS.DISABLED_PROVIDERS, []);
-};
-
-/**
- * Save disabled providers to localStorage.
- *
- * @deprecated Do not use — the SDK store is the single source of truth.
- * Use `useDisabledProviders().setDisabledProviders()` or
- * `setDisabledProvidersSync()` from `@/utils/disabledProviders`.
- *
- * @param disabledProviders Array of disabled provider base URLs
- */
-export const saveDisabledProviders = (disabledProviders: string[]): void => {
-  setStorageItem(STORAGE_KEYS.DISABLED_PROVIDERS, disabledProviders);
-};
-
-/**
  * Load mints from all providers
  * @returns Record mapping provider base URL to array of mint URLs
  */

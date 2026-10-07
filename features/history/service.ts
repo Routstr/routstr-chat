@@ -172,9 +172,10 @@ export class HistoryService {
    */
   async save(
     conversationId: string,
-    message: Message & { _prevId: string }
+    message: Message & { _prevId: string },
+    givenUp?: AbortSignal
   ): Promise<StoredMessage> {
-    const keys = await this.whenWritable();
+    const keys = await this.whenWritable(givenUp);
     const event = encodeMessage(
       conversationId,
       message,
@@ -446,9 +447,10 @@ export class HistoryService {
     }
   }
 
-  private async whenWritable(): Promise<PnsKeys> {
+  private async whenWritable(givenUp?: AbortSignal): Promise<PnsKeys> {
     for (;;) {
       this.assertLive();
+      givenUp?.throwIfAborted();
       const keys = this.writingKeys();
       if (keys) return keys;
       if (this.status === "locked") {
@@ -461,10 +463,13 @@ export class HistoryService {
         throw new Error("History could not open this device's storage");
       }
       await new Promise<void>((resolve) => {
-        const off = this.subscribe(() => {
+        const wake = () => {
           off();
+          givenUp?.removeEventListener("abort", wake);
           resolve();
-        });
+        };
+        const off = this.subscribe(wake);
+        givenUp?.addEventListener("abort", wake);
       });
     }
   }

@@ -12,10 +12,12 @@ export interface ChatHistory {
   /** The branch on screen, root first, without system notes. */
   branch(conversationId: string): StoredMessage[];
   /** Resolves only once the message is on disk; it becomes the shown
-   *  version at its place. A rejection means nothing was saved. */
+   *  version at its place. A rejection means nothing was saved. Once
+   *  `givenUp` aborts, a save still waiting for the keyring is dropped. */
   save(
     conversationId: string,
-    message: Message & { _prevId: string }
+    message: Message & { _prevId: string },
+    givenUp?: AbortSignal
   ): Promise<StoredMessage>;
 }
 

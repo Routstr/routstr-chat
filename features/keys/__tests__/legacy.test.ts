@@ -22,7 +22,6 @@ const disk = vi.hoisted(() => {
   };
   return { driver, reads };
 });
-vi.mock("@/sdk/sharedStore", () => ({ driver: disk.driver }));
 
 import { lockLegacy, oldCredit } from "../legacy";
 
@@ -37,7 +36,7 @@ const seed = async (keys: Record<string, string>) => {
   await main.flush?.();
 };
 const listed = async (nodeUrl?: string) =>
-  (await oldCredit(() => nodeUrl).load()).getAllApiKeys().map((k) => k.key);
+  (await oldCredit(() => nodeUrl, disk.driver as StorageDriver).load()).getAllApiKeys().map((k) => k.key);
 
 describe("oldCredit", () => {
   it("hides the node's key, and a sweep's removal reaches main's old store", async () => {
@@ -45,7 +44,7 @@ describe("oldCredit", () => {
       "https://p.test/": "sk-old",
       "https://node.test/": "sk-node",
     });
-    const old = await oldCredit(() => "https://node.test").load();
+    const old = await oldCredit(() => "https://node.test", disk.driver as StorageDriver).load();
 
     expect(old.getAllApiKeys().map((k) => k.key)).toContain("sk-old");
     expect(old.getAllApiKeys().map((k) => k.key)).not.toContain("sk-node");
@@ -60,7 +59,7 @@ describe("oldCredit", () => {
   it("reads the node that pays at each load", async () => {
     await seed({ "https://a.test/": "sk-a", "https://b.test/": "sk-b" });
     let node = "https://a.test";
-    const credit = oldCredit(() => node);
+    const credit = oldCredit(() => node, disk.driver as StorageDriver);
 
     const first = (await credit.load()).getAllApiKeys().map((k) => k.key);
     node = "https://b.test";
@@ -74,11 +73,11 @@ describe("oldCredit", () => {
 
   it("sees what another tab already swept, so it never sweeps a stale copy", async () => {
     await seed({ "https://swept.test/": "sk-swept" });
-    const credit = oldCredit(() => undefined);
+    const credit = oldCredit(() => undefined, disk.driver as StorageDriver);
     const before = await credit.load();
     expect(before.getAllApiKeys().map((k) => k.key)).toContain("sk-swept");
 
-    const otherTab = await oldCredit(() => undefined).load();
+    const otherTab = await oldCredit(() => undefined, disk.driver as StorageDriver).load();
     otherTab.removeApiKey("https://swept.test/");
     await otherTab.flush?.();
 
@@ -91,7 +90,7 @@ describe("oldCredit", () => {
       "https://one.test/": "sk-one",
       "https://two.test/": "sk-two",
     });
-    const credit = oldCredit(() => undefined);
+    const credit = oldCredit(() => undefined, disk.driver as StorageDriver);
     const release = await credit.lock();
     const sweep = await credit.load();
 
@@ -109,7 +108,7 @@ describe("oldCredit", () => {
 
   it("reads only the credit from main's old store, not its models and providers", async () => {
     disk.reads.length = 0;
-    await oldCredit(() => undefined).load();
+    await oldCredit(() => undefined, disk.driver as StorageDriver).load();
     expect(new Set(disk.reads)).toEqual(
       new Set([
         "api_keys",

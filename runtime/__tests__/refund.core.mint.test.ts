@@ -72,6 +72,16 @@ async function account(others: ApiKeyEntry[] = [], adopt: Adopt = noAdopt) {
       received.push(sats);
       return { sats, pending: false };
     },
+    redeem: async (token) => {
+      if (state.mintDown) {
+        throw Object.assign(new Error("Failed to fetch"), {
+          reason: "unreachable",
+        });
+      }
+      const sats = await kit.redeem(token);
+      received.push(sats);
+      return sats;
+    },
   };
   const credit = fakeKeys();
   await credit.keys.ready();

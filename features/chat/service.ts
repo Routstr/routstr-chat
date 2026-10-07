@@ -151,6 +151,10 @@ export class ChatService {
     content: Message["content"],
     model: ChatModel
   ): Promise<Turn> {
+    // never kept: no answer can come from this model
+    if (model.images === false && hasImage(content)) {
+      throw new Error(TEXT_ONLY);
+    }
     const claim = this.claim(conversationId);
     const branch = this.deps.history.branch(conversationId);
     let question: StoredMessage;
@@ -159,11 +163,14 @@ export class ChatService {
         { role: "user", content },
         claim.signal
       );
+      const late = new AbortController();
       question = await saving(
-        this.deps.history.save(conversationId, {
-          ...kept,
-          _prevId: parentAt(branch, depth),
-        })
+        this.deps.history.save(
+          conversationId,
+          { ...kept, _prevId: parentAt(branch, depth) },
+          late.signal
+        ),
+        () => late.abort()
       );
     } catch (error) {
       this.release(conversationId);
@@ -280,13 +287,14 @@ export class ChatService {
 }
 
 /** A save, given up after SAVE_WAIT_MS. Stop does not end it: what was
- *  written is kept. It may still land later; the turn is not held for it. */
-function saving<T>(save: Promise<T>): Promise<T> {
+ *  written is kept. It may still land later unless `giveUp` stops it; the
+ *  turn is not held for it. */
+function saving<T>(save: Promise<T>, giveUp?: () => void): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(
-      () => reject(new Error("the signer did not answer")),
-      SAVE_WAIT_MS
-    );
+    const timer = setTimeout(() => {
+      giveUp?.();
+      reject(new Error("the signer did not answer"));
+    }, SAVE_WAIT_MS);
     save.then(resolve, reject).finally(() => clearTimeout(timer));
   });
 }
@@ -297,24 +305,21 @@ function parentAt(branch: StoredMessage[], depth: number): string {
   return branch[depth]?._prevId ?? branch[depth - 1]?._eventId ?? ROOT_ID;
 }
 
+const TEXT_ONLY =
+  "This model reads text only. Remove the image or pick a model that sees images.";
+const isImage = (part: { type: string }) => part.type === "image_url";
+const hasImage = (content: Message["content"]) =>
+  Array.isArray(content) && content.some(isImage);
+
 /** A text-only model is never sent an image: the question's own image
  *  stops the turn, older ones are left out. */
 function withoutImages(
   history: Message[],
   warn: (text: string) => void
 ): Message[] {
-  const isImage = (part: { type: string }) => part.type === "image_url";
   const question = history.at(-1);
-  if (Array.isArray(question?.content) && question.content.some(isImage)) {
-    throw new Error(
-      "This model reads text only. Remove the image or pick a model that sees images."
-    );
-  }
-  if (
-    !history.some((m) => Array.isArray(m.content) && m.content.some(isImage))
-  ) {
-    return history;
-  }
+  if (question && hasImage(question.content)) throw new Error(TEXT_ONLY);
+  if (!history.some((m) => hasImage(m.content))) return history;
   warn("This model reads text only, so earlier images were left out.");
   return history.map((m) =>
     Array.isArray(m.content)

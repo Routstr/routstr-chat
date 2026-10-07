@@ -73,9 +73,10 @@ export async function refundCredit(
     // on every refund. Only here: after a failed reply the key stays, and the
     // next refund brings it home.
     let refunding: string | undefined;
-    const wallet = sdkWallet(deps.purse, deps.live, false, async (token) =>
-      refunding ? deps.adopt(token, refunding) : undefined
-    );
+    const wallet = sdkWallet(deps.purse, deps.live, false, {
+      recover: async (token) =>
+        refunding ? deps.adopt(token, refunding) : undefined,
+    });
     const payingOut: PayingOut = async (baseUrl, payOut) => {
       refunding = baseUrl;
       try {
@@ -207,8 +208,9 @@ async function refundKeys(
         forceRefund: force,
       })
     );
-    // A payout the wallet could not take in still emptied the key at the
-    // provider: show what it holds now, not what it held before
+    // A payout the mint refused, or a refund that failed part way, may still
+    // have emptied the key at the provider: show what it holds now, not what
+    // it held before
     if (!success && storage.getApiKey(key.baseUrl)?.key === key.key) {
       const after = await balances.getTokenBalance(key.key, key.baseUrl);
       if (!after.balanceUnknown && !after.isInvalidApiKey) {

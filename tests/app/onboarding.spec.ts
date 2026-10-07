@@ -26,7 +26,7 @@ test("a first send asks who's writing, then for 100 sats, then sends by itself",
 }) => {
   await kit.upstream.reset();
   await v2.open(page, appUrl);
-  await seedKitProvider(page, kit.coreUrl, "kit-cheap", { mainStore: false });
+  await seedKitProvider(page, kit.coreUrl, "kit-cheap");
 
   await firstSend(page, "[kit:usage=10,10] hello kit");
   await expect(who(page)).toBeVisible();

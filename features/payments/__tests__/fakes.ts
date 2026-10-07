@@ -140,6 +140,10 @@ export function fakePurse(balance = 100) {
       received.push(token);
       return { sats: 1, pending: false };
     }),
+    redeem: vi.fn(async (token: string) => {
+      received.push(token);
+      return 1;
+    }),
   } satisfies Purse;
   return { purse, received, sent };
 }

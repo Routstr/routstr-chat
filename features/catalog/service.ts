@@ -199,6 +199,11 @@ export class CatalogService {
     }
   }
 
+  /** The providers discovery found, whatever their routing state. */
+  knownProviders(): string[] {
+    return this.deps.discoveryAdapter.getBaseUrlsList();
+  }
+
   /** What a provider itself lists, whatever its routing state. */
   listing(baseUrl: string): Model[] {
     return (byBase(this.deps.discoveryAdapter.getCachedModels(), baseUrl) ?? []) as unknown as Model[];

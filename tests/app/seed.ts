@@ -1,53 +1,21 @@
-// Points the app's SDK at the kit's routstr-core. Discovery cannot do it offline: the SDK
-// disables every provider without a review signed by Routstr's key, so a test enables the
-// kit node by hand, exactly as a person does in Settings (manually_enabled_providers).
+// Points the app at the kit's routstr-core. The build already trusts it as a provider
+// (NEXT_PUBLIC_ROUTSTR_PROVIDERS), so discovery's review is not needed offline; this picks
+// its model, as a person who chose it earlier would have.
 import type { BrowserContext, Page } from "@playwright/test";
 import { PrivateKeyAccount } from "applesauce-accounts/accounts";
 import { nip19 } from "nostr-tools";
 
-/** Call on a loaded app page; reloads it so the SDK reads the new list. `mainStore: false`
- *  only picks the model: v2 finds the kit's core on its own (the build names it), so a v2
- *  test without main's provider store proves a fresh device works. */
+/** Call on a loaded app page; reloads it so the app reads the pick. */
 export async function seedKitProvider(
   page: Page,
   coreUrl: string,
-  model: string,
-  { mainStore = true }: { mainStore?: boolean } = {}
+  model: string
 ): Promise<void> {
-  if (!mainStore) {
-    await page.evaluate(
-      ({ url, model }) =>
-        localStorage.setItem("lastUsedModel", JSON.stringify(`${model}@@${url}`)),
-      { url: coreUrl, model }
-    );
-    await page.reload();
-    return;
-  }
-  // the SDK creates its database on start; wait for it rather than create it with the wrong shape
-  await page.waitForFunction(
-    async () =>
-      (await indexedDB.databases()).some((d) => d.name === "routstr-sdk"),
-    null,
-    { timeout: 30_000 }
-  );
   await page.evaluate(
-    async ({ url, model }) => {
+    ({ url, model }) => {
       localStorage.setItem("base_urls_list", JSON.stringify([url]));
       // stored JSON-encoded: the app drops a value it cannot parse
       localStorage.setItem("lastUsedModel", JSON.stringify(`${model}@@${url}`));
-      await new Promise<void>((resolve, reject) => {
-        const open = indexedDB.open("routstr-sdk");
-        open.onerror = () => reject(open.error);
-        open.onsuccess = () => {
-          const tx = open.result.transaction("sdk_storage", "readwrite");
-          const store = tx.objectStore("sdk_storage");
-          store.put(JSON.stringify([url]), "base_urls_list");
-          store.put(JSON.stringify(Date.now()), "lastBaseUrlsUpdate");
-          store.put(JSON.stringify([url]), "manually_enabled_providers");
-          tx.oncomplete = () => (open.result.close(), resolve());
-          tx.onerror = () => reject(tx.error);
-        };
-      });
     },
     { url: coreUrl, model }
   );

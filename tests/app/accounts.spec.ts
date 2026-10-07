@@ -128,7 +128,7 @@ test("a switch picked during a reply waits for it, and the reply's change lands 
   await kit.upstream.reset();
   await seedAccounts(context, [newKey(), newKey()]);
   await v2.open(page, appUrl);
-  await seedKitProvider(page, kit.coreUrl, "kit-cheap", { mainStore: false });
+  await seedKitProvider(page, kit.coreUrl, "kit-cheap");
   await v2.receive(page, await kit.mintToken(300));
   expect(await v2.balance(page)).toBe(300);
 

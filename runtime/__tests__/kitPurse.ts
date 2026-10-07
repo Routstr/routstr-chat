@@ -35,9 +35,29 @@ export function kitPurse(kit: KitClient, owner: string, mintUrl: string) {
     journal,
     locks: navigator.locks,
   });
+  /** Stands in for the wallet's mint-first redeem until it lands: the mint
+   *  swaps the token now, or nothing is kept. */
+  const redeem = async (token: string) => {
+    let sats: number;
+    try {
+      sats = await kit.redeem(token);
+    } catch (error) {
+      const code = (error as { code?: number }).code;
+      throw Object.assign(new Error(String(error)), {
+        reason:
+          code === 11001
+            ? "spent"
+            : error instanceof TypeError
+              ? "unreachable"
+              : "refused",
+      });
+    }
+    await store.change(owner, mintUrl, await kit.mintProofs(sats), []);
+    return sats;
+  };
   return {
     owner,
-    purse,
+    purse: { ...purse, redeem },
     journal,
     fund: async (sats: number) =>
       store.change(owner, mintUrl, await kit.mintProofs(sats), []),

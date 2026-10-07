@@ -28,7 +28,7 @@ async function funded(
   sats: number
 ) {
   await v2.open(page, appUrl);
-  await seedKitProvider(page, kit.coreUrl, "kit-cheap", { mainStore: false });
+  await seedKitProvider(page, kit.coreUrl, "kit-cheap");
   await v2.receive(page, await kit.mintToken(sats));
   await v2.useMint(page, kit.env.mintUrl);
 }
@@ -207,7 +207,7 @@ test(`first run${chosen ? "" : ", nothing chosen"}: who's writing, a new account
   appUrl,
 }) => {
   await v2.open(page, appUrl);
-  if (chosen) await seedKitProvider(page, kit.coreUrl, "kit-cheap", { mainStore: false });
+  if (chosen) await seedKitProvider(page, kit.coreUrl, "kit-cheap");
 
   const composer = page.getByRole("textbox", { name: "Message" });
   await composer.fill(`${TINY} my first message`);
@@ -303,7 +303,7 @@ test("credit a provider holds pays for messages to it, and only to it", async ({
   const nsec = newKey();
   await seedAccounts(context, [nsec]);
   await v2.open(page, appUrl);
-  await seedKitProvider(page, kit.coreUrl, "kit-cheap", { mainStore: false });
+  await seedKitProvider(page, kit.coreUrl, "kit-cheap");
 
   // 500 sats at a provider that does not serve the model, nothing in the wallet
   await holdAt(page, nsec, "http://elsewhere.localhost/", 500);

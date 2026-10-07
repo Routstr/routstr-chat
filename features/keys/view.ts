@@ -1,5 +1,6 @@
 import { createContext, useContext, useSyncExternalStore } from "react";
 import { useSession } from "@/features/session/view";
+import { useCatalogService } from "@/features/catalog/view";
 import { exportedKeysFor, type ExportedKey, type Purse } from "./exported";
 
 export type { ExportedKey };
@@ -28,3 +29,6 @@ export function useExportedKeys() {
   return { service, keys, purse };
 }
 
+/** Providers a key can be made at, as the catalogue last found them. */
+export const useKnownProviders = (): string[] =>
+  useCatalogService()?.knownProviders() ?? [];
