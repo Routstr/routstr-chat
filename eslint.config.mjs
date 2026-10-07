@@ -32,7 +32,7 @@ const LEGACY_IMPORTERS = ["features/wallet/components/**", "features/wallet/hook
 // with a glob `from`, the rule matches `except` against absolute paths, and only takes globs
 const glob = (p) => path.join(import.meta.dirname, p.replace(/\.ts(x?)$/, ".[t]s$1"));
 
-// The import graph from ARCHITECTURE.md: screens read views; services and rules never see React,
+// The import graph (AGENTS.md): screens read views; services and rules never see React,
 // the platform or the runtime; the platform never sees a feature beyond its ports; only app/ mounts
 // the runtime.
 const graph = {
