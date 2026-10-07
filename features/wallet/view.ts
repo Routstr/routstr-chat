@@ -13,6 +13,7 @@ import { DEFAULT_MINT_URL } from "@/lib/utils";
 import { saveTransactionHistory } from "@/utils/storageUtils";
 import { depositMint } from "./depositMint";
 import { listMint, walletLoading } from "./hooks/purseBridge";
+import type { UsageLog } from "./ports";
 import { toSats, type Purse } from "./purse";
 import { useCashuStore } from "./state/cashuStore";
 import {
@@ -134,6 +135,10 @@ export function useActivity() {
   }, [clearHistory]);
   return { entries, pending, clear };
 }
+
+/** The SDK's usage log, the one replies are recorded in; filled by the
+ *  composition root. Without it Usage shows nothing. */
+export const UsageLogContext = createContext<UsageLog | null>(null);
 
 /** The mints the provider about to be paid takes, for `sats` of new money,
  *  read when money is added; filled by the composition root from the catalog,

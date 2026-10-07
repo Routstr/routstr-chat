@@ -19,5 +19,5 @@ export function createRouting(options: {
     ensureNode: (url) => catalog.ensureNode(url),
     torMode: sdk.torMode,
   };
-  return { catalog, payments };
+  return { catalog, payments, usage: sdk.usageTrackingDriver };
 }

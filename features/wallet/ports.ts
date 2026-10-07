@@ -1,4 +1,5 @@
 import type { Proof } from "@cashu/cashu-ts";
+import type { UsageTrackingEntry } from "@routstr/sdk/storage";
 
 /** A coin as the wallet keeps it: the proof, whose it is, at which mint, and
  *  the unit of its keyset. */
@@ -26,6 +27,12 @@ export interface CoinStore {
   /** Runs when this owner's coins may have changed: by this tab, or when this
    *  tab reads what another tab saved. */
   subscribe(owner: string, listener: () => void): () => void;
+}
+
+/** The SDK's log of what each reply cost (Settings → Usage). */
+export interface UsageLog {
+  list(): Promise<UsageTrackingEntry[]>;
+  clear(): Promise<void>;
 }
 
 /** Where an account's activity is written: each send and receive, in sats. */

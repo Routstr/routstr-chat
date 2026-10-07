@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo } from "react";
+import { useContext, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { UsageTrackingEntry } from "@routstr/sdk/storage";
-import { usageTrackingDriver } from "@/sdk/sharedStore";
+import { UsageLogContext } from "../view";
 
 export interface UsageHistoryFilters {
   after?: number;
@@ -27,11 +27,12 @@ const USAGE_QUERY_KEY = "sdk-usage-history";
 
 export function useSdkUsageHistory(filters: UsageHistoryFilters) {
   const queryClient = useQueryClient();
+  const usageLog = useContext(UsageLogContext);
 
   const query = useQuery<UsageHistoryData>({
     queryKey: [USAGE_QUERY_KEY],
     queryFn: async () => {
-      const entries = await usageTrackingDriver.list();
+      const entries = (await usageLog?.list()) ?? [];
 
       return {
         entries,
@@ -69,7 +70,7 @@ export function useSdkUsageHistory(filters: UsageHistoryFilters) {
   }, [filters.after, filters.baseUrl, filters.modelId, query.data?.entries]);
 
   const clearUsage = async () => {
-    await usageTrackingDriver.clear();
+    await usageLog?.clear();
     await queryClient.invalidateQueries({ queryKey: [USAGE_QUERY_KEY] });
   };
 
