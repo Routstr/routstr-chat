@@ -5,11 +5,8 @@ import { useCatalogModels, useCatalogService } from "@/features/catalog/view";
 import { renderCompanyIcon } from "@/components/v2/picker/display";
 import { getModelCompanyId } from "@/components/v2/picker/modelCompanies";
 import { useDisabledProviders } from "@/hooks/useDisabledProviders";
-import {
-  getCachedProviderModels,
-  parseModelKey,
-} from "@/utils/modelUtils";
-import { loadBaseUrlsList, setProviderLastUpdate } from "@/utils/storageUtils";
+import { parseModelKey } from "@/utils/modelUtils";
+import { setProviderLastUpdate } from "@/utils/storageUtils";
 import {
   getProviderEndpoints,
   isTorContext,
@@ -42,6 +39,7 @@ import {
 type Provider = { name: string; url: string };
 
 function useProviders() {
+  const catalog = useCatalogService();
   const [all, setAll] = useState<Provider[]>([]);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
@@ -81,7 +79,7 @@ function useProviders() {
           );
       } catch {
         // the directory is gone or unreachable: the providers the chat already routes to
-        const saved = loadBaseUrlsList().map((url) => ({ name: hostOf(url), url }));
+        const saved = (catalog?.providers() ?? []).map((url) => ({ name: hostOf(url), url }));
         if (!dead) {
           setAll(saved.sort((a, b) => a.name.localeCompare(b.name)));
           setFailed(!saved.length);
@@ -126,7 +124,7 @@ export default function Models() {
         let model = models.find((m) => m.id === id);
         if (!model && base) {
           try {
-            model = (getCachedProviderModels(base) as Model[] | null)?.find(
+            model = catalog?.modelsOf(base).find(
               (m) => m.id === id
             );
           } catch {
@@ -316,7 +314,7 @@ export default function Models() {
         )}
         <div className="st-items st-provs">
           {providers.map((p) => {
-            const n = getCachedProviderModels(p.url)?.length;
+            const n = catalog?.modelsOf(p.url).length;
             // a provider named by its host says it once
             const sub = [p.name !== hostOf(p.url) && hostOf(p.url), n && plural(n, "model")].filter(Boolean).join(" · ");
             return (

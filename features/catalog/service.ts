@@ -31,6 +31,12 @@ const REFRESH_EVERY_MS = 30 * 60 * 1000;
  * pass rewrites the SDK's cache wholesale, so passes run one at a time and a
  * pass that a newer one replaced while it waited never runs.
  */
+// the SDK keys its caches by base URL, written with or without the closing slash
+function byBase<T>(all: Record<string, T>, baseUrl: string): T | undefined {
+  const bare = baseUrl.replace(/\/+$/, "");
+  return all[baseUrl] ?? all[bare] ?? all[`${bare}/`];
+}
+
 export class CatalogService {
   private snapshot: CatalogSnapshot = { models: [], loading: true };
   private listeners = new Set<() => void>();
@@ -72,11 +78,19 @@ export class CatalogService {
     return this.deps.discoveryAdapter.getRoutstr21Models();
   }
 
+  /** The providers the last discovery found. */
+  providers(): string[] {
+    return this.deps.discoveryAdapter.getBaseUrlsList();
+  }
+
   /** The mints a provider takes, as the last discovery found them. */
   mintsOf(baseUrl: string): string[] {
-    const all = this.deps.discoveryAdapter.getCachedMints();
-    const bare = baseUrl.replace(/\/+$/, "");
-    return all[baseUrl] ?? all[bare] ?? all[`${bare}/`] ?? [];
+    return byBase(this.deps.discoveryAdapter.getCachedMints(), baseUrl) ?? [];
+  }
+
+  /** The models a provider served at the last discovery. */
+  modelsOf(baseUrl: string): Model[] {
+    return (byBase(this.deps.discoveryAdapter.getCachedModels(), baseUrl) ?? []) as unknown as Model[];
   }
 
   /** Providers that serve this model, cheapest first, as routing ranks them. */

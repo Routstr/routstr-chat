@@ -84,7 +84,7 @@ export function labChat(history: ChatHistory, params: URLSearchParams): AccountC
 /** The lab's catalogue behind the catalogue view. */
 export function labCatalog(params: URLSearchParams): CatalogService {
   const snapshot = params.has("loading") ? { models: [], loading: true } : { models: LAB_MODELS, loading: false };
-  const catalog: Pick<CatalogService, "subscribe" | "getSnapshot" | "picks" | "routes" | "refresh" | "mintsOf"> = {
+  const catalog: Pick<CatalogService, "subscribe" | "getSnapshot" | "picks" | "routes" | "refresh" | "mintsOf" | "providers" | "modelsOf"> = {
     subscribe: () => () => {},
     getSnapshot: () => snapshot,
     picks: () => PICKS,
@@ -92,6 +92,8 @@ export function labCatalog(params: URLSearchParams): CatalogService {
     refresh: async () => {},
     // the lab names no provider's mints: new money keeps the wallet's own default
     mintsOf: () => [],
+    providers: () => [],
+    modelsOf: () => [],
   };
   return catalog as CatalogService;
 }

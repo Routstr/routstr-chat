@@ -1,11 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
-import {
-  knownProviders,
-  useExportedKeys,
-  type ExportedKey,
-} from "@/features/keys/view";
+import { useCatalogModels, useCatalogService } from "@/features/catalog/view";
+import { useExportedKeys, type ExportedKey } from "@/features/keys/view";
 import { Icon } from "../icons";
 import { useUi } from "../ui";
 import { satUnit } from "../format";
@@ -43,7 +40,10 @@ export default function Keys() {
   const [failed, setFailed] = useState<{ key: string; why: string } | null>(null);
   const [sats, setSats] = useState("");
   const [label, setLabel] = useState("");
-  const providers = knownProviders();
+  // the providers routing found: a key can be made at any of them (read again as discovery lands)
+  const catalog = useCatalogService();
+  useCatalogModels();
+  const providers = catalog?.providers() ?? [];
   const [provider, setProvider] = useState("");
   const chosen = provider || providers[0] || "";
 
