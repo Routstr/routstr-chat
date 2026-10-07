@@ -47,6 +47,8 @@ export function useWalletSend() {
   const nip60ProcessingInvoiceRef = useRef<string | null>(null);
   const reclaimsInFlightRef = useRef<Set<string>>(new Set());
   // the quote made for the pasted invoice, and the mint that made it
+  // each quote asked for; only the latest one asked is kept
+  const quoteSeq = useRef(0);
   const meltQuoteRef = useRef<{
     mintUrl: string;
     quote: MeltQuoteResponse;
@@ -189,7 +191,9 @@ export function useWalletSend() {
       const mintUrl = cashuStore.activeMintUrl;
       // another invoice can replace this one while its quote is made: then
       // this quote is dropped, and nothing here touches the other's state
-      const current = () => nip60ProcessingInvoiceRef.current === value;
+      const seq = ++quoteSeq.current;
+      const current = () =>
+        nip60ProcessingInvoiceRef.current === value && quoteSeq.current === seq;
       try {
         setIsNip60LoadingInvoice(true);
         const meltQuote = await createMeltQuote(mintUrl, value);

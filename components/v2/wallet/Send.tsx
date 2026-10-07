@@ -166,6 +166,24 @@ export default function Send({
     }
     wasPaying.current = s.isNip60Processing;
   }, [s.isNip60Processing, s.successMessage]);
+  // the quote is made again at a mint picked below while its own mint cannot
+  // cover it (the note names one that can), or while it is still being read:
+  // only on a real change of mint, never while paying; the latest one asked wins
+  const activeUrl = mint.active?.url ?? null;
+  const lastActive = useRef(activeUrl);
+  useEffect(() => {
+    const was = lastActive.current;
+    lastActive.current = activeUrl;
+    if (!was || !activeUrl || was === activeUrl || !ln || s.isNip60Processing) return;
+    const payer = mint.all.find((m) => m.url === s.quoteMintUrl);
+    const total = (s.invoiceAmount ?? 0) + (s.invoiceFeeReserve ?? 0);
+    const short = s.invoiceAmount !== null && s.quoteMintUrl !== activeUrl && (payer?.bal ?? 0) < total;
+    if (!short && !s.isNip60LoadingInvoice) return;
+    // what Try again does, with the invoice left in place
+    s.handleNip60PaymentCancel();
+    s.setError("");
+    void s.handleNip60InvoiceInput(ln);
+  }, [activeUrl]);
   const pay = () => {
     lnAmt.current = s.invoiceAmount ?? 0;
     void s.handlePayLightningInvoice();
