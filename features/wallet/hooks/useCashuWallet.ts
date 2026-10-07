@@ -15,6 +15,7 @@ import {
   Nip60TokenEvent,
   type CashuStore,
 } from "../state/cashuStore";
+import { useWalletStore, type WalletStore } from "../state/walletStore";
 import { Proof } from "@cashu/cashu-ts";
 import { z } from "zod";
 import { useNutzaps } from "./useNutzaps";
@@ -45,7 +46,7 @@ export interface DeletedEvents {
 async function initiateMints(
   mints: string[],
   mintService: MintService,
-  cashuStore: CashuStore
+  cashuStore: WalletStore
 ) {
   await Promise.all(
     mints.map(async (mint) => {
@@ -79,6 +80,7 @@ export function useCashuWallet() {
   const activeAccount = useObservableState(manager.active$);
   const queryClient = useQueryClient();
   const cashuStore = useCashuStore();
+  const walletStore = useWalletStore();
   const { createNutzapInfo } = useNutzaps();
   const [showQueryTimeoutModal, setShowQueryTimeoutModal] = useState(false);
   const [didRelaysTimeout, setDidRelaysTimeout] = useState(false);
@@ -192,10 +194,10 @@ export function useCashuWallet() {
 
         // fetch the mint info and keysets for each mint
         const mintService = new MintService();
-        await initiateMints(walletData.mints, mintService, cashuStore);
+        await initiateMints(walletData.mints, mintService, walletStore);
 
         // the active mint is useWalletBinder's: set only when there is none
-        cashuStore.setPrivkey(walletData.privkey);
+        walletStore.setPrivkey(walletData.privkey);
 
         // trigger getNip60TokensQuery refetch without awaiting to avoid circular dependency
         getNip60TokensQuery.refetch();
@@ -379,7 +381,7 @@ export function useCashuWallet() {
           }
         }
         const mintService = new MintService();
-        await initiateMints(Array.from(uniqueMints), mintService, cashuStore);
+        await initiateMints(Array.from(uniqueMints), mintService, walletStore);
 
         // Get existing deleted events from local storage
         const existingDeletedEvents = Array.isArray(deletedEvents)

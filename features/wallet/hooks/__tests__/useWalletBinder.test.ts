@@ -33,8 +33,8 @@ vi.mock("../../view", () => ({
   useBalances: () => null,
   usePurseOf: () => () => null,
 }));
-vi.mock("../../state/cashuStore", () => ({
-  useCashuStore: () => ({
+vi.mock("../../state/walletStore", () => ({
+  useWalletStore: () => ({
     activeMintUrl: "m",
     userSelectedMintUrl: undefined,
     mints: [],

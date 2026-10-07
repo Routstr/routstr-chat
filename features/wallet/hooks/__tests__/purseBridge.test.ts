@@ -32,6 +32,21 @@ vi.mock("@/features/wallet/state/cashuStore", () => ({
     }),
   },
 }));
+// the account's mints, in the wallet's own store
+vi.mock("@/features/wallet/state/walletStore", () => ({
+  useWalletStore: {
+    of: () => ({
+      getState: () => ({
+        ...state.store,
+        activeMintUrl: "m1",
+        mints: [
+          { url: "m1", keysets: [{ id: "k-sat", unit: "sat" }] },
+          { url: "m2", keysets: [{ _id: "k-msat", _unit: "msat" }] },
+        ],
+      }),
+    }),
+  },
+}));
 vi.mock("@/features/wallet/state/transactionHistoryStore", () => ({
   useTransactionHistoryStore: {
     of: (owner: string) => ({

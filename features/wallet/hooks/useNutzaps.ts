@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { CASHU_EVENT_KINDS } from "@/lib/cashu";
 import { relayPool } from "@/lib/applesauce-core";
 import { useNutzapStore, NutzapInformationalEvent } from "../state/nutzapStore";
-import { useCashuStore } from "../state/cashuStore";
+import { useWalletStore } from "../state/walletStore";
 import { fetchNutzapInfo, getNutzapInfoEvent } from "./cashuSync";
 import { relayUrls$ } from "@/hooks/sync/chatSyncInputs";
 
@@ -90,7 +90,7 @@ export function useNutzaps() {
   const activeAccount = useObservableState(manager.active$);
   const queryClient = useQueryClient();
   const nutzapStore = useNutzapStore();
-  const cashuStore = useCashuStore();
+  const cashuStore = useWalletStore();
 
   // Create or update nutzap informational event
   const createNutzapInfoMutation = useMutation({

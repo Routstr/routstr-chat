@@ -6,7 +6,7 @@ import { CASHU_EVENT_KINDS } from "@/lib/cashu";
 import { normalizeMintUrl } from "@/features/book/mint";
 import { DEFAULT_MINT_URL } from "@/lib/utils";
 import { dropSpent } from "../spent";
-import { useCashuStore } from "../state/cashuStore";
+import { useWalletStore } from "../state/walletStore";
 import { useBalances, usePurseOf } from "../view";
 import { walletCoins } from "./purseBridge";
 import { useCashuWallet } from "./useCashuWallet";
@@ -32,7 +32,7 @@ export function useWalletBinder() {
   const { mutateAsync: createWallet } = useCreateCashuWallet();
   const balances = useBalances(owner ?? null);
   const purseOf = usePurseOf();
-  const cashuStore = useCashuStore();
+  const cashuStore = useWalletStore();
 
   useEffect(() => {
     const locks = globalThis.navigator?.locks;

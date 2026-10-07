@@ -2,7 +2,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useAccountManager } from "@/components/ClientProviders";
 import { useObservableState } from "applesauce-react/hooks";
 import { useCashuWallet } from "./useCashuWallet";
-import { useCashuStore } from "../state/cashuStore";
+import { useWalletStore } from "../state/walletStore";
 import { defaultMints } from "../core/services/MintService";
 import { generateSecretKey } from "nostr-tools";
 import { bytesToHex } from "@noble/hashes/utils.js";
@@ -16,7 +16,7 @@ export function useCreateCashuWallet() {
   const { manager } = useAccountManager();
   const activeAccount = useObservableState(manager.active$);
   const { createWalletAsync } = useCashuWallet();
-  const cashuStore = useCashuStore();
+  const cashuStore = useWalletStore();
 
   return useMutation({
     mutationFn: async () => {

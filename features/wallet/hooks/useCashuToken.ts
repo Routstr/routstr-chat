@@ -1,4 +1,4 @@
-import { useCashuStore } from "../state/cashuStore";
+import { useWalletStore } from "../state/walletStore";
 import { useCashuWallet } from "./useCashuWallet";
 import type { Proof } from "@cashu/cashu-ts";
 import { normalizeMintUrl } from "@/features/book/mint";
@@ -8,7 +8,7 @@ import { dropSpent } from "../spent";
 import { walletCoins } from "./purseBridge";
 
 export function useCashuToken() {
-  const cashuStore = useCashuStore();
+  const cashuStore = useWalletStore();
   const { wallet, createWallet } = useCashuWallet();
 
   const ensureMintInitialized = async (mintUrl: string) => {

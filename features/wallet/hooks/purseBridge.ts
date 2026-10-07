@@ -3,6 +3,7 @@ import type { CommitProofs } from "@/features/book/settle";
 import { MintService } from "../core/services/MintService";
 import type { ActivityLog, Coin, CoinStore } from "../ports";
 import { useCashuStore } from "../state/cashuStore";
+import { useWalletStore, type WalletStore } from "../state/walletStore";
 import { useTransactionHistoryStore } from "../state/transactionHistoryStore";
 
 /*
@@ -44,7 +45,7 @@ export const legacyCoins: CoinStore = {
     if (!commitFor) {
       throw new Error("This account's wallet is not open; this waits for it.");
     }
-    await listMint(useCashuStore.of(owner).getState(), mintUrl, add);
+    await listMint(useWalletStore.of(owner).getState(), mintUrl, add);
     await commitFor(mintUrl)(add, remove);
   },
   async coins(owner, mintUrl) {
@@ -68,7 +69,8 @@ export const legacyCoins: CoinStore = {
       return [{ ...proof, owner, ...keyset }];
     });
   },
-  activeMint: (owner) => useCashuStore.of(owner).getState().activeMintUrl ?? "",
+  activeMint: (owner) =>
+    useWalletStore.of(owner).getState().activeMintUrl ?? "",
   subscribe(owner, listener) {
     const store = useCashuStore.of(owner);
     // only what balances read: a reload with the same coins is no change
@@ -109,7 +111,10 @@ export const walletCoins = (): CoinStore => coinStore;
  *  paid into). The coins are stored either way; a mint that does not answer is
  *  listed by the wallet's next refresh. */
 export async function listMint(
-  store: ReturnType<typeof useCashuStore.getState>,
+  store: Pick<
+    WalletStore,
+    "mints" | "addMint" | "setMintInfo" | "setKeysets" | "setKeys"
+  >,
   mintUrl: string,
   add: Proof[] = []
 ) {

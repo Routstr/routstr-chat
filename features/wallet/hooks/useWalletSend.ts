@@ -1,11 +1,10 @@
 "use client";
 
 import { useState, useCallback, useContext, useRef } from "react";
-import { MeltQuoteState } from "@cashu/cashu-ts";
+import { MeltQuoteState, type MeltQuoteResponse } from "@cashu/cashu-ts";
 import { useInvoiceSync } from "@/hooks/useInvoiceSync";
 import { currentOwner } from "@/features/session/owned";
 import {
-  useCashuStore,
   useUnclaimedTokensStore,
   formatBalance,
   calculateBalanceByMint,
@@ -15,6 +14,7 @@ import { getCurrentMintBalance as utilGetCurrentMintBalance } from "@/utils/wall
 import { createMeltQuote, quoteInSats } from "@/lib/cashuLightning";
 import { toSats } from "../purse";
 import { reclaim } from "../reclaim";
+import { useWalletStore } from "../state/walletStore";
 import { AdoptContext, usePurse } from "../view";
 import { useActiveMintUnit } from "./useActiveMintUnit";
 import { dismissToken } from "./useBook";
@@ -23,7 +23,7 @@ import { toast } from "sonner";
 export function useWalletSend() {
   const currentMintUnit = useActiveMintUnit();
   const { addInvoice, updateInvoice } = useInvoiceSync();
-  const cashuStore = useCashuStore();
+  const cashuStore = useWalletStore();
   const unclaimedTokensStore = useUnclaimedTokensStore();
   const purse = usePurse();
   const adopt = useContext(AdoptContext);
@@ -47,6 +47,7 @@ export function useWalletSend() {
   const [isNip60LoadingInvoice, setIsNip60LoadingInvoice] = useState(false);
   const nip60ProcessingInvoiceRef = useRef<string | null>(null);
   const reclaimsInFlightRef = useRef<Set<string>>(new Set());
+  const meltQuoteRef = useRef<MeltQuoteResponse | null>(null);
 
   // Unclaimed send tokens live in the wallet book, not this resettable UI state.
   const reset = useCallback(() => {
@@ -185,6 +186,7 @@ export function useWalletSend() {
         setIsNip60LoadingInvoice(true);
         const meltQuote = await createMeltQuote(mintUrl, value);
         if (!current()) return;
+        meltQuoteRef.current = meltQuote;
         setNip60MeltQuoteId(meltQuote.quote);
         // what Send shows and checks is in sats; the quote paid stays in the mint's unit
         const { amount, feeReserve } = quoteInSats(meltQuote);
@@ -247,8 +249,11 @@ export function useWalletSend() {
       setError("");
       setWarningMessage("");
       const mintUrl = cashuStore.activeMintUrl;
-      // read before the balance, which reloads the store from what is saved
-      const quote = cashuStore.getMeltQuote(mintUrl, nip60MeltQuoteId);
+      // the quote made for this invoice, kept with it (never one made before)
+      const quote = meltQuoteRef.current;
+      if (quote?.quote !== nip60MeltQuoteId) {
+        throw new Error("The invoice's quote is not here any more; paste it again");
+      }
       const from = purse();
       if (!from) throw new Error("User not logged in");
       const have = (await from.balances())[mintUrl] ?? 0;

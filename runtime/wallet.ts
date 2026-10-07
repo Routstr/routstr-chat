@@ -15,7 +15,7 @@ import type {
 } from "@/features/wallet/ports";
 import { createPurse, type Purse } from "@/features/wallet/purse";
 import { Replica } from "@/features/wallet/replica";
-import { useCashuStore } from "@/features/wallet/state/cashuStore";
+import { useWalletStore } from "@/features/wallet/state/walletStore";
 import { oldCoins, sweep } from "@/features/wallet/sweep";
 import { IndexedCoins } from "@/platform/wallet/coins";
 import { isMains, journal, locks } from "./book";
@@ -36,7 +36,7 @@ const indexed = () =>
 const coins: CoinStore = {
   async change(owner, mintUrl, add, remove) {
     // the old store's list still names the wallet's mints (Settings, the active one)
-    await listMint(useCashuStore.of(owner).getState(), mintUrl, add);
+    await listMint(useWalletStore.of(owner).getState(), mintUrl, add);
     await indexed().change(owner, mintUrl, add, remove);
   },
   coins: (owner, mintUrl) => indexed().coins(owner, mintUrl),
@@ -160,8 +160,19 @@ export function bindWallet(account: Account | undefined): void {
       .catch((error) => console.error("Could not read the coins:", error));
 
   setWalletLoading(owner, true);
+  // every mint that holds a coin is in the wallet's list, the coins from
+  // relays and old lists too, so the screens name it and count it
+  const listMints = async () => {
+    const mints = useWalletStore.of(owner).getState();
+    const holding = new Set((await store.coins(owner)).map((c) => c.mintUrl));
+    for (const url of holding) {
+      if (!mints.mints.some((m) => m.url === url)) await listMint(mints, url);
+    }
+  };
+
   void sweepOld()
     .then(pull)
+    .then(listMints)
     .finally(() => {
       if (stopped) return;
       setWalletLoading(owner, false);
@@ -172,7 +183,10 @@ export function bindWallet(account: Account | undefined): void {
   let pulling: ReturnType<typeof setTimeout> | undefined;
   const offStore = store.subscribe(() => {
     clearTimeout(pushing);
-    pushing = setTimeout(push, PUSH_AFTER_MS);
+    pushing = setTimeout(() => {
+      void listMints();
+      void push();
+    }, PUSH_AFTER_MS);
   });
   const live = relays
     .of(owner)

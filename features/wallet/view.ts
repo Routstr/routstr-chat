@@ -15,7 +15,7 @@ import { depositMint } from "./depositMint";
 import { listMint, walletCoins, walletLoading } from "./hooks/purseBridge";
 import type { UsageLog } from "./ports";
 import { toSats, type Purse } from "./purse";
-import { useCashuStore } from "./state/cashuStore";
+import { useWalletStore } from "./state/walletStore";
 import {
   useTransactionHistoryStore,
   type PendingTransaction,
@@ -23,6 +23,11 @@ import {
 import { useUnclaimedTokensStore } from "./state/unclaimedTokensStore";
 
 export { peek } from "./purse";
+
+/** The signed-in account's mints (every one that holds a coin, and the ones
+ *  it added), the one it pays from, and whether the person picked that one:
+ *  the wallet's own store, which main's old list only seeded. */
+export const useMints = useWalletStore;
 
 /** Each account's purse for the person's own moves, filled by the composition
  *  root (runtime/wallet's walletPurseFor). Without it screens have no purse and
@@ -188,7 +193,7 @@ export function useDepositMint(): (
   return useCallback(
     (balances, sats) => {
       const { activeMintUrl, userSelectedMintUrl, mints } =
-        useCashuStore.getState();
+        useWalletStore.getState();
       const url = depositMint({
         active: activeMintUrl,
         picked: !!activeMintUrl && activeMintUrl === userSelectedMintUrl,
@@ -197,7 +202,7 @@ export function useDepositMint(): (
         accepted: accepted(sats),
         fallback: DEFAULT_MINT_URL,
       });
-      void listMint(useCashuStore.getState(), url);
+      void listMint(useWalletStore.getState(), url);
       return url;
     },
     [accepted]
