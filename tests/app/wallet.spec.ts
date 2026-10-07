@@ -239,8 +239,8 @@ test("pays an invoice at the mint that quoted it, though another mint is picked 
 }) => {
   await v2.open(page, appUrl);
   await v2.receive(page, await kit.mintToken(40));
-  // the second mint is listed too
-  await v2.receive(page, await kit.mintToken(8, { otherMint: true }));
+  // the second mint is listed too, with enough that Send offers Pay there as well
+  await v2.receive(page, await kit.mintToken(16, { otherMint: true }));
   await v2.useMint(page, kit.env.mintUrl);
   const other = await kit.walletAt(kit.env.invoiceMintUrl);
   const invoice = await other.createMintQuote(8);
