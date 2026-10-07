@@ -6,7 +6,7 @@ import { chromiumPath } from "../kit/net";
 export default defineConfig({
   testDir: ".",
   testMatch: "**/*.spec.ts",
-  workers: 1, // one browser at a time on a shared laptop
+  workers: 1, // one browser at a time
   timeout: 90_000,
   expect: { timeout: 15_000 },
   reporter: [["list"]],

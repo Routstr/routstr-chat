@@ -1,7 +1,7 @@
 import net from "node:net";
 import type { ChildProcess } from "node:child_process";
 
-/** A port nothing listens on right now (the OS picks it, so never a fixed one like 3017). */
+/** A port nothing listens on right now (the OS picks it, never a fixed one). */
 export function freePort(): Promise<number> {
   return new Promise((resolve, reject) => {
     const server = net.createServer();

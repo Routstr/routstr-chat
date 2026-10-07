@@ -3,24 +3,21 @@
 // account's sats, so a person starts it:
 //
 //   cd <final v2/ui checkout> && node_modules/.bin/next build --webpack   (no kit variables)
-//   cd ~/Documents/Worktrees/Routstr/routstr-chat/v2-test && \
-//     LIVE_APP_OUT=<that checkout>/out node_modules/.bin/playwright test -c tests/live/playwright.config.ts
+//   LIVE_SECRET=<file with an nsec= line> LIVE_APP_OUT=<that checkout>/out \
+//     node_modules/.bin/playwright test -c tests/live/playwright.config.ts
 //
 // LIVE_TOPUP=21 adds a Lightning top-up of 21 sats: the run prints the invoice and waits for
 // you to pay it. The secret key is read from the file and typed into the app; it is never
 // printed, and this config keeps no traces or screenshots.
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 import { v2 } from "../app/drivers/v2";
 import { serveStatic } from "../kit/services/static";
 
-const SECRET = path.join(
-  os.homedir(),
-  "Documents/OpenSource/_docs/chat-v2/api-key-mode-test/test-account.secret"
-);
 const nsec = () => {
+  const SECRET = process.env.LIVE_SECRET;
+  if (!SECRET) throw new Error("set LIVE_SECRET to the test account's secret file");
   const line = fs
     .readFileSync(SECRET, "utf8")
     .split("\n")
