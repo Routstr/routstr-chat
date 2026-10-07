@@ -1,13 +1,13 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useHeldCredit } from "@/features/chat/view";
 import { useSession } from "@/features/session/view";
 import { peek } from "@/features/wallet/view";
 import { useUi } from "../../ui";
 import { useMoney, usePayable } from "../../useMoney";
 import { useChatModel } from "../../useChatModel";
-import { useFunding } from "../../wallet/useFunding";
+import { KEPT, useFunding } from "../../wallet/useFunding";
 import { PRESETS, fmt, reduced } from "./bits";
 
 /* Adding sats on the back of the composer: which amount, the invoice it made,
@@ -37,8 +37,14 @@ export function usePay(say: (t: string) => void) {
   const [picked, setPicked] = useState(0);
   const [other, setOther] = useState("");
   const [copied, setCopied] = useState(false);
-  const [tokText, setTokText] = useState("");
+  const [tokText, setText] = useState("");
   const [tokFail, setTokFail] = useState(false);
+  // the token kept while its mint does not answer; any new text is a new try
+  const [kept, setKept] = useState<string | null>(null);
+  const setTokText = useCallback((text: string) => {
+    setText(text);
+    setKept(null);
+  }, []);
   const [landed, setLanded] = useState(0);
 
   const minOther = Math.max(1, need - balance);
@@ -92,7 +98,9 @@ export function usePay(say: (t: string) => void) {
       ? "receiving"
       : tokFail && read.kind === "read"
         ? "error"
-        : read.kind;
+        : kept === tokText && read.kind === "read"
+          ? "waiting"
+          : read.kind;
 
   const view: "pick" | "inv" | "tok" | "landed" = method === "token" ? (tok === "paid" ? "landed" : "tok") : ln === "pick" ? "pick" : "inv";
 
@@ -181,13 +189,15 @@ export function usePay(say: (t: string) => void) {
     if (read.kind !== "read" || funding.tokenBusy) return;
     setTokFail(false);
     const got = await funding.redeemToken(tokText);
-    if (got < 0) return; // a second press while the first swap runs
-    if (got) setLanded(got);
-    else setTokFail(true);
+    if (got === "busy") return;
+    if (got === "refused") setTokFail(true);
+    else if (got.pending) setKept(tokText);
+    else setLanded(got.sats);
   };
 
-  // errors are spoken as well as shown
+  // errors are spoken as well as shown, and so is a token kept waiting
   useEffect(() => {
+    if (tok === "waiting") say(KEPT);
     if (tok === "error") say(/spent/i.test(funding.message) ? "Someone already spent this token. Nothing changed in your wallet." : "The token could not be received. Nothing changed in your wallet.");
   }, [tok]);
   useEffect(() => {

@@ -3,6 +3,7 @@
 import React from "react";
 import { Icon } from "../../icons";
 import { Warn, fmt, pasteInto } from "./bits";
+import { KEPT } from "../../wallet/useFunding";
 import type { Pay } from "./usePay";
 
 export default function PayToken({ pay }: { pay: Pay }) {
@@ -20,6 +21,8 @@ export default function PayToken({ pay }: { pay: Pay }) {
       </>
     ) : tok === "receiving" ? (
       "Receiving from the mint."
+    ) : tok === "waiting" ? (
+      KEPT
     ) : tok === "read" ? (
       read.kind === "read" && need > 0 && balance + read.sats < need
         ? `This covers part of it. You will need about ${fmt(need - balance - read.sats)} more.`

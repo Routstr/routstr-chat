@@ -81,7 +81,7 @@ export function payFoot(pay: Pay, view: string, ui: ReturnType<typeof useUi>, ph
     }
   } else if (view === "tok") {
     corner =
-      tok === "error" ? (
+      tok === "error" || tok === "waiting" ? (
         <button
           className="soft"
           type="button"

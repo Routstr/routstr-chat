@@ -363,6 +363,43 @@ test("with nothing chosen, credit a provider holds counts toward the model the a
   await expect(chip).toHaveAccessibleName(/^Model: Kit Echo\./);
 });
 
+// a token whose mint does not answer is kept in the wallet and said to be waiting, never called
+// received, by Add and by a ?cashu= link alike; the next load tries it again and it lands
+test("a token whose mint does not answer is kept and said so, then lands once it answers", async ({
+  page,
+  context,
+  kit,
+  appUrl,
+}) => {
+  await seedAccounts(context, [newKey()]);
+  await funded(page, kit, appUrl, 50);
+  const [byAdd, byLink] = [await kit.mintToken(40), await kit.mintToken(30)];
+  const mint = `${new URL(kit.env.mintUrl).origin}/**`;
+  await page.route(mint, (route) => route.abort("connectionrefused"));
+
+  await page.getByRole("button", { name: /^Open wallet\./ }).first().click();
+  await page.getByRole("region", { name: "Wallet", exact: true }).getByRole("button", { name: "Add", exact: true }).click();
+  const add = page.getByRole("region", { name: "Add funds", exact: true });
+  await add.getByRole("tab", { name: "Cashu token" }).click();
+  await add.getByRole("textbox", { name: "Cashu token" }).fill(byAdd);
+  await add.getByRole("button", { name: /^Receive [\d,]+ sats$/ }).click();
+  await expect(add.getByText(/^Kept\. Its mint did not answer yet/)).toBeVisible();
+  await expect(add.getByText("Added to your wallet")).toBeHidden();
+
+  await page.goto(`${appUrl}/?cashu=${encodeURIComponent(byLink)}`);
+  await v2.ready(page);
+  await expect(page.getByText("30 sats are waiting for their mint. They come in once it answers.")).toBeVisible();
+  expect(await v2.balance(page)).toBe(50);
+
+  // the mint answers: the next load takes both in, and they are money
+  await page.unroute(mint);
+  await page.reload();
+  await v2.ready(page);
+  await expect.poll(() => v2.balance(page).catch(() => 0), { timeout: 30_000 }).toBe(120);
+  await v2.useMint(page, kit.env.mintUrl);
+  expect(await kit.redeem(await v2.makeToken(page, 120))).toBe(120);
+});
+
 // with no pay mode picked the app pays through an API key (its credit waits at the provider
 // until Return), and Settings → Payments names that mode, not per request
 test("Settings names the way replies are really paid", async ({

@@ -6,6 +6,15 @@ import { useEnsureAccount } from "../useEnsureAccount";
 
 export type FundStatus = "idle" | "creating" | "waiting" | "paid" | "error";
 
+/** What became of a pasted token: the sats that landed, or (pending) the sats
+ *  kept while its mint does not answer, which land once it does; "refused"
+ *  when nothing was kept (`message` says why); "busy" for a second press while
+ *  the first swap runs. */
+export type Redeemed = { sats: number; pending: boolean } | "refused" | "busy";
+
+/** What a kept token says: the wallet tries it again when it next loads. */
+export const KEPT = "Kept. Its mint did not answer yet, so these sats come in once it does.";
+
 /* Adding money, for every surface that asks for it. It never handles proofs
    itself: invoices go through useWalletReceive (registered with the invoice
    store before they are shown, minted and saved by that hook, recovered by
@@ -106,16 +115,16 @@ export function useFunding() {
   // one swap at a time: a second press while one runs is not a second receive (-1)
   const redeeming = useRef(false);
   const redeemToken = useCallback(
-    async (raw: string) => {
+    async (raw: string): Promise<Redeemed> => {
       const token = raw.trim();
-      if (!token) return 0;
-      if (redeeming.current) return -1;
+      if (!token) return "refused";
+      if (redeeming.current) return "busy";
       setMessage("");
       try {
         peek(token);
       } catch {
         setMessage("That does not look like a Cashu token.");
-        return 0;
+        return "refused";
       }
       setTokenBusy(true);
       redeeming.current = true;
@@ -125,12 +134,12 @@ export function useFunding() {
         if (!into) throw new Error("There is no account to receive into.");
         // what the mint gave back, after any input fee; the token's face
         // value is only a promise until the swap
-        const landed = await into.receive(token);
-        done(landed);
-        return landed;
+        const got = await into.take(token);
+        if (!got.pending) done(got.sats);
+        return got;
       } catch (e) {
         setMessage(e instanceof Error ? e.message : "The token could not be received.");
-        return 0;
+        return "refused";
       } finally {
         redeeming.current = false;
         setTokenBusy(false);

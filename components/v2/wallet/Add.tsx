@@ -4,7 +4,7 @@ import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "re
 import { peek } from "@/features/wallet/view";
 import { Icon } from "../icons";
 import { useMoney } from "../useMoney";
-import { useFunding } from "./useFunding";
+import { KEPT, useFunding } from "./useFunding";
 import { usePendingInvoices, useActiveMint } from "./Wallet";
 import { Amount, Clock, Code, CopyLine, Done, Note, NumT, Pane, Pasted, Picks, Seg, Spin, Two, Warn, fmt, flipFrom, host, useCopy } from "./bits";
 
@@ -96,7 +96,7 @@ export default function Add({
   const expired = !!funding.expiresAt && ranOut === funding.expiresAt;
 
   /* ── a Cashu token ─────────────────────────────────────────────────────── */
-  const [tok, setTok] = useState<{ text: string; state: "idle" | "busy" | "failed" | "done"; got?: number }>({ text: "", state: "idle" });
+  const [tok, setTok] = useState<{ text: string; state: "idle" | "busy" | "failed" | "waiting" | "done"; got?: number }>({ text: "", state: "idle" });
 
   // paid: the ring shows, then the card pans home and the digits roll
   const paidT = useRef(0);
@@ -165,11 +165,13 @@ export default function Add({
     before.current = money.total;
     setTok((x) => ({ ...x, state: "busy" }));
     const got = await funding.redeemToken(tok.text);
-    if (got < 0) return; // a second press while the first swap runs
-    if (got > 0) {
-      setTok((x) => ({ ...x, state: "done", got }));
-      settle(got);
-    } else setTok((x) => ({ ...x, state: "failed" }));
+    if (got === "busy") return;
+    if (got === "refused") setTok((x) => ({ ...x, state: "failed" }));
+    else if (got.pending) setTok((x) => ({ ...x, state: "waiting" }));
+    else {
+      setTok((x) => ({ ...x, state: "done", got: got.sats }));
+      settle(got.sats);
+    }
   };
   const paste = async () => {
     try {
@@ -181,6 +183,7 @@ export default function Add({
   };
   const spent = tok.state === "failed" && /spent|already|claimed|redeemed/i.test(funding.message);
   useEffect(() => {
+    if (tok.state === "waiting") say(KEPT);
     if (tok.state !== "failed") return;
     say(spent ? "Someone already claimed it, so nothing was added." : "The token could not be received. Nothing changed in your wallet.");
   }, [tok.state]);
@@ -454,6 +457,8 @@ export default function Add({
           </p>
           {tok.state === "failed" ? (
             <Note kind="warn" center text="The token could not be received. Nothing changed in your wallet." />
+          ) : tok.state === "waiting" ? (
+            <Note kind="info" center text={KEPT} />
           ) : known ? (
             <p className="wl-read-s">
               From <b>{host(read.mint)}</b>, one of your mints. Taking it swaps it for fresh ecash, so nobody else can spend it after.
@@ -465,7 +470,12 @@ export default function Add({
           )}
         </div>
       );
-      main = (
+      main = tok.state === "waiting" ? (
+        <button type="button" className="wl-soft" onClick={clear}>
+          <Icon name="paste" size={15} />
+          Paste another token
+        </button>
+      ) : (
         <button type="button" className="wl-go" data-busy={busy ? "" : undefined} disabled={busy} onClick={() => void receive()}>
           {busy ? (
             <>

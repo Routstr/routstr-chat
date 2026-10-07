@@ -88,9 +88,11 @@ function Behaviour() {
         ensureAccount();
         const into = purse();
         if (!into) throw new Error("There is no account to receive into.");
-        // what the mint gave back, after any fee
-        const sats = await into.receive(token);
-        toast.success(`${sats.toLocaleString()} sats received`);
+        // what the mint gave back, after any fee; a mint that does not answer
+        // keeps them waiting in the wallet until it does
+        const { sats, pending } = await into.take(token);
+        if (pending) toast.info(`${sats.toLocaleString()} sats are waiting for their mint. They come in once it answers.`);
+        else toast.success(`${sats.toLocaleString()} sats received`);
         replaceQuery((p) => p.delete("cashu"));
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "That token could not be received");
