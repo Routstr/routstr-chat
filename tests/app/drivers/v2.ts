@@ -245,7 +245,8 @@ export const v2 = {
     });
   },
 
-  /** Wallet → "Return N sats to the wallet", until nothing is held at a provider. */
+  /** Wallet → "Return N sats to the wallet", until that return is over: the
+   *  button gives way to "Returning" at once, and the sats move after it. */
   async returnCredit(page: Page) {
     await openWallet(page);
     const give = page.getByRole("button", {
@@ -254,6 +255,7 @@ export const v2 = {
     if (await give.isVisible()) {
       await give.click();
       await gone(give, 60_000);
+      await gone(page.getByRole("status", { name: "Returning" }), 60_000);
     }
     await backToChats(page);
   },
