@@ -13,8 +13,9 @@ import type { KitClient } from "../kit";
 const TINY = "[kit:usage=10,10]";
 const env = envFromProcess()!;
 
-async function device(browser: Browser, appUrl: string, nsec: string, coreUrl: string) {
+async function device(browser: Browser, appUrl: string, nsec: string, coreUrl: string, aheadMs = 0) {
   const context = await browser.newContext();
+  if (aheadMs) await context.clock.setSystemTime(Date.now() + aheadMs);
   await seal(context, env, appUrl);
   await seedAccounts(context, [nsec]);
   const page = await context.newPage();
@@ -48,17 +49,15 @@ async function atCore(kit: KitClient, { baseUrl, key }: { baseUrl: string; key: 
   return ((await res.json()) as { balance: number }).balance;
 }
 
-test("a fresh device sees what an API-key reply and Return left", async ({
-  browser,
-  page,
-  context,
-  kit,
-  appUrl,
-}) => {
+const RETURN = /^Return [\d,]+ sats to the wallet$/;
+
+/** A new account funded with 300 sats on a first device, which then closes: the coins are on
+ *  the relays. */
+async function funded(page: Page, kit: KitClient, appUrl: string) {
   const secret = generateSecretKey();
   const nsec = nip19.nsecEncode(secret);
   const pubkey = getPublicKey(secret);
-  await seedAccounts(context, [nsec]);
+  await seedAccounts(page.context(), [nsec]);
   await v2.open(page, appUrl);
   await seedKitProvider(page, kit.coreUrl, "kit-cheap");
   await v2.receive(page, await kit.mintToken(300));
@@ -66,10 +65,13 @@ test("a fresh device sees what an API-key reply and Return left", async ({
   await expect
     .poll(async () => (await kit.relay.events()).filter((e) => e.kind === 7375 && e.pubkey === pubkey).length, { timeout: 30_000 })
     .toBeGreaterThan(0);
-  await context.close();
+  await page.context().close();
+  return { secret, nsec };
+}
 
-  // a second device: its coins only from relays
-  const b = await device(browser, appUrl, nsec, kit.coreUrl);
+/** One API-key reply on a device whose coins come from the relays; the key it made, as the
+ *  account's backup lists it. */
+async function replyOn(b: { page: Page }, kit: KitClient, secret: Uint8Array) {
   await expect.poll(() => balanceSoon(b.page), { timeout: 60_000 }).toBe(300);
   await v2.useMint(b.page, kit.env.mintUrl);
   await v2.send(b.page, `${TINY} one`);
@@ -78,11 +80,26 @@ test("a fresh device sees what an API-key reply and Return left", async ({
   // the reply's key, as its backup lists it, holds the deposit at core
   await expect.poll(async () => (await backedUpKeys(kit, secret)).length, { timeout: 30_000 }).toBeGreaterThan(0);
   const used = await backedUpKeys(kit, secret);
+  for (const key of used) expect(await atCore(kit, key)).toBeGreaterThan(0);
+  return used;
+}
+
+test("a fresh device sees what an API-key reply and Return left", async ({
+  browser,
+  page,
+  kit,
+  appUrl,
+}) => {
+  const { secret, nsec } = await funded(page, kit, appUrl);
+
+  // a second device: its coins only from relays
+  const b = await device(browser, appUrl, nsec, kit.coreUrl);
+  const used = await replyOn(b, kit, secret);
   await expect
     .poll(
       async () => {
         await v2.returnCredit(b.page);
-        return b.page.getByRole("button", { name: /^Return [\d,]+ sats to the wallet$/ }).count();
+        return b.page.getByRole("button", { name: RETURN }).count();
       },
       { timeout: 60_000 }
     )
@@ -101,5 +118,51 @@ test("a fresh device sees what an API-key reply and Return left", async ({
   console.log(`[loss] device three sees: ${seen}`);
   expect(left).toBeGreaterThanOrEqual(299);
   expect(seen).toBe(left);
+  await c.context.close();
+});
+
+test("a fresh device returns what a closed one left at a provider", async ({
+  browser,
+  page,
+  kit,
+  appUrl,
+}) => {
+  const { secret, nsec } = await funded(page, kit, appUrl);
+  const b = await device(browser, appUrl, nsec, kit.coreUrl);
+  const used = await replyOn(b, kit, secret);
+  // closed with the deposit still at core: only the backup knows that key now
+  await b.context.close();
+
+  // a new device, six minutes on: that device is not paying with its key any more
+  const c = await device(browser, appUrl, nsec, kit.coreUrl, 6 * 60_000);
+  await expect.poll(() => balanceSoon(c.page), { timeout: 60_000 }).toBeGreaterThan(0);
+  await v2.returnCredit(c.page);
+  for (const key of used) expect(await atCore(kit, key)).toBe(0);
+  await expect.poll(() => balanceSoon(c.page), { timeout: 30_000 }).toBeGreaterThanOrEqual(299);
+  await c.context.close();
+});
+
+test("a fresh device counts a key another device used in the last five minutes, and leaves it", async ({
+  browser,
+  page,
+  kit,
+  appUrl,
+}) => {
+  const { secret, nsec } = await funded(page, kit, appUrl);
+  const b = await device(browser, appUrl, nsec, kit.coreUrl);
+  const used = await replyOn(b, kit, secret);
+  await b.context.close();
+
+  // at once: that device may still be paying with it
+  const c = await device(browser, appUrl, nsec, kit.coreUrl);
+  await expect.poll(() => balanceSoon(c.page), { timeout: 60_000 }).toBeGreaterThan(0);
+  await c.page.getByRole("button", { name: /^Open wallet\./ }).first().click();
+  const give = c.page.getByRole("button", { name: RETURN });
+  const label = await give.getAttribute("aria-label");
+  await give.click();
+  await expect(c.page.getByRole("status", { name: "Returning" })).toHaveCount(0, { timeout: 60_000 });
+  // still counted, still at core: the next Return takes it
+  await expect(c.page.getByRole("button", { name: label! })).toBeVisible();
+  for (const key of used) expect(await atCore(kit, key)).toBeGreaterThan(0);
   await c.context.close();
 });

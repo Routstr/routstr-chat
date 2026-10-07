@@ -103,6 +103,7 @@ async function account(others: ApiKeyEntry[] = [], adopt: Adopt = noAdopt) {
     adopt,
     otherDevices: {
       keys: () => others,
+      subscribe: () => () => {},
       drop: async (keys) => {
         if (state.relayDown) throw new Error("relay down");
         keys.forEach((k) =>

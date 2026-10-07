@@ -47,6 +47,7 @@ export function startKeys(
     otherDevices: {
       keys: () => backup.otherKeys(),
       drop: (keys) => backup.dropOthers(keys),
+      subscribe: (listener) => backup.subscribe(listener),
     },
   };
 }

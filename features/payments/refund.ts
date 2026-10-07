@@ -18,7 +18,7 @@ interface RefundDeps {
   purse: Purse;
   sdk: Sdk;
   oldCredit: OldCredit;
-  otherDevices: OtherDevices;
+  otherDevices: Pick<OtherDevices, "keys" | "drop">;
   adopt: Adopt;
   live(): boolean;
 }
@@ -238,7 +238,8 @@ async function refundOthers(
   const mintUrl = wallet.getActiveMintUrl()!;
   const results: RefundResult[] = [];
   const refunded: string[] = [];
-  for (const key of deps.otherDevices.keys()) {
+  // a key its device used in the last five minutes may be paying a reply
+  for (const key of deps.otherDevices.keys().filter(due)) {
     // A key the provider forgot is done. Every other one goes to the
     // provider, even when it reads empty: a payout this wallet missed is
     // paid again.

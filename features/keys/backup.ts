@@ -18,6 +18,8 @@ export type SyncedApiKey = ApiKeyEntry & { device: string };
 export interface OtherDevices {
   keys(): SyncedApiKey[];
   drop(keys: string[]): Promise<void>;
+  /** Runs when those keys change. */
+  subscribe(listener: () => void): () => void;
 }
 
 const isEntry = (value: unknown): value is SyncedApiKey => {
@@ -52,6 +54,7 @@ export class KeyBackup {
   private others: SyncedApiKey[] = [];
   // keys that left this device this session; the relays may still list them
   private readonly removed = new Set<string>();
+  private readonly listeners = new Set<() => void>();
 
   constructor(
     private readonly keys: KeysService,
@@ -87,10 +90,17 @@ export class KeyBackup {
     return this.others;
   }
 
+  /** Runs when the other devices' keys change. */
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
   /** After refunding other devices' keys, they leave the backup. */
   async dropOthers(keys: string[]): Promise<void> {
     const gone = new Set(keys);
     this.others = this.others.filter((k) => !gone.has(k.key));
+    this.listeners.forEach((listener) => listener());
     await this.publish();
   }
 
@@ -116,6 +126,7 @@ export class KeyBackup {
     }
     this.published = keySet(listed);
     this.others = listed.filter((k) => k.device !== this.device);
+    this.listeners.forEach((listener) => listener());
     await this.publish();
   }
 

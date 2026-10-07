@@ -126,6 +126,17 @@ describe("KeyBackup", () => {
     expect(t.backup.otherKeys()).toEqual([]);
   });
 
+  it("tells its listeners when other devices' keys come from the relays or leave after a refund", async () => {
+    const t = await setup();
+    let told = 0;
+    t.backup.subscribe(() => told++);
+
+    await t.backup.apply([entry("other-device", "https://b.test/", "sk-b")]);
+    expect(told).toBe(1);
+    await t.backup.dropOthers(["sk-b"]);
+    expect(told).toBe(2);
+  });
+
   it("restores lost keys on top of what another tab wrote, never over it", async () => {
     const t = await setup();
     await t.backup.apply("none");
