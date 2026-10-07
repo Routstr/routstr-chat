@@ -22,3 +22,13 @@ export const heldSats = (storage: StorageAdapter): number =>
           0
         )
   );
+
+/** What this account's key at each provider holds, by the provider's address
+ *  as keys are stored (with its closing slash). The API-key path spends it
+ *  before the wallet, at that provider and no other. */
+export const keyCredit = (storage: StorageAdapter): Record<string, number> => {
+  const sats: Record<string, number> = {};
+  for (const key of storage.getAllApiKeys())
+    sats[key.baseUrl] = (sats[key.baseUrl] ?? 0) + keySats(key);
+  return sats;
+};

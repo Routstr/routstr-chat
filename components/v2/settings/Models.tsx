@@ -4,12 +4,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useCatalogModels, useCatalogService } from "@/features/catalog/view";
 import { renderCompanyIcon } from "@/components/v2/picker/display";
 import { getModelCompanyId } from "@/components/v2/picker/modelCompanies";
-import { useDisabledProviders } from "@/hooks/useDisabledProviders";
-import {
-  getCachedProviderModels,
-  parseModelKey,
-} from "@/utils/modelUtils";
-import { loadBaseUrlsList, setProviderLastUpdate } from "@/utils/storageUtils";
 import {
   getProviderEndpoints,
   isTorContext,
@@ -19,6 +13,7 @@ import type { Model } from "@/types/models";
 import { Icon } from "../icons";
 import { shortModelName } from "../format";
 import { useModelPick } from "../pick";
+import { parseKey } from "../picker/catalog";
 import {
   Btn,
   Fold,
@@ -42,6 +37,7 @@ import {
 type Provider = { name: string; url: string };
 
 function useProviders() {
+  const catalog = useCatalogService();
   const [all, setAll] = useState<Provider[]>([]);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
@@ -81,7 +77,7 @@ function useProviders() {
           );
       } catch {
         // the directory is gone or unreachable: the providers the chat already routes to
-        const saved = loadBaseUrlsList().map((url) => ({ name: hostOf(url), url }));
+        const saved = (catalog?.providers() ?? []).map((url) => ({ name: hostOf(url), url }));
         if (!dead) {
           setAll(saved.sort((a, b) => a.name.localeCompare(b.name)));
           setFailed(!saved.length);
@@ -114,21 +110,21 @@ export default function Models() {
     failed: provFailed,
     retry: provRetry,
   } = useProviders();
-  const { disabledProviders, setDisabledProviders } = useDisabledProviders();
+  const { off, turnedOff } = useCatalogModels();
   const norm = (u: string) => normalizeProviderUrl(u, tor) ?? "";
-  const isOff = (u: string) => disabledProviders.includes(norm(u));
+  const isOff = (u: string) => off.includes(norm(u));
+  // off after Routstr's review, not by you: only a review turns it back on
+  const byReview = (u: string) => isOff(u) && !turnedOff.includes(norm(u));
 
   /* ── favorites ─────────────────────────────────────────────────────────── */
   const favs = useMemo(
     () =>
       pick.configured.map((key) => {
-        const { id, base } = parseModelKey(key);
+        const { id, base } = parseKey(key);
         let model = models.find((m) => m.id === id);
         if (!model && base) {
           try {
-            model = (getCachedProviderModels(base) as Model[] | null)?.find(
-              (m) => m.id === id
-            );
+            model = catalog?.listedAt(base, id);
           } catch {
             // no cached copy: the id stands in for the name
           }
@@ -153,23 +149,11 @@ export default function Models() {
   const [clearAsk, setClearAsk] = useState(false);
 
   /* ── providers ─────────────────────────────────────────────────────────── */
-  const refresh = () =>
-    window.setTimeout(() => void catalog?.refresh(), 0);
   const toggleProv = (url: string) => {
     const n = norm(url);
-    if (!n) return;
-    const off = disabledProviders.includes(n);
-    if (off) setProviderLastUpdate(n, 0);
-    setDisabledProviders(
-      off ? disabledProviders.filter((x) => x !== n) : [...disabledProviders, n]
-    );
-    refresh();
+    if (n && !byReview(url)) catalog?.setProviderOn(n, turnedOff.includes(n));
   };
-  const allOn = () => {
-    disabledProviders.forEach((u) => setProviderLastUpdate(u, 0));
-    setDisabledProviders([]);
-    refresh();
-  };
+  const allOn = () => catalog?.allProvidersOn();
   const onN = providers.length - providers.filter((p) => isOff(p.url)).length;
 
   return (
@@ -311,14 +295,19 @@ export default function Models() {
         >
           {/* no switch that turns every provider off at one tap (replies would have nowhere to go):
               all on is said by the note; otherwise one button puts them all back */}
-          {onN < providers.length && <Btn onClick={allOn}>Turn all on</Btn>}
+          {providers.some((p) => turnedOff.includes(norm(p.url))) && <Btn onClick={allOn}>Turn all on</Btn>}
         </Row>
         )}
         <div className="st-items st-provs">
           {providers.map((p) => {
-            const n = getCachedProviderModels(p.url)?.length;
+            const n = catalog?.listing(norm(p.url)).length;
             // a provider named by its host says it once
-            const sub = [p.name !== hostOf(p.url) && hostOf(p.url), n && plural(n, "model")].filter(Boolean).join(" · ");
+            const sub = [
+              p.name !== hostOf(p.url) && hostOf(p.url),
+              byReview(p.url) ? "Off after Routstr's review" : n && plural(n, "model"),
+            ]
+              .filter(Boolean)
+              .join(" · ");
             return (
             <div
               className="st-it noic"
@@ -336,6 +325,7 @@ export default function Models() {
                 <Sw
                   on={!isOff(p.url)}
                   label={`Use ${p.name}`}
+                  disabled={byReview(p.url)}
                   onChange={() => toggleProv(p.url)}
                 />
               </span>
@@ -364,7 +354,7 @@ function FavAdder() {
   const { models } = useCatalogModels();
   const catalog = useCatalogService();
   const [q, setQ] = useState("");
-  const favIds = useMemo(() => new Set(pick.configured.map((k) => parseModelKey(k).id)), [pick.configured]);
+  const favIds = useMemo(() => new Set(pick.configured.map((k) => parseKey(k).id)), [pick.configured]);
   const matches = useMemo(() => {
     const qq = q.trim().toLowerCase();
     if (!qq) return [];

@@ -16,7 +16,14 @@ export interface AccountChatView {
   costs: ReplyCosts;
   refund(): Promise<RefundResult[]>;
   /** Sats this account holds at providers, main's old shared credit too. */
-  held: { subscribe(listener: () => void): () => void; get(): number };
+  held: {
+    subscribe(listener: () => void): () => void;
+    get(): number;
+    /** What its key at each provider holds while the next message there
+     *  spends it first (the API-key path), by address with the closing
+     *  slash; the same object until that changes. */
+    keys(): Readonly<Record<string, number>>;
+  };
   viewing(conversationId: string | null): void;
   /** The account's files: kept here, copied to Blossom. */
   files: Files;
@@ -83,6 +90,19 @@ export function useHeldCredit(): number {
     held?.subscribe ?? none,
     () => held?.get() ?? 0,
     () => 0
+  );
+}
+
+const NO_CREDIT: Readonly<Record<string, number>> = {};
+
+/** What the active account's key at each provider will spend before the
+ *  wallet, by address with the closing slash. */
+export function useKeyCredit(): Readonly<Record<string, number>> {
+  const held = useAccountChat()?.held;
+  return useSyncExternalStore(
+    held?.subscribe ?? none,
+    () => held?.keys() ?? NO_CREDIT,
+    () => NO_CREDIT
   );
 }
 

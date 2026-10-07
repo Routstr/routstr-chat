@@ -11,6 +11,7 @@ import { LAB_MODELS, PICKS, labRoutes } from "@/components/v2/lab/catalog";
    turn as the app does without spending sats. ?fail=1 ?nothink=1 ?loading=1 */
 
 const LAB_SYNC = { on: false, servers: DEFAULT_FILE_SERVERS };
+const NO_CREDIT = {};
 
 const memory = (): Pick<Storage, "getItem" | "setItem"> => {
   const map = new Map<string, string>();
@@ -66,7 +67,7 @@ export function labChat(history: ChatHistory, params: URLSearchParams): AccountC
     chat,
     costs,
     refund: async () => [],
-    held: { subscribe: () => () => {}, get: () => 0 },
+    held: { subscribe: () => () => {}, get: () => 0, keys: () => NO_CREDIT },
     viewing: () => {},
     // files stay inline in the lab: nothing is kept or copied
     files: {
@@ -77,14 +78,15 @@ export function labChat(history: ChatHistory, params: URLSearchParams): AccountC
       sync: () => LAB_SYNC,
       setSync: () => {},
       subscribe: () => () => {},
+      cleanup: async () => {},
     },
   };
 }
 
 /** The lab's catalogue behind the catalogue view. */
 export function labCatalog(params: URLSearchParams): CatalogService {
-  const snapshot = params.has("loading") ? { models: [], loading: true } : { models: LAB_MODELS, loading: false };
-  const catalog: Pick<CatalogService, "subscribe" | "getSnapshot" | "picks" | "routes" | "refresh" | "mintsOf"> = {
+  const snapshot = params.has("loading") ? { models: [], loading: true, off: [], turnedOff: [] } : { models: LAB_MODELS, loading: false, off: [], turnedOff: [] };
+  const catalog: Pick<CatalogService, "subscribe" | "getSnapshot" | "picks" | "routes" | "refresh" | "mintsOf" | "providers" | "listing" | "listedAt"> = {
     subscribe: () => () => {},
     getSnapshot: () => snapshot,
     picks: () => PICKS,
@@ -92,6 +94,9 @@ export function labCatalog(params: URLSearchParams): CatalogService {
     refresh: async () => {},
     // the lab names no provider's mints: new money keeps the wallet's own default
     mintsOf: () => [],
+    providers: () => [],
+    listing: () => [],
+    listedAt: () => undefined,
   };
   return catalog as CatalogService;
 }

@@ -9,7 +9,7 @@ test("pays for a reply through routstr-core and keeps the change", async ({
 }) => {
   await kit.upstream.reset();
   await v2.open(page, appUrl);
-  await seedKitProvider(page, kit.coreUrl, "kit-cheap");
+  await seedKitProvider(page, kit.coreUrl, "kit-cheap", { mainStore: false });
   await v2.fund(page, appUrl, await kit.mintToken(300));
   expect(await v2.balance(page)).toBe(300);
 

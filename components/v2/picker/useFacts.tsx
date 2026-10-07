@@ -24,7 +24,7 @@ export function useFacts(flat: Row[], cat: Catalog, routeOf: (r: Row) => ReturnT
       new Map(
         flat.map((r) => {
           const rt = routeOf(r);
-          const ok = cat.fits(rt.model);
+          const ok = cat.fits(rt);
           return [
             r.key,
             {

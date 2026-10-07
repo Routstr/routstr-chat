@@ -3,7 +3,7 @@ import type { Attachments, ChatHistory } from "@/features/chat/ports";
 import { ChatService } from "@/features/chat/service";
 import type { AccountChatView } from "@/features/chat/view";
 import { AutoRefund } from "@/features/payments/autoRefund";
-import { heldSats } from "@/features/payments/held";
+import { heldSats, keyCredit } from "@/features/payments/held";
 import type {
   Adopt,
   Keys,
@@ -40,6 +40,8 @@ export interface AccountChat extends Omit<AccountChatView, "files"> {
   dispose(): void;
 }
 
+const NONE: Readonly<Record<string, number>> = {};
+
 export function createAccountChat(deps: AccountChatDeps): AccountChat {
   let live = true;
   const payments = { ...deps, live: () => live };
@@ -68,6 +70,19 @@ export function createAccountChat(deps: AccountChatDeps): AccountChat {
       (error) => console.warn("Could not read the old credit", error)
     );
   void readOld();
+  // what each provider's key holds, the same object until that changes
+  let atEach: Readonly<Record<string, number>> = {};
+  const keysHold = () => {
+    // X-Cashu pays every message from the wallet, a node pays for all of them
+    const { mode, node } = deps.spending();
+    if (node || mode === "xcashu") return NONE;
+    const next = keyCredit(deps.keys.storage("direct"));
+    const same =
+      Object.keys(next).length === Object.keys(atEach).length &&
+      Object.entries(next).every(([base, sats]) => atEach[base] === sats);
+    if (!same) atEach = next;
+    return atEach;
+  };
   const refund = (force: boolean) =>
     refundCredit(payments, force).finally(readOld);
   const auto = new AutoRefund(() => refund(false));
@@ -87,6 +102,7 @@ export function createAccountChat(deps: AccountChatDeps): AccountChat {
         };
       },
       get: () => heldSats(deps.keys.storage("direct")) + oldHeld,
+      keys: keysHold,
     },
     viewing: (conversationId) => auto.viewing(conversationId),
     dispose() {

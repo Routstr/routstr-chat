@@ -4,10 +4,10 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useHeldCredit } from "@/features/chat/view";
 import { useSession } from "@/features/session/view";
 import { peek } from "@/features/wallet/view";
-import { getRequiredSatsForModel } from "@/utils/modelUtils";
 import { useUi } from "../../ui";
-import { useMoney } from "../../useMoney";
+import { useMoney, usePayable } from "../../useMoney";
 import { useChatModel } from "../../useChatModel";
+import { needOf } from "../../price";
 import { useFunding } from "../../wallet/useFunding";
 import { PRESETS, fmt, reduced } from "./bits";
 
@@ -20,7 +20,7 @@ export type Pay = ReturnType<typeof usePay>;
 const TRY = 100;
 
 export function usePay(say: (t: string) => void) {
-  const { model: selectedModel } = useChatModel();
+  const { model: selectedModel, provider } = useChatModel();
   const isAuthenticated = useSession().pubkey !== null;
   const ui = useUi();
   const money = useMoney();
@@ -28,7 +28,10 @@ export function usePay(say: (t: string) => void) {
 
   const balance = money.total;
   const held = useHeldCredit();
-  const need = selectedModel ? Math.ceil(getRequiredSatsForModel(selectedModel) || 0) : 0;
+  // what is short is counted as the send counts it: at the provider the message goes to
+  const payable = usePayable();
+  const have = payable.at(provider);
+  const need = selectedModel ? Math.ceil(needOf(selectedModel)) : 0;
   // an account's first sats (nothing in the wallet or held at a provider): a small try, picked for you
   const trying = !money.loading && balance + held <= 0 && TRY >= need;
 
@@ -40,7 +43,7 @@ export function usePay(say: (t: string) => void) {
   const [tokFail, setTokFail] = useState(false);
   const [landed, setLanded] = useState(0);
 
-  const minOther = Math.max(1, need - balance);
+  const minOther = Math.max(1, need - have);
   // an invoice runs out at the mint's deadline; after that nobody should pay it
   const [ranOut, setRanOut] = useState<number | null>(null);
   useEffect(() => {
@@ -114,9 +117,9 @@ export function usePay(say: (t: string) => void) {
   }, [settled, holding, setFace]);
   // a token that covered only part of what the held message needs: after the
   // seal the card goes back to the amounts, whose head says what is still short
-  const short = useRef(false);
+  const short = useRef(0);
   useEffect(() => {
-    short.current = need > 0 && balance < need;
+    short.current = selectedModel && !payable.covers(selectedModel, provider) ? Math.max(1, need - have) : 0;
   });
   useEffect(() => {
     if (!landed || !holding) return;
@@ -125,7 +128,7 @@ export function usePay(say: (t: string) => void) {
       setLanded(0);
       setTokText("");
       setMethod("ln");
-      say(`That covered part of it. Add about ${fmt(Math.max(1, need - balance))} more sats to send.`);
+      say(`That covered part of it. Add about ${fmt(short.current)} more sats to send.`);
     }, 1700);
     return () => window.clearTimeout(t);
   }, [landed, holding]);

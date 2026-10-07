@@ -16,7 +16,6 @@ const LEGACY = [
   "./features/wallet/state/unclaimedTokensStore.ts",
   "./hooks/useAutoRefill.ts",
   "./hooks/useBitcoinConnect.tsx",
-  "./hooks/useDisabledProviders.ts",
   "./hooks/useInvoiceChecker.ts",
   "./hooks/useInvoiceSync.ts",
   "./hooks/useLogs.ts",
@@ -25,7 +24,6 @@ const LEGACY = [
   "./lib/version.ts",
   "./utils/cashuUtils.ts",
   "./utils/download.ts",
-  "./utils/modelUtils.ts",
   "./utils/storageUtils.ts",
   "./utils/torUtils.ts",
 ];

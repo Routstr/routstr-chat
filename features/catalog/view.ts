@@ -6,7 +6,12 @@ export const CatalogContext = createContext<CatalogService | null>(null);
 export const useCatalogService = (): CatalogService | null =>
   useContext(CatalogContext);
 
-const empty: CatalogSnapshot = { models: [], loading: true };
+const empty: CatalogSnapshot = {
+  models: [],
+  loading: true,
+  off: [],
+  turnedOff: [],
+};
 const none = () => () => {};
 
 /** The models providers serve, and whether the first list is still coming. */

@@ -221,7 +221,7 @@ function usePaidUnclaimed() {
         .filter(
           (i) =>
             i.type === "mint" &&
-            ((i.state as string) === "PAID" || i.claimError === "recovery_pending" || i.claimError === "missing_preview")
+            ((i.state as string) === "PAID" || i.claimError === "recovery_pending")
         )
         .sort((a, b) => b.createdAt - a.createdAt),
     [invoices]
@@ -552,14 +552,10 @@ function Home({ go, freeze, bloom }: { go: (v: View, o?: { reopen?: Reopen | nul
                   <span>Invoice for {fmt(x.amount)} sats</span>
                 </span>
                 <span className="wl-row-s">
-                  {x.claimError === "missing_preview"
-                    ? "Paid, but it needs a manual recovery."
-                    : paid.failed === x.id
-                      ? "Paid. The mint did not hand it over yet. Try again."
-                      : "Paid, not received yet."}
+                  {paid.failed === x.id ? "Paid. The mint did not hand it over yet. Try again." : "Paid, not received yet."}
                 </span>
                 <span className="wl-row-r">
-                  {x.claimError === "missing_preview" ? null : paid.busy === x.id ? (
+                  {paid.busy === x.id ? (
                     <span className="wl-link" data-busy="" aria-disabled="true">
                       <span className="spin sm" role="status" aria-label="Receiving" />
                       Receiving

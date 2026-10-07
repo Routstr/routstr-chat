@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { CatalogService, type CatalogDeps } from "../service";
+import { CatalogService, PROVIDERS_OFF, type CatalogDeps } from "../service";
 
 const PUBLIC = "https://public.example/";
 const NODE = "https://node.example/";
@@ -36,8 +36,26 @@ function setup(cache: Record<string, unknown[]> = {}) {
     ),
     getBaseUrls: () => discovery.bases,
   };
+  // the store's provider lists: Routstr's reviews, and your own turns on and off
+  const lists = {
+    reviewed: [] as string[],
+    off: [] as string[],
+    on: [] as string[],
+  };
+  const stamps: Record<string, number> = {};
+  const changed = new Set<() => void>();
+  const saved = new Map<string, string>();
   const deps = {
     discoveryAdapter: {
+      getDisabledProviders: () =>
+        [...new Set([...lists.reviewed, ...lists.off])].filter(
+          (url) => !lists.on.includes(url)
+        ),
+      getManuallyDisabledProviders: () => lists.off,
+      setManuallyDisabledProviders: (urls: string[]) => (lists.off = urls),
+      getManuallyEnabledProviders: () => lists.on,
+      setManuallyEnabledProviders: (urls: string[]) => (lists.on = urls),
+      setProviderLastUpdate: (url: string, at: number) => (stamps[url] = at),
       getCachedModels: () => cache,
       getCachedMints: () => ({ [PUBLIC]: ["https://mint.example"] }),
       getBaseUrlsList: () => discovery.bases,
@@ -54,6 +72,14 @@ function setup(cache: Record<string, unknown[]> = {}) {
     ready: Promise.resolve(),
     node: () => node,
     torMode: () => false,
+    changes: (listener: () => void) => {
+      changed.add(listener);
+      return () => changed.delete(listener);
+    },
+    settings: {
+      getItem: (key: string) => saved.get(key) ?? null,
+      setItem: (key: string, value: string) => void saved.set(key, value),
+    },
   } as unknown as CatalogDeps;
   return {
     catalog: new CatalogService(deps),
@@ -62,6 +88,10 @@ function setup(cache: Record<string, unknown[]> = {}) {
     cache,
     discovery,
     setNode: (url?: string) => (node = url),
+    lists,
+    stamps,
+    saved,
+    change: () => changed.forEach((listener) => listener()),
   };
 }
 
@@ -76,6 +106,8 @@ describe("CatalogService", () => {
     expect(catalog.getSnapshot()).toEqual({
       models: [model(`${PUBLIC}m`)],
       loading: false,
+      off: [],
+      turnedOff: [],
     });
     expect(deps.mintDiscovery.discoverMints).toHaveBeenCalledWith([PUBLIC]);
   });
@@ -181,6 +213,8 @@ describe("CatalogService", () => {
     expect(catalog.getSnapshot()).toEqual({
       models: [model("a")],
       loading: false,
+      off: [],
+      turnedOff: [],
     });
     catalog.dispose();
   });
@@ -196,6 +230,8 @@ describe("CatalogService", () => {
     expect(catalog.getSnapshot()).toEqual({
       models: [model(`${PUBLIC}m`)],
       loading: false,
+      off: [],
+      turnedOff: [],
     });
   });
 
@@ -289,5 +325,83 @@ describe("CatalogService.listedAt", () => {
     expect(catalog.listedAt(PUBLIC, "b")?.id).toBe("b");
     expect(catalog.listedAt(PUBLIC, "c")).toBeUndefined();
     expect(catalog.listedAt("https://gone.example/", "a")).toBeUndefined();
+  });
+});
+
+describe("CatalogService: providers you turn on and off", () => {
+  const B = "https://b.example/";
+  const kept = (saved: Map<string, string>) =>
+    JSON.parse(saved.get(PROVIDERS_OFF) ?? "[]");
+
+  it("keeps one you turn off on this device, and turned back on it is asked for its models again", async () => {
+    const { catalog, lists, stamps, saved, modelManager } = setup();
+
+    catalog.setProviderOn("https://b.example", false);
+    expect(kept(saved)).toEqual([B]);
+    expect(lists.off).toEqual([B]);
+
+    catalog.setProviderOn(B, true);
+    expect(kept(saved)).toEqual([]);
+    expect(lists.off).toEqual([]);
+    expect(stamps[B]).toBe(0);
+    await vi.waitFor(() =>
+      expect(modelManager.bootstrapProviders).toHaveBeenCalled()
+    );
+  });
+
+  it("never overrides a Routstr review that keeps one off", () => {
+    const { catalog, lists } = setup();
+    lists.reviewed = [B];
+
+    catalog.setProviderOn(B, false);
+    catalog.setProviderOn(B, true);
+
+    expect(lists.on).toEqual([]);
+  });
+
+  it("a provider trusted by hand (a test stack's) is trusted no longer once turned off", () => {
+    const { catalog, lists } = setup();
+    lists.on = [B];
+
+    catalog.setProviderOn(B, false);
+
+    expect(lists.on).toEqual([]);
+    expect(lists.off).toEqual([B]);
+  });
+
+  it("all on brings back the ones you turned off", () => {
+    const { catalog, lists, saved } = setup();
+    catalog.setProviderOn(B, false);
+
+    catalog.allProvidersOn();
+
+    expect(kept(saved)).toEqual([]);
+    expect(lists.off).toEqual([]);
+  });
+
+  it("follows the list another tab changed", () => {
+    const { catalog, lists, saved } = setup();
+    saved.set(PROVIDERS_OFF, JSON.stringify([B]));
+
+    catalog.reloadTurnedOff();
+
+    expect(lists.off).toEqual([B]);
+  });
+
+  it("ranks the same models again when a provider cools down or is turned off, and says which are off", async () => {
+    const { catalog, lists, change } = setup();
+    catalog.start();
+    await vi.waitFor(() => expect(catalog.getSnapshot().loading).toBe(false));
+    const before = catalog.getSnapshot();
+
+    lists.reviewed = [B];
+    change();
+
+    const after = catalog.getSnapshot();
+    expect(after.models).not.toBe(before.models);
+    expect(after.models).toEqual(before.models);
+    expect(after.off).toEqual([B]);
+    expect(after.turnedOff).toEqual([]);
+    catalog.dispose();
   });
 });

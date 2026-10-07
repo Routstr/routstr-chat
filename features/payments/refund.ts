@@ -90,7 +90,9 @@ export async function refundCredit(
       results.push(...others.results);
       refunded = others.refunded;
     }
-    if (hasCredit(old)) results.push(...(await sweepOld(deps, wallet)));
+    if (hasCredit(old)) {
+      results.push(...(await sweepOld(deps, wallet, payingOut)));
+    }
   } finally {
     released = true;
     try {
@@ -113,7 +115,11 @@ export async function refundCredit(
 
 /** main's old shared store, under its device-wide lock and read again under
  *  it: another tab may have swept it while this one waited. */
-async function sweepOld(deps: RefundDeps, wallet: WalletAdapter) {
+async function sweepOld(
+  deps: RefundDeps,
+  wallet: WalletAdapter,
+  payingOut: PayingOut
+) {
   const release = await deps.oldCredit.lock();
   try {
     // No chat uses the old store's keys, so nothing there waits for one
@@ -121,7 +127,8 @@ async function sweepOld(deps: RefundDeps, wallet: WalletAdapter) {
       deps.sdk,
       wallet,
       await deps.oldCredit.load(),
-      true
+      true,
+      payingOut
     );
   } finally {
     release();
@@ -136,19 +143,18 @@ async function refundStorage(
   wallet: WalletAdapter,
   storage: StorageAdapter,
   force: boolean,
-  payingOut: PayingOut = (_, payOut) => payOut()
+  payingOut: PayingOut
 ): Promise<RefundResult[]> {
   const client = sdk.client(wallet, storage);
   const spender = client.getCashuSpender();
   const mintUrl = wallet.getActiveMintUrl()!;
-  const providers = force
-    ? await spender.refundProviders(mintUrl, true)
-    : await refundLargeCredit(
-        client.getBalanceManager(),
-        storage,
-        mintUrl,
-        payingOut
-      );
+  const providers = await refundKeys(
+    client.getBalanceManager(),
+    storage,
+    mintUrl,
+    force,
+    payingOut
+  );
   const xcashu = await spender.refundXcashuTokens(mintUrl);
   const held = await spender.recoverCachedReceiveTokens();
   await storage.flush?.();
@@ -159,16 +165,27 @@ async function refundStorage(
   ];
 }
 
-async function refundLargeCredit(
+/** Each key of the store paid out by its provider, one at a time, so a
+ *  payout the mint calls spent is settled with that provider. `force` (the
+ *  Refund button) takes every key; otherwise keys used in the last five
+ *  minutes and credit under 10 sats stay for the next chat. */
+async function refundKeys(
   balances: BalanceManager,
   storage: StorageAdapter,
   mintUrl: string,
+  force: boolean,
   payingOut: PayingOut
 ): Promise<RefundResult[]> {
   const results: RefundResult[] = [];
   // asking the provider about a key just used would only hold the lock longer
-  for (const key of storage.getAllApiKeys().filter(due)) {
+  for (const key of storage.getAllApiKeys().filter((k) => force || due(k))) {
     const balance = await balances.getTokenBalance(key.key, key.baseUrl);
+    // a key the provider forgot is done
+    if (balance.isInvalidApiKey) {
+      storage.removeApiKey(key.baseUrl);
+      results.push({ baseUrl: key.baseUrl, success: true });
+      continue;
+    }
     if (!balance.balanceUnknown) {
       // Show the real balance, also for credit left in place
       storage.updateApiKeyBalance(
@@ -176,18 +193,32 @@ async function refundLargeCredit(
         balance.amount / 1000,
         balance.reserved / 1000
       );
-      // An empty or dead key still goes to refundApiKey: it replays a payout
-      // the wallet failed to receive, or removes a key the provider forgot
-      if (balance.amount > 0 && balance.amount < KEEP_BELOW_MSATS) continue;
+      // An empty key still goes to refundApiKey: it replays a payout the
+      // wallet failed to receive
+      if (!force && balance.amount > 0 && balance.amount < KEEP_BELOW_MSATS) {
+        continue;
+      }
     }
     const { success } = await payingOut(key.baseUrl, () =>
       balances.refundApiKey({
         mintUrl,
         baseUrl: key.baseUrl,
         apiKey: key.key,
-        forceRefund: false,
+        forceRefund: force,
       })
     );
+    // A payout the wallet could not take in still emptied the key at the
+    // provider: show what it holds now, not what it held before
+    if (!success && storage.getApiKey(key.baseUrl)?.key === key.key) {
+      const after = await balances.getTokenBalance(key.key, key.baseUrl);
+      if (!after.balanceUnknown && !after.isInvalidApiKey) {
+        storage.updateApiKeyBalance(
+          key.baseUrl,
+          after.amount / 1000,
+          after.reserved / 1000
+        );
+      }
+    }
     results.push({ baseUrl: key.baseUrl, success });
   }
   return results;
