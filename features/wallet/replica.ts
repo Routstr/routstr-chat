@@ -12,6 +12,8 @@ const DELETE = 5;
 const CHECK_MS = 10_000;
 // coins per event: an event stays well under relays' size caps and NIP-44's
 const PER_EVENT = 100;
+// a deletion a relay or clock was late with is still read on the next pull
+const DELETED_MARGIN_S = 10 * 60;
 
 const bare = ({ id, amount, secret, C }: Proof) => ({ id, amount, secret, C });
 const now = () => Math.floor(Date.now() / 1000);
@@ -59,10 +61,15 @@ export class Replica {
 
   // what this tab published: relays echo it back, and it needs no pull
   private readonly wrote = new Set<string>();
+  // every deletion seen, and the newest one's time: later pulls ask only
+  // for deletions since then
+  private readonly deleted = new Set<string>();
+  private deletedUntil = 0;
 
-  /** This tab published the event: nothing in it is new here. */
-  published(id: string): boolean {
-    return this.wrote.has(id);
+  /** This tab published the event or has read it already: nothing in it is
+   *  new here. */
+  knows(id: string): boolean {
+    return this.wrote.has(id) || this.read.has(id);
   }
 
   // token events read before: an event never changes, so it is read once
@@ -137,19 +144,28 @@ export class Replica {
     const { store, signer, relays } = this.deps;
     const [tokens, deletions] = await Promise.all([
       relays.fetch({ kinds: [TOKEN], authors: [this.owner] }),
-      relays.fetch({ kinds: [DELETE], authors: [this.owner] }),
+      relays.fetch({
+        kinds: [DELETE],
+        authors: [this.owner],
+        // all of them the first time; then the newer ones, with a margin for
+        // relays and clocks that are late
+        ...(this.deletedUntil
+          ? { since: this.deletedUntil - DELETED_MARGIN_S }
+          : {}),
+      }),
     ]);
     const answer = { answered: tokens.answered, outcomes: tokens.outcomes };
     // no relay answered: nothing to go by
     if (!tokens.answered.length) return answer;
     const own = (e: NostrEvent, kind: number) =>
       e.kind === kind && e.pubkey === this.owner && verifyEvent(e);
-    const deleted = new Set<string>();
+    const deleted = this.deleted;
     deletions.events
       .filter((e) => own(e, DELETE))
-      .forEach((e) =>
-        e.tags.forEach(([name, id]) => name === "e" && id && deleted.add(id))
-      );
+      .forEach((e) => {
+        this.deletedUntil = Math.max(this.deletedUntil, e.created_at);
+        e.tags.forEach(([name, id]) => name === "e" && id && deleted.add(id));
+      });
     const events: Listed[] = [];
     for (const event of tokens.events.filter((e) => own(e, TOKEN))) {
       const read = this.read.get(event.id) ?? (await this.readEvent(event));
@@ -202,31 +218,33 @@ export class Replica {
     }
   }
 
-  /** The store already holds these events' coins, events and links, and
-   *  none of the deleted ones: a pull would change nothing. */
-  private async unchanged(
+  /** What a pull would do at one mint, from what the store holds now. */
+  private async plan(
     mintUrl: string,
-    events: Listed[],
+    proofs: Map<string, Proof>,
     listed: Map<string, string>,
     deleted: Set<string>
-  ): Promise<boolean> {
+  ) {
     const { store } = this.deps;
-    const held = new Map(
-      (await store.coins(this.owner, mintUrl)).map((c) => [c.secret, c])
-    );
-    for (const [secret, eventId] of listed) {
-      if (held.get(secret)?.eventId !== eventId) return false;
-    }
-    for (const c of held.values()) {
-      if (c.eventId && deleted.has(c.eventId) && !listed.has(c.secret)) {
-        return false;
-      }
-    }
-    const stored = new Set(await store.events(this.owner, mintUrl));
-    return (
-      events.every((e) => stored.has(e.id)) &&
-      ![...deleted].some((id) => stored.has(id))
-    );
+    const held = await store.coins(this.owner, mintUrl);
+    const known = await store.known([...proofs.keys()]);
+    const stored = await store.events(this.owner, mintUrl);
+    const heldSecrets = new Set(held.map((c) => c.secret));
+    return {
+      held,
+      fresh: [...proofs.values()].filter((p) => !known.has(p.secret)),
+      // another device replaced their event without them
+      gone: held.filter(
+        (c) => c.eventId && deleted.has(c.eventId) && !listed.has(c.secret)
+      ),
+      // listed still, by another device, though this one spent them
+      stale: [...proofs.values()].filter(
+        (p) => known.has(p.secret) && !heldSecrets.has(p.secret)
+      ),
+      // events this store keeps for the mint that are deleted now
+      forget: stored.filter((id) => deleted.has(id)),
+      stored: new Set(stored),
+    };
   }
 
   private async pullMint(
@@ -243,38 +261,45 @@ export class Replica {
         proofs.set(p.secret, p);
       }
     }
+    const first = await this.plan(mintUrl, proofs, listed, deleted);
+    const asked = [...first.fresh, ...first.gone, ...first.stale];
     // nothing here this device does not have already: no lock, nothing written
-    if (await this.unchanged(mintUrl, events, listed, deleted)) return;
+    if (
+      !asked.length &&
+      !first.forget.length &&
+      events.every((e) => first.stored.has(e.id)) &&
+      first.held.every(
+        (c) => !listed.has(c.secret) || listed.get(c.secret) === c.eventId
+      )
+    ) {
+      return;
+    }
+    // the mint is asked outside the lock, so a slow mint never holds up a
+    // payment; only coins it answered for are taken in or dropped below
+    let unspent = new Set<string>();
+    let spent = new Set<string>();
+    if (asked.length) {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const answer = await Promise.race([
+        states(mintUrl, asked),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(
+            () => reject(new Error(`${mintUrl} did not answer in time`)),
+            wait
+          );
+        }),
+      ]).finally(() => clearTimeout(timer));
+      unspent = new Set(answer.unspent.map((p) => p.secret));
+      spent = new Set(answer.spent.map((p) => p.secret));
+    }
     await locks.request(walletLock(this.owner), async () => {
-      const held = await store.coins(this.owner, mintUrl);
-      const known = await store.known([...proofs.keys()]);
-      const fresh = [...proofs.values()].filter((p) => !known.has(p.secret));
-      // another device replaced their event without them
-      const gone = held.filter(
-        (c) => c.eventId && deleted.has(c.eventId) && !listed.has(c.secret)
+      // what the store holds now: a payment may have run meanwhile
+      const { fresh, gone, stale, forget } = await this.plan(
+        mintUrl,
+        proofs,
+        listed,
+        deleted
       );
-      const heldSecrets = new Set(held.map((c) => c.secret));
-      // listed still, by another device, though this one spent them
-      const stale = [...proofs.values()].filter(
-        (p) => known.has(p.secret) && !heldSecrets.has(p.secret)
-      );
-      const asked = [...fresh, ...gone, ...stale];
-      let unspent = new Set<string>();
-      let spent = new Set<string>();
-      if (asked.length) {
-        let timer: ReturnType<typeof setTimeout> | undefined;
-        const answer = await Promise.race([
-          states(mintUrl, asked),
-          new Promise<never>((_, reject) => {
-            timer = setTimeout(
-              () => reject(new Error(`${mintUrl} did not answer in time`)),
-              wait
-            );
-          }),
-        ]).finally(() => clearTimeout(timer));
-        unspent = new Set(answer.unspent.map((p) => p.secret));
-        spent = new Set(answer.spent.map((p) => p.secret));
-      }
       await store.adopt(this.owner, mintUrl, {
         add: fresh
           .filter((p) => unspent.has(p.secret))
@@ -283,7 +308,7 @@ export class Replica {
         drop: gone.filter((c) => spent.has(c.secret)),
         listed,
         events: events.map((e) => e.id),
-        forget: [...deleted],
+        forget,
         // listed again by this device: still-unspent coins no event lists
         // any more, and events that still list a coin the mint says is
         // spent (not one still on its way, which settles first)
