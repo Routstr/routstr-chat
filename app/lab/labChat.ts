@@ -83,7 +83,7 @@ export function labChat(history: ChatHistory, params: URLSearchParams): AccountC
 
 /** The lab's catalogue behind the catalogue view. */
 export function labCatalog(params: URLSearchParams): CatalogService {
-  const snapshot = params.has("loading") ? { models: [], loading: true } : { models: LAB_MODELS, loading: false };
+  const snapshot = params.has("loading") ? { models: [], loading: true, off: [], turnedOff: [] } : { models: LAB_MODELS, loading: false, off: [], turnedOff: [] };
   const catalog: Pick<CatalogService, "subscribe" | "getSnapshot" | "picks" | "routes" | "refresh" | "mintsOf"> = {
     subscribe: () => () => {},
     getSnapshot: () => snapshot,

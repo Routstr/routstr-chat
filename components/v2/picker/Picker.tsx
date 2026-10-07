@@ -55,7 +55,7 @@ export default function Picker({
   const pick = useModelPick();
   const catalog = useCatalogService();
   const { loading: modelsLoading } = useCatalogModels();
-  const refresh = useCallback(() => void catalog?.refresh(), [catalog]);
+  const providersOn = useCallback(() => catalog?.allProvidersOn(), [catalog]);
   const isAuthenticated = useSession().pubkey !== null;
   const ui = useUi();
 
@@ -98,7 +98,7 @@ export default function Picker({
   const { activeIdx, detailKey, setActive } = useListGlide({ flat, idxOf, filtering, isCurrent, activeKey, setActiveKey, q, scope, f, only, sort, dir, cat, makerLabel, say, listEl, glide, lay });
   const { strip, railItems, railOrder, edges, stripEdges, pickScope, railKey } = useMakerRail({ lay, cat, liveFavs, makerLabel, scope, setScope, setActiveKey, railScroll, railGlide });
   const { commit, choose, toggleStar, fund, clearAll, allOn, push } = useChoose({
-    pick, refresh, cat, ui, phone, only, draft, setDraft, say, onClose, favKeys, favIds, isFavRow, setQ, setF, setOnly, input, card, setView, onDetail, onList,
+    pick, allOn: providersOn, cat, ui, phone, only, draft, setDraft, say, onClose, favKeys, favIds, isFavRow, setQ, setF, setOnly, input, card, setView, onDetail, onList,
   });
 
   /* ── open, place, close ─────────────────────────────────────────────── */

@@ -63,6 +63,17 @@ export function createSdk({ extraProviders }: { extraProviders: string[] }) {
   return {
     ready,
     discoveryAdapter,
+    changes: (listener: () => void) =>
+      store.subscribe((now, before) => {
+        if (
+          now.providersOnCooldown !== before.providersOnCooldown ||
+          now.disabledProviders !== before.disabledProviders ||
+          now.manuallyDisabledProviders !== before.manuallyDisabledProviders ||
+          now.manuallyEnabledProviders !== before.manuallyEnabledProviders
+        ) {
+          listener();
+        }
+      }),
     modelManager: new ModelManager(discoveryAdapter, {
       includeProviderUrls: extraProviders,
       logger: noopLogger,

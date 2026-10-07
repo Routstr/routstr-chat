@@ -165,6 +165,42 @@ describe("chat with real money", () => {
     });
   }
 
+  it.each(["apikeys", "xcashu"] as const)(
+    "never pays a provider that is turned off, and pays it again once it is back on (%s)",
+    async (mode) => {
+      spending = { mode };
+      const { chat, session, wallet } = await account();
+      const unpinned = { id: "kit-cheap" };
+
+      routing.catalog.setProviderOn(kit.coreUrl, false);
+      try {
+        expect(routing.catalog.routes("kit-cheap")).toEqual([]);
+        const turn = await chat.chat.send("c", "hello", unpinned);
+        await turn.settled;
+
+        expect(turn.run.getSnapshot().phase).toBe("failed");
+        expect(await kit.upstream.requests()).toEqual([]);
+        expect(wallet.sats).toBe(300);
+      } finally {
+        routing.catalog.setProviderOn(kit.coreUrl, true);
+        chat.dispose();
+      }
+
+      // back on: the next start trusts the test stack's provider again, and pays it
+      routing = createRouting({
+        node: () => undefined,
+        extraProviders: [kit.coreUrl],
+      });
+      await routing.catalog.refresh();
+      const next = session();
+      const turn = await next.chat.send("c", "again", unpinned);
+      await turn.settled;
+      expect(turn.run.getSnapshot().phase).toBe("done");
+      expect(wallet.sats).toBeLessThan(300);
+      next.dispose();
+    }
+  );
+
   it("loses nothing when the provider fails before answering", async () => {
     const { chat, wallet } = await account();
 
@@ -232,7 +268,6 @@ describe("chat with real money", () => {
     await settledAndUnspent(wallet);
     chat.dispose();
   });
-
 
   it("shows a key stopped as its token was made as held, and a refund brings all of it back", async () => {
     const { chat, wallet } = await account();

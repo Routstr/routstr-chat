@@ -1,4 +1,4 @@
-import { CatalogService } from "@/features/catalog/service";
+import { CatalogService, PROVIDERS_OFF } from "@/features/catalog/service";
 import type { Sdk } from "@/features/payments/ports";
 import { createSdk } from "@/platform/sdk";
 
@@ -10,7 +10,20 @@ export function createRouting(options: {
   extraProviders: string[];
 }) {
   const sdk = createSdk(options);
-  const catalog = new CatalogService({ ...sdk, node: options.node });
+  const browser = typeof window !== "undefined";
+  const catalog = new CatalogService({
+    ...sdk,
+    node: options.node,
+    settings: browser
+      ? window.localStorage
+      : { getItem: () => null, setItem: () => {} },
+  });
+  // providers turned off in another tab are off here too
+  if (browser) {
+    window.addEventListener("storage", (event) => {
+      if (event.key === PROVIDERS_OFF) catalog.reloadTurnedOff();
+    });
+  }
   const payments: Sdk = {
     request: sdk.request,
     client: sdk.client,
