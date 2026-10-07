@@ -14,7 +14,12 @@ import {
   type Wallet,
 } from "@cashu/cashu-ts";
 import type { Journal } from "./journal";
-import { assertRecoverable, normalizeMintUrl, openWallet } from "./mint";
+import {
+  assertRecoverable,
+  forgetWallets,
+  normalizeMintUrl,
+  openWallet,
+} from "./mint";
 import {
   amountOf,
   saveOutputs,
@@ -190,7 +195,7 @@ export class WalletExecutor {
     quote: MeltQuoteBolt11Response,
     coins: Coins
   ): Promise<{ state: MeltOutcome; fee: number; change: Proof[] }> {
-    return this.locked(async () =>
+    return this.locked(mintUrl, async () =>
       this.payLocked(mintUrl, quote, await read(coins))
     );
   }
@@ -302,7 +307,7 @@ export class WalletExecutor {
     coins: Coins,
     options: SendOptions = {}
   ): Promise<string> {
-    return this.locked(async () =>
+    return this.locked(mintUrl, async () =>
       this.sendLocked(mintUrl, sats, await read(coins), options)
     );
   }
@@ -371,7 +376,9 @@ export class WalletExecutor {
     token: string,
     options: { requirePersisted?: boolean } = {}
   ): Promise<Proof[]> {
-    return this.locked(() => this.receiveLocked(token, options));
+    return this.locked(getTokenMetadata(token).mint, () =>
+      this.receiveLocked(token, options)
+    );
   }
 
   /**
@@ -393,7 +400,7 @@ export class WalletExecutor {
     }
     try {
       return {
-        proofs: await this.locked(() => this.receiveLocked(token, {})),
+        proofs: await this.locked(mint, () => this.receiveLocked(token, {})),
         unit,
       };
     } catch (error) {
@@ -431,7 +438,7 @@ export class WalletExecutor {
     if (!(await this.reachable(record.mintUrl))) {
       return { proofs: [], unit: record.unit ?? "sat", pending: true };
     }
-    return this.locked(() => this.landReceive(record));
+    return this.locked(record.mintUrl, () => this.landReceive(record));
   }
 
   /** Tries every token this account still holds to receive; resolves with
@@ -441,12 +448,12 @@ export class WalletExecutor {
     for (const record of this.deps.journal.list(this.deps.owner)) {
       if (record.kind !== "receive") continue;
       if (!(await this.reachable(record.mintUrl))) continue;
-      const got = await this.locked(() => this.landReceive(record)).catch(
-        (error) => {
-          console.error("A waiting token was refused:", error);
-          return null;
-        }
-      );
+      const got = await this.locked(record.mintUrl, () =>
+        this.landReceive(record)
+      ).catch((error) => {
+        console.error("A waiting token was refused:", error);
+        return null;
+      });
       if (got?.proofs.length) landed.push(got);
     }
     return landed;
@@ -523,6 +530,7 @@ export class WalletExecutor {
         throw error;
       }
       console.error("The token could not be received yet; it waits:", error);
+      forgetWallets(record.mintUrl);
       return { proofs: [], unit, pending: true };
     }
   }
@@ -574,7 +582,7 @@ export class WalletExecutor {
     ) {
       throw new Error("Invoice has not been paid yet");
     }
-    return this.locked(() => this.claimLocked(url, quoteId));
+    return this.locked(url, () => this.claimLocked(url, quoteId));
   }
 
   private leftClaim(mintUrl: string, quoteId: string) {
@@ -640,7 +648,10 @@ export class WalletExecutor {
     const wallet = await this.open(url);
     // the wallet opens in msat when the mint offers it, else sat
     const amount = wallet.unit === "msat" ? sats * 1000 : sats;
-    const quote = await wallet.createMintQuote(amount);
+    const quote = await wallet.createMintQuote(amount).catch((error) => {
+      forgetWallets(url);
+      throw error;
+    });
     const expiresAt = quote.expiry ? quote.expiry * 1000 : undefined;
     this.deps.journal.put({
       ...this.held(newId(), url, wallet),
@@ -719,14 +730,24 @@ export class WalletExecutor {
     return { v: 1 as const, id, owner, mintUrl, unit, createdAt: Date.now() };
   }
 
-  private async locked<T>(operation: () => Promise<T>): Promise<T> {
+  /** Runs under the account's lock; a failure at `mintUrl` may be its
+   *  keysets changing, so its wallet is opened anew next time. */
+  private async locked<T>(
+    mintUrl: string,
+    operation: () => Promise<T>
+  ): Promise<T> {
     const locks = this.deps.locks;
     if (!locks) {
       throw new Error(
         "This browser cannot safely coordinate payments across tabs."
       );
     }
-    return locks.request(walletLock(this.deps.owner), operation);
+    return locks
+      .request(walletLock(this.deps.owner), operation)
+      .catch((error) => {
+        forgetWallets(mintUrl);
+        throw error;
+      });
   }
 
   /** A mint that cannot say what became of a lost answer is not used: no guessing. */

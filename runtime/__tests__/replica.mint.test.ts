@@ -8,7 +8,7 @@ import {
   getPublicKey,
   nip44,
 } from "nostr-tools";
-import { beforeEach, expect, it } from "vitest";
+import { beforeEach, expect, it, vi } from "vitest";
 import { getKit } from "@/tests/kit";
 import "@/tests/kit/idb";
 import { Journal, memoryStorage } from "@/features/book/journal";
@@ -17,6 +17,7 @@ import { Relays } from "@/features/relays/service";
 import { MintKeysets } from "@/features/wallet/mints";
 import type { CoinStore, WalletSigner } from "@/features/wallet/ports";
 import { createPurse } from "@/features/wallet/purse";
+import { walletLock } from "@/features/book/executor";
 import { Replica, statesAt } from "@/features/wallet/replica";
 import { newRelayPool, poolPort } from "@/platform/nostr/pool";
 import { IndexedCoins } from "@/platform/wallet/coins";
@@ -202,4 +203,50 @@ it("forgets the events relays say are deleted, so its own next one carries no lo
     await a.store.events(owner, MINT)
   );
   expect(await b.sats()).toBe(15);
+}, 60_000);
+
+it("writes nothing on a pull that finds only what it has, and knows its own events as its own", async () => {
+  const a = device();
+  await a.purse.receive(await kit.mintToken(8));
+  await a.replica.push();
+  const ours = (await kit.relay.events()).filter((e) => e.pubkey === owner);
+  expect(ours.length).toBeGreaterThan(0);
+  expect(ours.every((e) => a.replica.knows(e.id))).toBe(true);
+
+  const adopt = vi.spyOn(a.store, "adopt");
+  await a.replica.pull();
+  expect(adopt).not.toHaveBeenCalled();
+
+  // another device's events are still taken in
+  const b = device();
+  const taken = vi.spyOn(b.store, "adopt");
+  await b.replica.pull();
+  expect(taken).toHaveBeenCalled();
+  expect(await b.sats()).toBe(8);
+}, 60_000);
+
+it("asks the mint with the wallet lock free, and later pulls ask relays only for newer deletions", async () => {
+  const a = device();
+  await a.purse.receive(await kit.mintToken(8));
+  await a.replica.push();
+  await a.purse.receive(await kit.mintToken(4));
+  await a.replica.push(); // deletes the first event
+
+  const lockFree: boolean[] = [];
+  const b = device(async (mintUrl, coins) => {
+    const { held = [] } = await navigator.locks.query();
+    lockFree.push(!held.some((l) => l.name === walletLock(owner)));
+    return statesAt(mintUrl, coins);
+  });
+  const fetch = vi.spyOn(relays.of(owner), "fetch");
+  await b.replica.pull();
+  expect(await b.sats()).toBe(12);
+  expect(lockFree).toEqual([true]);
+  const deletions = () =>
+    fetch.mock.calls.map(([f]) => f).filter((f) => f.kinds?.includes(5));
+  expect(deletions()[0].since).toBeUndefined();
+
+  await b.replica.pull();
+  expect(deletions()[1].since).toBeGreaterThan(0);
+  fetch.mockRestore();
 }, 60_000);

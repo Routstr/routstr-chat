@@ -7,7 +7,8 @@ import {
 } from "@cashu/cashu-ts";
 import { claimPaid, walletLock } from "./executor";
 import type { Journal } from "./journal";
-import { openWallet } from "./mint";
+import type { BookRecord } from "./records";
+import { forgetWallets, openWallet } from "./mint";
 import {
   settleLanded,
   settleMelt,
@@ -31,6 +32,24 @@ export interface RecoveryDeps {
   claimed?: (owner: string, proofs: Proof[], unit: string) => void;
 }
 
+/** Whether a pass has anything to do with this record: a token waits for the
+ *  person and a receive for the purse; a quote only once the mint says paid
+ *  or issued, or unpaid past its expiry. */
+function due(
+  record: BookRecord,
+  answer: { state: string; at: number } | undefined
+): boolean {
+  if (record.kind === "token" || record.kind === "receive") return false;
+  if (record.kind !== "quote") return true;
+  if (answer?.state === MintQuoteState.UNPAID) {
+    return !!record.expiresAt && answer.at > record.expiresAt + EXPIRY_GRACE_MS;
+  }
+  return (
+    answer?.state === MintQuoteState.PAID ||
+    answer?.state === MintQuoteState.ISSUED
+  );
+}
+
 /** Settles each account's records that the operation writing them left behind. */
 export class RecoveryHost {
   constructor(private readonly deps: RecoveryDeps) {}
@@ -50,6 +69,10 @@ export class RecoveryHost {
     if (!locks) return outcomes;
     // deposit quotes are asked about outside the lock: most wait unpaid
     const quotes = await this.quoteStates(owner);
+    // nothing to settle: the lock is left to the person's own payments
+    if (!this.deps.journal.list(owner).some((r) => due(r, quotes.get(r.id)))) {
+      return outcomes;
+    }
     // a pass already running, here or in another tab, holds the lock too
     await locks.request(walletLock(owner), { ifAvailable: true }, (lock) =>
       lock ? this.pass(owner, commitFor, outcomes, quotes) : undefined
@@ -169,6 +192,7 @@ export class RecoveryHost {
       } catch (error) {
         // the mint did not answer, or this account is no longer active: the record waits
         console.error("Could not settle a pending wallet operation:", error);
+        forgetWallets(record.mintUrl);
       }
     }
   }

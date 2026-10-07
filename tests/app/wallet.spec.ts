@@ -292,7 +292,9 @@ test("quotes again at the mint picked when the quoting mint cannot cover the inv
   // the second mint holds too little, and is the one in use
   await v2.receive(page, await kit.mintToken(4, { otherMint: true }));
   await v2.useMint(page, kit.env.invoiceMintUrl);
-  const other = await kit.walletAt(kit.env.invoiceMintUrl);
+  // an invoice of a third mint: a kit mint pays its own invoices at once, and
+  // then refuses to quote one ("mint quote already paid")
+  const other = await kit.walletAt(kit.env.msatMintUrl);
   const invoice = await other.createMintQuote(8);
 
   await page
