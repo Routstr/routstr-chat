@@ -364,7 +364,10 @@ export default function Send({
     const total = (s.invoiceAmount ?? 0) + fee;
     const paying = s.isNip60Processing;
     const failed = quoted && !!s.error && !paying;
-    const short = quoted && !paying && total > have;
+    // the quote is paid by the mint that made it, whichever is active now
+    const payer = mint.all.find((m) => m.url === s.quoteMintUrl) ?? mint.active;
+    const payerBal = payer?.bal ?? 0;
+    const short = quoted && !paying && total > payerBal;
     const none = !!ln && /^ln(bc|tb|bcrt)/i.test(ln) && noAmount(ln);
     const notLn = !!ln && !/^ln(bc|tb|bcrt)/i.test(ln);
     let read_: React.ReactNode = <p className="wl-hint">You will see the amount and the fee before anything is paid.</p>;
@@ -416,7 +419,7 @@ export default function Send({
             </div>
           </div>
           {short && (
-            <Note kind="warn" text={`Not enough on ${mn}. It has ${fmt(have)} sats, this needs up to ${fmt(total)}.${o ? ` ${o.name} has ${fmt(o.bal)}, switch mint below.` : ""}`} />
+            <Note kind="warn" text={`Not enough on ${payer?.name ?? mn}. It has ${fmt(payerBal)} sats, this needs up to ${fmt(total)}.${o ? ` ${o.name} has ${fmt(o.bal)}, switch mint below.` : ""}`} />
           )}
           {failed && <Note kind="warn" text="This payment did not finish. Check the invoice is still unpaid before you try again." />}
         </>
