@@ -157,7 +157,7 @@ describe("settleMint", () => {
     outputs: [],
   };
 
-  it("drops a claim whose keyset the mint retired: it signed nothing, so the next claim asks again", async () => {
+  it("puts a claim whose keyset the mint retired back as a paid quote: it signed nothing, so the next claim asks again", async () => {
     const journal = new Journal(memoryStorage());
     journal.put(deposit);
     const commit = vi.fn();
@@ -170,7 +170,9 @@ describe("settleMint", () => {
 
     expect(await settleMint(wallet, deposit, commit, journal)).toBeNull();
     expect(commit).not.toHaveBeenCalled();
-    expect(journal.list("alice")).toEqual([]);
+    expect(journal.list("alice")).toMatchObject([
+      { kind: "quote", id: "d1", quoteId: "q1", amount: 8 },
+    ]);
   });
 
   it("waits while the quote is unpaid, and keeps the claim for any other failure", async () => {

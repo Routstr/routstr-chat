@@ -14,7 +14,8 @@ vi.mock("react", () => ({
   useEffect: (effect: () => void) => effect(),
   useRef: () => state.ref,
 }));
-vi.mock("@/features/session/owned", () => ({
+vi.mock("@/features/session/owned", async (actual) => ({
+  ...(await actual<object>()),
   currentOwner: () => state.active,
 }));
 // what is saved for the account, and a memory copy that may run ahead of it

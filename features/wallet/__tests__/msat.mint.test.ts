@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { getKit } from "@/tests/kit";
 import { WalletExecutor } from "@/features/book/executor";
 import { Journal, memoryStorage } from "@/features/book/journal";
-import { createLightningInvoice, quoteInSats } from "@/lib/cashuLightning";
+import { quoteInSats } from "@/lib/cashuLightning";
 import { createPurse, toSats } from "../purse";
 import type { Coin, CoinStore } from "../ports";
 
@@ -51,16 +51,6 @@ describe("a mint that offers msat", () => {
   });
 
   it("asks an invoice for the sats Add shows, and the purse claims those sats", async () => {
-    const invoice = await createLightningInvoice(MSAT_MINT, 50);
-    const mint = new Mint(MSAT_MINT);
-    let quote = await mint.checkMintQuoteBolt11(invoice.quoteId);
-    expect(quote.unit).toBe("msat");
-    expect(quote.amount).toBe(50_000);
-    for (let i = 0; i < 40 && quote.state !== "PAID"; i++) {
-      await new Promise((r) => setTimeout(r, 250));
-      quote = await mint.checkMintQuoteBolt11(invoice.quoteId);
-    }
-
     let held: Coin[] = [];
     const coins: CoinStore = {
       async change(owner, mintUrl, add) {
@@ -79,6 +69,16 @@ describe("a mint that offers msat", () => {
       journal: new Journal(memoryStorage()),
       locks: navigator.locks,
     });
+    const invoice = await purse.deposit(MSAT_MINT, 50);
+    const mint = new Mint(MSAT_MINT);
+    let quote = await mint.checkMintQuoteBolt11(invoice.quoteId);
+    expect(quote.unit).toBe("msat");
+    expect(quote.amount).toBe(50_000);
+    for (let i = 0; i < 40 && quote.state !== "PAID"; i++) {
+      await new Promise((r) => setTimeout(r, 250));
+      quote = await mint.checkMintQuoteBolt11(invoice.quoteId);
+    }
+
     expect(await purse.claim(MSAT_MINT, invoice.quoteId)).toBe(50);
     expect(await purse.balances()).toEqual({ [MSAT_MINT]: 50 });
     expect(written).toEqual([{ direction: "in", sats: 50 }]);

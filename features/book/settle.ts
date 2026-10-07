@@ -172,7 +172,18 @@ export async function settleMint(
         error.code >= 12001 &&
         error.code <= 12003
       ) {
-        journal.remove(record.id);
+        // back to a paid quote, claimed again with outputs of a keyset it takes
+        journal.put({
+          v: 1,
+          kind: "quote",
+          id: record.id,
+          owner: record.owner,
+          mintUrl: record.mintUrl,
+          unit: record.unit,
+          createdAt: record.createdAt,
+          quoteId: record.quoteId,
+          amount: record.amount,
+        });
         return null;
       }
       throw error;

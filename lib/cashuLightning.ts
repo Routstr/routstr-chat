@@ -1,22 +1,11 @@
-import { assertRecoverable } from "@/features/book/mint";
 import { useCashuStore } from "@/features/wallet";
 import {
   Mint,
   Wallet,
   MeltQuoteResponse,
   MeltQuoteState,
-  MintQuoteState,
   Proof,
 } from "@cashu/cashu-ts";
-
-export interface MintQuote {
-  mintUrl: string;
-  amount: number;
-  paymentRequest: string;
-  quoteId: string;
-  state: MintQuoteState;
-  expiresAt?: number;
-}
 
 export interface MeltQuote {
   mintUrl: string;
@@ -25,69 +14,6 @@ export interface MeltQuote {
   quoteId: string;
   state: MeltQuoteState;
   expiresAt?: number;
-}
-
-/**
- * Create a Lightning invoice to receive funds
- * @param mintUrl The URL of the mint to use
- * @param amount Amount in satoshis
- * @returns Object containing the invoice and information needed to process it
- */
-export async function createLightningInvoice(
-  mintUrl: string,
-  amount: number
-): Promise<MintQuote> {
-  try {
-    const mint = new Mint(mintUrl);
-    const keysets = await mint.getKeySets();
-
-    // Get preferred unit: msat over sat if both are active
-    const activeKeysets = keysets.keysets.filter((k) => k.active);
-    const units = [...new Set(activeKeysets.map((k) => k.unit))];
-    const preferredUnit = units.includes("msat")
-      ? "msat"
-      : units.includes("sat")
-        ? "sat"
-        : "not supported";
-
-    const wallet = new Wallet(mint, { unit: preferredUnit });
-
-    // Load mint keysets
-    await wallet.loadMint();
-    // the wallet claims deposits only where a lost answer can be restored
-    assertRecoverable(wallet, mintUrl);
-
-    // Create a mint quote, in the keyset's unit: `amount` is in sats
-    const mintQuote = await wallet.createMintQuote(
-      preferredUnit === "msat" ? amount * 1000 : amount
-    );
-    useCashuStore.getState().addMintQuote(mintUrl, mintQuote);
-
-    // Return the invoice and quote information
-    return {
-      mintUrl,
-      amount,
-      paymentRequest: mintQuote.request,
-      quoteId: mintQuote.quote,
-      state: MintQuoteState.UNPAID,
-      expiresAt: mintQuote.expiry ? mintQuote.expiry * 1000 : undefined,
-    };
-  } catch (error) {
-    if (
-      error instanceof Error &&
-      (error.message.includes(
-        "NetworkError when attempting to fetch resource"
-      ) ||
-        error.message.includes("Failed to fetch") ||
-        error.message.includes("Load failed"))
-    ) {
-      throw new Error(
-        `Mint connection error ${mintUrl}. The mint is blocking your IP or is down.`
-      );
-    }
-    console.error("Error creating Lightning invoice:", error);
-    throw error;
-  }
 }
 
 /**

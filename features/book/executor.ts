@@ -6,6 +6,7 @@ import {
   MintOperationError,
   MintQuoteState,
   type MeltQuoteBolt11Response,
+  type MintQuoteBolt11Response,
   type Proof,
   type SwapPreview,
   type Wallet,
@@ -17,6 +18,7 @@ import {
   saveOutputs,
   type MeltRecord,
   type MintRecord,
+  type QuoteRecord,
   type ReceiveRecord,
   type SwapRecord,
 } from "./records";
@@ -66,6 +68,73 @@ const read = async (coins: Coins) =>
 
 // how long a mint gets to show it is there before a token for it waits
 const REACH_MS = 10_000;
+
+/**
+ * Claims a paid quote's coins. Its record turns into a `mint` record holding
+ * the exact outputs before the mint is asked, so a lost answer is restored,
+ * here or by recovery; the coins are stored before the record goes. Throws
+ * when the coins could not be stored yet (they wait in the book).
+ */
+export async function claimPaid(
+  wallet: Wallet,
+  record: QuoteRecord,
+  quote: Pick<MintQuoteBolt11Response, "amount">,
+  commit: CommitProofs,
+  journal: Journal
+): Promise<Proof[]> {
+  const preview = await wallet.prepareMint(
+    "bolt11",
+    quote.amount,
+    record.quoteId,
+    { keysetId: wallet.keysetId }
+  );
+  const base = {
+    v: 1 as const,
+    id: record.id,
+    owner: record.owner,
+    mintUrl: record.mintUrl,
+    unit: wallet.unit,
+    createdAt: record.createdAt,
+  };
+  const claim: MintRecord = {
+    ...base,
+    kind: "mint",
+    keysetId: preview.keysetId,
+    quoteId: record.quoteId,
+    amount: quote.amount,
+    outputs: saveOutputs(preview.outputData),
+  };
+  journal.put(claim);
+  let proofs: Proof[];
+  try {
+    proofs = await wallet.completeMint(preview);
+  } catch (error) {
+    console.error("Mint request did not complete:", error);
+    await afterLostAnswer();
+    const restored = await settleMint(wallet, claim, commit, journal).catch(
+      () => null
+    );
+    if (restored?.length) return restored;
+    throw error;
+  }
+  try {
+    journal.put({ ...base, kind: "landed", proofs });
+  } catch (error) {
+    // storage full: the mint record stays, and recovery restores the coins
+    console.error("Could not write the coins down yet:", error);
+  }
+  try {
+    await commit(proofs, []);
+  } catch (error) {
+    // the coins wait in the book, and recovery stores them once it can
+    throw new Error(
+      "Deposit claimed, but storing the funds failed - they will be restored automatically. " +
+        (error instanceof Error ? error.message : String(error))
+    );
+  }
+  journal.remove(record.id);
+  return proofs;
+}
 
 /** One operation per account at a time, in every tab; recovery waits for it. */
 export const walletLock = (owner: string) => `routstr-chat-wallet:${owner}`;
@@ -443,55 +512,50 @@ export class WalletExecutor {
     if (quote.state === MintQuoteState.UNPAID) {
       throw new Error("Invoice has not been paid yet");
     }
+    const made = journal
+      .list(owner)
+      .find(
+        (r): r is QuoteRecord =>
+          r.kind === "quote" && r.mintUrl === mintUrl && r.quoteId === quoteId
+      );
     if (quote.state === MintQuoteState.ISSUED) {
+      if (made) journal.remove(made.id);
       return { proofs: [], unit: wallet.unit };
     }
-
-    const preview = await wallet.prepareMint("bolt11", quote.amount, quoteId, {
-      keysetId: wallet.keysetId,
-    });
-    const record: MintRecord = {
+    // a quote made before quotes were written down gets its record now
+    const record = made ?? {
       ...this.held(newId(), mintUrl, wallet),
-      kind: "mint",
-      keysetId: preview.keysetId,
+      kind: "quote" as const,
       quoteId,
       amount: quote.amount,
-      outputs: saveOutputs(preview.outputData),
     };
-    journal.put(record);
-    let proofs: Proof[];
-    try {
-      proofs = await wallet.completeMint(preview);
-    } catch (error) {
-      console.error("Mint request did not complete:", error);
-      await afterLostAnswer();
-      const restored = await settleMint(wallet, record, commit, journal).catch(
-        () => null
-      );
-      if (restored?.length) return { proofs: restored, unit: wallet.unit };
-      throw error;
-    }
-    try {
-      journal.put({
-        ...this.held(record.id, mintUrl, wallet),
-        kind: "landed",
-        proofs,
-      });
-    } catch (error) {
-      // storage full: the mint record stays, and recovery restores the coins
-      console.error("Could not write the coins down yet:", error);
-    }
-    try {
-      await commit(proofs, []);
-    } catch (error) {
-      // the coins wait in the book, and recovery stores them once it can
-      throw new Error(
-        "Deposit claimed, but storing the funds failed - they will be restored automatically. " +
-          (error instanceof Error ? error.message : String(error))
-      );
-    }
-    journal.remove(record.id);
+    const proofs = await claimPaid(wallet, record, quote, commit, journal);
     return { proofs, unit: wallet.unit };
+  }
+
+  /**
+   * A new deposit: a mint quote for `sats`, asked in the mint's unit (msat
+   * when it offers it), written down before its invoice is returned, so it is
+   * claimed whenever it is paid, even if nobody waits for it any more.
+   */
+  async deposit(
+    mintUrl: string,
+    sats: number
+  ): Promise<{ request: string; quoteId: string; expiresAt?: number }> {
+    const url = normalizeMintUrl(mintUrl);
+    const wallet = await this.open(url);
+    // the wallet opens in msat when the mint offers it, else sat
+    const amount = wallet.unit === "msat" ? sats * 1000 : sats;
+    const quote = await wallet.createMintQuote(amount);
+    const expiresAt = quote.expiry ? quote.expiry * 1000 : undefined;
+    this.deps.journal.put({
+      ...this.held(newId(), url, wallet),
+      kind: "quote",
+      quoteId: quote.quote,
+      amount,
+      expiresAt,
+    });
+    return { request: quote.request, quoteId: quote.quote, expiresAt };
   }
 
   /**

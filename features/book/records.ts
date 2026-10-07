@@ -50,6 +50,17 @@ export interface MeltRecord extends Base {
   blanks: SavedOutput[];
 }
 
+/** A deposit's mint quote, written before its invoice is shown: claimed
+ *  whenever the mint says it is paid, whoever made it or gave up on it. */
+export interface QuoteRecord extends Base {
+  kind: "quote";
+  quoteId: string;
+  /** in the quote's unit */
+  amount: number;
+  /** ms; an unpaid quote past it is dropped */
+  expiresAt?: number;
+}
+
 /** A paid deposit being claimed (NUT-04): the outputs asked for its coins. */
 export interface MintRecord extends Base {
   kind: "mint";
@@ -89,6 +100,7 @@ export interface TokenRecord extends Base {
 export type BookRecord =
   | SwapRecord
   | MeltRecord
+  | QuoteRecord
   | MintRecord
   | ReceiveRecord
   | LandedRecord

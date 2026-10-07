@@ -52,7 +52,7 @@ export interface StoredInvoice {
   fee?: number;
   retryCount?: number;
   nextRetryAt?: number;
-  claimError?: "recovery_pending" | "missing_preview";
+  claimError?: "recovery_pending";
 }
 
 interface InvoiceStore {

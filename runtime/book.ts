@@ -3,6 +3,8 @@ import { adoptLegacy } from "@/features/book/legacy";
 import { RecoveryHost } from "@/features/book/recovery";
 import { tokensOf, waitingOf } from "@/features/book/tokens";
 import { currentOwner } from "@/features/session/owned";
+import { legacyActivity } from "@/features/wallet/hooks/purseBridge";
+import { toSats } from "@/features/wallet/purse";
 import { useUnclaimedTokensStore } from "@/features/wallet/state/unclaimedTokensStore";
 
 /* The wallet book for this tab: one journal for every account's money in motion. */
@@ -15,7 +17,19 @@ export const journal = new Journal(storage);
 /** Keeps one operation per account at a time, across this browser's tabs. */
 export const locks = globalThis.navigator?.locks;
 
-export const recovery = new RecoveryHost({ journal, locks });
+export const recovery = new RecoveryHost({
+  journal,
+  locks,
+  // a deposit recovery claimed is in the account's activity like any other
+  claimed: (owner, proofs, unit) =>
+    legacyActivity.record(owner, {
+      direction: "in",
+      sats: toSats(
+        proofs.reduce((sum, p) => sum + p.amount, 0),
+        unit
+      ),
+    }),
+});
 
 const showTokens = () => {
   const owner = currentOwner();
