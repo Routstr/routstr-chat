@@ -29,7 +29,7 @@ const backup = (secret: string, amount: number) =>
   });
 const sats = (records: BookRecord[]) =>
   records.reduce((sum, r) => {
-    if (r.kind === "token") return sum + r.amount;
+    if (r.kind === "token" || r.kind === "receive") return sum + r.amount;
     if (r.kind === "mint") return sum;
     const proofs = r.kind === "landed" ? r.proofs : r.inputs;
     return sum + proofs.reduce((s, p) => s + p.amount, 0);

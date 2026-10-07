@@ -7,7 +7,7 @@ import { normalizeMintUrl } from "@/features/book/mint";
 import { DEFAULT_MINT_URL } from "@/lib/utils";
 import { dropSpent } from "../spent";
 import { useCashuStore } from "../state/cashuStore";
-import { useBalances } from "../view";
+import { useBalances, usePurseOf } from "../view";
 import { legacyCoins } from "./purseBridge";
 import { useCashuWallet } from "./useCashuWallet";
 import { useCreateCashuWallet } from "./useCreateCashuWallet";
@@ -30,6 +30,7 @@ export function useWalletBinder() {
   const { owner, wallet, isLoading } = useCashuWallet();
   const { mutateAsync: createWallet } = useCreateCashuWallet();
   const balances = useBalances(owner ?? null);
+  const purseOf = usePurseOf();
   const cashuStore = useCashuStore();
 
   useEffect(() => {
@@ -65,6 +66,12 @@ export function useWalletBinder() {
   useEffect(() => {
     const locks = globalThis.navigator?.locks;
     if (!owner || !wallet || !locks) return;
+    // tokens received while their mint could not be reached
+    void purseOf(owner)
+      ?.retryPending()
+      .catch((error) =>
+        console.error("Could not try the waiting tokens:", error)
+      );
     for (const mint of new Set((wallet.mints ?? []).map(normalizeMintUrl))) {
       dropSpent(owner, mint, { coins: legacyCoins, locks }).catch((error) =>
         console.error(`Could not check ${mint}'s coins:`, error)

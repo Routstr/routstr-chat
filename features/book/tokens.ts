@@ -10,6 +10,33 @@ export interface UnclaimedToken {
   createdAt: number;
 }
 
+/** A received token still waiting for its mint, as activity lists it. */
+export interface WaitingToken {
+  id: string;
+  amount: number;
+  unit: string;
+  mintUrl: string;
+  createdAt: number;
+}
+
+/** The receive records among an account's records, newest first. */
+export const waitingOf = (records: BookRecord[]): WaitingToken[] =>
+  records
+    .flatMap((r) =>
+      r.kind === "receive"
+        ? [
+            {
+              id: r.id,
+              amount: r.amount,
+              unit: r.unit ?? "sat",
+              mintUrl: r.mintUrl,
+              createdAt: r.createdAt,
+            },
+          ]
+        : []
+    )
+    .sort((a, b) => b.createdAt - a.createdAt);
+
 /** The token records among an account's records, newest first. */
 export const tokensOf = (records: BookRecord[]): UnclaimedToken[] =>
   records

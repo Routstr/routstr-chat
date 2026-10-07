@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useState,
   useSyncExternalStore,
 } from "react";
@@ -12,9 +13,13 @@ import { DEFAULT_MINT_URL } from "@/lib/utils";
 import { saveTransactionHistory } from "@/utils/storageUtils";
 import { depositMint } from "./depositMint";
 import { listMint, walletLoading } from "./hooks/purseBridge";
-import type { Purse } from "./purse";
+import { toSats, type Purse } from "./purse";
 import { useCashuStore } from "./state/cashuStore";
-import { useTransactionHistoryStore } from "./state/transactionHistoryStore";
+import {
+  useTransactionHistoryStore,
+  type PendingTransaction,
+} from "./state/transactionHistoryStore";
+import { useUnclaimedTokensStore } from "./state/unclaimedTokensStore";
 
 export { peek } from "./purse";
 
@@ -102,7 +107,25 @@ export function useWallet(): {
  *  only read it, or clear the records. */
 export function useActivity() {
   const entries = useTransactionHistoryStore((s) => s.history);
-  const pending = useTransactionHistoryStore((s) => s.pendingTransactions);
+  const invoices = useTransactionHistoryStore((s) => s.pendingTransactions);
+  // received tokens whose mint could not be reached yet: not in the balance
+  const waiting = useUnclaimedTokensStore((s) => s.waitingTokens);
+  const pending = useMemo(
+    (): PendingTransaction[] => [
+      ...invoices,
+      ...waiting.map((t) => ({
+        id: t.id,
+        direction: "in" as const,
+        amount: String(toSats(t.amount, t.unit)),
+        timestamp: Math.floor(t.createdAt / 1000),
+        status: "pending" as const,
+        mintUrl: t.mintUrl,
+        quoteId: "",
+        paymentRequest: "",
+      })),
+    ],
+    [invoices, waiting]
+  );
   const clearHistory = useTransactionHistoryStore((s) => s.clearHistory);
   const clear = useCallback(() => {
     clearHistory();

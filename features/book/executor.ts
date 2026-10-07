@@ -3,6 +3,7 @@ import {
   getTokenMetadata,
   MeltQuoteState,
   Mint,
+  MintOperationError,
   MintQuoteState,
   type MeltQuoteBolt11Response,
   type Proof,
@@ -16,6 +17,7 @@ import {
   saveOutputs,
   type MeltRecord,
   type MintRecord,
+  type ReceiveRecord,
   type SwapRecord,
 } from "./records";
 import {
@@ -61,6 +63,9 @@ const bare = (proofs: Proof[]) =>
   proofs.map(({ id, amount, secret, C }) => ({ id, amount, secret, C }));
 const read = async (coins: Coins) =>
   bare(typeof coins === "function" ? await coins() : coins);
+
+// how long a mint gets to show it is there before a token for it waits
+const REACH_MS = 10_000;
 
 /** One operation per account at a time, in every tab; recovery waits for it. */
 export const walletLock = (owner: string) => `routstr-chat-wallet:${owner}`;
@@ -246,6 +251,119 @@ export class WalletExecutor {
     options: { requirePersisted?: boolean } = {}
   ): Promise<Proof[]> {
     return this.locked(() => this.receiveLocked(token, options));
+  }
+
+  /**
+   * Takes a token into the wallet. It is written down first, before any
+   * network step, so a token whose mint cannot be reached stays in the book
+   * and is tried again (retryReceives); the same token twice is one record.
+   * Resolves once the wallet owns it: the coins it gave, or pending. Throws
+   * only when nothing was kept: the mint refused it (spent, invalid) or the
+   * record could not be written.
+   */
+  async take(
+    token: string
+  ): Promise<{ proofs: Proof[]; unit: string; pending: boolean }> {
+    if (!this.deps.locks) {
+      throw new Error(
+        "This browser cannot safely coordinate payments across tabs."
+      );
+    }
+    const record = this.holdReceive(token);
+    // a mint that does not answer never holds the account's lock
+    if (!(await this.reachable(record.mintUrl))) {
+      return { proofs: [], unit: record.unit ?? "sat", pending: true };
+    }
+    return this.locked(() => this.landReceive(record));
+  }
+
+  /** Tries every token this account still holds to receive; resolves with
+   *  what landed. One the mint refuses (spent, invalid) is dropped. */
+  async retryReceives(): Promise<{ proofs: Proof[]; unit: string }[]> {
+    const landed: { proofs: Proof[]; unit: string }[] = [];
+    for (const record of this.deps.journal.list(this.deps.owner)) {
+      if (record.kind !== "receive") continue;
+      if (!(await this.reachable(record.mintUrl))) continue;
+      const got = await this.locked(() => this.landReceive(record)).catch(
+        (error) => {
+          console.error("A waiting token was refused:", error);
+          return null;
+        }
+      );
+      if (got?.proofs.length) landed.push(got);
+    }
+    return landed;
+  }
+
+  /** The mint answers at all, within REACH_MS: asked outside the lock. */
+  private async reachable(mintUrl: string): Promise<boolean> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        new Mint(mintUrl).getInfo(),
+        new Promise((_, reject) => {
+          timer = setTimeout(() => reject(new Error("no answer")), REACH_MS);
+        }),
+      ]);
+      return true;
+    } catch (error) {
+      console.error(`${mintUrl} could not be reached; its token waits:`, error);
+      return false;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  private holdReceive(token: string): ReceiveRecord {
+    const { journal, owner } = this.deps;
+    const { mint, unit, amount, incompleteProofs } = getTokenMetadata(token);
+    const secrets = incompleteProofs.map((p) => p.secret);
+    const held = journal
+      .list(owner)
+      .find(
+        (r): r is ReceiveRecord =>
+          r.kind === "receive" && r.secrets.some((s) => secrets.includes(s))
+      );
+    if (held) return held;
+    const record: ReceiveRecord = {
+      v: 1,
+      kind: "receive",
+      id: newId(),
+      owner,
+      mintUrl: normalizeMintUrl(mint),
+      unit,
+      createdAt: Date.now(),
+      token,
+      amount,
+      secrets,
+    };
+    journal.put(record);
+    return record;
+  }
+
+  private async landReceive(
+    record: ReceiveRecord
+  ): Promise<{ proofs: Proof[]; unit: string; pending: boolean }> {
+    const unit = record.unit ?? "sat";
+    const { journal, owner } = this.deps;
+    // a retry, here or in another tab, took it in while this one waited
+    if (!journal.list(owner).some((r) => r.id === record.id)) {
+      return { proofs: [], unit, pending: false };
+    }
+    try {
+      const proofs = await this.receiveLocked(record.token, {});
+      journal.remove(record.id);
+      return { proofs, unit, pending: false };
+    } catch (error) {
+      // only the mint's own refusal ends it: no network, a proxy's page or a
+      // reply that makes no sense keep the token for later
+      if (error instanceof MintOperationError) {
+        journal.remove(record.id);
+        throw error;
+      }
+      console.error("The token could not be received yet; it waits:", error);
+      return { proofs: [], unit, pending: true };
+    }
   }
 
   private async receiveLocked(
