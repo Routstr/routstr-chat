@@ -5,6 +5,7 @@ import type {
 } from "@routstr/sdk";
 import type { DiscoveryAdapter } from "@routstr/sdk/discovery";
 import type { Model } from "@/types/models";
+import type { Route, RouteChoice, WalletView } from "./ports";
 
 export interface CatalogDeps {
   discoveryAdapter: DiscoveryAdapter;
@@ -21,6 +22,7 @@ export interface CatalogDeps {
   changes(listener: () => void): () => void;
   /** Where the providers you turned off are kept on this device. */
   settings: Pick<Storage, "getItem" | "setItem">;
+  route: Route;
 }
 
 /** The providers you turned off, on this device (localStorage). */
@@ -171,6 +173,21 @@ export class CatalogService {
     return this.deps.providerManager.getProviderPriceRankingForModel(modelId, {
       torMode: this.deps.torMode(),
     });
+  }
+
+  /** Where a send of this model is paid, by the SDK's own rule: the cheapest
+   *  provider that takes a mint holding sats, else the cheapest. Undefined
+   *  while the list is not in, or when no provider serves it. */
+  async goesTo(
+    modelId: string,
+    wallet: WalletView
+  ): Promise<RouteChoice | undefined> {
+    if (!this.warm()) return undefined;
+    try {
+      return await this.deps.route(modelId, wallet);
+    } catch {
+      return undefined;
+    }
   }
 
   /** What a provider itself lists, whatever its routing state. */

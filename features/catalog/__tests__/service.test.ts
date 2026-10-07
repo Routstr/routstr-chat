@@ -76,6 +76,7 @@ function setup(cache: Record<string, unknown[]> = {}) {
       changed.add(listener);
       return () => changed.delete(listener);
     },
+    route: vi.fn(async () => ({ baseUrl: PUBLIC, mintUrl: "https://mint" })),
     settings: {
       getItem: (key: string) => saved.get(key) ?? null,
       setItem: (key: string, value: string) => void saved.set(key, value),
@@ -115,7 +116,9 @@ describe("CatalogService", () => {
   it("tells which mints a provider takes, with or without its closing slash", () => {
     const { catalog } = setup();
     expect(catalog.mintsOf(PUBLIC)).toEqual(["https://mint.example"]);
-    expect(catalog.mintsOf(PUBLIC.slice(0, -1))).toEqual(["https://mint.example"]);
+    expect(catalog.mintsOf(PUBLIC.slice(0, -1))).toEqual([
+      "https://mint.example",
+    ]);
     expect(catalog.mintsOf("https://other.example/")).toEqual([]);
   });
 
@@ -403,5 +406,35 @@ describe("CatalogService: providers you turn on and off", () => {
     expect(after.off).toEqual([B]);
     expect(after.turnedOff).toEqual([]);
     catalog.dispose();
+  });
+});
+
+describe("CatalogService.goesTo", () => {
+  const wallet = {
+    balances: { "https://mint": 10 },
+    activeMint: "https://mint",
+  };
+
+  it("says nothing until the list is in, then the SDK's own choice", async () => {
+    const { catalog, deps } = setup();
+    expect(await catalog.goesTo("m", wallet)).toBeUndefined();
+
+    await catalog.refresh();
+
+    expect(await catalog.goesTo("m", wallet)).toEqual({
+      baseUrl: PUBLIC,
+      mintUrl: "https://mint",
+    });
+    expect(deps.route).toHaveBeenCalledWith("m", wallet);
+  });
+
+  it("says nothing when no provider serves the model", async () => {
+    const { catalog, deps } = setup();
+    await catalog.refresh();
+    vi.mocked(deps.route).mockRejectedValueOnce(
+      new Error("No providers found")
+    );
+
+    expect(await catalog.goesTo("m", wallet)).toBeUndefined();
   });
 });

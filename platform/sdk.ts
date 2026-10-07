@@ -5,10 +5,12 @@ import {
   ModelManager,
   noopLogger,
   ProviderManager,
+  resolveRequestContext,
 } from "@routstr/sdk";
 import { RoutstrClient } from "@routstr/sdk/client";
 import {
   createDiscoveryAdapterFromStore,
+  createStorageAdapterFromStore,
   createIndexedDBDriver,
   createIndexedDBUsageTrackingDriver,
   createMemoryDriver,
@@ -16,6 +18,7 @@ import {
   createSdkStore,
 } from "@routstr/sdk/storage";
 import type { StorageAdapter, WalletAdapter } from "@routstr/sdk/wallet";
+import type { Route } from "@/features/catalog/ports";
 import type { Sdk } from "@/features/payments/ports";
 
 /**
@@ -60,9 +63,42 @@ export function createSdk({ extraProviders }: { extraProviders: string[] }) {
     (await usageTrackingDriver.list({ after: Date.now() - 60_000 })).find(
       (entry) => entry.id === requestId
     )?.satsCost;
+  const modelManager = new ModelManager(discoveryAdapter, {
+    includeProviderUrls: extraProviders,
+    logger: noopLogger,
+  });
+  const providerManager = new ProviderManager(
+    discoveryAdapter,
+    store,
+    noopLogger
+  );
+  // the routing state only; a route is resolved without touching credit
+  const noCredit = createStorageAdapterFromStore(
+    createSdkStore({ driver: createMemoryDriver() }).store
+  );
+  /** Where the SDK pays a request for this model from a wallet holding these
+   *  sats per mint: its own rule, read from the cache (never fetched). */
+  const route: Route = async (modelId, wallet) => {
+    const { baseUrl, mintUrl } = await resolveRequestContext({
+      modelId,
+      walletAdapter: {
+        getBalances: async () => wallet.balances,
+        getActiveMintUrl: () => wallet.activeMint,
+        getMintUnits: () => ({}),
+      } as unknown as WalletAdapter,
+      storageAdapter: noCredit,
+      discoveryAdapter,
+      modelManager,
+      providerManager,
+      torMode: isTorContext(),
+      logger: noopLogger,
+    });
+    return { baseUrl, mintUrl };
+  };
   return {
     ready,
     discoveryAdapter,
+    route,
     changes: (listener: () => void) =>
       store.subscribe((now, before) => {
         if (
@@ -74,11 +110,8 @@ export function createSdk({ extraProviders }: { extraProviders: string[] }) {
           listener();
         }
       }),
-    modelManager: new ModelManager(discoveryAdapter, {
-      includeProviderUrls: extraProviders,
-      logger: noopLogger,
-    }),
-    providerManager: new ProviderManager(discoveryAdapter, store, noopLogger),
+    modelManager,
+    providerManager,
     mintDiscovery: new MintDiscovery(discoveryAdapter),
     request,
     cost,
