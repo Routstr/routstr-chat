@@ -102,18 +102,23 @@ export function useActivity() {
   return { entries, pending, clear };
 }
 
-/** The mints the provider about to be paid takes, read when money is added;
- *  filled by the composition root from the catalog, empty while none is known.
- *  The wallet never imports chat. */
-export const AcceptedMintsContext = createContext<() => string[]>(() => []);
+/** The mints the provider about to be paid takes, for `sats` of new money,
+ *  read when money is added; filled by the composition root from the catalog,
+ *  empty while none is known. The wallet never imports chat. */
+export const AcceptedMintsContext = createContext<(sats: number) => string[]>(
+  () => []
+);
 
-/** Where new money should go, so the provider can take it (see
+/** Where `sats` of new money should go, so the provider can take it (see
  *  depositMint), given the account's sats per mint. The wallet lists that mint
  *  and its keysets too, so what lands there counts at once. */
-export function useDepositMint(): (balances: Record<string, number>) => string {
+export function useDepositMint(): (
+  balances: Record<string, number>,
+  sats: number
+) => string {
   const accepted = useContext(AcceptedMintsContext);
   return useCallback(
-    (balances) => {
+    (balances, sats) => {
       const { activeMintUrl, userSelectedMintUrl, mints } =
         useCashuStore.getState();
       const url = depositMint({
@@ -121,7 +126,7 @@ export function useDepositMint(): (balances: Record<string, number>) => string {
         picked: !!activeMintUrl && activeMintUrl === userSelectedMintUrl,
         known: mints.map((m) => m.url),
         balances,
-        accepted: accepted(),
+        accepted: accepted(sats),
         fallback: DEFAULT_MINT_URL,
       });
       void listMint(useCashuStore.getState(), url);

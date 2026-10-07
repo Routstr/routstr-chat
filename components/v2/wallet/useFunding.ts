@@ -60,8 +60,8 @@ export function useFunding() {
   // new money goes where the provider about to be paid can take it
   const depositTo = useDepositMint();
   const [mint, setMint] = useState<string | null>(null);
-  const ensureMint = useCallback(() => {
-    const url = depositTo(balances);
+  const ensureMint = useCallback((sats: number) => {
+    const url = depositTo(balances, sats);
     if (!cashuStore.mints.find((m) => m.url === url)) cashuStore.addMint(url);
     if (cashuStore.activeMintUrl !== url) cashuStore.setActiveMintUrl(url);
     setMint(url);
@@ -77,7 +77,7 @@ export function useFunding() {
       setMessage("");
       receive.setError("");
       ensureAccount();
-      ensureMint();
+      ensureMint(sats);
       amountRef.current = sats;
       setAmount(sats);
       receive.setMintAmount(String(sats));

@@ -16,7 +16,7 @@ import { createMeltQuote, quoteInSats } from "@/lib/cashuLightning";
 import { toSats } from "../purse";
 import { usePurse } from "../view";
 import { useActiveMintUnit } from "./useActiveMintUnit";
-import { dismissToken, useBook } from "./useBook";
+import { dismissToken } from "./useBook";
 import { toast } from "sonner";
 
 export function useWalletSend() {
@@ -25,7 +25,6 @@ export function useWalletSend() {
   const { receiveToken } = useCashuToken();
   const cashuStore = useCashuStore();
   const unclaimedTokensStore = useUnclaimedTokensStore();
-  const { activeExecutor } = useBook();
   const purse = usePurse();
 
   // Send tab state
@@ -236,9 +235,11 @@ export function useWalletSend() {
       setError("");
       setWarningMessage("");
       const mintUrl = cashuStore.activeMintUrl;
-      const selectedProofs = await cashuStore.getMintProofs(mintUrl);
-      const totalProofsAmount = selectedProofs.reduce((sum, p) => sum + p.amount, 0);
-      const have = toSats(totalProofsAmount, currentMintUnit);
+      // read before the balance, which reloads the store from what is saved
+      const quote = cashuStore.getMeltQuote(mintUrl, nip60MeltQuoteId);
+      const from = purse();
+      if (!from) throw new Error("User not logged in");
+      const have = (await from.balances())[mintUrl] ?? 0;
       if (have < invoiceAmount + (invoiceFeeReserve || 0)) {
         setError(
           `Insufficient balance: have ${formatBalance(have, "sat")}s, need ${formatBalance(invoiceAmount + (invoiceFeeReserve || 0), "sat")}s`
@@ -246,18 +247,16 @@ export function useWalletSend() {
         setIsNip60Processing(false);
         return;
       }
-      const executor = activeExecutor();
-      if (!executor) throw new Error("User not logged in");
-      const quote = cashuStore.getMeltQuote(mintUrl, nip60MeltQuoteId);
-      const result = await executor.pay(mintUrl, quote, selectedProofs);
+      // the coins are read once the account's lock is held, never before
+      const state = await from.pay(mintUrl, quote);
       const amount = `${formatBalance(invoiceAmount, "sat")}s`;
-      if (result.state === "failed") {
+      if (state === "failed") {
         await updateInvoice(nip60MeltQuoteId, { state: MeltQuoteState.UNPAID });
         setError(
           "The payment did not go through. Your sats are back in the wallet."
         );
       } else {
-        const paid = result.state === "paid";
+        const paid = state === "paid";
         await updateInvoice(
           nip60MeltQuoteId,
           paid
@@ -284,9 +283,8 @@ export function useWalletSend() {
     invoiceAmount,
     invoiceFeeReserve,
     nip60MeltQuoteId,
-    activeExecutor,
+    purse,
     error,
-    currentMintUnit,
     handleNip60InvoiceInput,
     handleNip60PaymentCancel,
     updateInvoice,

@@ -55,6 +55,8 @@ const afterLostAnswer = () =>
 // the store keeps next to a coin (its NIP-60 event, its owner)
 const bare = (proofs: Proof[]) =>
   proofs.map(({ id, amount, secret, C }) => ({ id, amount, secret, C }));
+const read = async (coins: Coins) =>
+  bare(typeof coins === "function" ? await coins() : coins);
 
 /** One operation per account at a time, in every tab; recovery waits for it. */
 export const walletLock = (owner: string) => `routstr-chat-wallet:${owner}`;
@@ -69,13 +71,15 @@ export const walletLock = (owner: string) => `routstr-chat-wallet:${owner}`;
 export class WalletExecutor {
   constructor(private readonly deps: ExecutorDeps) {}
 
-  /** Pays a Lightning melt quote from these proofs of the wallet. */
+  /** Pays a Lightning melt quote from these coins of the wallet. */
   pay(
     mintUrl: string,
     quote: MeltQuoteBolt11Response,
-    proofs: Proof[]
+    coins: Coins
   ): Promise<{ state: MeltOutcome; fee: number; change: Proof[] }> {
-    return this.locked(() => this.payLocked(mintUrl, quote, bare(proofs)));
+    return this.locked(async () =>
+      this.payLocked(mintUrl, quote, await read(coins))
+    );
   }
 
   private async payLocked(
@@ -184,12 +188,7 @@ export class WalletExecutor {
     options: SendOptions = {}
   ): Promise<string> {
     return this.locked(async () =>
-      this.sendLocked(
-        mintUrl,
-        sats,
-        bare(typeof coins === "function" ? await coins() : coins),
-        options
-      )
+      this.sendLocked(mintUrl, sats, await read(coins), options)
     );
   }
 
