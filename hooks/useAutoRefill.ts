@@ -18,12 +18,6 @@ const AUTO_REFILL_COOLDOWN_MS = 5 * 60 * 1000;
 // Minimum interval between balance checks (5 seconds for testing, can increase later)
 const BALANCE_CHECK_INTERVAL_MS = 5 * 1000;
 
-export interface AutoRefillStatus {
-  nwcAutoRefillEnabled: boolean;
-  isProcessingNWCRefill: boolean;
-  lastNWCRefillAt: number | null;
-}
-
 interface UseAutoRefillProps {
   balance: number;
   isWalletLoaded: boolean;
@@ -41,20 +35,13 @@ interface UseAutoRefillProps {
 export function useAutoRefill({
   balance,
   isWalletLoaded,
-}: UseAutoRefillProps): AutoRefillStatus {
+}: UseAutoRefillProps): void {
   const cashuStore = useCashuStore();
   const { updateProofs } = useCashuWallet();
 
   // Track processing states
   const isProcessingNWCRef = useRef(false);
   const lastCheckTimeRef = useRef(0);
-
-  // Track settings for status return
-  const settingsRef = useRef<{
-    nwc: AutoRefillNWCSettings;
-  }>({
-    nwc: loadAutoRefillNWCSettings(),
-  });
 
   /**
    * Check if we're within the cooldown period
@@ -145,7 +132,6 @@ export function useAutoRefill({
 
       // Load current settings
       const nwcSettings = loadAutoRefillNWCSettings();
-      settingsRef.current = { nwc: nwcSettings };
 
       // Check NWC auto-refill
       if (nwcSettings.enabled && !isProcessingNWCRef.current) {
@@ -166,10 +152,4 @@ export function useAutoRefill({
     isInCooldown,
     executeNWCRefill,
   ]);
-
-  return {
-    nwcAutoRefillEnabled: settingsRef.current.nwc.enabled,
-    isProcessingNWCRefill: isProcessingNWCRef.current,
-    lastNWCRefillAt: settingsRef.current.nwc.lastRefillAt || null,
-  };
 }
