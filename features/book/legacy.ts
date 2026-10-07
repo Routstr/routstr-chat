@@ -46,6 +46,7 @@ interface OldInvoice {
   mintUrl: string;
   amount?: number;
   createdAt?: number;
+  expiresAt?: number;
 }
 
 interface OldToken {
@@ -84,7 +85,7 @@ export function adoptLegacy(
           : family === UNCLAIMED
             ? tokensFrom(saved, owner)
             : family === PROVIDER
-              ? providerTokens(key, saved, owner)
+              ? providerTokens(saved, owner)
               : backupFrom(key, saved, owner);
     } catch {
       // unreadable: left in place for a person to look at
@@ -135,6 +136,8 @@ function paidInvoices(
       quoteId: i.quoteId,
       // main's figure, in sats; the claim takes the mint's
       amount: i.amount ?? 0,
+      // a quote the mint no longer knows is dropped once this is past
+      expiresAt: i.expiresAt,
     })
   );
   storage.setItem(
@@ -164,18 +167,20 @@ function tokensFrom(
  *  listed for them to take back (or keep as that provider's key), never
  *  returned by themselves. */
 function providerTokens(
-  key: string,
   saved: { baseUrl?: string; token?: string }[],
   owner: string
 ): BookRecord[] {
-  return saved.flatMap(({ baseUrl, token }, i) => {
+  return saved.flatMap(({ baseUrl, token }) => {
     if (!token) return [];
-    const { mint, unit, amount } = getTokenMetadata(token);
+    const { mint, unit, amount, incompleteProofs } = getTokenMetadata(token);
+    const [first] = incompleteProofs;
+    if (!first) return [];
     return [
       {
         v: 1 as const,
         kind: "token" as const,
-        id: `legacy-${key}-${i}`,
+        // by the token itself: main can leave another under the same key later
+        id: `legacy-token-${first.secret}`,
         owner,
         mintUrl: normalizeMintUrl(mint),
         unit: unit ?? "sat",

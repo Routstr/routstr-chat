@@ -1,5 +1,11 @@
 // At a mint that offers msat: what Send shows is in sats, and the book pays the msat quote.
-import { getEncodedTokenV4, Mint, Wallet, type Proof } from "@cashu/cashu-ts";
+import {
+  getEncodedTokenV4,
+  getTokenMetadata,
+  Mint,
+  Wallet,
+  type Proof,
+} from "@cashu/cashu-ts";
 import { describe, expect, it } from "vitest";
 import { getKit } from "@/tests/kit";
 import { WalletExecutor } from "@/features/book/executor";
@@ -107,5 +113,70 @@ describe("a mint that offers msat", () => {
     expect(taken.unit).toBe("sat");
     expect(sum(taken.proofs)).toBe(8);
     expect(journal.list("alice")).toEqual([]);
+  });
+
+  describe("with sat coins beside its msat ones", () => {
+    const paidIn = async (unit: string, amount: number) => {
+      const wallet = new Wallet(new Mint(MSAT_MINT), { unit });
+      await wallet.loadMint();
+      const quote = await wallet.createMintQuote(amount);
+      for (let i = 0; i < 40; i++) {
+        if ((await wallet.checkMintQuote(quote.quote)).state === "PAID") break;
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      return wallet.mintProofs(amount, quote.quote);
+    };
+    /** an account holding `msat` msat in coins, then taking a sat token of `sat` */
+    const holding = async (msat: number, sat: number) => {
+      const { keysets } = await new Mint(MSAT_MINT).getKeySets();
+      // as the coin store writes them: each coin with its keyset's unit
+      const tagged = (ps: Proof[]) =>
+        ps.map((p) => ({
+          ...p,
+          unit: keysets.find((k) => k.id === p.id)?.unit,
+        }));
+      const held = { coins: tagged(await paidIn("msat", msat)) };
+      const journal = new Journal(memoryStorage());
+      const executor = new WalletExecutor({
+        owner: "alice",
+        journal,
+        locks: navigator.locks,
+        commitFor: () => async (add, remove) => {
+          const gone = new Set(remove.map((p) => p.secret));
+          held.coins = held.coins
+            .filter((p) => !gone.has(p.secret))
+            .concat(tagged(add));
+        },
+      });
+      const token = getEncodedTokenV4({
+        mint: MSAT_MINT,
+        unit: "sat",
+        proofs: await paidIn("sat", sat),
+      });
+      expect((await executor.take(token)).pending).toBe(false);
+      return { executor, journal, held, read: async () => held.coins };
+    };
+
+    it("sends and pays from the msat coins when they cover it", async () => {
+      const { executor, journal, read } = await holding(50_000, 8);
+      const sent = await executor.send(MSAT_MINT, 5, read);
+      expect(getTokenMetadata(sent)).toMatchObject({
+        unit: "msat",
+        amount: 5000,
+      });
+
+      const wallet = new Wallet(new Mint(MSAT_MINT), { unit: "msat" });
+      await wallet.loadMint();
+      const quote = await wallet.createMeltQuote(await kit.invoice(3));
+      expect((await executor.pay(MSAT_MINT, quote, read)).state).toBe("paid");
+      expect(journal.list("alice")).toEqual([]);
+    });
+
+    it("sends from the sat coins when only they cover it", async () => {
+      const { executor, journal, read } = await holding(2_000, 8);
+      const sent = await executor.send(MSAT_MINT, 5, read);
+      expect(getTokenMetadata(sent)).toMatchObject({ unit: "sat", amount: 5 });
+      expect(journal.list("alice")).toEqual([]);
+    });
   });
 });

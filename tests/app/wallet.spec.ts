@@ -264,11 +264,10 @@ test("pays an invoice at the mint that quoted it, though another mint is picked 
   // the other mint is picked at the foot while Send shows the quote
   const host = new URL(kit.env.invoiceMintUrl).host.replace(/[.]/g, "\\.");
   await page.getByRole("button", { name: /^Mint / }).click();
-  await page
-    .getByRole("menu", { name: "Mints" })
-    .getByRole("menuitemradio", { name: new RegExp(host) })
-    .click();
-  await page.keyboard.press("Escape");
+  const menu = page.getByRole("menu", { name: "Mints" });
+  await menu.getByRole("menuitemradio", { name: new RegExp(host) }).click();
+  // picking closes the menu: Send stays open with its quote
+  await expect(menu).toBeHidden();
 
   await pay.click();
   await expect(
@@ -324,8 +323,9 @@ test("pays an invoice on a second press, after the first payment did not go thro
   });
   expect(failed).toBe(true);
 
-  // tried again, it pays
+  // tried again, the invoice is read anew and its fresh quote paid
   await send.getByRole("button", { name: "Try again" }).click();
+  await pay.click({ timeout: 30_000 });
   await expect(
     send.getByRole("button", { name: "Pay another invoice" })
   ).toBeVisible({ timeout: 30_000 });
