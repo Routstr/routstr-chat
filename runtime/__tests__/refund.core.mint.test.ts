@@ -66,11 +66,11 @@ async function account(others: ApiKeyEntry[] = [], adopt: Adopt = noAdopt) {
     send: async () => {
       throw new Error("these tests never pay");
     },
-    receive: async (token) => {
+    take: async (token) => {
       if (state.mintDown) throw new Error("Failed to fetch");
       const sats = await kit.redeem(token);
       received.push(sats);
-      return sats;
+      return { sats, pending: false };
     },
   };
   const credit = fakeKeys();

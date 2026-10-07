@@ -1,7 +1,7 @@
 import { Journal, memoryStorage, PREFIX } from "@/features/book/journal";
 import { adoptLegacy } from "@/features/book/legacy";
 import { RecoveryHost } from "@/features/book/recovery";
-import { tokensOf } from "@/features/book/tokens";
+import { tokensOf, waitingOf } from "@/features/book/tokens";
 import { currentOwner } from "@/features/session/owned";
 import { useUnclaimedTokensStore } from "@/features/wallet/state/unclaimedTokensStore";
 
@@ -19,8 +19,10 @@ export const recovery = new RecoveryHost({ journal, locks });
 
 const showTokens = () => {
   const owner = currentOwner();
+  const records = owner ? journal.list(owner) : [];
   useUnclaimedTokensStore.setState({
-    unclaimedTokens: owner ? tokensOf(journal.list(owner)) : [],
+    unclaimedTokens: tokensOf(records),
+    waitingTokens: waitingOf(records),
   });
 };
 

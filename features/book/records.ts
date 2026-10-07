@@ -60,6 +60,17 @@ export interface MintRecord extends Base {
   outputs: SavedOutput[];
 }
 
+/** A token being received, written before anything is asked of its mint: it
+ *  stays until the mint takes it into the wallet or says it is spent. */
+export interface ReceiveRecord extends Base {
+  kind: "receive";
+  token: string;
+  /** in the token's unit */
+  amount: number;
+  /** its proofs' secrets: the same token twice is one record */
+  secrets: string[];
+}
+
 /** New proofs the mint gave us, held until the wallet has stored them. */
 export interface LandedRecord extends Base {
   kind: "landed";
@@ -79,6 +90,7 @@ export type BookRecord =
   | SwapRecord
   | MeltRecord
   | MintRecord
+  | ReceiveRecord
   | LandedRecord
   | TokenRecord;
 

@@ -33,8 +33,11 @@ export interface Purse {
     sats: number,
     handoff?: (token: string) => Promise<void>
   ): Promise<string>;
-  /** Takes a token into this account's wallet; resolves with its sats. */
-  receive(token: string): Promise<number>;
+  /** Takes a token into this account's wallet. Resolved, the wallet owns it:
+   *  received, or `pending` in its book while the mint cannot be reached, and
+   *  taken in by a retry. Throws only when the mint refuses it (spent,
+   *  invalid); then nothing is kept. */
+  take(token: string): Promise<{ sats: number; pending: boolean }>;
 }
 
 /** Where a request is paid from. */

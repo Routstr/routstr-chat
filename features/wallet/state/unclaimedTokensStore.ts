@@ -1,10 +1,12 @@
 import { create } from "zustand";
-import type { UnclaimedToken } from "@/features/book/tokens";
+import type { UnclaimedToken, WaitingToken } from "@/features/book/tokens";
 
-export type { UnclaimedToken };
+export type { UnclaimedToken, WaitingToken };
 
-/** The active account's send tokens nobody has claimed yet. A view of its
- *  token records in the wallet book, kept in step by the runtime. */
+/** The active account's send tokens nobody has claimed yet, and received
+ *  tokens still waiting for their mint. A view of its token and receive
+ *  records in the wallet book, kept in step by the runtime. */
 export const useUnclaimedTokensStore = create<{
   unclaimedTokens: UnclaimedToken[];
-}>()(() => ({ unclaimedTokens: [] }));
+  waitingTokens: WaitingToken[];
+}>()(() => ({ unclaimedTokens: [], waitingTokens: [] }));

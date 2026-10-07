@@ -30,7 +30,10 @@ vi.mock("../useCashuWallet", () => ({
 vi.mock("../useCreateCashuWallet", () => ({
   useCreateCashuWallet: () => ({ mutateAsync: state.createWallet }),
 }));
-vi.mock("../../view", () => ({ useBalances: () => null }));
+vi.mock("../../view", () => ({
+  useBalances: () => null,
+  usePurseOf: () => () => null,
+}));
 vi.mock("../../state/cashuStore", () => ({
   useCashuStore: () => ({
     activeMintUrl: "m",

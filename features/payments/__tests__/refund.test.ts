@@ -138,7 +138,7 @@ describe("refundCredit", () => {
     const { deps, direct, credit, wallet } = await setup();
     direct.setApiKey(LARGE, "sk-large");
     lastUsed(credit, 0);
-    wallet.purse.receive.mockRejectedValueOnce(new Error("mint unreachable"));
+    wallet.purse.take.mockRejectedValueOnce(new Error("mint unreachable"));
 
     await refundCredit(deps, false);
     expect(direct.getApiKey(LARGE)).not.toBeNull();
@@ -277,7 +277,7 @@ describe("refundCredit", () => {
     const { deps, direct, wallet } = await setup();
     direct.setApiKey(LARGE, "sk-mine");
     direct.updateApiKeyBalance(LARGE, 120);
-    wallet.purse.receive.mockRejectedValueOnce(new Error("Failed to fetch"));
+    wallet.purse.take.mockRejectedValueOnce(new Error("Failed to fetch"));
 
     const results = await refundCredit(deps, true);
 
@@ -297,7 +297,7 @@ describe("refundCredit", () => {
       balance: 120,
       lastUsed: null,
     });
-    wallet.purse.receive.mockRejectedValueOnce(new Error("Failed to fetch"));
+    wallet.purse.take.mockRejectedValueOnce(new Error("Failed to fetch"));
 
     const results = await refundCredit(deps, true);
 
@@ -543,7 +543,7 @@ describe("refundCredit: a payout the mint calls spent", () => {
       balance: 0,
       lastUsed: null,
     });
-    account.wallet.purse.receive.mockRejectedValue(
+    account.wallet.purse.take.mockRejectedValue(
       Object.assign(new Error("Token already spent"), { code: 11001 })
     );
     return account;
@@ -564,7 +564,7 @@ describe("refundCredit: a payout the mint calls spent", () => {
     provider({ [LARGE]: 0 });
     const { deps, direct, wallet } = await setup();
     direct.setApiKey(LARGE, "sk-mine");
-    wallet.purse.receive.mockRejectedValue(
+    wallet.purse.take.mockRejectedValue(
       Object.assign(new Error("Token already spent"), { code: 11001 })
     );
     const adopt = vi.fn(async () => 0);
@@ -588,7 +588,7 @@ describe("refundCredit: a payout the mint calls spent", () => {
   it("asks only about a payout: a spent token outside one does not reach the provider", async () => {
     const { deps, wallet } = await setup();
     const adopt = vi.fn(async () => 0);
-    wallet.purse.receive.mockRejectedValue(
+    wallet.purse.take.mockRejectedValue(
       Object.assign(new Error("Token already spent"), { code: 11001 })
     );
 

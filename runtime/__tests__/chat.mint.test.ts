@@ -18,6 +18,10 @@ import type { Spending } from "@/features/payments/ports";
 import { getKit } from "@/tests/kit";
 import { createAccountChat } from "../chat";
 import { createRouting } from "../routing";
+import { CatalogService } from "@/features/catalog/service";
+import type { Sdk } from "@/features/payments/ports";
+import type { Model } from "@/types/models";
+import { createSdk } from "@/platform/sdk";
 import { kitPurse } from "./kitPurse";
 
 const kit = getKit();
@@ -200,6 +204,132 @@ describe("chat with real money", () => {
       next.dispose();
     }
   );
+
+  it("pays the provider goesTo names when the cheapest takes neither of the wallet's mints", async () => {
+    // routing as the root builds it, so a provider can be added to its cache
+    const sdk = createSdk({ extraProviders: [kit.coreUrl] });
+    const catalog = new CatalogService({
+      ...sdk,
+      node: () => undefined,
+      settings: memoryStorage(),
+    });
+    await catalog.refresh();
+    // a cheaper provider of the same model that takes only another mint
+    const elsewhere = "http://127.0.0.1:9/";
+    const d = sdk.discoveryAdapter;
+    const cached = d.getCachedModels() as unknown as Record<string, Model[]>;
+    const listed = cached[kit.coreUrl].find((m) => m.id === "kit-cheap")!;
+    const cheaper = {
+      ...listed,
+      sats_pricing: {
+        ...listed.sats_pricing,
+        prompt: listed.sats_pricing.prompt / 10,
+        completion: listed.sats_pricing.completion / 10,
+      },
+    };
+    d.setCachedModels({ ...cached, [elsewhere]: [cheaper] } as never);
+    d.setBaseUrlsList([...d.getBaseUrlsList(), elsewhere]);
+    d.setCachedMints({
+      ...d.getCachedMints(),
+      [elsewhere]: ["https://another-mint.example"],
+    });
+    d.setManuallyEnabledProviders?.([
+      ...d.getManuallyEnabledProviders(),
+      elsewhere,
+    ]);
+    expect(catalog.routes("kit-cheap")[0].baseUrl).toBe(elsewhere);
+
+    // the wallet holds two mints
+    const wallet = kitPurse(kit, "alice", kit.env.mintUrl);
+    await wallet.fund(200);
+    await wallet.purse.receive(await kit.mintToken(100, { otherMint: true }));
+    const balances = await wallet.purse.balances();
+    expect(Object.keys(balances)).toHaveLength(2);
+    const goes = await catalog.goesTo("kit-cheap", {
+      balances,
+      activeMint: wallet.purse.activeMint(),
+    });
+    expect(goes?.baseUrl).toBe(kit.coreUrl);
+
+    const payments: Sdk = {
+      request: sdk.request,
+      client: sdk.client,
+      cost: sdk.cost,
+      warm: () => catalog.warm(),
+      ensureNode: (url) => catalog.ensureNode(url),
+      torMode: sdk.torMode,
+    };
+    const credit = fakeKeys();
+    await credit.keys.ready();
+    const chat = createAccountChat({
+      owner: "alice",
+      storage: memoryStorage(),
+      history: new FakeHistory(),
+      attachments: passThroughAttachments(),
+      keys: credit.keys,
+      purse: wallet.purse,
+      sdk: payments,
+      spending: () => ({ mode: "apikeys" }),
+      ...emptyDevice(),
+    });
+    const turn = await chat.chat.send("c", "[kit:usage=10,10] hello", {
+      id: "kit-cheap",
+    });
+    await turn.settled;
+
+    expect(turn.run.getSnapshot().phase).toBe("done");
+    expect(await kit.upstream.requests()).toHaveLength(1);
+    expect(
+      credit.keys
+        .storage()
+        .getAllApiKeys()
+        .map((k) => k.baseUrl)
+    ).toEqual([goes!.baseUrl]);
+    chat.dispose();
+  });
+
+  it("keeps a payout the wallet could not take in while its mint was down, and it lands later", async () => {
+    const { chat, wallet, credit } = await account();
+    const storage = credit.keys.storage();
+    // a key worth 40 sats at core, this account's
+    const made = await fetch(`${kit.coreUrl}v1/wallet/info`, {
+      headers: { Authorization: `Bearer ${await kit.mintToken(40)}` },
+    });
+    storage.setApiKey(kit.coreUrl, (await made.json()).api_key);
+
+    // the Refund button while this device cannot reach the mint: core pays
+    // the key out, and the wallet keeps the payout in its book
+    const real = globalThis.fetch;
+    const mint = kit.env.mintUrl.replace(/\/$/, "");
+    globalThis.fetch = (input, init) =>
+      String(input instanceof Request ? input.url : input).startsWith(mint)
+        ? Promise.reject(new TypeError("Failed to fetch"))
+        : real(input, init);
+    try {
+      expect(await chat.refund()).toEqual([
+        { baseUrl: kit.coreUrl, success: true },
+      ]);
+    } finally {
+      globalThis.fetch = real;
+    }
+    expect(storage.getAllApiKeys()).toEqual([]);
+    expect(wallet.sats).toBe(300);
+
+    // a reply on the same provider makes and funds a key there: core no longer
+    // replays that payout
+    const turn = await chat.chat.send("c", "[kit:usage=10,10] hello", model());
+    await turn.settled;
+    expect(turn.run.getSnapshot().phase).toBe("done");
+
+    // the mint is back: the wallet takes the payout in, and the new key's
+    // change comes home
+    await wallet.purse.retryPending();
+    await chat.refund();
+    // 300 funded, 40 paid out, the reply cost about a sat
+    expect(wallet.sats).toBeGreaterThanOrEqual(338);
+    await settledAndUnspent(wallet);
+    chat.dispose();
+  });
 
   it("loses nothing when the provider fails before answering", async () => {
     const { chat, wallet } = await account();

@@ -136,9 +136,9 @@ export function fakePurse(balance = 100) {
         return token;
       }
     ),
-    receive: vi.fn(async (token: string) => {
+    take: vi.fn(async (token: string) => {
       received.push(token);
-      return 1;
+      return { sats: 1, pending: false };
     }),
   } satisfies Purse;
   return { purse, received, sent };
