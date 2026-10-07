@@ -7,7 +7,7 @@ import {
 } from "@cashu/cashu-ts";
 import { claimPaid, walletLock } from "./executor";
 import type { Journal } from "./journal";
-import { openWallet } from "./mint";
+import { forgetWallets, openWallet } from "./mint";
 import {
   settleLanded,
   settleMelt,
@@ -169,6 +169,7 @@ export class RecoveryHost {
       } catch (error) {
         // the mint did not answer, or this account is no longer active: the record waits
         console.error("Could not settle a pending wallet operation:", error);
+        forgetWallets(record.mintUrl);
       }
     }
   }

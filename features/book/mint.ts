@@ -1,11 +1,32 @@
 import { Mint, Wallet } from "@cashu/cashu-ts";
 
+// opening a wallet asks the mint four times, two rounds one after the other:
+// each mint and unit's is kept this long, and asked again after any failure
+const KEEP_MS = 10 * 60_000;
+const opened = new Map<string, { at: number; wallet: Promise<Wallet> }>();
+
 /** A cashu-ts wallet for this mint in `unit`, or by default in msat when the
- *  mint offers it, else sat. */
-export async function openWallet(
-  mintUrl: string,
-  unit?: string
-): Promise<Wallet> {
+ *  mint offers it, else sat. One opened lately is given again (one being
+ *  opened too); forgetWallets makes the next open ask the mint again. */
+export function openWallet(mintUrl: string, unit?: string): Promise<Wallet> {
+  const key = `${normalizeMintUrl(mintUrl)} ${unit ?? ""}`;
+  const kept = opened.get(key);
+  if (kept && Date.now() - kept.at < KEEP_MS) return kept.wallet;
+  const wallet = load(mintUrl, unit);
+  opened.set(key, { at: Date.now(), wallet });
+  wallet.catch(() => forgetWallets(mintUrl));
+  return wallet;
+}
+
+/** The mint failed a request or changed: its wallets are opened anew. */
+export function forgetWallets(mintUrl: string): void {
+  const url = normalizeMintUrl(mintUrl);
+  for (const key of opened.keys()) {
+    if (key.startsWith(`${url} `)) opened.delete(key);
+  }
+}
+
+async function load(mintUrl: string, unit?: string): Promise<Wallet> {
   const mint = new Mint(mintUrl);
   const { keysets } = await mint.getKeySets();
   const active = new Set(keysets.filter((k) => k.active).map((k) => k.unit));
