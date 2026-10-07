@@ -72,8 +72,13 @@ export interface Files extends FileStore {
   copy(dataUrl: string, signal: AbortSignal): Promise<StoredFile>;
   sync(): FileSync;
   setSync(change: Partial<FileSync>): void;
-  /** Calls `listener` when the sync setting changes in this tab. */
+  /** Calls `listener` when the sync setting changes. */
   subscribe(listener: () => void): () => void;
+  /** Main's weekly cleanup, made safe: a week-old file this account kept
+   *  that no message uses goes; a week-old file a message uses goes only once
+   *  a Blossom server confirms it has the copy; the only copy of a file a
+   *  message uses never goes. `used`: every file the account's messages use. */
+  cleanup(used: StoredFile[]): Promise<void>;
 }
 
 export interface ChatModel {

@@ -95,6 +95,13 @@ export class HistoryService {
   private liveFor = new Set<string>();
   private live = new Subscription();
   private disposed = false;
+  private resolveComplete!: (all: boolean) => void;
+  /** Resolves once the first sync after opening has ended: true when it
+   *  reached the relays and every key of this history is open, so all its
+   *  messages are here. */
+  readonly complete = new Promise<boolean>((resolve) => {
+    this.resolveComplete = resolve;
+  });
 
   constructor(private deps: HistoryDeps) {
     this.owner = deps.owner;
@@ -104,6 +111,7 @@ export class HistoryService {
     this.boot().catch((error) => {
       // most likely this device's storage would not open: saves must not wait
       console.error("History could not start:", error);
+      this.resolveComplete(false);
       this.broken = true;
       this.settle();
     });
@@ -235,7 +243,11 @@ export class HistoryService {
       })
     );
     await this.deps.relays.ready();
-    await this.syncOnce();
+    const synced = await this.syncOnce();
+    this.resolveComplete(
+      synced === "ok" &&
+        [...this.keyrings.values()].every((keyring) => keyring.keys)
+    );
     // a switch during the first sync: the next account starts its own
     if (this.disposed) return;
     await this.importSaved();

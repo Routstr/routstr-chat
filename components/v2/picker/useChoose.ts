@@ -1,7 +1,5 @@
 import React, { useCallback } from "react";
 import type { useModelPick } from "../pick";
-import { setProviderLastUpdate } from "@/utils/storageUtils";
-import { useDisabledProviders } from "@/hooks/useDisabledProviders";
 import { useChipRef, type useUi } from "../ui";
 import { shortModelName } from "../format";
 import type { Catalog } from "./useCatalog";
@@ -10,7 +8,7 @@ import { fmt, parseKey, type Row } from "./catalog";
 
 export function useChoose({
   pick,
-  refresh,
+  allOn,
   cat,
   ui,
   phone,
@@ -32,8 +30,8 @@ export function useChoose({
   onList,
 }: {
   pick: ReturnType<typeof useModelPick>;
-  /** Asks the providers again for what they serve. */
-  refresh: () => void;
+  /** Turns back on every provider you turned off. */
+  allOn: () => void;
   cat: Catalog;
   ui: ReturnType<typeof useUi>;
   phone: boolean;
@@ -116,14 +114,6 @@ export function useChoose({
     setF(NO_FILTERS);
     setOnly(null);
     input.current?.focus();
-  };
-
-  // the same way back as Settings, Models: every provider on, then ask them again
-  const { disabledProviders, setDisabledProviders } = useDisabledProviders();
-  const allOn = () => {
-    disabledProviders.forEach((u) => setProviderLastUpdate(u, 0));
-    setDisabledProviders([]);
-    refresh();
   };
 
   const push = useCallback(

@@ -1,5 +1,5 @@
 import type { Message, MessageContent } from "@/types/chat";
-import type { ApiMessage, Attachments, FileStore } from "./ports";
+import type { ApiMessage, Attachments, FileStore, StoredFile } from "./ports";
 
 type ApiPart = Exclude<ApiMessage["content"], string>[number];
 
@@ -12,6 +12,17 @@ const fileOf = (part: MessageContent) =>
     : part.type === "file"
       ? part.file
       : undefined;
+
+/** Where every file these messages carry is kept. */
+export const filesIn = (messages: Message[]): StoredFile[] =>
+  messages.flatMap(({ content }) =>
+    typeof content === "string"
+      ? []
+      : content.flatMap((part) => {
+          const file = fileOf(part);
+          return file ? [file] : [];
+        })
+  );
 
 /**
  * A message's files over the file store. History keeps only where each file

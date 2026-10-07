@@ -55,6 +55,7 @@ let settings: Map<string, string>;
 let keys: PnsKeys[];
 const store = () =>
   createFileStore({
+    owner: "alice",
     keys: () => keys,
     settings: {
       getItem: (key) => settings.get(key) ?? null,
@@ -306,5 +307,80 @@ describe("FileStore: Blossom", () => {
     await vi.advanceTimersByTimeAsync(60_000);
 
     expect(done).toBe(false);
+  });
+});
+
+describe("FileStore: the weekly cleanup", () => {
+  const WEEK = 7 * 24 * 60 * 60 * 1000;
+  // files kept eight days ago, then today
+  async function keptLastWeek(make: () => Promise<string | undefined>) {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(Date.now() - WEEK - 24 * 60 * 60 * 1000);
+    const id = await make();
+    vi.useRealTimers();
+    return id!;
+  }
+  const here = async (storageId: string) => {
+    settings.set("blossomSyncEnabled", "false");
+    const found = await store().load({ storageId }, signal());
+    settings.set("blossomSyncEnabled", "true");
+    return found;
+  };
+
+  it("drops a week-old file this account kept that no message uses, never a newer one or another account's", async () => {
+    const unsent = await keptLastWeek(() => store().keep(PNG));
+    const others = await keptLastWeek(() =>
+      createFileStore({
+        owner: "bob",
+        keys: () => keys,
+        settings: { getItem: () => null, setItem: () => {} },
+      }).keep(PNG)
+    );
+    const fresh = (await store().keep(PNG))!;
+
+    await store().cleanup([]);
+
+    expect(await here(unsent)).toBeUndefined();
+    expect(await here(others)).toBe(PNG);
+    expect(await here(fresh)).toBe(PNG);
+  });
+
+  it("drops a week-old file a message uses only once a Blossom server confirms its copy", async () => {
+    const files = store();
+    const storageId = await keptLastWeek(() => files.keep(PNG));
+    const copies = await files.copy(PNG, signal());
+
+    await files.cleanup([{ storageId, ...copies }]);
+
+    expect(await here(storageId)).toBeUndefined();
+    // fetched again from Blossom when it is needed
+    expect(await files.load({ storageId, ...copies }, signal())).toBe(PNG);
+  });
+
+  it("keeps a used copy while file sync is off: it could not be fetched again", async () => {
+    const files = store();
+    const storageId = await keptLastWeek(() => files.keep(PNG));
+    const copies = await files.copy(PNG, signal());
+    settings.set("blossomSyncEnabled", "false");
+
+    await files.cleanup([{ storageId, ...copies }]);
+
+    expect(await here(storageId)).toBe(PNG);
+  });
+
+  it("never drops the only copy of a file a message uses", async () => {
+    const files = store();
+    const noCopy = await keptLastWeek(() => files.keep(PNG));
+    const lostCopy = await keptLastWeek(() => files.keep(PNG));
+    const { blossomHash } = await files.copy(PNG, signal());
+    blossom.blobs.clear();
+
+    await files.cleanup([
+      { storageId: noCopy },
+      { storageId: lostCopy, blossomHash, blossomServers: [A, B] },
+    ]);
+
+    expect(await here(noCopy)).toBe(PNG);
+    expect(await here(lostCopy)).toBe(PNG);
   });
 });

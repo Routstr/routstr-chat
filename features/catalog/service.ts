@@ -16,12 +16,25 @@ export interface CatalogDeps {
   /** A remote routstrd node that pays, if any: then it is the only provider. */
   node(): string | undefined;
   torMode(): boolean;
+  /** Calls `listener` when routing changes between passes: a provider
+   *  cooling down after failures, or one turned on or off. */
+  changes(listener: () => void): () => void;
+  /** Where the providers you turned off are kept on this device. */
+  settings: Pick<Storage, "getItem" | "setItem">;
 }
+
+/** The providers you turned off, on this device (localStorage). */
+export const PROVIDERS_OFF = "providers_off";
 
 export interface CatalogSnapshot {
   models: Model[];
   /** No model list has been shown yet. */
   loading: boolean;
+  /** Providers that are off: by you, or by Routstr's reviews. Never ranked,
+   *  never paid. */
+  off: string[];
+  /** The ones you turned off. */
+  turnedOff: string[];
 }
 
 const REFRESH_EVERY_MS = 30 * 60 * 1000;
@@ -38,11 +51,17 @@ function byBase<T>(all: Record<string, T>, baseUrl: string): T | undefined {
 }
 
 export class CatalogService {
-  private snapshot: CatalogSnapshot = { models: [], loading: true };
+  private snapshot: CatalogSnapshot = {
+    models: [],
+    loading: true,
+    off: [],
+    turnedOff: [],
+  };
   private listeners = new Set<() => void>();
   private chain: Promise<void> = Promise.resolve();
   private latest = 0;
   private timer: ReturnType<typeof setInterval> | undefined;
+  private unwatch: (() => void) | undefined;
 
   constructor(private deps: CatalogDeps) {}
 
@@ -55,13 +74,81 @@ export class CatalogService {
 
   /** Shows what the last visit cached, then refreshes, then keeps it fresh. */
   start(): void {
-    void this.deps.ready.then(() => this.seed());
+    void this.deps.ready.then(() => {
+      this.applyTurnedOff();
+      this.seed();
+    });
     void this.refresh();
     this.timer = setInterval(() => void this.refresh(), REFRESH_EVERY_MS);
+    // the same models, ranked again
+    this.unwatch = this.deps.changes(() =>
+      this.set({ ...this.snapshot, models: [...this.snapshot.models] })
+    );
   }
 
   dispose(): void {
     clearInterval(this.timer);
+    this.unwatch?.();
+  }
+
+  /** Turns a provider off on this device, or back on. On never overrides a
+   *  Routstr review that keeps it off. Turned back on, it is asked for its
+   *  models again. */
+  setProviderOn(baseUrl: string, on: boolean): void {
+    const url = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
+    const off = this.turnedOff().filter((u) => u !== url);
+    this.saveTurnedOff(on ? off : [...off, url], on ? [url] : []);
+  }
+
+  /** Every provider you turned off, on again. */
+  allProvidersOn(): void {
+    this.saveTurnedOff([], this.turnedOff());
+  }
+
+  /** Another tab changed the list: follow it. */
+  reloadTurnedOff(): void {
+    this.applyTurnedOff();
+    void this.refresh();
+  }
+
+  private turnedOff(): string[] {
+    try {
+      const list: unknown = JSON.parse(
+        this.deps.settings.getItem(PROVIDERS_OFF) ?? "[]"
+      );
+      return Array.isArray(list)
+        ? list.filter((u) => typeof u === "string")
+        : [];
+    } catch {
+      return [];
+    }
+  }
+
+  private saveTurnedOff(urls: string[], backOn: string[]): void {
+    try {
+      this.deps.settings.setItem(PROVIDERS_OFF, JSON.stringify(urls));
+    } catch (error) {
+      // storage full: it holds in this tab until it closes
+      console.warn("Could not keep the providers you turned off", error);
+    }
+    this.applyTurnedOff(urls);
+    for (const url of backOn) {
+      this.deps.discoveryAdapter.setProviderLastUpdate(url, 0);
+    }
+    void this.refresh();
+  }
+
+  // The SDK honors the list in ranking and payment. A provider trusted by
+  // hand (a test stack's) is trusted no longer once you turn it off.
+  private applyTurnedOff(urls = this.turnedOff()): void {
+    const adapter = this.deps.discoveryAdapter;
+    adapter.setManuallyDisabledProviders?.(urls);
+    const trusted = adapter.getManuallyEnabledProviders();
+    if (trusted.some((url) => urls.includes(url))) {
+      adapter.setManuallyEnabledProviders?.(
+        trusted.filter((url) => !urls.includes(url))
+      );
+    }
   }
 
   /** Runs after every pass already queued; resolves when this one is done. */
@@ -88,11 +175,6 @@ export class CatalogService {
     return byBase(this.deps.discoveryAdapter.getCachedMints(), baseUrl) ?? [];
   }
 
-  /** The models a provider served at the last discovery. */
-  modelsOf(baseUrl: string): Model[] {
-    return (byBase(this.deps.discoveryAdapter.getCachedModels(), baseUrl) ?? []) as unknown as Model[];
-  }
-
   /** Providers that serve this model, cheapest first, as routing ranks them. */
   routes(modelId: string) {
     return this.deps.providerManager.getProviderPriceRankingForModel(modelId, {
@@ -100,15 +182,14 @@ export class CatalogService {
     });
   }
 
-  /** What a provider itself lists for a model, whatever its routing state:
-   *  a pin to a provider that dropped out is priced at its own listing. */
+  /** What a provider itself lists, whatever its routing state. */
+  listing(baseUrl: string): Model[] {
+    return (byBase(this.deps.discoveryAdapter.getCachedModels(), baseUrl) ?? []) as unknown as Model[];
+  }
+
+  /** A pin to a provider that dropped out is priced at its own listing. */
   listedAt(baseUrl: string, modelId: string): Model | undefined {
-    const cached =
-      this.deps.discoveryAdapter.getCachedModels() as unknown as Record<
-        string,
-        Model[]
-      >;
-    return cached[baseUrl]?.find((model) => model.id === modelId);
+    return this.listing(baseUrl).find((model) => model.id === modelId);
   }
 
   /** The managers once their cache holds models: the SDK then routes from
@@ -195,8 +276,12 @@ export class CatalogService {
     }
   }
 
-  private set(snapshot: CatalogSnapshot): void {
-    this.snapshot = snapshot;
+  private set(snapshot: Omit<CatalogSnapshot, "off" | "turnedOff">): void {
+    this.snapshot = {
+      ...snapshot,
+      off: this.deps.discoveryAdapter.getDisabledProviders(),
+      turnedOff: this.turnedOff(),
+    };
     this.listeners.forEach((listener) => listener());
   }
 }

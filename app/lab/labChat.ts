@@ -77,14 +77,15 @@ export function labChat(history: ChatHistory, params: URLSearchParams): AccountC
       sync: () => LAB_SYNC,
       setSync: () => {},
       subscribe: () => () => {},
+      cleanup: async () => {},
     },
   };
 }
 
 /** The lab's catalogue behind the catalogue view. */
 export function labCatalog(params: URLSearchParams): CatalogService {
-  const snapshot = params.has("loading") ? { models: [], loading: true } : { models: LAB_MODELS, loading: false };
-  const catalog: Pick<CatalogService, "subscribe" | "getSnapshot" | "picks" | "routes" | "refresh" | "mintsOf" | "providers" | "modelsOf"> = {
+  const snapshot = params.has("loading") ? { models: [], loading: true, off: [], turnedOff: [] } : { models: LAB_MODELS, loading: false, off: [], turnedOff: [] };
+  const catalog: Pick<CatalogService, "subscribe" | "getSnapshot" | "picks" | "routes" | "refresh" | "mintsOf" | "providers" | "listing" | "listedAt"> = {
     subscribe: () => () => {},
     getSnapshot: () => snapshot,
     picks: () => PICKS,
@@ -93,7 +94,8 @@ export function labCatalog(params: URLSearchParams): CatalogService {
     // the lab names no provider's mints: new money keeps the wallet's own default
     mintsOf: () => [],
     providers: () => [],
-    modelsOf: () => [],
+    listing: () => [],
+    listedAt: () => undefined,
   };
   return catalog as CatalogService;
 }
