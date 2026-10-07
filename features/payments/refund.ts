@@ -208,8 +208,9 @@ async function refundKeys(
         forceRefund: force,
       })
     );
-    // A payout the wallet could not take in still emptied the key at the
-    // provider: show what it holds now, not what it held before
+    // A payout the mint refused, or a refund that failed part way, may still
+    // have emptied the key at the provider: show what it holds now, not what
+    // it held before
     if (!success && storage.getApiKey(key.baseUrl)?.key === key.key) {
       const after = await balances.getTokenBalance(key.key, key.baseUrl);
       if (!after.balanceUnknown && !after.isInvalidApiKey) {
