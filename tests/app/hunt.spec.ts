@@ -195,14 +195,16 @@ test("two tabs on one account agree on the balance after one of them sends", asy
 });
 
 // the first top-up lands at a mint the provider about to be paid takes (the kit's core takes
-// only the kit mint), so the held message can pay from it
-test("first run: who's writing, a new account, 100 sats by Lightning, then the held message sends", async ({
+// only the kit mint), so the held message can pay from it: with a model chosen, and with
+// nothing chosen, where the app's own pick is made for the sats about to land
+for (const chosen of [true, false])
+test(`first run${chosen ? "" : ", nothing chosen"}: who's writing, a new account, 100 sats by Lightning, then the held message sends`, async ({
   page,
   kit,
   appUrl,
 }) => {
   await v2.open(page, appUrl);
-  await seedKitProvider(page, kit.coreUrl, "kit-cheap", { mainStore: false });
+  if (chosen) await seedKitProvider(page, kit.coreUrl, "kit-cheap", { mainStore: false });
 
   const composer = page.getByRole("textbox", { name: "Message" });
   await composer.fill(`${TINY} my first message`);
