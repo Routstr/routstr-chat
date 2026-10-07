@@ -47,7 +47,7 @@ const graph = {
           {
             target: "./components/v2/**",
             from: ["./**"],
-            except: ["./components/v2/**", "./features/*/view.ts", "./features/*/view.tsx", "./features/*/copy.ts", "./types/**", "./node_modules/**", ...LEGACY].map(glob),
+            except: ["./components/v2/**", "./features/*/view.ts", "./features/*/view.tsx", "./features/*/copy.ts", "./types/**", "./lib/base.ts", "./node_modules/**", ...LEGACY].map(glob),
             message: "Screens read a feature's view, never its service, the platform, the runtime or the old engine.",
           },
           { target: "./features/**", from: ["./platform/**", "./runtime/**", "./components/**", "./app/**"], message: "Features get the platform through their ports, filled by the runtime." },
@@ -78,6 +78,21 @@ const packages = [
   { files: ["features/wallet/**/*.ts", "features/book/**/*.ts"], ignores: ["features/**/view.ts", ...LEGACY_IMPORTERS, ...TESTS], rules: restrict(RELAY, REACT) },
 ];
 
+// A hand-written absolute path breaks when the app is served under a base path (/v2 beside main):
+// it goes through withBase (lib/base.ts). Next adds the base to its own links, router and assets.
+const RAW_PATH = "Write an absolute path as withBase(\"/…\") (lib/base.ts), so the app also works under /v2.";
+const basePaths = {
+  files: ["**/*.{ts,tsx}"],
+  ignores: ["tests/**", "lib/base.ts", "next.config.ts", ...TESTS],
+  rules: {
+    "no-restricted-syntax": [
+      "error",
+      { selector: 'Literal[value=/^\\/[A-Za-z_]/]:not(CallExpression[callee.name="withBase"] > Literal)', message: RAW_PATH },
+      { selector: "TemplateLiteral[expressions.length=0] > TemplateElement[value.raw=/^\\/[A-Za-z_]/]", message: RAW_PATH },
+    ],
+  },
+};
+
 const config = [
   { ignores: ["node_modules/**", ".next/**", "out/**", "public/**", "components/ui/**", "next-env.d.ts"] },
   ...nextVitals,
@@ -94,6 +109,7 @@ const config = [
   },
   graph,
   ...packages,
+  basePaths,
 ];
 
 export default config;

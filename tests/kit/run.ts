@@ -238,6 +238,8 @@ function sourceStamp(dir: string): number {
   return newest;
 }
 
+const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+
 /** Builds a checkout's out/ unless no source changed since its last kit build. Returns the folder. */
 async function build(dir = ROOT): Promise<string> {
   const out = path.join(dir, "out");
@@ -246,6 +248,8 @@ async function build(dir = ROOT): Promise<string> {
   const env = {
     NEXT_PUBLIC_ROUTSTR_PROVIDERS: PROVIDER_ALIAS,
     NEXT_TELEMETRY_DISABLED: "1",
+    // a build for /v2 beside main (NEXT_PUBLIC_BASE_PATH=/v2) is served and tested under it
+    ...(BASE_PATH ? { NEXT_PUBLIC_BASE_PATH: BASE_PATH } : {}),
   };
   const sources = sourceStamp(dir); // taken before: a file saved during the build counts as new
   const stamp = { env, sources };
@@ -291,7 +295,7 @@ async function appInside(args: string[]): Promise<number> {
   const stack = await startStack({ log: say });
   const server = process.env.KIT_APP_URL
     ? undefined
-    : await serveStatic(process.env.KIT_APP_OUT ?? path.join(ROOT, "out"));
+    : await serveStatic(process.env.KIT_APP_OUT ?? path.join(ROOT, "out"), BASE_PATH);
   const mainServer = process.env.KIT_MAIN_OUT
     ? await serveStatic(process.env.KIT_MAIN_OUT)
     : undefined;

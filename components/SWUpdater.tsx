@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { Workbox } from "workbox-window";
+import { withBase } from "@/lib/base";
 
 export default function SWUpdater() {
   useEffect(() => {
@@ -11,7 +12,8 @@ export default function SWUpdater() {
     // Don't register service worker in development to avoid HMR conflicts
     if (process.env.NODE_ENV === "development") return;
 
-    const wb = new Workbox("/sw.js");
+    // its scope is the folder it is served from: the base, never main's root
+    const wb = new Workbox(withBase("/sw.js"), { scope: withBase("/") });
     let prompted = false;
 
     wb.addEventListener("waiting", () => {

@@ -25,6 +25,7 @@ import { PurseContext as KeysPurseContext } from "@/features/keys/view";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { AppProvider } from "./AppProvider";
+import { withBase } from "@/lib/base";
 
 const accountContext = { manager: session.accounts, session };
 
@@ -71,7 +72,7 @@ export default function ClientProviders({ children }: { children: ReactNode }) {
           worker.start({
             onUnhandledRequest: "bypass",
             serviceWorker: {
-              url: "/mockServiceWorker.js",
+              url: withBase("/mockServiceWorker.js"),
             },
           });
         })

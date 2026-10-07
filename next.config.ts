@@ -54,6 +54,8 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_APP_VERSION: pkg.version,
   },
   output: "export",
+  // "" at the root; "/v2" while main keeps the root (lib/base.ts adds it to hand-written paths)
+  basePath: process.env.NEXT_PUBLIC_BASE_PATH || undefined,
   images: {
     unoptimized: true,
   },

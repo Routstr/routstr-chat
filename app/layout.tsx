@@ -9,6 +9,7 @@ import { Toaster } from "@/components/ui/sonner";
 import BitcoinConnectClient from "@/components/bitcoin-connect/BitcoinConnectClient";
 import SWUpdater from "@/components/SWUpdater";
 import { GlobalTooltip } from "@/components/ui/GlobalTooltip";
+import { withBase } from "@/lib/base";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -24,14 +25,14 @@ export const metadata: Metadata = {
   title: "Routstr",
   description:
     "The future of AI access is permissionless, private, and decentralized",
-  manifest: "/manifest.webmanifest",
+  manifest: withBase("/manifest.webmanifest"),
   icons: {
     icon: [
-      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
-      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+      { url: withBase("/icons/icon-192.png"), sizes: "192x192", type: "image/png" },
+      { url: withBase("/icons/icon-512.png"), sizes: "512x512", type: "image/png" },
     ],
-    apple: "/icons/apple-touch-icon.png",
-    shortcut: "/icons/icon-192.png",
+    apple: withBase("/icons/apple-touch-icon.png"),
+    shortcut: withBase("/icons/icon-192.png"),
   },
   appleWebApp: {
     capable: true,
