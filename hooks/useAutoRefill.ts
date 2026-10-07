@@ -7,8 +7,6 @@ import {
   AutoRefillNWCSettings,
 } from "@/utils/storageUtils";
 import { payWithNWC, isNWCConnected } from "@/lib/nwcPayment";
-import { currentOwner } from "@/features/session/owned";
-import { useCashuWallet } from "@/features/wallet";
 import { useDepositMint, usePurse } from "@/features/wallet/view";
 import { toast } from "sonner";
 
@@ -36,7 +34,6 @@ export function useAutoRefill({
   balance,
   isWalletLoaded,
 }: UseAutoRefillProps): void {
-  const { updateProofs } = useCashuWallet();
   const purse = usePurse();
   const depositTo = useDepositMint();
 
@@ -61,7 +58,9 @@ export function useAutoRefill({
   const executeNWCRefill = useCallback(
     async (settings: AutoRefillNWCSettings) => {
       if (isProcessingNWCRef.current) return;
-      const owner = currentOwner();
+      // the account active now gets the refill, even if another is by the time it lands
+      const from = purse();
+      if (!from) return;
 
       try {
         isProcessingNWCRef.current = true;
@@ -73,7 +72,7 @@ export function useAutoRefill({
         }
 
         // where the provider about to be paid can take it, as Add does
-        const balances = (await purse()?.balances()) ?? {};
+        const balances = await from.balances();
         const mintUrl = depositTo(balances, settings.amount);
 
         toast.info(`Auto-refilling ${settings.amount} sats from NWC wallet...`);
@@ -81,19 +80,11 @@ export function useAutoRefill({
         const result = await payWithNWC(
           settings.amount,
           mintUrl,
-          owner,
+          from.claim,
           {
-            onPaymentSuccess: async (proofs, amount) => {
-              // Add proofs to wallet
-              if (proofs.length > 0) {
-                await updateProofs({
-                  mintUrl,
-                  proofsToAdd: proofs,
-                  proofsToRemove: [],
-                });
-              }
+            onPaymentSuccess: () => {
               updateNWCLastRefillTime();
-              toast.success(`Auto-refilled ${amount} sats from NWC wallet!`);
+              toast.success(`Auto-refilled ${settings.amount} sats from NWC wallet!`);
             },
             onPaymentError: (error) => {
               console.error("[useAutoRefill] NWC payment error:", error);
@@ -112,7 +103,7 @@ export function useAutoRefill({
         isProcessingNWCRef.current = false;
       }
     },
-    [updateProofs, purse, depositTo]
+    [purse, depositTo]
   );
 
   /**

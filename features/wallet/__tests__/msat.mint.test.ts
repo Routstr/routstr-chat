@@ -4,8 +4,9 @@ import { describe, expect, it } from "vitest";
 import { getKit } from "@/tests/kit";
 import { WalletExecutor } from "@/features/book/executor";
 import { Journal, memoryStorage } from "@/features/book/journal";
-import { quoteInSats } from "@/lib/cashuLightning";
-import { toSats } from "../purse";
+import { createLightningInvoice, quoteInSats } from "@/lib/cashuLightning";
+import { createPurse, toSats } from "../purse";
+import type { Coin, CoinStore } from "../ports";
 
 const kit = getKit();
 const MSAT_MINT = kit.env.msatMintUrl;
@@ -47,5 +48,39 @@ describe("a mint that offers msat", () => {
     expect(spent).toBeGreaterThanOrEqual(8000);
     expect(spent).toBeLessThanOrEqual(8000 + quote.fee_reserve);
     expect(journal.list("alice")).toEqual([]);
+  });
+
+  it("asks an invoice for the sats Add shows, and the purse claims those sats", async () => {
+    const invoice = await createLightningInvoice(MSAT_MINT, 50);
+    const mint = new Mint(MSAT_MINT);
+    let quote = await mint.checkMintQuoteBolt11(invoice.quoteId);
+    expect(quote.unit).toBe("msat");
+    expect(quote.amount).toBe(50_000);
+    for (let i = 0; i < 40 && quote.state !== "PAID"; i++) {
+      await new Promise((r) => setTimeout(r, 250));
+      quote = await mint.checkMintQuoteBolt11(invoice.quoteId);
+    }
+
+    let held: Coin[] = [];
+    const coins: CoinStore = {
+      async change(owner, mintUrl, add) {
+        held = held.concat(
+          add.map((p) => ({ ...p, owner, mintUrl, unit: "msat" }))
+        );
+      },
+      coins: async () => held,
+      activeMint: () => MSAT_MINT,
+      subscribe: () => () => undefined,
+    };
+    const written: { direction: string; sats: number }[] = [];
+    const purse = createPurse("alice", {
+      coins,
+      activity: { record: (_, e) => void written.push(e) },
+      journal: new Journal(memoryStorage()),
+      locks: navigator.locks,
+    });
+    expect(await purse.claim(MSAT_MINT, invoice.quoteId)).toBe(50);
+    expect(await purse.balances()).toEqual({ [MSAT_MINT]: 50 });
+    expect(written).toEqual([{ direction: "in", sats: 50 }]);
   });
 });

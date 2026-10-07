@@ -50,6 +50,16 @@ export interface MeltRecord extends Base {
   blanks: SavedOutput[];
 }
 
+/** A paid deposit being claimed (NUT-04): the outputs asked for its coins. */
+export interface MintRecord extends Base {
+  kind: "mint";
+  keysetId: string;
+  quoteId: string;
+  /** in the keyset's unit */
+  amount: number;
+  outputs: SavedOutput[];
+}
+
 /** New proofs the mint gave us, held until the wallet has stored them. */
 export interface LandedRecord extends Base {
   kind: "landed";
@@ -65,7 +75,12 @@ export interface TokenRecord extends Base {
   unit: string;
 }
 
-export type BookRecord = SwapRecord | MeltRecord | LandedRecord | TokenRecord;
+export type BookRecord =
+  | SwapRecord
+  | MeltRecord
+  | MintRecord
+  | LandedRecord
+  | TokenRecord;
 
 export const saveOutputs = (outputs: OutputDataLike[] = []): SavedOutput[] =>
   outputs.map((o) => ({

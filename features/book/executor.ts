@@ -2,21 +2,25 @@ import {
   getEncodedTokenV4,
   getTokenMetadata,
   MeltQuoteState,
+  Mint,
+  MintQuoteState,
   type MeltQuoteBolt11Response,
   type Proof,
   type SwapPreview,
   type Wallet,
 } from "@cashu/cashu-ts";
 import type { Journal } from "./journal";
-import { normalizeMintUrl, openWallet } from "./mint";
+import { assertRecoverable, normalizeMintUrl, openWallet } from "./mint";
 import {
   amountOf,
   saveOutputs,
   type MeltRecord,
+  type MintRecord,
   type SwapRecord,
 } from "./records";
 import {
   settleMelt,
+  settleMint,
   settleSwap,
   type CommitProofs,
   type MeltOutcome,
@@ -28,7 +32,7 @@ export interface ExecutorDeps {
   journal: Journal;
   /** stores proofs in this account's wallet, and refuses once another account is active */
   commitFor: (mintUrl: string) => CommitProofs;
-  openWallet?: (mintUrl: string) => Promise<Wallet>;
+  openWallet?: (mintUrl: string, unit?: string) => Promise<Wallet>;
   /** Web Locks; without them the executor refuses to move money */
   locks?: LockManager;
 }
@@ -269,6 +273,110 @@ export class WalletExecutor {
   }
 
   /**
+   * Claims the coins of a paid deposit (NUT-04 mint quote `quoteId`), in the
+   * quote's unit. The outputs are written down before the mint is asked, so a
+   * lost answer is restored, here or by recovery. Resolves with no coins when
+   * the quote was already issued with nothing of ours left to restore (claimed
+   * earlier, or by another tab or device); throws while it is unpaid.
+   */
+  async claim(
+    mintUrl: string,
+    quoteId: string
+  ): Promise<{ proofs: Proof[]; unit: string }> {
+    const url = normalizeMintUrl(mintUrl);
+    // an unpaid invoice is asked about every few seconds: never under the
+    // account's lock, so a slow mint never holds up a payment
+    const quote = await new Mint(url).checkMintQuoteBolt11(quoteId);
+    if (
+      quote.state === MintQuoteState.UNPAID &&
+      !this.leftClaim(url, quoteId)
+    ) {
+      throw new Error("Invoice has not been paid yet");
+    }
+    return this.locked(() => this.claimLocked(url, quoteId));
+  }
+
+  private leftClaim(mintUrl: string, quoteId: string) {
+    return this.deps.journal
+      .list(this.deps.owner)
+      .find(
+        (r): r is MintRecord =>
+          r.kind === "mint" && r.mintUrl === mintUrl && r.quoteId === quoteId
+      );
+  }
+
+  private async claimLocked(
+    mintUrl: string,
+    quoteId: string
+  ): Promise<{ proofs: Proof[]; unit: string }> {
+    const { journal, owner } = this.deps;
+    let wallet = await this.open(mintUrl);
+    const quote = await wallet.checkMintQuoteBolt11(quoteId);
+    if (quote.unit && quote.unit !== wallet.unit) {
+      wallet = await this.open(mintUrl, quote.unit);
+    }
+    const commit = this.deps.commitFor(mintUrl);
+    const left = this.leftClaim(mintUrl, quoteId);
+    if (left) {
+      const proofs = await settleMint(wallet, left, commit, journal);
+      if (!proofs) throw new Error("The mint has not settled this deposit yet");
+      return { proofs, unit: wallet.unit };
+    }
+    if (quote.state === MintQuoteState.UNPAID) {
+      throw new Error("Invoice has not been paid yet");
+    }
+    if (quote.state === MintQuoteState.ISSUED) {
+      return { proofs: [], unit: wallet.unit };
+    }
+
+    const preview = await wallet.prepareMint("bolt11", quote.amount, quoteId, {
+      keysetId: wallet.keysetId,
+    });
+    const record: MintRecord = {
+      ...this.held(newId(), mintUrl, wallet),
+      kind: "mint",
+      keysetId: preview.keysetId,
+      quoteId,
+      amount: quote.amount,
+      outputs: saveOutputs(preview.outputData),
+    };
+    journal.put(record);
+    let proofs: Proof[];
+    try {
+      proofs = await wallet.completeMint(preview);
+    } catch (error) {
+      console.error("Mint request did not complete:", error);
+      await afterLostAnswer();
+      const restored = await settleMint(wallet, record, commit, journal).catch(
+        () => null
+      );
+      if (restored?.length) return { proofs: restored, unit: wallet.unit };
+      throw error;
+    }
+    try {
+      journal.put({
+        ...this.held(record.id, mintUrl, wallet),
+        kind: "landed",
+        proofs,
+      });
+    } catch (error) {
+      // storage full: the mint record stays, and recovery restores the coins
+      console.error("Could not write the coins down yet:", error);
+    }
+    try {
+      await commit(proofs, []);
+    } catch (error) {
+      // the coins wait in the book, and recovery stores them once it can
+      throw new Error(
+        "Deposit claimed, but storing the funds failed - they will be restored automatically. " +
+          (error instanceof Error ? error.message : String(error))
+      );
+    }
+    journal.remove(record.id);
+    return { proofs, unit: wallet.unit };
+  }
+
+  /**
    * One swap, written down before the mint call. `ours` are the wallet's
    * proofs the preview chose from (none when receiving): the inputs among
    * them leave the wallet first, and the ones the swap left untouched are not
@@ -346,14 +454,9 @@ export class WalletExecutor {
   }
 
   /** A mint that cannot say what became of a lost answer is not used: no guessing. */
-  private async open(mintUrl: string) {
-    const wallet = await (this.deps.openWallet ?? openWallet)(mintUrl);
-    const info = wallet.getMintInfo();
-    if (!info.isSupported(7).supported || !info.isSupported(9).supported) {
-      throw new Error(
-        `${mintUrl} cannot report what happened to a lost payment (NUT-07 and NUT-09), so the wallet does not move coins there.`
-      );
-    }
+  private async open(mintUrl: string, unit?: string) {
+    const wallet = await (this.deps.openWallet ?? openWallet)(mintUrl, unit);
+    assertRecoverable(wallet, mintUrl);
     return wallet;
   }
 }

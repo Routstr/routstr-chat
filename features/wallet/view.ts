@@ -36,6 +36,16 @@ export function usePurse(): () => Purse | null {
   }, [purseFor]);
 }
 
+/** The purse of a given account, for work that began for it: a deposit is
+ *  claimed into the account that made the invoice, whoever is active now. */
+export function usePurseOf(): (owner: string) => Purse | null {
+  const purseFor = useContext(PurseContext);
+  return useCallback(
+    (owner) => (purseFor ? purseFor(owner) : null),
+    [purseFor]
+  );
+}
+
 /** This account's spendable sats per mint, read again when its coins change
  *  here; null until the first read, and with no account. */
 export function useBalances(
