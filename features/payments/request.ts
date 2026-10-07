@@ -2,7 +2,7 @@ import type { StorageAdapter, WalletAdapter } from "@routstr/sdk/wallet";
 import type { Pay } from "@/features/chat/ports";
 import { withNodeModeError } from "./nodeErrors";
 import { lockedAfter } from "./lateWrites";
-import type { Keys, Purse, Sdk, Spending } from "./ports";
+import type { Keys, Purse, RedeemFailure, Sdk, Spending } from "./ports";
 
 interface PayDeps {
   keys: Keys;
@@ -15,6 +15,17 @@ interface PayDeps {
 
 // NUT error code: the mint saw these proofs spent already
 const ALREADY_SPENT = 11001;
+const isSpent = (error: unknown) =>
+  (error as { code?: number }).code === ALREADY_SPENT ||
+  (error as { reason?: RedeemFailure }).reason === "spent";
+
+/** The credit still keeps `token`, as a provider's API key or an X-Cashu
+ *  record: the provider may hold it already. */
+const keeps = (storage: StorageAdapter, token: string) =>
+  storage.getAllApiKeys().some((key) => key.key === token) ||
+  Object.values(storage.getXcashuTokens()).some((records) =>
+    records.some((record) => record.token === token)
+  );
 
 const sourceChanged = () =>
   new DOMException(
@@ -32,7 +43,15 @@ export function sdkWallet(
   purse: Purse,
   canSpend: () => boolean,
   node: boolean,
-  recover?: (token: string) => Promise<number | undefined>
+  {
+    recover,
+    listed,
+  }: {
+    /** Asks the provider what it holds for a token the mint calls spent. */
+    recover?: (token: string) => Promise<number | undefined>;
+    /** The credit still keeps this token (`keeps`). */
+    listed?: (token: string) => boolean;
+  } = {}
 ): WalletAdapter {
   const check = () => {
     if (!canSpend()) throw sourceChanged();
@@ -54,16 +73,19 @@ export function sdkWallet(
     },
     receiveToken: async (token) => {
       try {
-        return {
-          success: true,
-          amount: (await purse.take(token)).sats,
-          unit: "sat",
-        };
+        // A token the credit keeps comes back after a failed reply, and the
+        // provider may have taken it already: received only if its mint
+        // takes it now, else the SDK keeps its record for the next refund.
+        // A payout is the wallet's once taken, even while its mint waits.
+        const amount = listed?.(token)
+          ? await purse.redeem(token)
+          : (await purse.take(token)).sats;
+        return { success: true, amount, unit: "sat" };
       } catch (error) {
         // The mint says it is spent: `recover` asks the provider what it holds
         // for it. Spent elsewhere (a payout this wallet already took), or now
         // an exported key: the wallet received nothing either way.
-        if ((error as { code?: number }).code === ALREADY_SPENT && recover) {
+        if (isSpent(error) && recover) {
           try {
             if ((await recover(token)) !== undefined) {
               return { success: true, amount: 0, unit: "sat" };
@@ -135,7 +157,8 @@ export function createPay(deps: PayDeps): Pay {
       const wallet = sdkWallet(
         purse,
         () => !settled && !signal.aborted && deps.live() && sameSource(),
-        Boolean(node)
+        Boolean(node),
+        { listed: (token) => keeps(storage, token) }
       );
       const warm = deps.sdk.warm();
       await deps.sdk.request(

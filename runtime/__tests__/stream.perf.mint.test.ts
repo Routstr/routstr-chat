@@ -105,6 +105,7 @@ describe("streaming cost", () => {
             throw new Error("the key pays");
           },
           take: async () => ({ sats: 0, pending: false }),
+          redeem: async () => 0,
         },
         sdk: timed,
         spending: () => ({ mode: "apikeys" }),

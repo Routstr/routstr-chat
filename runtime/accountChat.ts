@@ -19,6 +19,15 @@ import { purseFor } from "./wallet";
 // main's key; "x-cashu" pays each reply with a token, anything else with API keys
 const SPEND_MODE = "spendMode";
 
+/** payments' `redeem` until the wallet's own lands (merged with v2/ui): a
+ *  token the credit keeps is never taken back after a failed reply, so the
+ *  SDK keeps its key and the next refund brings it home. */
+const notRedeemed = async (): Promise<number> => {
+  throw Object.assign(new Error("Left for the next refund"), {
+    reason: "unreachable",
+  });
+};
+
 type ActiveChat = AccountChat & Pick<AccountChatView, "files">;
 
 let current: {
@@ -67,7 +76,7 @@ function build(
       history,
       attachments: createAttachments(files),
       keys: keysFor(owner),
-      purse: purseFor(owner),
+      purse: { ...purseFor(owner), redeem: notRedeemed },
       sdk,
       spending: () => ({
         mode:

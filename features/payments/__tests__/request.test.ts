@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createMemoryDriver, type StorageDriver } from "@routstr/sdk/storage";
 import { BalanceManager } from "@routstr/sdk/wallet";
 import type { Purse, Sdk } from "../ports";
@@ -98,6 +98,11 @@ async function paidInOneOfTwoTabs(disk: StorageDriver = createMemoryDriver()) {
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 
+afterEach(() => vi.unstubAllGlobals());
+
+const unreachable = () =>
+  Object.assign(new Error("mint unreachable"), { reason: "unreachable" });
+
 /** A purse like the wallet book's: a send holds the account's wallet lock
  *  across the mint swap and the SDK's handoff. The first swap waits for the
  *  test. */
@@ -123,6 +128,7 @@ function lockingPurse(walletLock: ReturnType<typeof fakeLock>) {
       }
     },
     take: async () => ({ sats: 1, pending: false }),
+    redeem: async () => 1,
   };
   return { purse, answerSwap: () => answer() };
 }
@@ -223,21 +229,60 @@ describe("sdkWallet", () => {
     });
   });
 
+  it("receives a token the credit still keeps only if its mint takes it now", async () => {
+    const { purse } = fakePurse();
+    purse.redeem.mockRejectedValueOnce(unreachable());
+    const wallet = sdkWallet(purse, () => true, false, {
+      listed: (token) => token === tokenOf(7),
+    });
+
+    // the SDK keeps its key or X-Cashu record
+    expect(await wallet.receiveToken(tokenOf(7))).toMatchObject({
+      success: false,
+    });
+    // a payout from the provider is taken, even while its mint waits
+    expect(await wallet.receiveToken(tokenOf(3))).toMatchObject({
+      success: true,
+    });
+    expect(purse.take).toHaveBeenCalledTimes(1);
+    expect(purse.take).toHaveBeenCalledWith(tokenOf(3));
+  });
+
   describe("a token the mint calls spent", () => {
     const spent = () =>
       Object.assign(new Error("Token already spent"), { code: 11001 });
+
+    it("is the same for a token the credit keeps whose redeem landed before a reload", async () => {
+      const { purse } = fakePurse();
+      const landed = () =>
+        Object.assign(new Error("Token already spent"), { reason: "spent" });
+      purse.redeem.mockRejectedValue(landed());
+      const recover = vi.fn(async () => 0);
+      const listed = () => true;
+
+      const asked = await sdkWallet(purse, () => true, false, {
+        recover,
+        listed,
+      }).receiveToken(tokenOf(7));
+      const kept = await sdkWallet(purse, () => true, false, {
+        listed,
+      }).receiveToken(tokenOf(7));
+
+      expect(recover).toHaveBeenCalledWith(tokenOf(7));
+      expect(asked).toEqual({ success: true, amount: 0, unit: "sat" });
+      // its coins are in the wallet already: it is never taken a second time
+      expect(kept.success).toBe(false);
+      expect(purse.take).not.toHaveBeenCalled();
+    });
 
     it("asks what the provider holds for it, and tells the SDK it is done", async () => {
       const { purse } = fakePurse();
       purse.take.mockRejectedValueOnce(spent());
       const recover = vi.fn(async () => 0);
 
-      const result = await sdkWallet(
-        purse,
-        () => true,
-        false,
-        recover
-      ).receiveToken(tokenOf(7));
+      const result = await sdkWallet(purse, () => true, false, {
+        recover,
+      }).receiveToken(tokenOf(7));
 
       expect(recover).toHaveBeenCalledWith(tokenOf(7));
       // nothing reached the wallet either way
@@ -251,18 +296,12 @@ describe("sdkWallet", () => {
         throw new Error("provider down");
       });
 
-      const kept = await sdkWallet(
-        purse,
-        () => true,
-        false,
-        silent
-      ).receiveToken(tokenOf(7));
-      const notAsked = await sdkWallet(
-        purse,
-        () => true,
-        false,
-        async () => undefined
-      ).receiveToken(tokenOf(7));
+      const kept = await sdkWallet(purse, () => true, false, {
+        recover: silent,
+      }).receiveToken(tokenOf(7));
+      const notAsked = await sdkWallet(purse, () => true, false, {
+        recover: async () => undefined,
+      }).receiveToken(tokenOf(7));
 
       expect(kept.success).toBe(false);
       expect(notAsked.success).toBe(false);
@@ -432,6 +471,48 @@ describe("createPay", () => {
       await there.reload();
       expect(there.storage().getApiKey(P1)?.balance).toBe(150);
     });
+  });
+
+  it("keeps a key whose reply failed after the provider took its token, while the mint cannot be reached", async () => {
+    const { pay, fetch, wallet, sdk } = await setup();
+    wallet.purse.redeem.mockRejectedValue(unreachable());
+    const paying = pay(request, callbacks(), new AbortController().signal);
+    await tick();
+    const { walletAdapter, storageAdapter } = fetch.calls[0].args[0];
+    // a first reply at P1: the SDK made the key from the wallet
+    const token = tokenOf(7);
+    storageAdapter!.setApiKey(P1, token);
+
+    // the connection drops: the SDK takes its token back, through its own path
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new TypeError("Failed to fetch");
+      })
+    );
+    const client = sdk.client(walletAdapter!, storageAdapter!) as unknown as {
+      _makeRequest(params: object): Promise<Response>;
+    };
+    await client
+      ._makeRequest({
+        path: "/v1/chat/completions",
+        method: "POST",
+        body: { model: "m", messages: [] },
+        baseUrl: P1,
+        mintUrl: MINT,
+        token,
+        headers: { Authorization: `Bearer ${token}` },
+        baseHeaders: {},
+        requiredSats: 5,
+        retryCount: 0,
+      })
+      .catch(() => {});
+    fetch.calls[0].finish();
+    await paying;
+
+    // the provider may hold it: the next refund brings it home
+    expect(storageAdapter!.getApiKey(P1)?.key).toBe(token);
+    expect(wallet.purse.take).not.toHaveBeenCalled();
   });
 
   it("finishes a spend under way before letting go of the lock, so its handoff never waits on it", async () => {

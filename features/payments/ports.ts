@@ -38,7 +38,14 @@ export interface Purse {
    *  taken in by a retry. Throws only when the mint refuses it (spent,
    *  invalid); then nothing is kept. */
   take(token: string): Promise<{ sats: number; pending: boolean }>;
+  /** Receives a token only if its mint takes it now; resolves with its sats.
+   *  Otherwise it keeps nothing and throws an error with a `reason`. */
+  redeem(token: string): Promise<number>;
 }
+
+/** Why `redeem` kept nothing. "spent" also covers a token it took already,
+ *  before a reload. */
+export type RedeemFailure = "unreachable" | "spent" | "refused";
 
 /** Where a request is paid from. */
 export interface Spending {

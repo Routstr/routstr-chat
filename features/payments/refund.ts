@@ -73,9 +73,10 @@ export async function refundCredit(
     // on every refund. Only here: after a failed reply the key stays, and the
     // next refund brings it home.
     let refunding: string | undefined;
-    const wallet = sdkWallet(deps.purse, deps.live, false, async (token) =>
-      refunding ? deps.adopt(token, refunding) : undefined
-    );
+    const wallet = sdkWallet(deps.purse, deps.live, false, {
+      recover: async (token) =>
+        refunding ? deps.adopt(token, refunding) : undefined,
+    });
     const payingOut: PayingOut = async (baseUrl, payOut) => {
       refunding = baseUrl;
       try {
