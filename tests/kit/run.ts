@@ -100,23 +100,18 @@ export async function withLock<T>(
   for (;;) {
     await waitForMemory();
     if (!file) return fn();
-    // flock holds the lock while `cat` reads our stdin; it ends when we close stdin or die
-    // its own process group, so a Ctrl-C at the terminal cannot drop the lock mid-step
-    const holder = spawn("flock", [file, "-c", "echo held; exec cat"], {
-      stdio: ["pipe", "pipe", "inherit"],
-      detached: true,
-    });
-    const waiting = setTimeout(
-      () => say(`waiting for the ${kind} lock (${file})`),
-      2000
-    );
-    await new Promise<void>((resolve, reject) => {
-      holder.stdout!.once("data", () => resolve());
-      holder.once("exit", (code) =>
-        reject(new Error(`flock exited with ${code}`))
+    // light work has a second slot that only the kit takes, so two light runs can go side
+    // by side (each has its own ports, mints and run folder); a script that flocks the lock
+    // file itself queues for the first
+    let holder = kind === "light" ? await hold(`${file}.2`, true) : undefined;
+    if (!holder) {
+      const waiting = setTimeout(
+        () => say(`waiting for the ${kind} lock (${file})`),
+        2000
       );
-    });
-    clearTimeout(waiting);
+      holder = (await hold(file, false))!;
+      clearTimeout(waiting);
+    }
     const release = () => holder.stdin!.end();
     if (freeMb() < Number(process.env.KIT_MIN_FREE_MB ?? 1536)) {
       release(); // memory dropped while we waited for the lock: let it recover first
@@ -134,6 +129,30 @@ export async function withLock<T>(
         );
     }
   }
+}
+
+/**
+ * Holds `file` with flock while `cat` reads our stdin: it lets go when we close stdin or die.
+ * Its own process group, so a Ctrl-C at the terminal cannot drop the lock mid-step. With
+ * `nowait`, undefined when someone else holds it.
+ */
+function hold(
+  file: string,
+  nowait: boolean
+): Promise<ChildProcess | undefined> {
+  const holder = spawn(
+    "flock",
+    [...(nowait ? ["-n"] : []), file, "-c", "echo held; exec cat"],
+    { stdio: ["pipe", "pipe", "inherit"], detached: true }
+  );
+  return new Promise((resolve, reject) => {
+    holder.stdout!.once("data", () => resolve(holder));
+    holder.once("exit", (code) =>
+      nowait && code === 1
+        ? resolve(undefined)
+        : reject(new Error(`flock exited with ${code}`))
+    );
+  });
 }
 
 // ---------- running things ----------
@@ -369,9 +388,12 @@ function locks(): number {
       .replace(/^\S*\/node (--(require|import) \S+ )+/, "node ")
       .trim();
   say(`${Math.round(freeMb())} MB free`);
-  for (const kind of ["heavy", "light"] as const) {
-    const file = lockFile(kind);
-    if (!file) continue;
+  for (const [kind, file] of [
+    ["heavy", lockFile("heavy")],
+    ["light", lockFile("light")],
+    ["light2", lockFile("light") && `${lockFile("light")}.2`],
+  ] as const) {
+    if (!file || !fs.existsSync(file)) continue;
     const inode = fs.statSync(file).ino;
     for (const line of table) {
       const m = line.match(
