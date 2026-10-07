@@ -48,7 +48,7 @@ function Pre({ label, ...props }: React.HTMLAttributes<HTMLPreElement> & { label
    Copy that says Done in the same width, and Wrap only when a line overflows.
    Past 12 lines the numbers sit in their own gutter that does not scroll
    away; gutter and code share one line box. Colours come from the room. */
-function Code({ lang, code }: { lang: string; code: string }) {
+function Code({ lang, code, live = false }: { lang: string; code: string; live?: boolean }) {
   const [done, setDone] = useState(() => Date.now() - (copiedAt.get(code) ?? 0) < 1500);
   const [wrap, setWrap] = useState(false);
   const [over, setOver] = useState(false);
@@ -62,10 +62,11 @@ function Code({ lang, code }: { lang: string; code: string }) {
   const name = (lang || "text").toLowerCase();
   const known = name in LANGS;
 
-  // does a line run past the edge? Then Wrap is offered, and the edge fades
+  // does a line run past the edge? Then Wrap is offered, and the edge fades.
+  // Not while its lines still arrive: that would lay the page out each frame.
   useLayoutEffect(() => {
     const pre = fig.current?.querySelector<HTMLElement>(".rd-pre");
-    if (!pre) return;
+    if (!pre || live) return;
     const check = () => {
       setOver(pre.scrollWidth - pre.clientWidth > 1);
       edgeFades(pre);
@@ -79,7 +80,7 @@ function Code({ lang, code }: { lang: string; code: string }) {
     });
     ro.observe(pre);
     return () => ro.disconnect();
-  }, [code, wrap]);
+  }, [code, wrap, live]);
 
   const copy = async () => {
     try {
@@ -131,7 +132,8 @@ function Code({ lang, code }: { lang: string; code: string }) {
             ))}
           </div>
         )}
-        {known ? (
+        {/* coloured once the block is whole; while it streams the lines show plain */}
+        {known && !live ? (
           <Prism
             language={name}
             useInlineStyles={false}

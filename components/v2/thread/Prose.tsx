@@ -20,15 +20,20 @@ const text = (children: React.ReactNode): string =>
     .map((c) => (typeof c === "string" || typeof c === "number" ? String(c) : ""))
     .join("");
 
+/** A fenced block's language and text, from the <pre><code> markdown makes. */
+const codeOf = (children: React.ReactNode) => {
+  const child = React.Children.toArray(children)[0] as React.ReactElement<{
+    className?: string;
+    children?: React.ReactNode;
+  }>;
+  return {
+    lang: /language-([\w+#-]+)/.exec(child?.props?.className ?? "")?.[1] ?? "",
+    code: text(child?.props?.children).replace(/\n$/, ""),
+  };
+};
+
 const COMPONENTS: Components = {
-  pre: ({ children }) => {
-    const child = React.Children.toArray(children)[0] as React.ReactElement<{
-      className?: string;
-      children?: React.ReactNode;
-    }>;
-    const lang = /language-([\w+#-]+)/.exec(child?.props?.className ?? "")?.[1] ?? "";
-    return <Code lang={lang} code={text(child?.props?.children).replace(/\n$/, "")} />;
-  },
+  pre: ({ children }) => <Code {...codeOf(children)} />,
   code: ({ children, className }) => <code className={className}>{children}</code>,
   a: ({ href, children }) => {
     const ok = safeHref(href);
@@ -60,6 +65,13 @@ const COMPONENTS: Components = {
       <table>{children}</table>
     </div>
   ),
+};
+
+/* The growing block: its code shows plain until the block is whole, so no
+   frame of a streaming answer highlights or measures it. */
+const LIVE_COMPONENTS: Components = {
+  ...COMPONENTS,
+  pre: ({ children }) => <Code {...codeOf(children)} live />,
 };
 
 const Block = memo(function Block({ md }: { md: string }) {
@@ -104,7 +116,7 @@ function tableNums(wrap: HTMLElement) {
 const LiveBlock = memo(function LiveBlock({ md, idle }: { md: string; idle: boolean }) {
   const plugins = useMemo(() => [rehypeKatex, rehypeWords({ idle })], [idle]);
   return (
-    <ReactMarkdown remarkPlugins={REMARK} rehypePlugins={plugins} components={COMPONENTS}>
+    <ReactMarkdown remarkPlugins={REMARK} rehypePlugins={plugins} components={LIVE_COMPONENTS}>
       {md}
     </ReactMarkdown>
   );
