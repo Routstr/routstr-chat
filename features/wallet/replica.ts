@@ -119,9 +119,11 @@ export class Replica {
         tags: [],
         created_at: now(),
       });
+      // known as this tab's before it goes: a relay echoes it back to the
+      // live read before every relay has answered the publish
+      this.wrote.add(event.id);
       // rejects when no relay took it: then it is on none, and a retry signs anew
       await relays.publish(event);
-      this.wrote.add(event.id);
       // a later failure in this push leaves it listed for the retry to delete
       await store.publishing(this.owner, mintUrl, event.id);
       proofs.forEach((p) => listed.set(p.secret, event.id));
@@ -133,8 +135,8 @@ export class Replica {
         tags: [...replaced.map((id) => ["e", id]), ["k", String(TOKEN)]],
         created_at: now(),
       });
-      await relays.publish(deletion);
       this.wrote.add(deletion.id);
+      await relays.publish(deletion);
     }
     await store.published(this.owner, mintUrl, { version, replaced, listed });
   }
