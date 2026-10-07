@@ -4,7 +4,14 @@ import type { UnclaimedToken } from "@/features/book/tokens";
  *  it is the wallet's, waiting for its mint. key: the provider it was handed
  *  to made a key from it, which now holds `sats`. spent: someone took it. */
 export type Reclaimed =
-  | { kind: "back" | "waiting" | "key"; sats: number }
+  | { kind: "back" | "key"; sats: number }
+  | {
+      kind: "waiting";
+      sats: number;
+      /** stays listed: handed to a provider, so if its mint then says spent,
+       *  only a later Reclaim asks that provider */
+      keep: boolean;
+    }
   | { kind: "spent" };
 
 const SPENT = /already spent|already claimed|already redeemed/i;
@@ -28,7 +35,9 @@ export async function reclaim(
 ): Promise<Reclaimed> {
   try {
     const { sats, pending } = await take(entry.token);
-    return { kind: pending ? "waiting" : "back", sats };
+    return pending
+      ? { kind: "waiting", sats, keep: !!entry.baseUrl }
+      : { kind: "back", sats };
   } catch (error) {
     if (!SPENT.test(error instanceof Error ? error.message : String(error))) {
       throw error;

@@ -139,8 +139,7 @@ export function createPurse(
     },
     take: async (token) => {
       const { proofs, unit, pending } = await executor.take(token);
-      // waiting for its mint, or taken in by a retry that noted it
-      if (pending || !proofs.length) return { sats: peek(token).sats, pending };
+      if (pending) return { sats: peek(token).sats, pending };
       const sats = toSats(total(proofs), unit);
       note({ direction: "in", sats });
       // its mint answers: tokens still waiting are tried again

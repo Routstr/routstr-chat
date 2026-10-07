@@ -12,7 +12,14 @@ it("takes a token back, or leaves it waiting for its mint", async () => {
   ).toEqual({ kind: "back", sats: 8 });
   expect(
     await reclaim(entry, { take: async () => ({ sats: 8, pending: true }) })
-  ).toEqual({ kind: "waiting", sats: 8 });
+  ).toEqual({ kind: "waiting", sats: 8, keep: false });
+  // handed to a provider: it stays listed, so a later Reclaim can ask it
+  expect(
+    await reclaim(
+      { token: "t", baseUrl: "https://p/" },
+      { take: async () => ({ sats: 8, pending: true }) }
+    )
+  ).toMatchObject({ kind: "waiting", keep: true });
 });
 
 it("asks the provider a spent token went to, and calls it gone only when that says so", async () => {

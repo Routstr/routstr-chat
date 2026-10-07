@@ -423,9 +423,13 @@ export class WalletExecutor {
   ): Promise<{ proofs: Proof[]; unit: string; pending: boolean }> {
     const unit = record.unit ?? "sat";
     const { journal, owner } = this.deps;
-    // a retry, here or in another tab, took it in while this one waited
+    // a retry, here or in another tab, settled it while this one waited:
+    // taken in, or found spent. Which is not known here, so nothing is
+    // claimed; asked again, the mint's answer says
     if (!journal.list(owner).some((r) => r.id === record.id)) {
-      return { proofs: [], unit, pending: false };
+      throw new Error(
+        "This token was settled elsewhere meanwhile; try again to see how"
+      );
     }
     try {
       const proofs = await this.receiveLocked(record.token, {});

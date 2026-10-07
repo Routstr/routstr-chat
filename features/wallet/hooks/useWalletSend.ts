@@ -135,7 +135,7 @@ export function useWalletSend() {
             ? (token, baseUrl) => adopt(owner, token, baseUrl)
             : undefined,
         });
-        dismissToken(entry.id);
+        if (!(done.kind === "waiting" && done.keep)) dismissToken(entry.id);
         if (done.kind === "spent") {
           // Redeemed by the recipient, or by an earlier reclaim whose
           // storage failed (the wallet book stores those funds later).
@@ -145,7 +145,9 @@ export function useWalletSend() {
         } else {
           setSuccessMessage(
             done.kind === "waiting"
-              ? `${formatBalance(done.sats, "sat")}s wait for their mint, and land once it answers`
+              ? done.keep
+                ? `${formatBalance(done.sats, "sat")}s wait for their mint; the token stays listed until it answers`
+                : `${formatBalance(done.sats, "sat")}s wait for their mint, and land once it answers`
               : done.kind === "key"
                 ? `It became an API key holding ${formatBalance(done.sats, "sat")}s, kept with your keys`
                 : `Reclaimed ${formatBalance(done.sats, "sat")}s back to your wallet`
