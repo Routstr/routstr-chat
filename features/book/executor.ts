@@ -68,12 +68,25 @@ const afterLostAnswer = () =>
 const bare = (proofs: Proof[]) =>
   proofs.map(({ id, amount, secret, C }) => ({ id, amount, secret, C }));
 const read = async (coins: Coins) =>
-  bare(typeof coins === "function" ? await coins() : coins);
+  typeof coins === "function" ? await coins() : coins;
 
 // how long a mint gets to show it is there before a token for it waits
 const REACH_MS = 10_000;
 // NUT-00: the token's proofs were spent already
 const SPENT = 11001;
+
+/** A stored coin's unit (the coin store writes it); none on a bare proof. */
+const unitOf = (proof: Proof) => (proof as { unit?: string }).unit;
+
+/** The coins one wallet can spend: cashu-ts picks only among its own unit's. */
+const inUnit = (proofs: Proof[], unit: string) =>
+  proofs.filter((p) => (unitOf(p) ?? unit) === unit);
+
+/** Whole sats of these coins in `unit`. */
+const worth = (proofs: Proof[], unit: string) => {
+  const sum = inUnit(proofs, unit).reduce((s, p) => s + p.amount, 0);
+  return unit === "msat" ? Math.floor(sum / 1000) : unit === "sat" ? sum : 0;
+};
 
 /** Why a redeem took nothing in: its mint could not be reached (try again
  *  later), the mint says the token is spent, or it refused it otherwise. */
@@ -188,7 +201,9 @@ export class WalletExecutor {
     proofs: Proof[]
   ): Promise<{ state: MeltOutcome; fee: number; change: Proof[] }> {
     const { journal, owner } = this.deps;
-    const wallet = await this.open(mintUrl);
+    const wallet = await this.open(mintUrl, quote.unit);
+    // only coins in the quote's unit pay it
+    proofs = bare(inUnit(proofs, wallet.unit));
     const commit = this.deps.commitFor(mintUrl);
     const fee = quote.fee_reserve || 0;
     const amount = quote.amount + fee;
@@ -299,7 +314,16 @@ export class WalletExecutor {
     options: SendOptions
   ): Promise<string> {
     const { journal } = this.deps;
-    const wallet = await this.open(mintUrl);
+    let wallet = await this.open(mintUrl);
+    // the mint may hold coins of more than one unit (a sat token taken where
+    // msat is the default): sent from the default's, else a unit that covers it
+    if (worth(proofs, wallet.unit) < sats) {
+      const other = [...new Set(proofs.map(unitOf))].find(
+        (unit) => unit && worth(proofs, unit) >= sats
+      );
+      if (other) wallet = await this.open(mintUrl, other);
+    }
+    proofs = bare(inUnit(proofs, wallet.unit));
     const commit = this.deps.commitFor(mintUrl);
     const amount = wallet.unit === "msat" ? sats * 1000 : sats;
     // a token is always swapped fresh, never coins the wallet already held
