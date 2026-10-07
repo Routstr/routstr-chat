@@ -101,16 +101,18 @@ function tableNums(wrap: HTMLElement) {
 
 /* The block words are arriving in: the caret rides after the newest word and
    breathes when the model pauses. */
-function LiveBlock({ md, idle }: { md: string; idle: boolean }) {
+const LiveBlock = memo(function LiveBlock({ md, idle }: { md: string; idle: boolean }) {
   const plugins = useMemo(() => [rehypeKatex, rehypeWords({ idle })], [idle]);
   return (
     <ReactMarkdown remarkPlugins={REMARK} rehypePlugins={plugins} components={COMPONENTS}>
       {md}
     </ReactMarkdown>
   );
-}
+});
 
-export default function Prose({ content, streaming, words, idle = false }: { content: string; streaming?: boolean; words?: boolean; idle?: boolean }) {
+/* A render with the same words changes nothing: the live answer re-renders
+   for its run as well as for each frame of words, and parses only once. */
+export default memo(function Prose({ content, streaming, words, idle = false }: { content: string; streaming?: boolean; words?: boolean; idle?: boolean }) {
   const blocks = useMemo(() => splitBlocks(stripParensAroundLinks(content)), [content]);
   const lastIdx = blocks.length - 1;
   const root = useRef<HTMLDivElement>(null);
@@ -129,15 +131,25 @@ export default function Prose({ content, streaming, words, idle = false }: { con
     }
     seen.current = { block: lastIdx, n: at };
   });
+  // tables and wide maths are measured once their block is whole: while
+  // words arrive only the growing block changes, and measuring the rest every
+  // frame would make the browser lay the whole answer out again each time
+  const measured = useRef(0);
   useLayoutEffect(() => {
     const el = root.current;
     if (!el) return;
-    el.querySelectorAll<HTMLElement>(".rd-table").forEach((t) => {
-      tableNums(t);
-      edgeFades(t);
-    });
-    el.querySelectorAll<HTMLElement>(".katex-display").forEach(edgeFades);
-  }, [blocks]);
+    // streaming, the blocks before the last are whole and never change again
+    const whole = streaming ? lastIdx : blocks.length;
+    const from = streaming && whole >= measured.current ? measured.current : 0;
+    measured.current = whole;
+    for (const blk of Array.from(el.children).slice(from, whole)) {
+      blk.querySelectorAll<HTMLElement>(".rd-table").forEach((t) => {
+        tableNums(t);
+        edgeFades(t);
+      });
+      blk.querySelectorAll<HTMLElement>(".katex-display").forEach(edgeFades);
+    }
+  }, [blocks, streaming, lastIdx]);
   return (
     <div className="md" ref={root} data-streaming={streaming ? "" : undefined}>
       {blocks.map((b, i) => (
@@ -147,4 +159,4 @@ export default function Prose({ content, streaming, words, idle = false }: { con
       ))}
     </div>
   );
-}
+});

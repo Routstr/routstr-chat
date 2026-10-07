@@ -180,16 +180,24 @@ export default function Live({
 
   // the topic sits after the verb; placed by a transform, so nothing re-lays
   // out. Set on the line, so the mark and the line's action read them too.
+  // Measured when the words change, and again once they are drawn: never on
+  // the renders words of the answer cause, where reading a width would make
+  // the browser lay the whole answer out again each frame.
   const words = useRef<HTMLSpanElement>(null);
   useLayoutEffect(() => {
-    const w = words.current;
-    const line = w?.parentElement;
-    const main = w?.querySelector<HTMLElement>(".la-main .la-w:not([data-out])");
-    if (!w || !line || !main) return;
-    line.style.setProperty("--after", `${Math.ceil(main.scrollWidth)}px`);
-    const top = w.querySelector<HTMLElement>(".la-topic .la-w:not([data-out])");
-    line.style.setProperty("--tail", `${Math.ceil(main.scrollWidth + (topic && top ? top.scrollWidth + 18 : 0))}px`);
-  });
+    const measure = () => {
+      const w = words.current;
+      const line = w?.parentElement;
+      const main = w?.querySelector<HTMLElement>(".la-main .la-w:not([data-out])");
+      if (!w || !line || !main) return;
+      line.style.setProperty("--after", `${Math.ceil(main.scrollWidth)}px`);
+      const top = w.querySelector<HTMLElement>(".la-topic .la-w:not([data-out])");
+      line.style.setProperty("--tail", `${Math.ceil(main.scrollWidth + (topic && top ? top.scrollWidth + 18 : 0))}px`);
+    };
+    measure();
+    const raf = requestAnimationFrame(measure);
+    return () => cancelAnimationFrame(raf);
+  }, [verb, topic, fold]);
 
   // the live window grows with its first lines, then holds at the cap and
   // the lines rise at its floor (a pure transform, nothing below moves)
