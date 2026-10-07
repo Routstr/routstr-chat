@@ -7,10 +7,8 @@ import { currentOwner } from "@/features/session/owned";
 import {
   useUnclaimedTokensStore,
   formatBalance,
-  calculateBalanceByMint,
   type UnclaimedToken,
 } from "@/features/wallet";
-import { getCurrentMintBalance as utilGetCurrentMintBalance } from "@/utils/walletUtils";
 import { createMeltQuote, quoteInSats } from "@/lib/cashuLightning";
 import { toSats } from "../purse";
 import { reclaim } from "../reclaim";
@@ -18,7 +16,6 @@ import { useWalletStore } from "../state/walletStore";
 import { AdoptContext, usePurse } from "../view";
 import { useActiveMintUnit } from "./useActiveMintUnit";
 import { dismissToken } from "./useBook";
-import { toast } from "sonner";
 
 export function useWalletSend() {
   const currentMintUnit = useActiveMintUnit();

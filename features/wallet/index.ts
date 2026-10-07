@@ -24,7 +24,6 @@ export type * from "./core/domain";
 export * from "./core/services/MintService";
 
 // Core Utilities (Pure functions)
-export * from "./core/utils/balance";
 export * from "./core/utils/formatting";
 
 // State Management (Zustand stores)

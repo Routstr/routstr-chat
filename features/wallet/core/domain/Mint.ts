@@ -24,28 +24,6 @@ export interface Mint {
 }
 
 /**
- * Mint with balance information
- */
-export interface MintWithBalance extends Mint {
-  /** Current balance on this mint */
-  balance: number;
-  /** Unit of the balance (sat, msat, etc.) */
-  unit: string;
-}
-
-/**
- * Mint quote for receiving (minting)
- */
-export interface MintQuote {
-  mintUrl: string;
-  amount: number;
-  paymentRequest: string;
-  quoteId: string;
-  state: CashuMintQuoteState;
-  expiresAt?: number;
-}
-
-/**
  * Mint quote for sending (melting)
  */
 export interface MeltQuote {

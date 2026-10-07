@@ -28,11 +28,3 @@ export enum ProofState {
   SPENT = "SPENT",
   PENDING = "PENDING",
 }
-
-/**
- * Proof with state information
- */
-export interface ProofWithState extends Proof {
-  state: ProofState;
-  witness?: string;
-}
