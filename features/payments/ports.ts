@@ -75,6 +75,8 @@ export interface OtherDevices {
   keys(): ApiKeyEntry[];
   /** Forget keys once they are refunded. */
   drop(keys: string[]): Promise<void>;
+  /** Runs when those keys change (the relay copy arrived, or a drop). */
+  subscribe(listener: () => void): () => void;
 }
 
 type FetchOptions = Parameters<typeof fetchAIResponse>[0];

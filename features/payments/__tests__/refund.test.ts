@@ -254,6 +254,22 @@ describe("refundCredit", () => {
     expect(deps.otherDevices.drop).toHaveBeenCalledWith(["sk-lost-device"]);
   });
 
+  it("leaves another device's key used in the last five minutes: that device may still be paying with it", async () => {
+    const refunded = provider({ [LARGE]: 120_000 });
+    const { deps, others } = await setup();
+    others.push({
+      baseUrl: LARGE,
+      key: "sk-busy-device",
+      balance: 120,
+      lastUsed: Date.now() - 60_000,
+    });
+
+    await refundCredit(deps, true);
+
+    expect(refunded).toEqual([]);
+    expect(deps.otherDevices.drop).not.toHaveBeenCalled();
+  });
+
   it("still asks the provider about a lost device's key that reads empty", async () => {
     // an emptied key may hold a payout the wallet missed: the provider pays it again
     const refunded = provider({ [LARGE]: 0 });

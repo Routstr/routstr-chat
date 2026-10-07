@@ -178,7 +178,11 @@ export function emptyDevice() {
       },
       lock: () => fakeLock().lock(),
     },
-    otherDevices: { keys: () => [], drop: async () => {} },
+    otherDevices: {
+      keys: () => [],
+      drop: async () => {},
+      subscribe: () => () => {},
+    },
     adopt: noAdopt,
   };
 }

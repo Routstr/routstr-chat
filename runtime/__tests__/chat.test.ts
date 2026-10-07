@@ -13,6 +13,7 @@ import {
   tokenOf,
 } from "@/features/payments/__tests__/fakes";
 import type { Sdk } from "@/features/payments/ports";
+import type { ApiKeyEntry } from "@routstr/sdk/wallet";
 import { createAccountChat } from "../chat";
 
 type RequestArgs = Parameters<Sdk["request"]>;
@@ -169,5 +170,48 @@ describe("createAccountChat", () => {
     await tick();
     expect(credit.keys.lock.mock.calls.length).toBe(locks);
     expect(wallet.received).toHaveLength(2);
+  });
+});
+
+describe("held", () => {
+  it("counts the keys the account's other devices backed up, and follows them", async () => {
+    const credit = fakeKeys();
+    await credit.keys.ready();
+    let others: ApiKeyEntry[] = [];
+    const listeners = new Set<() => void>();
+    const account = createAccountChat({
+      owner: "alice",
+      storage: memoryStorage(),
+      history: new FakeHistory(),
+      attachments: passThroughAttachments(),
+      keys: credit.keys,
+      purse: fakePurse().purse,
+      sdk: fakeSdk(),
+      spending: () => ({ mode: "apikeys" }),
+      ...emptyDevice(),
+      otherDevices: {
+        keys: () => others,
+        drop: async () => {},
+        subscribe: (listener) => {
+          listeners.add(listener);
+          return () => listeners.delete(listener);
+        },
+      },
+    });
+    await tick();
+    let told = 0;
+    account.held.subscribe(() => told++);
+    expect(account.held.get()).toBe(0);
+
+    // a closed device's keys arrive from the relays: one read, one never answered
+    others = [
+      { baseUrl: "https://a.example/", key: "sk-a", balance: 80, lastUsed: 0 },
+      { baseUrl: "https://b.example/", key: tokenOf(77), balance: 0, lastUsed: 0 },
+    ];
+    listeners.forEach((listener) => listener());
+
+    expect(told).toBe(1);
+    expect(account.held.get()).toBe(157);
+    account.dispose();
   });
 });

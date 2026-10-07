@@ -6,12 +6,16 @@ import { tokenSats } from "@/features/wallet/tokens";
 const keySats = (key: ApiKeyEntry) =>
   key.balance || (key.key.startsWith("cashu") ? tokenSats(key.key) : 0);
 
+/** What these keys hold, unrounded. */
+export const keysSats = (keys: ApiKeyEntry[]): number =>
+  keys.reduce((sum, key) => sum + keySats(key), 0);
+
 /** Sats held at providers in this credit store: what its keys hold, X-Cashu
  *  tokens kept for a provider, and refunds a provider sent back that the
  *  wallet has not taken in yet. */
 export const heldSats = (storage: StorageAdapter): number =>
   Math.round(
-    storage.getAllApiKeys().reduce((sum, key) => sum + keySats(key), 0) +
+    keysSats(storage.getAllApiKeys()) +
       Object.values(storage.getXcashuTokens())
         .flat()
         .reduce((sum, t) => sum + tokenSats(t.token), 0) +

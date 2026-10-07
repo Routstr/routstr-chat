@@ -3,7 +3,7 @@ import type { Attachments, ChatHistory } from "@/features/chat/ports";
 import { ChatService } from "@/features/chat/service";
 import type { AccountChatView } from "@/features/chat/view";
 import { AutoRefund } from "@/features/payments/autoRefund";
-import { heldSats } from "@/features/payments/held";
+import { heldSats, keysSats } from "@/features/payments/held";
 import type {
   Adopt,
   Keys,
@@ -81,12 +81,18 @@ export function createAccountChat(deps: AccountChatDeps): AccountChat {
       subscribe(listener) {
         heldListeners.add(listener);
         const unsubscribe = deps.keys.subscribeCredit(listener);
+        const unfollow = deps.otherDevices.subscribe(listener);
         return () => {
           heldListeners.delete(listener);
           unsubscribe();
+          unfollow();
         };
       },
-      get: () => heldSats(deps.keys.storage("direct")) + oldHeld,
+      // other devices' keys too: a new browser can still return them
+      get: () =>
+        heldSats(deps.keys.storage("direct")) +
+        oldHeld +
+        Math.round(keysSats(deps.otherDevices.keys())),
     },
     viewing: (conversationId) => auto.viewing(conversationId),
     dispose() {
