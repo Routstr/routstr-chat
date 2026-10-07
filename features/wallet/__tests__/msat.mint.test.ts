@@ -1,10 +1,5 @@
 // At a mint that offers msat: what Send shows is in sats, and the book pays the msat quote.
-import {
-  getEncodedTokenV4,
-  Mint,
-  Wallet,
-  type Proof,
-} from "@cashu/cashu-ts";
+import { getEncodedTokenV4, Mint, Wallet, type Proof } from "@cashu/cashu-ts";
 import { describe, expect, it } from "vitest";
 import { getKit } from "@/tests/kit";
 import { WalletExecutor } from "@/features/book/executor";

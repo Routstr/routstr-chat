@@ -46,8 +46,8 @@ export interface Purse {
    *  wallet tries it again (retryPending). Throws only when nothing was kept
    *  (the mint refused it): the caller keeps its own record then. */
   take(token: string): Promise<{ sats: number; pending: boolean }>;
-  /** As take, the sats alone. */
-  receive(token: string): Promise<number>;
+  /** As take: a token pasted or paid out to this account. */
+  receive(token: string): Promise<{ sats: number; pending: boolean }>;
   /** Redeems a token another record still holds (an API key, an X-Cashu
    *  record): the mint first, and nothing kept when it fails, so that record
    *  stays the token's; throws RedeemError ("unreachable", "spent",
@@ -160,7 +160,7 @@ export function createPurse(
         );
       return { sats, pending };
     },
-    receive: async (token) => (await purse.take(token)).sats,
+    receive: (token) => purse.take(token),
     redeem: (token) => {
       const secrets = getTokenMetadata(token).incompleteProofs.map(
         (p) => p.secret

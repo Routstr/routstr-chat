@@ -101,6 +101,19 @@ it("keeps a token the mint cannot be reached for, lands it when it can, and a re
   expect(await kit.coinStates(held, MINT)).toEqual(held.map(() => "UNSPENT"));
 });
 
+it("says a pasted token whose mint cannot be reached is kept, not received", async () => {
+  const token = await kit.mintToken(24);
+  const restore = cutOff(MINT);
+  try {
+    expect(await purse.receive(token)).toEqual({ sats: 24, pending: true });
+  } finally {
+    restore();
+  }
+  expect(await purse.balances()).toEqual({});
+  expect(written).toEqual([]);
+  expect(await purse.retryPending()).toBe(24);
+});
+
 it("drops a waiting token the mint says was spent elsewhere, and tries it no more", async () => {
   const token = await kit.mintToken(16);
   const restore = cutOff(MINT);
