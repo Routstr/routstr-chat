@@ -158,6 +158,12 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
 
   // a fold already handed its space back
   const folding = useRef(false);
+  // the room left, read by the observer below: a new observer for every
+  // change of it would measure the thread again on each frame of an answer
+  const reserveNow = useRef(reserve);
+  useLayoutEffect(() => {
+    reserveNow.current = reserve;
+  });
   // the answer outgrew the room we made: follow its tail, until you scroll
   useEffect(() => {
     const el = scroller.current;
@@ -172,7 +178,7 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
       if (!liveHere) {
         // a picture landed in a chat you are reading at its end: stay at the end
         if (pinned.current && grew > 0) el.scrollTop = el.scrollHeight;
-        const gap = el.scrollHeight - reserve - (el.scrollTop + el.clientHeight);
+        const gap = el.scrollHeight - reserveNow.current - (el.scrollTop + el.clientHeight);
         setAway(gap > 240);
         return;
       }
@@ -183,7 +189,7 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
         return;
       }
       const tailBelow = box.offsetTop + h - (el.scrollTop + el.clientHeight);
-      if (reserve > 0) {
+      if (reserveNow.current > 0) {
         // eat the reserved space first
         setReserve((r) => Math.max(0, r - grew));
       }
@@ -193,11 +199,11 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
         el.scrollTop += tailBelow + 8;
       }
       // the answer grows below someone reading further up: the way back appears without a scroll
-      else setAway(el.scrollHeight - reserve - (el.scrollTop + el.clientHeight) > 240);
+      else setAway(el.scrollHeight - reserveNow.current - (el.scrollTop + el.clientHeight) > 240);
     });
     ro.observe(box);
     return () => ro.disconnect();
-  }, [liveHere, reserve]);
+  }, [liveHere]);
 
   useEffect(() => {
     const el = scroller.current;
