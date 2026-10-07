@@ -136,6 +136,14 @@ export function useActivity() {
   return { entries, pending, clear };
 }
 
+/** Asks the provider a token was handed to what it holds for it (keys'
+ *  adopt): the key's sats, 0 when the provider says it was spent elsewhere;
+ *  throws when it does not answer. Filled by the composition root for the
+ *  token's owner, so the wallet never imports keys. */
+export const AdoptContext = createContext<
+  ((owner: string, token: string, baseUrl: string) => Promise<number>) | null
+>(null);
+
 /** The SDK's usage log, the one replies are recorded in; filled by the
  *  composition root. Without it Usage shows nothing. */
 export const UsageLogContext = createContext<UsageLog | null>(null);

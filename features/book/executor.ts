@@ -51,6 +51,8 @@ export interface SendOptions {
   track?: boolean;
   includeFees?: boolean;
   handoff?: (token: string) => Promise<void>;
+  /** the provider the handoff gives the token to, kept on its record */
+  to?: string;
 }
 
 // a request that failed may still be on its way to the mint: it gets this long
@@ -300,7 +302,13 @@ export class WalletExecutor {
     });
     if (options.track || options.handoff) {
       const held = this.held(id, mintUrl, wallet);
-      journal.put({ ...held, kind: "token", token, amount });
+      journal.put({
+        ...held,
+        kind: "token",
+        token,
+        amount,
+        ...(options.to ? { baseUrl: options.to } : {}),
+      });
     } else {
       journal.remove(id);
     }

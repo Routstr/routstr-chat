@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useContext, useRef } from "react";
 import { MeltQuoteState } from "@cashu/cashu-ts";
 import { useInvoiceSync } from "@/hooks/useInvoiceSync";
+import { currentOwner } from "@/features/session/owned";
 import {
   useCashuStore,
   useUnclaimedTokensStore,
@@ -13,7 +14,8 @@ import {
 import { getCurrentMintBalance as utilGetCurrentMintBalance } from "@/utils/walletUtils";
 import { createMeltQuote, quoteInSats } from "@/lib/cashuLightning";
 import { toSats } from "../purse";
-import { usePurse } from "../view";
+import { reclaim } from "../reclaim";
+import { AdoptContext, usePurse } from "../view";
 import { useActiveMintUnit } from "./useActiveMintUnit";
 import { dismissToken } from "./useBook";
 import { toast } from "sonner";
@@ -24,6 +26,7 @@ export function useWalletSend() {
   const cashuStore = useCashuStore();
   const unclaimedTokensStore = useUnclaimedTokensStore();
   const purse = usePurse();
+  const adopt = useContext(AdoptContext);
 
   // Send tab state
   const [sendTab, setSendTab] = useState<"token" | "lightning">("token");
@@ -122,35 +125,41 @@ export function useWalletSend() {
         setError("");
         setWarningMessage("");
         const from = purse();
-        if (!from) throw new Error("User not logged in");
-        // the wallet owns it once this resolves: taken in, or waiting for its
-        // mint in the book, so the listed token can go
-        const { sats, pending } = await from.take(entry.token);
+        const owner = currentOwner();
+        if (!from || !owner) throw new Error("User not logged in");
+        // settled once this resolves, so the listed token can go
+        const done = await reclaim(entry, {
+          take: from.take,
+          adopt: adopt
+            ? (token, baseUrl) => adopt(owner, token, baseUrl)
+            : undefined,
+        });
         dismissToken(entry.id);
-        setSuccessMessage(
-          pending
-            ? `${formatBalance(sats, "sat")}s wait for their mint, and land once it answers`
-            : `Reclaimed ${formatBalance(sats, "sat")}s back to your wallet`
-        );
-        setTimeout(() => setSuccessMessage(""), 5000);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        if (/already spent|already claimed|already redeemed/i.test(msg)) {
+        if (done.kind === "spent") {
           // Redeemed by the recipient, or by an earlier reclaim whose
           // storage failed (the wallet book stores those funds later).
-          dismissToken(entry.id);
           setSuccessMessage("");
           setWarningMessage("Token was already redeemed.");
           setTimeout(() => setWarningMessage(""), 5000);
         } else {
-          setError(`Failed to reclaim token: ${msg}`);
+          setSuccessMessage(
+            done.kind === "waiting"
+              ? `${formatBalance(done.sats, "sat")}s wait for their mint, and land once it answers`
+              : done.kind === "key"
+                ? `It became an API key holding ${formatBalance(done.sats, "sat")}s, kept with your keys`
+                : `Reclaimed ${formatBalance(done.sats, "sat")}s back to your wallet`
+          );
+          setTimeout(() => setSuccessMessage(""), 5000);
         }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        setError(`Failed to reclaim token: ${msg}`);
       } finally {
         reclaimsInFlightRef.current.delete(entry.id);
         setReclaimingTokenId(null);
       }
     },
-    [purse]
+    [purse, adopt]
   );
 
   const handleNip60InvoiceInput = useCallback(

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { getKit } from "@/tests/kit";
 import { Journal, memoryStorage } from "@/features/book/journal";
 import { RecoveryHost } from "@/features/book/recovery";
+import { tokensOf } from "@/features/book/tokens";
 import { createPurse } from "../purse";
 import type { Coin, CoinStore } from "../ports";
 
@@ -191,4 +192,30 @@ it("pays an invoice while a token is being made, from the coins the token left",
   expect(await kit.coinStates(all() as Proof[], mint)).toEqual(
     all().map(() => "UNSPENT")
   );
+});
+
+it("keeps the provider a token went to on its listing when the handoff fails, for Reclaim to ask", async () => {
+  const mint = kit.env.mintUrl;
+  const { store } = memoryCoins(() => "sat");
+  const journal = new Journal(memoryStorage());
+  const purse = createPurse("alice", {
+    coins: store,
+    activity,
+    journal,
+    locks: navigator.locks,
+  });
+  await purse.receive(await kit.mintToken(32));
+  await expect(
+    purse.send(
+      mint,
+      16,
+      async () => {
+        throw new Error("neither store kept the key");
+      },
+      "https://provider.example/"
+    )
+  ).rejects.toThrow("neither store kept the key");
+  expect(tokensOf(journal.list("alice"))).toMatchObject([
+    { amount: 16, baseUrl: "https://provider.example/" },
+  ]);
 });

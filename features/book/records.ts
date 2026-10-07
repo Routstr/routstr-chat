@@ -95,6 +95,8 @@ export interface TokenRecord extends Base {
   token: string;
   amount: number;
   unit: string;
+  /** the provider it was handed to: one that made a key from it may hold it */
+  baseUrl?: string;
 }
 
 export type BookRecord =

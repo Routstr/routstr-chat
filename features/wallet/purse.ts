@@ -21,7 +21,9 @@ export interface Purse {
   send(
     mintUrl: string,
     sats: number,
-    handoff?: (token: string) => Promise<void>
+    handoff?: (token: string) => Promise<void>,
+    /** the provider the handoff gives it to, for Reclaim to ask */
+    to?: string
   ): Promise<string>;
   /** Pays a Lightning invoice's melt quote from this account's coins at the
    *  mint. "pending" means the mint has not settled it yet: the coins stay out
@@ -115,12 +117,12 @@ export function createPurse(
   const purse: Purse = {
     balances: async () => balancesOf(await coins.coins(owner)),
     activeMint: () => coins.activeMint(owner),
-    send: async (mintUrl, sats, handoff) => {
+    send: async (mintUrl, sats, handoff, to) => {
       const token = await executor.send(
         mintUrl,
         sats,
         () => coins.coins(owner, mintUrl),
-        { handoff, track: !handoff }
+        { handoff, track: !handoff, to }
       );
       note({ direction: "out", sats });
       return token;
