@@ -8,6 +8,8 @@ export interface UnclaimedToken {
   unit: string;
   mintUrl: string;
   createdAt: number;
+  /** the provider it was handed to, if any */
+  baseUrl?: string;
 }
 
 /** A received token still waiting for its mint, as activity lists it. */
@@ -50,6 +52,7 @@ export const tokensOf = (records: BookRecord[]): UnclaimedToken[] =>
               unit: r.unit,
               mintUrl: r.mintUrl,
               createdAt: r.createdAt,
+              ...(r.baseUrl ? { baseUrl: r.baseUrl } : {}),
             },
           ]
         : []

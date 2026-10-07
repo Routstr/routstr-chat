@@ -19,13 +19,22 @@ import { HistoryContext } from "@/features/history/view";
 import { activeChat } from "@/runtime/accountChat";
 import { AccountChatContext } from "@/features/chat/view";
 import { RelaysContext } from "@/features/relays/view";
-import { PurseContext, UsageLogContext } from "@/features/wallet/view";
+import {
+  AdoptContext,
+  PurseContext,
+  UsageLogContext,
+} from "@/features/wallet/view";
+import { exportedKeysFor } from "@/features/keys/exported";
 import { PurseContext as KeysPurseContext } from "@/features/keys/view";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { AppProvider } from "./AppProvider";
 import { withBase } from "@/lib/base";
+
+// a token Reclaim finds spent is asked of the provider it went to, as its owner's keys
+const adoptFor = (owner: string, token: string, baseUrl: string) =>
+  exportedKeysFor(owner).adopt(token, baseUrl);
 
 const accountContext = { manager: session.accounts, session };
 
@@ -93,6 +102,7 @@ export default function ClientProviders({ children }: { children: ReactNode }) {
               <HistoryContext.Provider value={history}>
                 <PurseContext.Provider value={walletPurseFor}>
                 <UsageLogContext.Provider value={routing.usage}>
+                <AdoptContext.Provider value={adoptFor}>
                 <KeysPurseContext.Provider value={walletPurseFor}>
                 <AccountChatContext.Provider value={chat}>
                   <InvoiceRecoveryProvider key={generation}>
@@ -100,6 +110,7 @@ export default function ClientProviders({ children }: { children: ReactNode }) {
                   </InvoiceRecoveryProvider>
                 </AccountChatContext.Provider>
                 </KeysPurseContext.Provider>
+                </AdoptContext.Provider>
                 </UsageLogContext.Provider>
                 </PurseContext.Provider>
               </HistoryContext.Provider>

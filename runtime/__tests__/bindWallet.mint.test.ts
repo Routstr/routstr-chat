@@ -9,6 +9,7 @@ import {
   nip44,
   type NostrEvent,
 } from "nostr-tools";
+import { createServer } from "node:net";
 import { afterAll, expect, it, vi } from "vitest";
 import { getKit } from "@/tests/kit";
 import "@/tests/kit/idb";
@@ -24,8 +25,9 @@ vi.stubGlobal("window", {
   removeEventListener: () => undefined,
 });
 const { bindWallet, walletPurseFor } = await import("../wallet");
-const { walletCoins } = await import("@/features/wallet/hooks/purseBridge");
-// the money files share one process: the next must not find this pretend browser and start the app
+const { walletCoins, walletCopy } =
+  await import("@/features/wallet/hooks/purseBridge");
+// the money tests share one process: no other file may see this stand-in tab
 afterAll(() => vi.unstubAllGlobals());
 
 function account() {
@@ -125,3 +127,92 @@ it("brings another key's old coins in too, so its money counts before it is acti
   expect(await listed(other.pubkey, other.key)).toEqual([]);
   bindWallet(undefined);
 }, 60_000);
+
+it("binds the account, not its key: of one key added twice, the copy that is active signs", async () => {
+  const a = account();
+  const broken = {
+    ...a.account,
+    signEvent: async () => {
+      throw new Error("this copy cannot sign");
+    },
+  } as unknown as Account;
+  bindWallet(broken);
+  await walletPurseFor(a.pubkey).receive(await kit.mintToken(8));
+  await new Promise((r) => setTimeout(r, 1500));
+  expect(await listed(a.pubkey, a.key)).toEqual([]);
+
+  bindWallet(a.account); // the same key, the copy that can sign
+  await vi.waitFor(
+    async () =>
+      expect((await listed(a.pubkey, a.key)).length).toBeGreaterThan(0),
+    { timeout: 20_000 }
+  );
+  bindWallet(undefined);
+}, 60_000);
+
+it("reads nothing more for an account switched away from while its old list was swept", async () => {
+  // a mint that takes the connection and never answers
+  const blackhole = createServer(() => undefined);
+  await new Promise<void>((r) => blackhole.listen(0, "127.0.0.1", r));
+  const port = (blackhole.address() as { port: number }).port;
+  try {
+    const a = account();
+    const b = account();
+    // a's copy on relays: reading it would decrypt with a's signer
+    await kit.relay.seed([
+      await a.account.signEvent({
+        kind: 7375,
+        content: nip44.encrypt(
+          JSON.stringify({ mint: "https://m", proofs: [] }),
+          a.key
+        ),
+        tags: [],
+        created_at: Math.floor(Date.now() / 1000),
+      }),
+    ]);
+    const decrypt = vi.spyOn(a.account.nip44!, "decrypt");
+    window.localStorage.setItem(
+      `cashu:${a.pubkey}`,
+      JSON.stringify({
+        state: {
+          proofs: [{ id: "00aa", amount: 8, secret: "s1", C: "02" }],
+          mints: [
+            { url: `http://127.0.0.1:${port}`, keysets: [{ id: "00aa" }] },
+          ],
+        },
+        version: 0,
+      })
+    );
+    bindWallet(a.account); // its sweep waits on the silent mint
+    bindWallet(b.account);
+    await new Promise((r) => setTimeout(r, 12_000));
+    expect(decrypt).not.toHaveBeenCalled();
+    bindWallet(undefined);
+  } finally {
+    blackhole.close();
+  }
+}, 60_000);
+
+it("says whether the relays answered the read of the wallet copy", async () => {
+  const a = account();
+  await kit.relay.down(true);
+  try {
+    bindWallet(a.account);
+    expect(walletCopy.of(a.pubkey)?.status).toBe("reading");
+    await vi.waitFor(
+      () => expect(walletCopy.of(a.pubkey)?.status).toBe("unanswered"),
+      { timeout: 30_000 }
+    );
+    expect(Object.values(walletCopy.of(a.pubkey)!.outcomes)).not.toContain(
+      "eose"
+    );
+  } finally {
+    await kit.relay.down(false);
+  }
+  bindWallet(undefined);
+  bindWallet(a.account);
+  await vi.waitFor(() => expect(walletCopy.of(a.pubkey)?.status).toBe("read"), {
+    timeout: 30_000,
+  });
+  bindWallet(undefined);
+}, 90_000);

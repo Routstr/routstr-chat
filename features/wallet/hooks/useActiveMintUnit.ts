@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useCashuStore } from "../state/cashuStore";
+import { useWalletStore } from "../state/walletStore";
 
 // keysets come back from storage with their fields as _active and _unit
 type StoredKeyset = {
@@ -12,7 +12,7 @@ type StoredKeyset = {
 /** The unit the wallet counts in at the account's active mint: msat when the
  *  mint offers it, else sat, as the wallet book opens it. */
 export function useActiveMintUnit(): string {
-  const { mints, activeMintUrl } = useCashuStore();
+  const { mints, activeMintUrl } = useWalletStore();
   return useMemo(() => {
     const keysets = (mints.find((m) => m.url === activeMintUrl)?.keysets ??
       []) as unknown as StoredKeyset[];

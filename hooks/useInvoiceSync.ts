@@ -10,7 +10,7 @@
  * - Exponential backoff for retries
  */
 
-import { useAccountManager } from "@/components/ClientProviders";
+import { useAccountManager } from "@/features/session/view";
 import { useObservableState } from "applesauce-react/hooks";
 import { useAppContext } from "@/hooks/useAppContext";
 import {

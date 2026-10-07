@@ -2,6 +2,7 @@ import { Mint, Wallet, type Proof } from "@cashu/cashu-ts";
 import { verifyEvent, type NostrEvent } from "nostr-tools";
 import { walletLock } from "@/features/book/executor";
 import { normalizeMintUrl } from "@/features/book/mint";
+import type { Fetched } from "@/features/relays/service";
 import type { ReplicaStore, WalletRelays, WalletSigner } from "./ports";
 
 // NIP-60 token events, and NIP-09 deletions of them
@@ -122,14 +123,16 @@ export class Replica {
     await store.published(this.owner, mintUrl, { version, replaced, listed });
   }
 
-  async pull(): Promise<void> {
+  /** Resolves with how the relays answered the read of the token events. */
+  async pull(): Promise<Pick<Fetched, "answered" | "outcomes">> {
     const { store, signer, relays } = this.deps;
     const [tokens, deletions] = await Promise.all([
       relays.fetch({ kinds: [TOKEN], authors: [this.owner] }),
       relays.fetch({ kinds: [DELETE], authors: [this.owner] }),
     ]);
+    const answer = { answered: tokens.answered, outcomes: tokens.outcomes };
     // no relay answered: nothing to go by
-    if (!tokens.answered.length) return;
+    if (!tokens.answered.length) return answer;
     const own = (e: NostrEvent, kind: number) =>
       e.kind === kind && e.pubkey === this.owner && verifyEvent(e);
     const deleted = new Set<string>();
@@ -161,6 +164,7 @@ export class Replica {
         console.error(`Could not take in ${mintUrl}'s coins yet:`, error)
       );
     }
+    return answer;
   }
 
   private async readEvent(

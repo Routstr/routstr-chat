@@ -30,7 +30,9 @@ export interface Purse {
   send(
     mint: string,
     sats: number,
-    handoff: (token: string) => Promise<void>
+    handoff: (token: string) => Promise<void>,
+    /** the provider it goes to, so Reclaim can ask it for the key */
+    to?: string
   ): Promise<unknown>;
   receive(token: string): Promise<unknown>;
 }
@@ -161,26 +163,31 @@ export class ExportedKeys {
    *  key again from that token). */
   async create(purse: Purse, baseUrl: string, sats: number, label: string) {
     let made: ExportedKey | undefined;
-    await purse.send(purse.activeMint(), sats, async (token) => {
-      const ask = () =>
-        inTime(this.provider.getTokenBalance(token, slash(baseUrl)));
-      let info = await ask();
-      // an answer lost on the way may still have made the key; asked again
-      // with the same token, the provider finds that key
-      if (info.balanceUnknown && !info.isInvalidApiKey) info = await ask();
-      if (info.balanceUnknown || !info.apiKey) {
-        throw new Error("The provider did not make a key. Try again later.");
-      }
-      made = {
-        key: info.apiKey,
-        balance: info.amount,
-        label,
-        baseUrl: slash(baseUrl),
-      };
-      this.change((keys) => [...keys, made!]);
-      await this.keep(made);
-      this.push();
-    });
+    await purse.send(
+      purse.activeMint(),
+      sats,
+      async (token) => {
+        const ask = () =>
+          inTime(this.provider.getTokenBalance(token, slash(baseUrl)));
+        let info = await ask();
+        // an answer lost on the way may still have made the key; asked again
+        // with the same token, the provider finds that key
+        if (info.balanceUnknown && !info.isInvalidApiKey) info = await ask();
+        if (info.balanceUnknown || !info.apiKey) {
+          throw new Error("The provider did not make a key. Try again later.");
+        }
+        made = {
+          key: info.apiKey,
+          balance: info.amount,
+          label,
+          baseUrl: slash(baseUrl),
+        };
+        this.change((keys) => [...keys, made!]);
+        await this.keep(made);
+        this.push();
+      },
+      slash(baseUrl)
+    );
     return made!;
   }
 

@@ -1,10 +1,11 @@
 import { beforeEach, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
-  urls: ["wss://r"],
-  // how each relay's connection looks once the fetch is over
-  status: {} as Record<string, string>,
-  fetched: { events: [] as object[], answered: [] as string[] },
+  fetched: {
+    events: [] as object[],
+    answered: [] as string[],
+    outcomes: {} as Record<string, string>,
+  },
   createWallet: vi.fn(async () => undefined),
   effects: [] as (() => void)[],
   // the account active in the tab, read as the relays answer
@@ -17,10 +18,8 @@ vi.mock("react", () => ({
   useContext: () => ({
     of: () => ({
       ready: async () => {},
-      urls: () => state.urls,
       fetch: async () => state.fetched,
     }),
-    port: { status: (url: string) => state.status[url] ?? "ok" },
   }),
   createContext: () => ({}),
 }));
@@ -34,8 +33,8 @@ vi.mock("../../view", () => ({
   useBalances: () => null,
   usePurseOf: () => () => null,
 }));
-vi.mock("../../state/cashuStore", () => ({
-  useCashuStore: () => ({
+vi.mock("../../state/walletStore", () => ({
+  useWalletStore: () => ({
     activeMintUrl: "m",
     userSelectedMintUrl: undefined,
     mints: [],
@@ -68,27 +67,32 @@ async function bind() {
 
 beforeEach(() => {
   state.createWallet.mockClear();
-  state.urls = ["wss://r"];
-  state.status = {};
   state.active = "alice";
 });
 
+/** each relay's outcome, and what the ones that sent all they hold had */
+const fetched = (outcomes: Record<string, string>, events: object[] = []) => ({
+  events,
+  answered: Object.keys(outcomes).filter((url) => outcomes[url] === "eose"),
+  outcomes,
+});
+
 it("makes a wallet only when a relay answered that there is none", async () => {
-  state.fetched = { events: [], answered: [] }; // silence or a timeout
+  state.fetched = fetched({ "wss://r": "timeout" }); // silence
   await bind();
   expect(state.createWallet).not.toHaveBeenCalled();
 
-  state.fetched = { events: [{ id: "w" }], answered: ["wss://r"] }; // there is one
+  state.fetched = fetched({ "wss://r": "eose" }, [{ id: "w" }]); // there is one
   await bind();
   expect(state.createWallet).not.toHaveBeenCalled();
 
-  state.fetched = { events: [], answered: ["wss://r"] }; // answered: none
+  state.fetched = fetched({ "wss://r": "eose" }); // answered: none
   await bind();
   expect(state.createWallet).toHaveBeenCalledTimes(1);
 });
 
 it("makes it once when asked twice at the same time", async () => {
-  state.fetched = { events: [], answered: ["wss://r"] };
+  state.fetched = fetched({ "wss://r": "eose" });
   state.effects = [];
   Binder();
   Binder();
@@ -98,24 +102,32 @@ it("makes it once when asked twice at the same time", async () => {
   expect(state.createWallet).toHaveBeenCalledTimes(1);
 });
 
-it("makes none while a relay that connected stays silent, on this load", async () => {
-  state.urls = ["wss://a", "wss://slow"];
-  state.status = { "wss://slow": "ok" }; // connected, then timed out
-  state.fetched = { events: [], answered: ["wss://a"] };
-  await bind();
-  expect(state.createWallet).not.toHaveBeenCalled();
-});
+it.each([
+  ["went silent after the request", "timeout"],
+  ["dropped after the request", "error"],
+])(
+  "makes none while a relay that got the request %s, on this load",
+  async (_, outcome) => {
+    state.fetched = fetched({ "wss://a": "eose", "wss://b": outcome });
+    await bind();
+    expect(state.createWallet).not.toHaveBeenCalled();
+  }
+);
 
-it("makes it when one relay answered none and another never connected", async () => {
-  state.urls = ["wss://a", "wss://dead"];
-  state.status = { "wss://dead": "bad" }; // refused
-  state.fetched = { events: [], answered: ["wss://a"] };
-  await bind();
-  expect(state.createWallet).toHaveBeenCalledTimes(1);
-});
+it.each([
+  ["refused (auth-required)", "closed"],
+  ["never opened", "unreachable"],
+])(
+  "makes it when one relay answered none and another %s",
+  async (_, outcome) => {
+    state.fetched = fetched({ "wss://a": "eose", "wss://b": outcome });
+    await bind();
+    expect(state.createWallet).toHaveBeenCalledTimes(1);
+  }
+);
 
 it("makes none when the person switched account while the relays were asked", async () => {
-  state.fetched = { events: [], answered: ["wss://r"] };
+  state.fetched = fetched({ "wss://r": "eose" });
   state.active = "bob";
   await bind();
   expect(state.createWallet).not.toHaveBeenCalled();

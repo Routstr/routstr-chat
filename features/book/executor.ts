@@ -51,6 +51,8 @@ export interface SendOptions {
   track?: boolean;
   includeFees?: boolean;
   handoff?: (token: string) => Promise<void>;
+  /** the provider the handoff gives the token to, kept on its record */
+  to?: string;
 }
 
 // a request that failed may still be on its way to the mint: it gets this long
@@ -300,7 +302,13 @@ export class WalletExecutor {
     });
     if (options.track || options.handoff) {
       const held = this.held(id, mintUrl, wallet);
-      journal.put({ ...held, kind: "token", token, amount });
+      journal.put({
+        ...held,
+        kind: "token",
+        token,
+        amount,
+        ...(options.to ? { baseUrl: options.to } : {}),
+      });
     } else {
       journal.remove(id);
     }
@@ -415,9 +423,13 @@ export class WalletExecutor {
   ): Promise<{ proofs: Proof[]; unit: string; pending: boolean }> {
     const unit = record.unit ?? "sat";
     const { journal, owner } = this.deps;
-    // a retry, here or in another tab, took it in while this one waited
+    // a retry, here or in another tab, settled it while this one waited:
+    // taken in, or found spent. Which is not known here, so nothing is
+    // claimed; asked again, the mint's answer says
     if (!journal.list(owner).some((r) => r.id === record.id)) {
-      return { proofs: [], unit, pending: false };
+      throw new Error(
+        "This token was settled elsewhere meanwhile; try again to see how"
+      );
     }
     try {
       const proofs = await this.receiveLocked(record.token, {});

@@ -124,7 +124,7 @@ it("throws and keeps nothing when the mint refuses the token", async () => {
   expect(kinds()).toEqual([]);
 });
 
-it("reports a token another tab took in while this one waited for the lock", async () => {
+it("claims nothing for a token another tab settled while this one waited for the lock", async () => {
   const token = await kit.mintToken(24);
   let release!: () => void;
   const busy = new Promise<void>((r) => (release = r));
@@ -141,7 +141,8 @@ it("reports a token another tab took in while this one waited for the lock", asy
   release();
   await other;
 
-  expect(await took).toEqual({ sats: 24, pending: false });
+  // taken in or found spent there: this one cannot tell, so it says neither
+  await expect(took).rejects.toThrow("settled elsewhere");
   expect(written).toEqual([]);
 });
 

@@ -59,6 +59,27 @@ const graph = {
   },
 };
 
+// The whole wallet, its old hooks included, never reaches the root or the runtime: the runtime
+// hands it what it needs (features/wallet/hooks/purseBridge.ts). Last for these files, so it
+// carries the features zone too.
+const wallet = {
+  files: ["features/wallet/**/*.ts", "features/wallet/**/*.tsx"],
+  rules: {
+    "import/no-restricted-paths": [
+      "error",
+      {
+        zones: [
+          {
+            target: "./features/wallet/**",
+            from: ["./platform/**", "./runtime/**", "./components/**", "./app/**"],
+            message: "The wallet never imports the root, the runtime or the platform: the runtime registers what it needs.",
+          },
+        ],
+      },
+    ],
+  },
+};
+
 // Restricted packages. ESLint keeps only the last matching config's options for a rule, so each
 // group below lists every restriction that applies to it, from the widest group to the narrowest.
 const RELAY = { name: "applesauce-relay", message: "Relays go through history's relay layer (features/relays, platform/nostr)." };
@@ -114,6 +135,7 @@ const config = [
     },
   },
   graph,
+  wallet,
   ...packages,
   basePaths,
 ];

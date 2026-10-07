@@ -4,12 +4,12 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { MintQuoteState } from "@cashu/cashu-ts";
 import { useInvoiceSync } from "@/hooks/useInvoiceSync";
 import {
-  useCashuStore,
   formatBalance,
   useTransactionHistoryStore,
 } from "@/features/wallet";
 import { createPendingTransaction } from "@/utils/transactionUtils";
 import { getPendingCashuTokenAmount } from "@/utils/cashuUtils";
+import { useWalletStore } from "../state/walletStore";
 import { usePurse, usePurseOf, useWallet } from "../view";
 import {
   requestBitcoinConnectProvider,
@@ -19,7 +19,7 @@ import {
 export function useWalletReceive(navigateToTab: (tab: "overview" | "invoice") => void) {
   const { total: balance } = useWallet();
   const { addInvoice, updateInvoice, owner } = useInvoiceSync();
-  const cashuStore = useCashuStore();
+  const cashuStore = useWalletStore();
   const purseOf = usePurseOf();
   const current = usePurse();
   const transactionHistoryStore = useTransactionHistoryStore();

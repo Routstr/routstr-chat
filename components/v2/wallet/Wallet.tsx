@@ -4,8 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useObservableState } from "applesauce-react/hooks";
 import { useAccountChat, useHeldCredit } from "@/features/chat/view";
 import { useAccountManager } from "@/features/session/view";
-import { useCashuStore } from "@/features/wallet";
-import { useActivity, useWallet } from "@/features/wallet/view";
+import { useActivity, useMints, useWallet } from "@/features/wallet/view";
 import { useUnclaimedTokensStore } from "@/features/wallet/state/unclaimedTokensStore";
 import { useInvoiceSync } from "@/hooks/useInvoiceSync";
 import { useInvoiceChecker } from "@/hooks/useInvoiceChecker";
@@ -42,7 +41,7 @@ export const satsOf = (n: number, unit?: string) => (unit === "msat" ? Math.floo
 
 /** The active mint and what it holds (a token or a payment spends only from it). */
 export function useActiveMint() {
-  const cashu = useCashuStore();
+  const cashu = useMints();
   const { balances } = useWallet();
   const url = cashu.activeMintUrl ?? null;
   const all = cashu.mints.map((m) => ({ url: m.url, name: mintLabel(m), bal: balances[m.url] ?? 0 }));

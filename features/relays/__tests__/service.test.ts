@@ -79,17 +79,32 @@ describe("AccountRelays", () => {
   it("takes only the account's own signed NIP-65 list, whatever else a relay serves", async () => {
     const net = network();
     const own = sign(10002, 1, [["r", "wss://mine.example.com"]]);
-    const stranger = finalizeEvent({ kind: 10002, created_at: 5, tags: [["r", "wss://theirs.example.com"]], content: "" }, generateSecretKey());
+    const stranger = finalizeEvent(
+      {
+        kind: 10002,
+        created_at: 5,
+        tags: [["r", "wss://theirs.example.com"]],
+        content: "",
+      },
+      generateSecretKey()
+    );
     // forged: the owner's key named on someone else's signature
-    const forged = JSON.parse(JSON.stringify({ ...stranger, pubkey: OWNER, created_at: 6 }));
+    const forged = JSON.parse(
+      JSON.stringify({ ...stranger, pubkey: OWNER, created_at: 6 })
+    );
     const note = sign(1, 7, [["r", "wss://note.example.com"]]);
     net.relay(R1).ignoresFilters = true;
-    [own, stranger, forged, note].forEach((e) => net.relay(R1).events.set(e.id, e));
+    [own, stranger, forged, note].forEach((e) =>
+      net.relay(R1).events.set(e.id, e)
+    );
     const account = new Relays(net.port, memoryStorage()).of(OWNER);
 
     await account.ready();
 
-    expect(account.urls()).toEqual([...DEFAULT_RELAYS, "wss://mine.example.com"]);
+    expect(account.urls()).toEqual([
+      ...DEFAULT_RELAYS,
+      "wss://mine.example.com",
+    ]);
   });
 
   it("uses no relay at all when the person emptied this device's list", async () => {
@@ -184,9 +199,13 @@ describe("AccountRelays", () => {
     net.relay(R1).events.set(theirs.id, theirs);
     let release!: () => void;
     net.relay(R1).publishGate = new Promise((resolve) => (release = resolve));
-    const account = new Relays(net.port, memoryStorage(), `?relays=${R1}`).of(OWNER);
+    const account = new Relays(net.port, memoryStorage(), `?relays=${R1}`).of(
+      OWNER
+    );
 
-    const first = await account.fetch({ kinds: [1080], authors: [OWNER] }, [ours]);
+    const first = await account.fetch({ kinds: [1080], authors: [OWNER] }, [
+      ours,
+    ]);
     expect(first.events.map((e) => e.id)).toEqual([theirs.id]);
     // a second sync while the first upload is still on its way
     await account.fetch({ kinds: [1080], authors: [OWNER] }, [ours]);
@@ -203,7 +222,11 @@ describe("AccountRelays", () => {
     const broken = { ...real, content: "tampered" };
     net.relay(R1).events.set(real.id, real);
     net.relay(R2).events.set(broken.id, broken);
-    const account = new Relays(net.port, memoryStorage(), `?relays=${R1},${R2}`).of(OWNER);
+    const account = new Relays(
+      net.port,
+      memoryStorage(),
+      `?relays=${R1},${R2}`
+    ).of(OWNER);
 
     const { events } = await account.fetch({ kinds: [1081], authors: [OWNER] });
 
@@ -215,7 +238,9 @@ describe("AccountRelays", () => {
     const [theirs, both, ours] = [sign(1080, 1), sign(1080, 2), sign(1080, 3)];
     net.relay(R1).nip77 = true;
     [theirs, both].forEach((e) => net.relay(R1).events.set(e.id, e));
-    const account = new Relays(net.port, memoryStorage(), `?relays=${R1}`).of(OWNER);
+    const account = new Relays(net.port, memoryStorage(), `?relays=${R1}`).of(
+      OWNER
+    );
 
     const { events, answered } = await account.fetch(
       { kinds: [1080], authors: [OWNER] },
@@ -225,7 +250,9 @@ describe("AccountRelays", () => {
     expect(events.map((e) => e.id)).toEqual([theirs.id]);
     expect(answered).toEqual([R1]);
     expect(net.relay(R1).received.map((e) => e.id)).toEqual([ours.id]);
-    expect(net.relay(R1).asked).toEqual([{ kinds: [1080], authors: [OWNER], ids: [theirs.id] }]);
+    expect(net.relay(R1).asked).toEqual([
+      { kinds: [1080], authors: [OWNER], ids: [theirs.id] },
+    ]);
   });
 
   it("reads page by page when a NIP-77 sync fails, stalls, or this device holds nothing yet", async () => {
@@ -234,18 +261,34 @@ describe("AccountRelays", () => {
       for (const setup of ["fails", "hangs", "empty"] as const) {
         const net = network();
         const [theirs, ours] = [sign(1080, 1), sign(1080, 2)];
-        Object.assign(net.relay(R1), { nip77: true, syncFails: setup === "fails", syncHangs: setup === "hangs" });
+        Object.assign(net.relay(R1), {
+          nip77: true,
+          syncFails: setup === "fails",
+          syncHangs: setup === "hangs",
+        });
         net.relay(R1).events.set(theirs.id, theirs);
-        const account = new Relays(net.port, memoryStorage(), `?relays=${R1}`).of(OWNER);
+        const account = new Relays(
+          net.port,
+          memoryStorage(),
+          `?relays=${R1}`
+        ).of(OWNER);
 
-        const fetching = account.fetch({ kinds: [1080], authors: [OWNER] }, setup === "empty" ? [] : [ours]);
+        const fetching = account.fetch(
+          { kinds: [1080], authors: [OWNER] },
+          setup === "empty" ? [] : [ours]
+        );
         await vi.advanceTimersByTimeAsync(20_000);
         const { events, answered } = await fetching;
 
         expect(events.map((e) => e.id)).toEqual([theirs.id]);
         expect(answered).toEqual([R1]);
-        expect(net.relay(R1).asked[0]).toEqual({ kinds: [1080], authors: [OWNER] });
-        expect(net.relay(R1).received.map((e) => e.id)).toEqual(setup === "empty" ? [] : [ours.id]);
+        expect(net.relay(R1).asked[0]).toEqual({
+          kinds: [1080],
+          authors: [OWNER],
+        });
+        expect(net.relay(R1).received.map((e) => e.id)).toEqual(
+          setup === "empty" ? [] : [ours.id]
+        );
       }
     } finally {
       vi.useRealTimers();
@@ -305,5 +348,44 @@ describe("AccountRelays", () => {
     sub.unsubscribe();
 
     expect(seen).not.toContain(true);
+  });
+});
+
+describe("Relays: how each relay's part of a fetch ended", () => {
+  it("tells all sent, refused, silent while open, dropped and never opened apart", async () => {
+    const net = network();
+    const urls = [
+      "wss://a",
+      "wss://closed",
+      "wss://silent",
+      "wss://drops",
+      "wss://never",
+    ];
+    net.relay("wss://a");
+    net.relay("wss://closed").refuses = true;
+    net.relay("wss://silent").silent = true;
+    net.relay("wss://drops").down = true;
+    net.relay("wss://never").unreachable = true;
+    const relays = new Relays(
+      net.port,
+      memoryStorage(),
+      `?relays=${urls.join(",")}`
+    );
+    vi.useFakeTimers();
+    try {
+      const fetching = relays.of(OWNER).fetch({ kinds: [1], authors: [OWNER] });
+      await vi.advanceTimersByTimeAsync(11_000);
+      const { answered, outcomes } = await fetching;
+      expect(answered).toEqual(["wss://a"]);
+      expect(outcomes).toEqual({
+        "wss://a": "eose",
+        "wss://closed": "closed",
+        "wss://silent": "timeout",
+        "wss://drops": "error",
+        "wss://never": "unreachable",
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

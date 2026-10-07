@@ -2,14 +2,14 @@
 
 import React, { useState } from "react";
 import { useLogs } from "@/hooks/useLogs";
-import { useCashuStore } from "@/features/wallet";
+import { useCoinCount } from "@/features/wallet/view";
 import { useActiveMint } from "../wallet/Wallet";
 import { satUnit } from "../format";
 import { Btn, Grp, Seg, hostOf, n0, plural, useCopied } from "./parts";
 
 export default function Console() {
   const { logs, logCount, clearLogs } = useLogs();
-  const cashu = useCashuStore();
+  const coins = useCoinCount();
   const mints = useActiveMint();
   const [view, setView] = useState<"logs" | "wallet">("logs");
   const { done, copy } = useCopied();
@@ -61,7 +61,7 @@ export default function Console() {
           </div>
         </Grp>
       ) : (
-        <Grp id="g-ws" k="Mints" kv={plural(cashu.proofs.length, "proof")}>
+        <Grp id="g-ws" k="Mints" kv={plural(coins, "proof")}>
           <div className="st-items st-ledger">
             {mints.all.map((m) => (
               <div className="st-it noic" key={m.url}>

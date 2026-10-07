@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
-import { MeltQuoteState } from "@cashu/cashu-ts";
+import { useState, useCallback, useContext, useRef } from "react";
+import { MeltQuoteState, type MeltQuoteResponse } from "@cashu/cashu-ts";
 import { useInvoiceSync } from "@/hooks/useInvoiceSync";
+import { currentOwner } from "@/features/session/owned";
 import {
-  useCashuStore,
   useUnclaimedTokensStore,
   formatBalance,
   calculateBalanceByMint,
@@ -13,7 +13,9 @@ import {
 import { getCurrentMintBalance as utilGetCurrentMintBalance } from "@/utils/walletUtils";
 import { createMeltQuote, quoteInSats } from "@/lib/cashuLightning";
 import { toSats } from "../purse";
-import { usePurse } from "../view";
+import { reclaim } from "../reclaim";
+import { useWalletStore } from "../state/walletStore";
+import { AdoptContext, usePurse } from "../view";
 import { useActiveMintUnit } from "./useActiveMintUnit";
 import { dismissToken } from "./useBook";
 import { toast } from "sonner";
@@ -21,9 +23,10 @@ import { toast } from "sonner";
 export function useWalletSend() {
   const currentMintUnit = useActiveMintUnit();
   const { addInvoice, updateInvoice } = useInvoiceSync();
-  const cashuStore = useCashuStore();
+  const cashuStore = useWalletStore();
   const unclaimedTokensStore = useUnclaimedTokensStore();
   const purse = usePurse();
+  const adopt = useContext(AdoptContext);
 
   // Send tab state
   const [sendTab, setSendTab] = useState<"token" | "lightning">("token");
@@ -44,6 +47,11 @@ export function useWalletSend() {
   const [isNip60LoadingInvoice, setIsNip60LoadingInvoice] = useState(false);
   const nip60ProcessingInvoiceRef = useRef<string | null>(null);
   const reclaimsInFlightRef = useRef<Set<string>>(new Set());
+  // the quote made for the pasted invoice, and the mint that made it
+  const meltQuoteRef = useRef<{
+    mintUrl: string;
+    quote: MeltQuoteResponse;
+  } | null>(null);
 
   // Unclaimed send tokens live in the wallet book, not this resettable UI state.
   const reset = useCallback(() => {
@@ -122,35 +130,43 @@ export function useWalletSend() {
         setError("");
         setWarningMessage("");
         const from = purse();
-        if (!from) throw new Error("User not logged in");
-        // the wallet owns it once this resolves: taken in, or waiting for its
-        // mint in the book, so the listed token can go
-        const { sats, pending } = await from.take(entry.token);
-        dismissToken(entry.id);
-        setSuccessMessage(
-          pending
-            ? `${formatBalance(sats, "sat")}s wait for their mint, and land once it answers`
-            : `Reclaimed ${formatBalance(sats, "sat")}s back to your wallet`
-        );
-        setTimeout(() => setSuccessMessage(""), 5000);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        if (/already spent|already claimed|already redeemed/i.test(msg)) {
+        const owner = currentOwner();
+        if (!from || !owner) throw new Error("User not logged in");
+        // settled once this resolves, so the listed token can go
+        const done = await reclaim(entry, {
+          take: from.take,
+          adopt: adopt
+            ? (token, baseUrl) => adopt(owner, token, baseUrl)
+            : undefined,
+        });
+        if (!(done.kind === "waiting" && done.keep)) dismissToken(entry.id);
+        if (done.kind === "spent") {
           // Redeemed by the recipient, or by an earlier reclaim whose
           // storage failed (the wallet book stores those funds later).
-          dismissToken(entry.id);
           setSuccessMessage("");
           setWarningMessage("Token was already redeemed.");
           setTimeout(() => setWarningMessage(""), 5000);
         } else {
-          setError(`Failed to reclaim token: ${msg}`);
+          setSuccessMessage(
+            done.kind === "waiting"
+              ? done.keep
+                ? `${formatBalance(done.sats, "sat")}s wait for their mint; the token stays listed until it answers`
+                : `${formatBalance(done.sats, "sat")}s wait for their mint, and land once it answers`
+              : done.kind === "key"
+                ? `It became an API key holding ${formatBalance(done.sats, "sat")}s, kept with your keys`
+                : `Reclaimed ${formatBalance(done.sats, "sat")}s back to your wallet`
+          );
+          setTimeout(() => setSuccessMessage(""), 5000);
         }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        setError(`Failed to reclaim token: ${msg}`);
       } finally {
         reclaimsInFlightRef.current.delete(entry.id);
         setReclaimingTokenId(null);
       }
     },
-    [purse]
+    [purse, adopt]
   );
 
   const handleNip60InvoiceInput = useCallback(
@@ -176,6 +192,7 @@ export function useWalletSend() {
         setIsNip60LoadingInvoice(true);
         const meltQuote = await createMeltQuote(mintUrl, value);
         if (!current()) return;
+        meltQuoteRef.current = { mintUrl, quote: meltQuote };
         setNip60MeltQuoteId(meltQuote.quote);
         // what Send shows and checks is in sats; the quote paid stays in the mint's unit
         const { amount, feeReserve } = quoteInSats(meltQuote);
@@ -237,9 +254,13 @@ export function useWalletSend() {
       setIsNip60Processing(true);
       setError("");
       setWarningMessage("");
-      const mintUrl = cashuStore.activeMintUrl;
-      // read before the balance, which reloads the store from what is saved
-      const quote = cashuStore.getMeltQuote(mintUrl, nip60MeltQuoteId);
+      // the quote made for this invoice, kept with it (never one made
+      // before), paid at the mint that made it, whichever mint is active now
+      const made = meltQuoteRef.current;
+      if (made?.quote.quote !== nip60MeltQuoteId) {
+        throw new Error("The invoice's quote is not here any more; paste it again");
+      }
+      const { mintUrl, quote } = made;
       const from = purse();
       if (!from) throw new Error("User not logged in");
       const have = (await from.balances())[mintUrl] ?? 0;

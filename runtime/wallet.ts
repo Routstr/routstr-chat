@@ -1,10 +1,10 @@
 import type { Account } from "@/features/session/service";
 import {
   legacyActivity,
-  legacyCoins,
   listMint,
   localActivity,
   registerCoins,
+  setWalletCopy,
   setWalletLoading,
 } from "@/features/wallet/hooks/purseBridge";
 import { MintKeysets } from "@/features/wallet/mints";
@@ -15,7 +15,7 @@ import type {
 } from "@/features/wallet/ports";
 import { createPurse, type Purse } from "@/features/wallet/purse";
 import { Replica } from "@/features/wallet/replica";
-import { useCashuStore } from "@/features/wallet/state/cashuStore";
+import { useWalletStore } from "@/features/wallet/state/walletStore";
 import { oldCoins, sweep } from "@/features/wallet/sweep";
 import { IndexedCoins } from "@/platform/wallet/coins";
 import { isMains, journal, locks } from "./book";
@@ -36,11 +36,12 @@ const indexed = () =>
 const coins: CoinStore = {
   async change(owner, mintUrl, add, remove) {
     // the old store's list still names the wallet's mints (Settings, the active one)
-    await listMint(useCashuStore.of(owner).getState(), mintUrl, add);
+    await listMint(useWalletStore.of(owner).getState(), mintUrl, add);
     await indexed().change(owner, mintUrl, add, remove);
   },
   coins: (owner, mintUrl) => indexed().coins(owner, mintUrl),
-  activeMint: legacyCoins.activeMint,
+  activeMint: (owner) =>
+    useWalletStore.of(owner).getState().activeMintUrl ?? "",
   subscribe: (_, listener) => indexed().subscribe(listener),
 };
 if (browser) registerCoins(coins);
@@ -53,7 +54,7 @@ function cached(owner: string, activity: ActivityLog): Purse {
   let purse = purses.get(owner);
   if (!purse) {
     purse = createPurse(owner, {
-      coins: browser ? coins : legacyCoins,
+      coins,
       activity,
       journal,
       locks,
@@ -90,7 +91,7 @@ const PULL_AFTER_MS = 2000;
 const RETRY_MS = 60_000;
 const RETRY_MAX_MS = 30 * 60_000;
 
-let bound: { owner: string; stop(): void } | null = null;
+let bound: { account: Account; stop(): void } | null = null;
 
 /**
  * Called by the composition root when the active account changes. Main's old
@@ -102,7 +103,9 @@ let bound: { owner: string; stop(): void } | null = null;
  * this one's signer.
  */
 export function bindWallet(account: Account | undefined): void {
-  if (bound?.owner === account?.pubkey) return;
+  // the account, not its key: one key can be in twice (an extension and an
+  // nsec), and each copy signs with its own signer
+  if (bound?.account === account) return;
   bound?.stop();
   bound = null;
   if (!browser || !account || !locks) return;
@@ -157,11 +160,35 @@ export function bindWallet(account: Account | undefined): void {
   const pull = () =>
     replica
       .pull()
+      .then(({ answered, outcomes }) => {
+        if (!stopped) {
+          // no relay at all (the person emptied the list) is no outage
+          const asked = Object.keys(outcomes).length > 0;
+          setWalletCopy(
+            owner,
+            answered.length || !asked ? "read" : "unanswered",
+            outcomes
+          );
+        }
+      })
       .catch((error) => console.error("Could not read the coins:", error));
 
   setWalletLoading(owner, true);
+  setWalletCopy(owner, "reading");
+  // every mint that holds a coin is in the wallet's list, the coins from
+  // relays and old lists too, so the screens name it and count it
+  const listMints = async () => {
+    const mints = useWalletStore.of(owner).getState();
+    const holding = new Set((await store.coins(owner)).map((c) => c.mintUrl));
+    for (const url of holding) {
+      if (!mints.mints.some((m) => m.url === url)) await listMint(mints, url);
+    }
+  };
+
+  // a switch while the old lists are swept: nothing more runs for this one
   void sweepOld()
-    .then(pull)
+    .then(() => (stopped ? undefined : pull()))
+    .then(() => (stopped ? undefined : listMints()))
     .finally(() => {
       if (stopped) return;
       setWalletLoading(owner, false);
@@ -172,7 +199,10 @@ export function bindWallet(account: Account | undefined): void {
   let pulling: ReturnType<typeof setTimeout> | undefined;
   const offStore = store.subscribe(() => {
     clearTimeout(pushing);
-    pushing = setTimeout(push, PUSH_AFTER_MS);
+    pushing = setTimeout(() => {
+      void listMints();
+      void push();
+    }, PUSH_AFTER_MS);
   });
   const live = relays
     .of(owner)
@@ -191,7 +221,7 @@ export function bindWallet(account: Account | undefined): void {
   window.addEventListener("online", online);
   window.addEventListener("storage", oldChanged);
   bound = {
-    owner,
+    account,
     stop() {
       stopped = true;
       offStore();

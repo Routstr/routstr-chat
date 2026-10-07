@@ -2,9 +2,9 @@
 
 import React, { useState } from "react";
 import { useBitcoinConnectStatus } from "@/hooks/useBitcoinConnect";
-import { useCashuStore } from "@/features/wallet";
 import { useCashuWallet } from "@/features/wallet/hooks/useCashuWallet";
 import { useCashuToken } from "@/features/wallet/hooks/useCashuToken";
+import { useMints } from "@/features/wallet/view";
 import { loadAutoRefillNWCSettings, saveAutoRefillNWCSettings, type AutoRefillNWCSettings } from "@/utils/storageUtils";
 import { Icon } from "../icons";
 import { useUi } from "../ui";
@@ -45,7 +45,7 @@ export default function Payments() {
   });
 
   /* ── mints ─────────────────────────────────────────────────────────────── */
-  const cashu = useCashuStore();
+  const cashu = useMints();
   const { wallet } = useCashuWallet();
   const { addMintIfNotExists, removeMint, cleanSpentProofs } = useCashuToken();
   const urls = wallet?.mints?.length ? wallet.mints : cashu.mints.map((m) => m.url);

@@ -1,4 +1,3 @@
-import { useCashuStore } from "@/features/wallet";
 import {
   Mint,
   Wallet,
@@ -45,10 +44,7 @@ export async function createMeltQuote(
     await wallet.loadMint();
 
     // Create a melt quote
-    const meltQuote = await wallet.createMeltQuote(paymentRequest);
-    useCashuStore.getState().addMeltQuote(mintUrl, meltQuote);
-
-    return meltQuote;
+    return await wallet.createMeltQuote(paymentRequest);
   } catch (error) {
     console.error("Error creating melt quote:", error);
     throw error;

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useCashuStore } from "@/features/wallet";
-import { peek, useDepositMint, usePurse, useWallet } from "@/features/wallet/view";
+import { peek, useDepositMint, useMints, usePurse, useWallet } from "@/features/wallet/view";
 import { useWalletReceive } from "@/features/wallet/hooks/useWalletReceive";
 import { useEnsureAccount } from "../useEnsureAccount";
 
@@ -22,7 +21,7 @@ export const KEPT = "Kept. Its mint did not answer yet, so these sats come in on
    account's purse. This file only sequences and describes. */
 export function useFunding() {
   const { total: balance, balances } = useWallet();
-  const cashuStore = useCashuStore();
+  const cashuStore = useMints();
   const purse = usePurse();
   const ensureAccount = useEnsureAccount();
   const [status, setStatus] = useState<FundStatus>("idle");

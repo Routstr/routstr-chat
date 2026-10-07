@@ -12,10 +12,17 @@ import { useSession } from "@/features/session/view";
 import { DEFAULT_MINT_URL } from "@/lib/utils";
 import { saveTransactionHistory } from "@/utils/storageUtils";
 import { depositMint } from "./depositMint";
-import { listMint, walletLoading } from "./hooks/purseBridge";
+import {
+  listMint,
+  walletCoins,
+  walletCopy,
+  walletLoading,
+  type CopyStatus,
+} from "./hooks/purseBridge";
+import type { RelayOutcome } from "@/features/relays/service";
 import type { UsageLog } from "./ports";
 import { toSats, type Purse } from "./purse";
-import { useCashuStore } from "./state/cashuStore";
+import { useWalletStore } from "./state/walletStore";
 import {
   useTransactionHistoryStore,
   type PendingTransaction,
@@ -23,6 +30,11 @@ import {
 import { useUnclaimedTokensStore } from "./state/unclaimedTokensStore";
 
 export { peek } from "./purse";
+
+/** The signed-in account's mints (every one that holds a coin, and the ones
+ *  it added), the one it pays from, and whether the person picked that one:
+ *  the wallet's own store, which main's old list only seeded. */
+export const useMints = useWalletStore;
 
 /** Each account's purse for the person's own moves, filled by the composition
  *  root (runtime/wallet's walletPurseFor). Without it screens have no purse and
@@ -103,6 +115,47 @@ export function useWallet(): {
   };
 }
 
+/** How the last read of the signed-in account's wallet copy on relays went:
+ *  "reading" until relays answered, "read" once one sent all it holds, and
+ *  "unanswered" when none did (offline, or each timed out, failed, refused
+ *  or never opened), with each relay's outcome. App's relay notice shows on
+ *  "unanswered"; it is read again on every reload, switch and live event. */
+export function useWalletCopy(): {
+  status: CopyStatus;
+  outcomes: Record<string, RelayOutcome>;
+} {
+  const { pubkey } = useSession();
+  const now = useSyncExternalStore(
+    walletCopy.subscribe,
+    () => walletCopy.of(pubkey),
+    () => null
+  );
+  return now ?? { status: "reading", outcomes: NONE };
+}
+const NONE: Record<string, RelayOutcome> = {};
+
+/** How many coins the signed-in account holds (Settings → Console). */
+export function useCoinCount(): number {
+  const { pubkey } = useSession();
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    if (!pubkey) return;
+    const coins = walletCoins();
+    let live = true;
+    const load = () =>
+      void coins.coins(pubkey).then((all) => {
+        if (live) setCount(all.length);
+      });
+    load();
+    const stop = coins.subscribe(pubkey, load);
+    return () => {
+      live = false;
+      stop();
+    };
+  }, [pubkey]);
+  return pubkey ? count : 0;
+}
+
 /** The signed-in account's activity, newest first: what its wallet sent and
  *  received, and Lightning invoices not paid yet. The wallet writes it; screens
  *  only read it, or clear the records. */
@@ -136,6 +189,14 @@ export function useActivity() {
   return { entries, pending, clear };
 }
 
+/** Asks the provider a token was handed to what it holds for it (keys'
+ *  adopt): the key's sats, 0 when the provider says it was spent elsewhere;
+ *  throws when it does not answer. Filled by the composition root for the
+ *  token's owner, so the wallet never imports keys. */
+export const AdoptContext = createContext<
+  ((owner: string, token: string, baseUrl: string) => Promise<number>) | null
+>(null);
+
 /** The SDK's usage log, the one replies are recorded in; filled by the
  *  composition root. Without it Usage shows nothing. */
 export const UsageLogContext = createContext<UsageLog | null>(null);
@@ -158,7 +219,7 @@ export function useDepositMint(): (
   return useCallback(
     (balances, sats) => {
       const { activeMintUrl, userSelectedMintUrl, mints } =
-        useCashuStore.getState();
+        useWalletStore.getState();
       const url = depositMint({
         active: activeMintUrl,
         picked: !!activeMintUrl && activeMintUrl === userSelectedMintUrl,
@@ -167,7 +228,7 @@ export function useDepositMint(): (
         accepted: accepted(sats),
         fallback: DEFAULT_MINT_URL,
       });
-      void listMint(useCashuStore.getState(), url);
+      void listMint(useWalletStore.getState(), url);
       return url;
     },
     [accepted]
