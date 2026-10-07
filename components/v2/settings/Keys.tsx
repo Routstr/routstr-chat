@@ -2,8 +2,8 @@
 
 import React, { useState } from "react";
 import {
-  knownProviders,
   useExportedKeys,
+  useKnownProviders,
   type ExportedKey,
 } from "@/features/keys/view";
 import { Icon } from "../icons";
@@ -43,7 +43,7 @@ export default function Keys() {
   const [failed, setFailed] = useState<{ key: string; why: string } | null>(null);
   const [sats, setSats] = useState("");
   const [label, setLabel] = useState("");
-  const providers = knownProviders();
+  const providers = useKnownProviders();
   const [provider, setProvider] = useState("");
   const chosen = provider || providers[0] || "";
 

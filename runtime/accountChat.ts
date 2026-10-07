@@ -5,6 +5,7 @@ import { exportedKeysFor } from "@/features/keys/exported";
 import { oldCredit } from "@/features/keys/legacy";
 import { keysFor } from "@/features/keys/service";
 import { createFileStore } from "@/platform/files";
+import { mainStoreDriver } from "@/platform/sdk";
 import type { AccountChatView } from "@/features/chat/view";
 import { createAccountChat, type AccountChat } from "./chat";
 import { node } from "./node";
@@ -26,6 +27,9 @@ let current: {
   chat: ActiveChat;
 } | null = null;
 const listeners = new Set<() => void>();
+// main's old store, opened once per tab and shared by every account
+let mainOld: ReturnType<typeof mainStoreDriver> | undefined;
+const mainStore = () => (mainOld ??= mainStoreDriver());
 
 /** Builds the chat of `owner` (or none), and puts the previous one away. */
 export function startChat(
@@ -73,7 +77,7 @@ function build(
             : "apikeys",
         node: node.paysFor(owner) ?? undefined,
       }),
-      oldCredit: oldCredit(() => node.paysFor(owner)?.url),
+      oldCredit: oldCredit(() => node.paysFor(owner)?.url, mainStore()),
       otherDevices,
       adopt: (token, baseUrl) => exportedKeysFor(owner).adopt(token, baseUrl),
     }),

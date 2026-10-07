@@ -6,7 +6,6 @@ import {
 } from "@routstr/sdk/storage";
 import { normalizeProviderUrl } from "@routstr/sdk";
 import type { StorageAdapter } from "@routstr/sdk/wallet";
-import { driver } from "@/sdk/sharedStore";
 import { webLock } from "./service";
 
 // main's old store keeps models and providers beside the credit; a sweep
@@ -34,7 +33,11 @@ export const lockLegacy = (signal?: AbortSignal) =>
  *  a fresh copy from disk that no one else writes, so a sweep sees what
  *  another tab swept, and a second load never puts back what a sweep in this
  *  tab removed. The node's key is left out: it holds the node's balance. */
-export const oldCredit = (nodeUrl: () => string | undefined) => ({
+export const oldCredit = (
+  nodeUrl: () => string | undefined,
+  /** main's old store on this device (platform/sdk.ts `mainStoreDriver`) */
+  driver: StorageDriver
+) => ({
   load: async (): Promise<StorageAdapter> => {
     const { store, hydrate } = createSdkStore({ driver: creditOnly(driver) });
     await hydrate;

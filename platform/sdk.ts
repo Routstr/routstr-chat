@@ -21,6 +21,10 @@ import type { StorageAdapter, WalletAdapter } from "@routstr/sdk/wallet";
 import type { Route } from "@/features/catalog/ports";
 import type { Sdk } from "@/features/payments/ports";
 
+/** main's old SDK store on this device ("routstr-sdk", the SDK's default
+ *  database): only its credit is read, to sweep it (features/keys/legacy). */
+export const mainStoreDriver = () => createIndexedDBDriver();
+
 /**
  * The Routstr SDK's routing state, built once per tab: where providers and
  * their models are cached, how they rank, and the usage log. Credentials are

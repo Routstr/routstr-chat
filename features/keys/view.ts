@@ -1,6 +1,6 @@
 import { createContext, useContext, useSyncExternalStore } from "react";
 import { useSession } from "@/features/session/view";
-import { discoveryAdapter } from "@/sdk/sharedStore";
+import { useCatalogService } from "@/features/catalog/view";
 import { exportedKeysFor, type ExportedKey, type Purse } from "./exported";
 
 export type { ExportedKey };
@@ -29,6 +29,6 @@ export function useExportedKeys() {
   return { service, keys, purse };
 }
 
-/** Providers a key can be made at, as the app last found them. */
-export const knownProviders = (): string[] =>
-  discoveryAdapter.getBaseUrlsList();
+/** Providers a key can be made at, as the catalogue last found them. */
+export const useKnownProviders = (): string[] =>
+  useCatalogService()?.knownProviders() ?? [];
