@@ -4,9 +4,21 @@ import type { Observable } from "rxjs";
 /** ok: open. bad: it tried and failed. wait: connecting. idle: nothing opened it. */
 export type RelayStatus = "ok" | "bad" | "wait" | "idle";
 
+/** The relay answered a request with CLOSED (auth-required, restricted). */
+export class RelayClosedError extends Error {
+  name = "RelayClosedError";
+}
+
+/** The relay never opened for a request (refused, failed). */
+export class RelayUnreachableError extends Error {
+  name = "RelayUnreachableError";
+}
+
 /** What the relay layer needs from a relay library (platform/nostr/pool.ts). */
 export interface RelayPort {
-  /** Stored events for a filter; completes at EOSE, errors when the relay fails. */
+  /** Stored events for a filter; completes at EOSE, errors when the relay
+   *  fails: RelayClosedError when it said CLOSED, RelayUnreachableError when
+   *  it never opened for this request. */
   request(url: string, filter: Filter): Observable<NostrEvent>;
   /** Events as relays receive them. */
   subscribe(urls: string[], filter: Filter): Observable<NostrEvent>;

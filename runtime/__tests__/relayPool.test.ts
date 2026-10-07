@@ -10,7 +10,7 @@ import { startRelay } from "@/tests/kit/services/relay";
 const servers: (WebSocketServer | Server)[] = [];
 afterEach(() => servers.splice(0).forEach((server) => server.close()));
 
-type Behaviour = "answers" | "silent" | "drops";
+type Behaviour = "answers" | "silent" | "drops" | "refuses";
 
 /** A relay that answers a REQ with EOSE, never says a word, or closes the socket. */
 function relay(behaviour: Behaviour): Promise<string> {
@@ -27,6 +27,8 @@ function relay(behaviour: Behaviour): Promise<string> {
         if (type !== "REQ") return;
         if (behaviour === "answers") socket.send(JSON.stringify(["EOSE", id]));
         if (behaviour === "drops") socket.close();
+        if (behaviour === "refuses")
+          socket.send(JSON.stringify(["CLOSED", id, "auth-required: sign in"]));
       })
     );
   });
@@ -45,25 +47,37 @@ function refused(): Promise<string> {
 
 describe("the app's relay pool", () => {
   it("counts only a relay's own EOSE as an answer: silent, dropped and refused relays fail", async () => {
-    const [answering, silent, drops, closed] = await Promise.all([
+    const [answering, silent, drops, closed, refuses] = await Promise.all([
       relay("answers"),
       relay("silent"),
       relay("drops"),
       refused(),
+      relay("refuses"),
     ]);
     const owner = getPublicKey(generateSecretKey());
     const port = poolPort(newRelayPool());
     const relays = new Relays(
       port,
       memoryStorage(),
-      `?relays=${[answering, silent, drops, closed].join(",")}`
+      `?relays=${[answering, silent, drops, closed, refuses].join(",")}`
     );
 
     const got = await relays
       .of(owner)
       .fetch({ kinds: [1081], authors: [owner] });
 
-    expect(got).toEqual({ events: [], answered: [answering] });
+    expect(got).toEqual({
+      events: [],
+      answered: [answering],
+      // silent while open, dropped after the REQ, and never opened, told apart
+      outcomes: {
+        [answering]: "eose",
+        [silent]: "timeout",
+        [drops]: "error",
+        [closed]: "unreachable",
+        [refuses]: "closed",
+      },
+    });
     // what Settings shows for each, read without opening anything
     expect(port.status(answering)).toBe("ok");
     expect(port.status(closed)).toBe("bad");

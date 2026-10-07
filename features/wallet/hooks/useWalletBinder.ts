@@ -17,10 +17,11 @@ const making = new Map<string, Promise<unknown>>();
 
 /**
  * The signed-in account's wallet, kept in order while the app runs. Its NIP-60
- * wallet is made once, and only when the relays answered that it has none:
- * every relay that connected sent its end of stored events, and at least one
- * did. A relay that connected and went silent may hold the wallet, so nothing
- * is made on this load; one that never connected is left out. Coins the mint
+ * wallet is made once, and only when the relays answered that it has none: at
+ * least one sent its end of stored events, and none that got the request went
+ * silent or failed after it (it may hold the wallet: nothing is made on this
+ * load). One that refused (CLOSED, auth-required) or never opened is left
+ * out, so it cannot keep a first wallet from being made. Coins the mint
  * already saw spent leave on load. An active mint is set when there is none,
  * and an empty one gives way to a mint with money, unless the person picked
  * it. Mount it once per account.
@@ -42,19 +43,23 @@ export function useWalletBinder() {
         const account = relays.of(owner);
         // the person's own relays (NIP-65) are asked too
         await account.ready();
-        const urls = account.urls();
-        const { events, answered } = await account.fetch({
+        const { events, answered, outcomes } = await account.fetch({
           kinds: [CASHU_EVENT_KINDS.WALLET],
           authors: [owner],
           limit: 1,
         });
-        const silent = urls.filter(
-          (url) => !answered.includes(url) && relays.port.status(url) === "ok"
+        const unsure = Object.entries(outcomes).filter(
+          ([, outcome]) => outcome === "timeout" || outcome === "error"
         );
+        Object.entries(outcomes)
+          .filter(([, outcome]) => outcome === "closed")
+          .forEach(([url]) =>
+            console.warn(`${url} refused to say if a wallet exists`)
+          );
         // the create signs as whoever is active: never for an account the
         // person switched to while the relays were asked
         if (currentOwner() !== owner) return;
-        if (answered.length > 0 && !silent.length && !events.length) {
+        if (answered.length > 0 && !unsure.length && !events.length) {
           await createWallet();
         }
       })

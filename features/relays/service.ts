@@ -7,12 +7,28 @@ import {
   timeout,
   toArray,
 } from "rxjs";
-import type { RelayPort } from "./ports";
+import {
+  RelayClosedError,
+  RelayUnreachableError,
+  type RelayPort,
+} from "./ports";
+
+/** How one relay's part of a fetch ended. eose: it sent all it holds.
+ *  closed: it refused (CLOSED). timeout: it opened, then went silent. error:
+ *  it opened, then failed or dropped. unreachable: it never opened. */
+export type RelayOutcome =
+  | "eose"
+  | "closed"
+  | "timeout"
+  | "error"
+  | "unreachable";
 
 export interface Fetched {
   events: NostrEvent[];
   /** The relays that answered; the others failed or stayed silent. */
   answered: string[];
+  /** Each relay's outcome. */
+  outcomes: Record<string, RelayOutcome>;
 }
 
 export interface Latest {
@@ -132,7 +148,9 @@ export class Relays {
     );
     const events = new Map<string, NostrEvent>();
     const answered: string[] = [];
+    const outcomes: Record<string, RelayOutcome> = {};
     for (const result of results) {
+      outcomes[result.url] = result.outcome;
       if (!result.events) continue;
       answered.push(result.url);
       result.events.forEach((event) => {
@@ -147,7 +165,7 @@ export class Relays {
     results.forEach(({ url, events: got, lacks }) => {
       if (got) void this.send(url, lacks);
     });
-    return { events: [...events.values()], answered };
+    return { events: [...events.values()], answered, outcomes };
   }
 
   // Once we hold some, a NIP-77 relay is asked only for the difference; any
@@ -156,11 +174,15 @@ export class Relays {
     url: string,
     filter: Filter,
     held: NostrEvent[]
-  ): Promise<{ events: Map<string, NostrEvent> | null; lacks: NostrEvent[] }> {
+  ): Promise<{
+    events: Map<string, NostrEvent> | null;
+    lacks: NostrEvent[];
+    outcome: RelayOutcome;
+  }> {
     const synced = held.length > 0 && (await this.reconcile(url, filter, held));
-    if (synced) return synced;
-    const events = await this.fetchOne(url, filter);
-    return { events, lacks: held.filter((e) => !events?.has(e.id)) };
+    if (synced) return { ...synced, outcome: "eose" };
+    const { events, outcome } = await this.fetchOne(url, filter);
+    return { events, lacks: held.filter((e) => !events?.has(e.id)), outcome };
   }
 
   private async reconcile(url: string, filter: Filter, held: NostrEvent[]) {
@@ -191,7 +213,10 @@ export class Relays {
   private async fetchOne(
     url: string,
     filter: Filter
-  ): Promise<Map<string, NostrEvent> | null> {
+  ): Promise<{
+    events: Map<string, NostrEvent> | null;
+    outcome: RelayOutcome;
+  }> {
     const seen = new Map<string, NostrEvent>();
     let until: number | undefined;
     try {
@@ -213,12 +238,22 @@ export class Relays {
         ) {
           until--;
         } else {
-          return seen;
+          return { events: seen, outcome: "eose" };
         }
       }
-    } catch {
-      return null;
+    } catch (error) {
+      return { events: null, outcome: this.outcomeOf(url, error) };
     }
+  }
+
+  private outcomeOf(url: string, error: unknown): RelayOutcome {
+    if (error instanceof RelayClosedError) return "closed";
+    if (error instanceof RelayUnreachableError) return "unreachable";
+    // silent past PAGE_MS: it timed out if it is open, else it never opened
+    if (error instanceof Error && error.name === "TimeoutError") {
+      return this.port.status(url) === "ok" ? "timeout" : "unreachable";
+    }
+    return "error";
   }
 
   // A sync during a long upload sends only what is not already on its way.

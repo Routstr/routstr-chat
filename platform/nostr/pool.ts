@@ -1,8 +1,26 @@
-import { RelayPool, completeOnEose, onlyEvents, type Relay } from "applesauce-relay";
+import {
+  RelayPool,
+  ReqCloseError,
+  completeOnEose,
+  onlyEvents,
+  type Relay,
+} from "applesauce-relay";
 import { normalizeURL } from "applesauce-core/helpers/url";
 import { nip77, type Filter, type NostrEvent } from "nostr-tools";
-import { endWith, map, timer, type Subscription } from "rxjs";
-import type { RelayPort } from "@/features/relays/ports";
+import {
+  catchError,
+  defer,
+  endWith,
+  finalize,
+  map,
+  timer,
+  type Subscription,
+} from "rxjs";
+import {
+  RelayClosedError,
+  RelayUnreachableError,
+  type RelayPort,
+} from "@/features/relays/ports";
 
 /** The app's relay pool. applesauce answers a silent relay with a made-up
  *  EOSE after `eoseTimeout`; ours is longer than the relay layer's own 10 s
@@ -13,19 +31,32 @@ export const newRelayPool = () => new RelayPool({ eoseTimeout: 20_000 });
 export const poolPort = (pool: RelayPool): RelayPort => ({
   // Only the relay's own EOSE means "that is all": applesauce also ends a
   // request quietly when the socket closes, which must count as a failure.
+  // Says how it failed: CLOSED is a refusal, and a relay that never opened
+  // for this request is unreachable, not one that dropped after the REQ.
   request: (url, filter) =>
-    pool
-      .relay(url)
-      .req(filter)
-      .pipe(
+    defer(() => {
+      const relay = pool.relay(url);
+      let opened = relay.connected;
+      const watch = relay.connected$.subscribe((on) => {
+        if (on) opened = true;
+      });
+      return relay.req(filter).pipe(
         endWith(null),
         map((message) => {
           if (message === null)
             throw new Error(`${url} closed before it answered`);
           return message;
         }),
-        completeOnEose()
-      ),
+        completeOnEose(),
+        catchError((error) => {
+          if (error instanceof ReqCloseError)
+            throw new RelayClosedError(`${url} refused: ${error.message}`);
+          if (!opened) throw new RelayUnreachableError(`${url} did not open`);
+          throw error;
+        }),
+        finalize(() => watch.unsubscribe())
+      );
+    }),
   // live feeds outlast a sleep or a dropped network: applesauce's default
   // gives up after three tries a second apart
   subscribe: (urls, filter) =>

@@ -1,6 +1,10 @@
 import { matchFilter, type Filter, type NostrEvent } from "nostr-tools";
 import { Observable, Subject, filter as where } from "rxjs";
-import type { RelayPort } from "../ports";
+import {
+  RelayClosedError,
+  RelayUnreachableError,
+  type RelayPort,
+} from "../ports";
 
 interface FakeRelay {
   events: Map<string, NostrEvent>;
@@ -13,6 +17,10 @@ interface FakeRelay {
   nip77?: boolean;
   syncFails?: boolean;
   syncHangs?: boolean;
+  /** answers a request with CLOSED, never opens for it, or stays silent */
+  refuses?: boolean;
+  unreachable?: boolean;
+  silent?: boolean;
   /** publishes wait for this before the relay takes them */
   publishGate?: Promise<void>;
   received: NostrEvent[];
@@ -39,6 +47,11 @@ export function network() {
         r.asked.push(filter);
         // answers after the caller subscribed, as a socket does
         queueMicrotask(() => {
+          if (r.refuses)
+            return observer.error(new RelayClosedError("auth-required"));
+          if (r.unreachable)
+            return observer.error(new RelayUnreachableError(url));
+          if (r.silent) return;
           if (r.down) return observer.error(new Error(`${url} is down`));
           const matches = [...r.events.values()]
             .filter((event) => r.ignoresFilters || matchFilter(filter, event))
