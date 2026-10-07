@@ -164,6 +164,7 @@ describe("adoptLegacy", () => {
       mintUrl: `${mintUrl}/`,
       amount: 21,
       createdAt: 3,
+      expiresAt: 4,
     });
     const list = JSON.stringify({
       invoices: [
@@ -186,6 +187,7 @@ describe("adoptLegacy", () => {
         createdAt: 3,
         quoteId: "paid",
         amount: 21,
+        expiresAt: 4,
       },
     ]);
     expect(storage.getItem("lightning_invoices:alice")).toBe(list);
@@ -215,7 +217,7 @@ describe("adoptLegacy", () => {
       {
         v: 1,
         kind: "token",
-        id: "legacy-local_cashu_tokens:alice-0",
+        id: "legacy-token-s9",
         owner: "alice",
         mintUrl,
         unit: "sat",
@@ -227,5 +229,23 @@ describe("adoptLegacy", () => {
     ]);
     // no longer counted as pending beside it
     expect(storage.getItem("local_cashu_tokens:alice")).toBeNull();
+
+    // main, still open, leaves another token under the same key
+    const later = getEncodedTokenV4({
+      mint: `${mintUrl}/`,
+      unit: "sat",
+      proofs: [proof("s10", 4)],
+    });
+    storage.setItem(
+      "local_cashu_tokens:alice",
+      JSON.stringify([{ baseUrl: "https://p/", token: later }])
+    );
+    adoptLegacy("alice", storage, journal, true);
+    expect(
+      journal
+        .list("alice")
+        .map((r) => (r.kind === "token" ? r.token : ""))
+        .sort()
+    ).toEqual([token, later].sort());
   });
 });
