@@ -9,7 +9,7 @@ import {
   nip44,
   type NostrEvent,
 } from "nostr-tools";
-import { expect, it, vi } from "vitest";
+import { afterAll, expect, it, vi } from "vitest";
 import { getKit } from "@/tests/kit";
 import "@/tests/kit/idb";
 import { memoryStorage } from "@/features/book/journal";
@@ -25,6 +25,8 @@ vi.stubGlobal("window", {
 });
 const { bindWallet, walletPurseFor } = await import("../wallet");
 const { walletCoins } = await import("@/features/wallet/hooks/purseBridge");
+// the money files share one process: the next must not find this pretend browser and start the app
+afterAll(() => vi.unstubAllGlobals());
 
 function account() {
   const secret = generateSecretKey();
