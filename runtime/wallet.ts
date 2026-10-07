@@ -1,16 +1,49 @@
+import type { Account } from "@/features/session/service";
 import {
   legacyActivity,
   legacyCoins,
+  listMint,
   localActivity,
+  registerCoins,
+  setWalletLoading,
 } from "@/features/wallet/hooks/purseBridge";
+import { MintKeysets } from "@/features/wallet/mints";
+import type {
+  ActivityLog,
+  CoinStore,
+  WalletSigner,
+} from "@/features/wallet/ports";
 import { createPurse, type Purse } from "@/features/wallet/purse";
-import type { ActivityLog } from "@/features/wallet/ports";
-import { journal, locks } from "./book";
+import { Replica } from "@/features/wallet/replica";
+import { useCashuStore } from "@/features/wallet/state/cashuStore";
+import { oldCoins, sweep } from "@/features/wallet/sweep";
+import { IndexedCoins } from "@/platform/wallet/coins";
+import { isMains, journal, locks } from "./book";
+import { relays } from "./nostr";
 
 /* The one door to each account's money. A chat's per-reply payments and
    refunds keep their activity on this device (a reply never asks the
    signer); what the person does with a button (the wallet screens, API keys)
-   is published. Both kinds move coins through the same book and lock. */
+   is published. Both kinds move coins through the same book and lock. Coins
+   live in IndexedDB, and each account's copy on relays (NIP-60) follows it. */
+
+const browser = typeof window !== "undefined";
+const keysets = new MintKeysets();
+let opened: IndexedCoins | null = null;
+const indexed = () =>
+  (opened ??= IndexedCoins.open((mintUrl, id) => keysets.unitOf(mintUrl, id)));
+
+const coins: CoinStore = {
+  async change(owner, mintUrl, add, remove) {
+    // the old store's list still names the wallet's mints (Settings, the active one)
+    await listMint(useCashuStore.of(owner).getState(), mintUrl, add);
+    await indexed().change(owner, mintUrl, add, remove);
+  },
+  coins: (owner, mintUrl) => indexed().coins(owner, mintUrl),
+  activeMint: legacyCoins.activeMint,
+  subscribe: (_, listener) => indexed().subscribe(listener),
+};
+if (browser) registerCoins(coins);
 
 const made = new Map<ActivityLog, Map<string, Purse>>();
 
@@ -20,7 +53,7 @@ function cached(owner: string, activity: ActivityLog): Purse {
   let purse = purses.get(owner);
   if (!purse) {
     purse = createPurse(owner, {
-      coins: legacyCoins,
+      coins: browser ? coins : legacyCoins,
       activity,
       journal,
       locks,
@@ -37,3 +70,122 @@ export const purseFor = (owner: string): Purse => cached(owner, localActivity);
 /** The purse of `owner` for the person's own moves: activity published. */
 export const walletPurseFor = (owner: string): Purse =>
   cached(owner, legacyActivity);
+
+const signerOf = (account: Account): WalletSigner => {
+  const nip44 = () => {
+    if (!account.nip44) throw new Error("Your signer cannot encrypt (NIP-44)");
+    return account.nip44;
+  };
+  return {
+    encrypt: (text) => nip44().encrypt(account.pubkey, text),
+    decrypt: (text) => nip44().decrypt(account.pubkey, text),
+    sign: (template) => account.signEvent(template),
+  };
+};
+
+const PUSH_AFTER_MS = 1000;
+const PULL_AFTER_MS = 2000;
+// a push that failed is tried again later and later (each try may ask the
+// signer): from a minute up to half an hour, and at once when back online
+const RETRY_MS = 60_000;
+const RETRY_MAX_MS = 30 * 60_000;
+
+let bound: { owner: string; stop(): void } | null = null;
+
+/**
+ * Called by the composition root when the active account changes. Main's old
+ * coin list for the account is swept in, its copy on relays is read, and from
+ * then on every change of its coins is published (tried again later while any
+ * is left in the outbox, and when the network is back), and what another
+ * device publishes is read as it arrives. Another account's outbox waits in
+ * IndexedDB until that account is active again: it is never published under
+ * this one's signer.
+ */
+export function bindWallet(account: Account | undefined): void {
+  if (bound?.owner === account?.pubkey) return;
+  bound?.stop();
+  bound = null;
+  if (!browser || !account || !locks) return;
+  const owner = account.pubkey;
+  const store = indexed();
+  const replica = new Replica(owner, {
+    store,
+    signer: signerOf(account),
+    relays: relays.of(owner),
+    locks,
+  });
+  const storage = window.localStorage;
+  const old = [`cashu:${owner}`, ...(isMains(owner) ? ["cashu"] : [])];
+  const sweepOld = () =>
+    Promise.all(
+      old.map((key) =>
+        sweep(owner, oldCoins(storage.getItem(key)), { into: store, locks })
+      )
+    );
+  let retrying: ReturnType<typeof setTimeout> | undefined;
+  let wait = RETRY_MS;
+  let stopped = false;
+  const push = async () => {
+    clearTimeout(retrying);
+    const done = await replica.push().catch((error) => {
+      console.error("Could not publish the coins:", error);
+      return false;
+    });
+    if (stopped) return;
+    if (done) {
+      wait = RETRY_MS;
+    } else {
+      retrying = setTimeout(push, wait);
+      wait = Math.min(wait * 2, RETRY_MAX_MS);
+    }
+  };
+  const pull = () =>
+    replica
+      .pull()
+      .catch((error) => console.error("Could not read the coins:", error));
+
+  setWalletLoading(owner, true);
+  void sweepOld()
+    .then(pull)
+    .finally(() => {
+      if (stopped) return;
+      setWalletLoading(owner, false);
+      void push();
+    });
+
+  let pushing: ReturnType<typeof setTimeout> | undefined;
+  let pulling: ReturnType<typeof setTimeout> | undefined;
+  const offStore = store.subscribe(() => {
+    clearTimeout(pushing);
+    pushing = setTimeout(push, PUSH_AFTER_MS);
+  });
+  const live = relays
+    .of(owner)
+    .live({ kinds: [7375, 5], authors: [owner] })
+    .subscribe(() => {
+      clearTimeout(pulling);
+      pulling = setTimeout(pull, PULL_AFTER_MS);
+    });
+  const online = () => {
+    wait = RETRY_MS;
+    void push();
+  };
+  const oldChanged = (event: StorageEvent) => {
+    if (event.key && old.includes(event.key)) void sweepOld();
+  };
+  window.addEventListener("online", online);
+  window.addEventListener("storage", oldChanged);
+  bound = {
+    owner,
+    stop() {
+      stopped = true;
+      offStore();
+      live.unsubscribe();
+      clearTimeout(pushing);
+      clearTimeout(pulling);
+      clearTimeout(retrying);
+      window.removeEventListener("online", online);
+      window.removeEventListener("storage", oldChanged);
+    },
+  };
+}

@@ -4,6 +4,7 @@ import { bindOwner } from "./owner";
 import { bindHistory, relays } from "./nostr";
 import { startKeys } from "./keys";
 import { bindBook } from "./book";
+import { bindWallet } from "./wallet";
 import { node } from "./node";
 import { createRouting } from "./routing";
 import { startChat, activeChat } from "./accountChat";
@@ -50,6 +51,8 @@ if (typeof window !== "undefined") {
   };
   bind();
   session.subscribe(bind);
+  // the wallet's relay copy runs for the active account, with its own signer
+  session.accounts.active$.subscribe((account) => bindWallet(account));
 
   // the models providers serve: the last visit's at once, then fresh ones
   routing.catalog.start();

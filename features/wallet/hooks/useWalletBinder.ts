@@ -8,7 +8,7 @@ import { DEFAULT_MINT_URL } from "@/lib/utils";
 import { dropSpent } from "../spent";
 import { useCashuStore } from "../state/cashuStore";
 import { useBalances, usePurseOf } from "../view";
-import { legacyCoins } from "./purseBridge";
+import { walletCoins } from "./purseBridge";
 import { useCashuWallet } from "./useCashuWallet";
 import { useCreateCashuWallet } from "./useCreateCashuWallet";
 
@@ -73,7 +73,7 @@ export function useWalletBinder() {
         console.error("Could not try the waiting tokens:", error)
       );
     for (const mint of new Set((wallet.mints ?? []).map(normalizeMintUrl))) {
-      dropSpent(owner, mint, { coins: legacyCoins, locks }).catch((error) =>
+      dropSpent(owner, mint, { coins: walletCoins(), locks }).catch((error) =>
         console.error(`Could not check ${mint}'s coins:`, error)
       );
     }

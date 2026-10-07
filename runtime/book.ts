@@ -46,6 +46,10 @@ const showTokens = () => {
 // sign-out wipe leaves alone, and only it ever takes those entries.
 const MAIN_OWNER = "cashu_op:main-owner";
 
+/** The account main had signed in: the plain old keys are its. */
+export const isMains = (pubkey: string): boolean =>
+  storage.getItem(MAIN_OWNER) === pubkey;
+
 /** Runs when the active account changes: what main left behind becomes this
  *  account's, and the screens list this account's unclaimed tokens. */
 export function bindBook(pubkey: string | null): void {
