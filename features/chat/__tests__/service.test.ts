@@ -210,22 +210,30 @@ describe("ChatService: what the model is sent", () => {
     expect(contents(provider.last.messages)).toEqual(["Q1"]);
   });
 
-  it("never sends a text-only model an image", async () => {
+  it("never sends a text-only model an image, nor keeps a question it cannot answer", async () => {
     const image = [
       { type: "text" as const, text: "what is this" },
       { type: "image_url" as const, image_url: { url: "data:x" } },
     ];
-    const turn = await chat.send("c", image, { id: "m", images: false });
-    await turn.reply;
+    await expect(
+      chat.send("c", image, { id: "m", images: false })
+    ).rejects.toThrow("reads text only");
+    expect(history.save).not.toHaveBeenCalled();
+    expect(chat.asking("c")).toBe(false);
 
-    expect(provider.pay).not.toHaveBeenCalled();
-    expect(turn.run.getSnapshot()).toMatchObject({
+    // asked earlier, then retried on a text-only model
+    const first = await chat.send("c", image, model);
+    await flush();
+    provider.answer("a cat");
+    await first.reply;
+    const retried = await chat.retry("c", 1, { id: "m", images: false });
+    await retried.reply;
+
+    expect(provider.pay).toHaveBeenCalledTimes(1);
+    expect(retried.run.getSnapshot()).toMatchObject({
       phase: "failed",
       error: expect.stringContaining("reads text only"),
     });
-
-    await chat.retry("c", 1, { id: "m", images: false }).then((t) => t.reply);
-    expect(provider.pay).not.toHaveBeenCalled();
   });
 
   it("leaves earlier images out for a text-only model, and says so", async () => {

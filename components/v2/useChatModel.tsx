@@ -4,6 +4,7 @@ import { AcceptedMintsContext } from "@/features/wallet/view";
 import type { Model } from "@/types/models";
 import { getRequiredSatsForModel } from "@/utils/modelUtils";
 import { defaultModel, pickedModel, useModelPick, type Choice } from "./pick";
+import { normalizeModality } from "./picker/modality";
 import { useMoney } from "./useMoney";
 
 const need = (m: Model) => getRequiredSatsForModel(m);
@@ -73,5 +74,5 @@ export function chatModelOf(
       : undefined;
   const inputs = model.architecture?.input_modalities;
   // unknown inputs are not taken as text only
-  return { id: model.id, provider: pinned, images: inputs ? inputs.includes("image") : undefined };
+  return { id: model.id, provider: pinned, images: inputs ? inputs.some((m) => normalizeModality(m) === "image") : undefined };
 }

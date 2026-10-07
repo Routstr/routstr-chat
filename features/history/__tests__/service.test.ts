@@ -610,6 +610,41 @@ describe("HistoryService: sync", () => {
     expect(writes).toHaveBeenCalledTimes(1);
     expect(redraws).toBe(1);
   });
+
+  it("never writes or publishes a save given up while the keyring was opening", async () => {
+    const net = network();
+    const who = person();
+    await keyringOn(net, who);
+    let open!: () => void;
+    const gate = new Promise<void>((resolve) => (open = resolve));
+    const signer: HistorySigner = {
+      ...who.signer,
+      nip44: {
+        encrypt: who.signer.nip44!.encrypt,
+        decrypt: async (pubkey, ciphertext) => {
+          await gate;
+          return who.signer.nip44!.decrypt(pubkey, ciphertext);
+        },
+      },
+    };
+    const { history, log } = device({ net, who, signer });
+    history.start();
+
+    const givenUp = new AbortController();
+    const late = history.save("c1", ask("not sent"), givenUp.signal);
+    await settle();
+    givenUp.abort();
+    open();
+    await late.catch(() => {});
+    await ready(history);
+    await settle();
+
+    const messages = (events: Iterable<{ kind: number }>) =>
+      [...events].filter((event) => event.kind === KIND_PNS);
+    expect(history.branch("c1")).toEqual([]);
+    expect(messages(log.rows.values())).toEqual([]);
+    expect(messages(net.relay(R1).events.values())).toEqual([]);
+  });
 });
 
 describe("HistoryService: lifetime", () => {
@@ -895,7 +930,12 @@ describe("HistoryService: the first keyring and a broken disk", () => {
     const net = network();
     const who = person();
     // a relay that ignores filters sends the person's own note with the keyrings
-    const note = await who.signer.signEvent({ kind: 1, created_at: NOW - 10, tags: [], content: "hello" });
+    const note = await who.signer.signEvent({
+      kind: 1,
+      created_at: NOW - 10,
+      tags: [],
+      content: "hello",
+    });
     net.relay(R1).ignoresFilters = true;
     net.relay(R1).events.set(note.id, note);
     const { history } = device({ net, who });
@@ -954,9 +994,12 @@ describe("HistoryService: the first keyring and a broken disk", () => {
     answer();
     for (let i = 0; i < 20; i++) await settle();
 
-    const keyrings = (events: Iterable<{ kind: number }>) => [...events].filter((e) => e.kind === KIND_KEYRING);
+    const keyrings = (events: Iterable<{ kind: number }>) =>
+      [...events].filter((e) => e.kind === KIND_KEYRING);
     expect(keyrings(log.rows.values())).toEqual([]);
-    expect(DEFAULT_RELAYS.flatMap((url) => keyrings(net.relay(url).events.values()))).toEqual([]);
+    expect(
+      DEFAULT_RELAYS.flatMap((url) => keyrings(net.relay(url).events.values()))
+    ).toEqual([]);
   });
 
   it("never asks a switched-away account's signer for a first keyring", async () => {

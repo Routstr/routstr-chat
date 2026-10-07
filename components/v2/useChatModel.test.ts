@@ -20,4 +20,10 @@ describe("chatModelOf: what the engine is told about a model", () => {
     expect(chatModelOf(model(["text", "image"]), null, []).images).toBe(true);
     expect(chatModelOf(model(), null, []).images).toBeUndefined();
   });
+
+  it("reads the provider's other spellings of image", () => {
+    expect(chatModelOf(model(["text", "vision"]), null, []).images).toBe(true);
+    expect(chatModelOf(model(["Image"]), null, []).images).toBe(true);
+    expect(chatModelOf(model(["text", "images"]), null, []).images).toBe(true);
+  });
 });
