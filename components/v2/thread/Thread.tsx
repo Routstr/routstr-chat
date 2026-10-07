@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { useOpenChat } from "../openChat";
 import { useAccountChat, useAsking, useReplyCosts } from "@/features/chat/view";
 import { useHistory, useThread, type ThreadSlot } from "@/features/history/view";
-import { useActions } from "../useActions";
+import { useTurnActions } from "../useActions";
 import { useChatModel } from "../useChatModel";
 import { useNotes } from "./useNotes";
 import { shortModelName } from "../format";
@@ -72,7 +72,7 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
     },
     [history, activeConversationId]
   );
-  const actions = useActions();
+  const actions = useTurnActions();
   const latest = useRef(actions.retry);
   useLayoutEffect(() => {
     latest.current = actions.retry;

@@ -9,21 +9,14 @@ import { useDraft, useUi } from "./ui";
 
 type Chat = AccountChatView["chat"];
 
-/* Send, retry and edit through the signed-in account's chat. Signed out, the
-   composer turns to sign in. A turn that cannot start says why, and what you
-   wrote stays in the box. */
-export function useActions() {
+/* Starts a turn through the signed-in account's chat. Signed out, the
+   composer turns to sign in. A turn that cannot start says why. */
+function useStart() {
   const account = useAccountChat();
-  const history = useHistory();
   const catalog = useCatalogService();
   const { model, chosen } = useChatModel();
-  const { id: activeConversationId, current: getActiveConversationId, open: loadConversation } = useOpenChat();
-  const draft = useDraft();
   const { setFace } = useUi();
-  // a new chat has no id to claim until its question is in: a second Enter waits
-  const sending = useRef(false);
-
-  const start = useCallback(
+  return useCallback(
     async (turn: (chat: Chat, model: ChatModel) => Promise<unknown>): Promise<boolean> => {
       if (!account) {
         setFace("auth");
@@ -43,8 +36,18 @@ export function useActions() {
     },
     [account, model, chosen, catalog, setFace]
   );
+}
 
-  const send = useCallback(async () => {
+/* The composer's send: what you wrote stays in the box until the question is
+   in. Only the composer reads the draft, so a key press re-renders nothing else. */
+export function useSend() {
+  const start = useStart();
+  const { id: activeConversationId, current: getActiveConversationId, open: loadConversation } = useOpenChat();
+  const draft = useDraft();
+  // a new chat has no id to claim until its question is in: a second Enter waits
+  const sending = useRef(false);
+
+  return useCallback(async () => {
     const { text, attachments, rev } = draft;
     if ((!text.trim() && !attachments.length) || sending.current) return;
     const id = activeConversationId ?? String(Date.now());
@@ -57,6 +60,13 @@ export function useActions() {
     // a new chat opens once its question is in, unless you went elsewhere meanwhile
     if (getActiveConversationId() === null) loadConversation(id);
   }, [draft, activeConversationId, start, getActiveConversationId, loadConversation]);
+}
+
+/* Retry and edit on the thread's turns. */
+export function useTurnActions() {
+  const start = useStart();
+  const history = useHistory();
+  const { id: activeConversationId } = useOpenChat();
 
   const retry = useCallback(
     (index: number) => {
@@ -76,5 +86,5 @@ export function useActions() {
     [activeConversationId, history, start]
   );
 
-  return { send, retry, saveEdit };
+  return { retry, saveEdit };
 }

@@ -5,7 +5,7 @@ import { useOpenChat } from "../openChat";
 import { useAsking } from "@/features/chat/view";
 import { useThread } from "@/features/history/view";
 import type { Message } from "@/types/chat";
-import { useActions } from "../useActions";
+import { useTurnActions } from "../useActions";
 import { useMoney } from "../useMoney";
 import { useUi } from "../ui";
 import { Icon } from "../icons";
@@ -67,7 +67,7 @@ export default function Trouble({
   const { id: activeConversationId } = useOpenChat();
   const asking = useAsking(activeConversationId);
   const slots = useThread(activeConversationId);
-  const { retry } = useActions();
+  const { retry } = useTurnActions();
   const money = useMoney();
   const ui = useUi();
   const [open, setOpen] = useState(false);

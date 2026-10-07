@@ -3,12 +3,12 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { useOpenChat } from "../../openChat";
 import { useAsking } from "@/features/chat/view";
-import { useActions } from "../../useActions";
+import { useTurnActions } from "../../useActions";
 
 export function Edit({ index, initial, onClose }: { index: number; initial: string; onClose: () => void }) {
   const asking = useAsking(useOpenChat().id);
   const [text, setText] = useState(initial);
-  const { saveEdit } = useActions();
+  const { saveEdit } = useTurnActions();
   const area = useRef<HTMLTextAreaElement>(null);
   useLayoutEffect(() => {
     const a = area.current;

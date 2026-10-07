@@ -13,7 +13,7 @@ import type { Model } from "@/types/models";
 import { Icon } from "../icons";
 import { useChipRef, useDraft, useUi } from "../ui";
 import { useOpenChat } from "../openChat";
-import { useActions } from "../useActions";
+import { useSend } from "../useActions";
 import { useChatModel } from "../useChatModel";
 import { useMoney, usePayable } from "../useMoney";
 import { sats, satUnit, shortModelName, textOf } from "../format";
@@ -158,7 +158,7 @@ export default function Composer({ centred }: { centred: boolean }) {
   // the same rule the picker shows: what can pay at the provider the message goes to
   const payable = usePayable();
   const lowBalanceWarningForModel = !!priced && !payable.covers(priced, provider);
-  const { send } = useActions();
+  const send = useSend();
   const field = useRef<HTMLTextAreaElement>(null);
   const island = useRef<HTMLDivElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
