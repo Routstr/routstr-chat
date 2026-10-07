@@ -994,3 +994,21 @@ describe("HistoryService: the first keyring and a broken disk", () => {
     await expect(history.save("c1", ask("x"))).rejects.toThrow(/storage/);
   });
 });
+
+describe("HistoryService.complete: every message is here", () => {
+  it("is true once the first sync reached the relays with every key open", async () => {
+    const { history } = device();
+    history.start();
+
+    await expect(history.complete).resolves.toBe(true);
+  });
+
+  it("is false while no relay answers: messages may be missing", async () => {
+    const net = network();
+    DEFAULT_RELAYS.forEach((url) => (net.relay(url).down = true));
+    const { history } = device({ net });
+    history.start();
+
+    await expect(history.complete).resolves.toBe(false);
+  });
+});

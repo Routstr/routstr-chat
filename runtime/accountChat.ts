@@ -1,4 +1,5 @@
-import { createAttachments } from "@/features/chat/attachments";
+import { createAttachments, filesIn } from "@/features/chat/attachments";
+import { owned } from "@/features/session/owned";
 import type { OtherDevices } from "@/features/keys/backup";
 import { exportedKeysFor } from "@/features/keys/exported";
 import { oldCredit } from "@/features/keys/legacy";
@@ -50,9 +51,11 @@ function build(
   otherDevices: OtherDevices
 ): ActiveChat {
   const files = createFileStore({
+    owner,
     keys: () => history.readingKeys(),
     settings: window.localStorage,
   });
+  cleanUpDaily(owner, history, files);
   return {
     ...createAccountChat({
       owner,
@@ -76,6 +79,37 @@ function build(
     }),
     files,
   };
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** The files layer's weekly cleanup, once a day per account, in the
+ *  background once the account's history is all in: it decides by the
+ *  messages. */
+function cleanUpDaily(
+  owner: string,
+  history: NonNullable<ReturnType<typeof activeHistory.get>>,
+  files: AccountChatView["files"]
+) {
+  const key = owned("files_cleaned_at", owner);
+  try {
+    if (Date.now() - Number(window.localStorage.getItem(key)) < DAY_MS) return;
+  } catch {
+    return; // storage blocked: no way to keep it to once a day
+  }
+  // only once every message is here: a file no loaded message uses goes
+  void history.complete.then((all) => {
+    if (!all) return;
+    try {
+      window.localStorage.setItem(key, String(Date.now()));
+    } catch {
+      // storage full: it runs again next time
+    }
+    const used = filesIn(history.getConversations().flatMap((c) => c.messages));
+    files
+      .cleanup(used)
+      .catch((error) => console.warn("Could not clean up old files", error));
+  });
 }
 
 export const activeChat = {

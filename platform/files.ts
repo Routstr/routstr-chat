@@ -16,7 +16,8 @@ import { decryptBlob, encryptBlob } from "@/utils/blobEncryption";
 interface FilesDb extends DBSchema {
   files: {
     key: string;
-    value: { id: string; file: File; timestamp: number };
+    // the account that kept it (main's records have none)
+    value: { id: string; file: File; timestamp: number; owner?: string };
     indexes: { "by-date": number };
   };
 }
@@ -28,6 +29,8 @@ const SERVERS = "blossomServers";
 // must not hold it (Stop ends the wait at once). A copy the composer makes in
 // the background holds nothing, so it waits as long as the upload takes.
 const SAVE_WAIT_MS = 30_000;
+const CHECK_WAIT_MS = 10_000;
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 const trim = (server: string) => server.replace(/\/$/, "");
 
@@ -67,6 +70,8 @@ function readable(dataUrl: string) {
  * key so its other devices can open them.
  */
 export function createFileStore(deps: {
+  /** The account whose files these are. */
+  owner: string;
   /** The account's history keys, the one it writes with first; none while
    *  its history is locked. A copy opens with whichever key made it. */
   keys(): PnsKeys[];
@@ -140,6 +145,29 @@ export function createFileStore(deps: {
     }
   }
 
+  /** A Blossom server still has this copy. */
+  async function onBlossom({ blossomHash, blossomServers }: StoredFile) {
+    const servers = blossomServers?.length
+      ? blossomServers
+      : setting(SERVERS, DEFAULT_FILE_SERVERS);
+    for (const server of servers) {
+      const stop = new AbortController();
+      const timer = setTimeout(() => stop.abort(), CHECK_WAIT_MS);
+      try {
+        const response = await fetch(`${trim(server)}/${blossomHash}`, {
+          method: "HEAD",
+          signal: stop.signal,
+        });
+        if (response.ok) return true;
+      } catch {
+        // the next server
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+    return false;
+  }
+
   async function keepHere(bytes: Uint8Array<ArrayBuffer>, type: string) {
     try {
       const id = crypto.randomUUID();
@@ -148,7 +176,7 @@ export function createFileStore(deps: {
       });
       await (
         await database()
-      ).put("files", { id, file, timestamp: Date.now() });
+      ).put("files", { id, file, timestamp: Date.now(), owner: deps.owner });
       return id;
     } catch (error) {
       console.warn("Could not keep a file on this device", error);
@@ -259,6 +287,32 @@ export function createFileStore(deps: {
     async copy(dataUrl, signal) {
       const file = readable(dataUrl);
       return file ? upload(file.bytes, file.type, signal) : {};
+    },
+
+    async cleanup(used) {
+      const recovered = setting<Record<string, string>>(RECOVERED, {});
+      const uses = new Map<string, StoredFile>();
+      for (const file of used) {
+        if (!file.storageId) continue;
+        uses.set(file.storageId, file);
+        const copy = recovered[file.storageId];
+        if (copy) uses.set(copy, file);
+      }
+      const db = await database();
+      const old = await db.getAllFromIndex(
+        "files",
+        "by-date",
+        IDBKeyRange.upperBound(Date.now() - WEEK_MS)
+      );
+      // a copy dropped here must be one this account can fetch again
+      const canFetch = syncKeys().length > 0;
+      for (const record of old) {
+        const use = uses.get(record.id);
+        const goes = use
+          ? canFetch && !!use.blossomHash && (await onBlossom(use))
+          : record.owner === deps.owner;
+        if (goes) await db.delete("files", record.id);
+      }
     },
 
     sync: () => sync,

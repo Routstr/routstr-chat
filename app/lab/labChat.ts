@@ -77,6 +77,7 @@ export function labChat(history: ChatHistory, params: URLSearchParams): AccountC
       sync: () => LAB_SYNC,
       setSync: () => {},
       subscribe: () => () => {},
+      cleanup: async () => {},
     },
   };
 }
