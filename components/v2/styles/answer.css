@@ -59,6 +59,9 @@
 .md { overflow-wrap: break-word; hanging-punctuation: first; }
 .md > * + * { margin-top: .92em; }
 .md p, .md li, .md blockquote { text-wrap: pretty; }
+/* a whole block off the screen is not laid out again while the answer grows
+   below it; it keeps the size it was last drawn at */
+.md > .blk:not(:last-child) { content-visibility: auto; contain-intrinsic-size: auto 120px; }
 .md strong { font-weight: var(--w-strong); }
 .md em { font-style: italic; }
 .md :is(h1, h2, h3, h4) {
