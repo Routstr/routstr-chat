@@ -36,6 +36,7 @@ import {
   type UserSignerInfo,
 } from "@/hooks/sync";
 import { currentOwner, owned } from "@/features/session/owned";
+import { forward, mergeInvoice } from "./invoiceState";
 
 export interface StoredInvoice {
   id: string;
@@ -231,9 +232,7 @@ export function useInvoiceSync() {
     // Add/update with local invoices (local takes precedence for newer data)
     localInvoices.forEach((inv) => {
       const existing = mergedMap.get(inv.id);
-      if (!existing || (inv.checkedAt || 0) > (existing.checkedAt || 0)) {
-        mergedMap.set(inv.id, inv);
-      }
+      mergedMap.set(inv.id, existing ? mergeInvoice(existing, inv) : inv);
     });
 
     return Array.from(mergedMap.values());
@@ -351,11 +350,11 @@ export function useInvoiceSync() {
         throw new Error("Invoice update target is missing or ambiguous");
       }
       const target = directMatch || quoteMatches[0];
-      const updated = existing.map((inv) =>
-        inv.id === target.id
-          ? { ...inv, ...updates, checkedAt: Date.now() }
-          : inv
-      );
+      const updated = existing.map((inv) => {
+        if (inv.id !== target.id) return inv;
+        const next = { ...inv, ...updates, checkedAt: Date.now() };
+        return { ...next, state: forward(inv, next) };
+      });
       saveLocalInvoices(updated);
 
       // Sync to cloud
