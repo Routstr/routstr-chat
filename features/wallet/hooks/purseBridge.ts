@@ -1,5 +1,6 @@
 import type { Proof } from "@cashu/cashu-ts";
 import type { CommitProofs } from "@/features/book/settle";
+import type { RelayOutcome } from "@/features/relays/service";
 import { MintService } from "../core/services/MintService";
 import type { ActivityLog, Coin, CoinStore } from "../ports";
 import { useCashuStore } from "../state/cashuStore";
@@ -171,6 +172,37 @@ export const legacyActivity: ActivityLog = {
 };
 
 // the open account's NIP-60 wallet still loading from relays: coins may yet arrive
+/** How the last read of an account's wallet copy on relays went. reading:
+ *  no answer yet. read: a relay sent all it holds. unanswered: none did
+ *  (offline, or every relay timed out, failed, refused or never opened). */
+export type CopyStatus = "reading" | "read" | "unanswered";
+
+let copy: {
+  owner: string | null;
+  status: CopyStatus;
+  outcomes: Record<string, RelayOutcome>;
+} = { owner: null, status: "reading", outcomes: {} };
+const copyListeners = new Set<() => void>();
+
+/** Set by the runtime, which reads the active account's copy. */
+export function setWalletCopy(
+  owner: string,
+  status: CopyStatus,
+  outcomes: Record<string, RelayOutcome> = {}
+): void {
+  copy = { owner, status, outcomes };
+  copyListeners.forEach((listener) => listener());
+}
+
+export const walletCopy = {
+  subscribe(listener: () => void): () => void {
+    copyListeners.add(listener);
+    return () => copyListeners.delete(listener);
+  },
+  of: (owner: string | null): typeof copy | null =>
+    owner && copy.owner === owner ? copy : null,
+};
+
 let loading: { owner: string | null; is: boolean } = { owner: null, is: false };
 const loadingListeners = new Set<() => void>();
 

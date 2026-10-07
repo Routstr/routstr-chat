@@ -5,6 +5,7 @@ import {
   listMint,
   localActivity,
   registerCoins,
+  setWalletCopy,
   setWalletLoading,
 } from "@/features/wallet/hooks/purseBridge";
 import { MintKeysets } from "@/features/wallet/mints";
@@ -159,9 +160,19 @@ export function bindWallet(account: Account | undefined): void {
   const pull = () =>
     replica
       .pull()
+      .then(({ answered, outcomes }) => {
+        if (!stopped) {
+          setWalletCopy(
+            owner,
+            answered.length ? "read" : "unanswered",
+            outcomes
+          );
+        }
+      })
       .catch((error) => console.error("Could not read the coins:", error));
 
   setWalletLoading(owner, true);
+  setWalletCopy(owner, "reading");
   // every mint that holds a coin is in the wallet's list, the coins from
   // relays and old lists too, so the screens name it and count it
   const listMints = async () => {

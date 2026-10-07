@@ -10,7 +10,7 @@ import {
   type NostrEvent,
 } from "nostr-tools";
 import { createServer } from "node:net";
-import { expect, it, vi } from "vitest";
+import { afterAll, expect, it, vi } from "vitest";
 import { getKit } from "@/tests/kit";
 import "@/tests/kit/idb";
 import { memoryStorage } from "@/features/book/journal";
@@ -25,7 +25,10 @@ vi.stubGlobal("window", {
   removeEventListener: () => undefined,
 });
 const { bindWallet, walletPurseFor } = await import("../wallet");
-const { walletCoins } = await import("@/features/wallet/hooks/purseBridge");
+const { walletCoins, walletCopy } =
+  await import("@/features/wallet/hooks/purseBridge");
+// the money tests share one process: no other file may see this stand-in tab
+afterAll(() => vi.unstubAllGlobals());
 
 function account() {
   const secret = generateSecretKey();
@@ -189,3 +192,27 @@ it("reads nothing more for an account switched away from while its old list was 
     blackhole.close();
   }
 }, 60_000);
+
+it("says whether the relays answered the read of the wallet copy", async () => {
+  const a = account();
+  await kit.relay.down(true);
+  try {
+    bindWallet(a.account);
+    expect(walletCopy.of(a.pubkey)?.status).toBe("reading");
+    await vi.waitFor(
+      () => expect(walletCopy.of(a.pubkey)?.status).toBe("unanswered"),
+      { timeout: 30_000 }
+    );
+    expect(Object.values(walletCopy.of(a.pubkey)!.outcomes)).not.toContain(
+      "eose"
+    );
+  } finally {
+    await kit.relay.down(false);
+  }
+  bindWallet(undefined);
+  bindWallet(a.account);
+  await vi.waitFor(() => expect(walletCopy.of(a.pubkey)?.status).toBe("read"), {
+    timeout: 30_000,
+  });
+  bindWallet(undefined);
+}, 90_000);

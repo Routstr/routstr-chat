@@ -1,6 +1,7 @@
 import type { Proof } from "@cashu/cashu-ts";
 import type { UsageTrackingEntry } from "@routstr/sdk/storage";
 import type { EventTemplate, Filter, NostrEvent } from "nostr-tools";
+import type { Fetched } from "@/features/relays/service";
 
 /** A coin as the wallet keeps it: the proof, whose it is, at which mint, and
  *  the unit of its keyset. */
@@ -81,7 +82,7 @@ export interface WalletSigner {
 
 /** One account's relays (history's `relays.of(owner)`). */
 export interface WalletRelays {
-  fetch(filter: Filter): Promise<{ events: NostrEvent[]; answered: string[] }>;
+  fetch(filter: Filter): Promise<Fetched>;
   /** Resolves with the relays that took it; rejects when none did. */
   publish(event: NostrEvent): Promise<string[]>;
 }

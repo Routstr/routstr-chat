@@ -12,7 +12,14 @@ import { useSession } from "@/features/session/view";
 import { DEFAULT_MINT_URL } from "@/lib/utils";
 import { saveTransactionHistory } from "@/utils/storageUtils";
 import { depositMint } from "./depositMint";
-import { listMint, walletCoins, walletLoading } from "./hooks/purseBridge";
+import {
+  listMint,
+  walletCoins,
+  walletCopy,
+  walletLoading,
+  type CopyStatus,
+} from "./hooks/purseBridge";
+import type { RelayOutcome } from "@/features/relays/service";
 import type { UsageLog } from "./ports";
 import { toSats, type Purse } from "./purse";
 import { useWalletStore } from "./state/walletStore";
@@ -107,6 +114,25 @@ export function useWallet(): {
     loading: arriving || (!!pubkey && !balances),
   };
 }
+
+/** How the last read of the signed-in account's wallet copy on relays went:
+ *  "reading" until relays answered, "read" once one sent all it holds, and
+ *  "unanswered" when none did (offline, or each timed out, failed, refused
+ *  or never opened), with each relay's outcome. App's relay notice shows on
+ *  "unanswered"; it is read again on every reload, switch and live event. */
+export function useWalletCopy(): {
+  status: CopyStatus;
+  outcomes: Record<string, RelayOutcome>;
+} {
+  const { pubkey } = useSession();
+  const now = useSyncExternalStore(
+    walletCopy.subscribe,
+    () => walletCopy.of(pubkey),
+    () => null
+  );
+  return now ?? { status: "reading", outcomes: NONE };
+}
+const NONE: Record<string, RelayOutcome> = {};
 
 /** How many coins the signed-in account holds (Settings → Console). */
 export function useCoinCount(): number {
