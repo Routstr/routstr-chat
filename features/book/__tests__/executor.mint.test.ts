@@ -107,7 +107,7 @@ const held = (records: BookRecord[]) =>
   records.reduce((s, r) => {
     if (r.kind === "token" || r.kind === "receive") return s + r.amount;
     // a deposit being claimed holds none of our coins yet
-    if (r.kind === "mint") return s;
+    if (r.kind === "mint" || r.kind === "quote") return s;
     return (
       s + sum(r.kind === "melt" || r.kind === "swap" ? r.inputs : r.proofs)
     );

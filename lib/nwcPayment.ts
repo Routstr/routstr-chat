@@ -1,6 +1,6 @@
 "use client";
 
-import { createLightningInvoice } from "@/lib/cashuLightning";
+import type { Purse } from "@/features/wallet/purse";
 
 /**
  * Check if NWC (Nostr Wallet Connect) is connected
@@ -61,12 +61,9 @@ export interface NWCPaymentResult {
   error?: string;
 }
 
-/** Claims a paid deposit into the wallet it was made for; resolves with the
- *  sats it gave and throws while the mint has not seen the payment. */
-export type ClaimDeposit = (
-  mintUrl: string,
-  quoteId: string
-) => Promise<number>;
+/** The wallet a refill lands in: it makes the invoice, written down before
+ *  it is paid, and claims it once the mint has seen the payment. */
+export type DepositWallet = Pick<Purse, "deposit" | "claim">;
 
 // the mint may see the payment a while after the wallet sends it, and the
 // payment has left by then: every failure is tried again for that long
@@ -74,13 +71,13 @@ const CLAIM_TRIES = 40;
 const CLAIM_EVERY_MS = 3000;
 
 async function claimWhenPaid(
-  claim: ClaimDeposit,
+  wallet: DepositWallet,
   mintUrl: string,
   quoteId: string
 ): Promise<number> {
   for (let i = 1; ; i++) {
     try {
-      return await claim(mintUrl, quoteId);
+      return await wallet.claim(mintUrl, quoteId);
     } catch (error) {
       if (i >= CLAIM_TRIES) throw error;
     }
@@ -95,14 +92,14 @@ async function claimWhenPaid(
  *
  * @param amount Amount in sats to pay
  * @param mintUrl The Cashu mint URL to create invoice against
- * @param claim Claims the deposit into the account it is for, even if another one is active by then
+ * @param wallet Makes the invoice and claims it, for the account it is for even if another one is active by then; if this gives up, the wallet still claims it once paid
  * @param callbacks Optional callbacks for invoice creation, success, and error
  * @returns Promise resolving to payment result
  */
 export async function payWithNWC(
   amount: number,
   mintUrl: string,
-  claim: ClaimDeposit,
+  wallet: DepositWallet,
   callbacks?: NWCPaymentCallbacks
 ): Promise<NWCPaymentResult> {
   try {
@@ -113,8 +110,10 @@ export async function payWithNWC(
     }
 
     // Create invoice via Cashu mint
-    const invoiceData = await createLightningInvoice(mintUrl, amount);
-    const { paymentRequest, quoteId } = invoiceData;
+    const { request: paymentRequest, quoteId } = await wallet.deposit(
+      mintUrl,
+      amount
+    );
 
     callbacks?.onInvoiceCreated?.(paymentRequest, quoteId);
 
@@ -126,7 +125,7 @@ export async function payWithNWC(
     // some wallets answer before the payment settles: the claim waits for the mint
     let sats: number;
     try {
-      sats = await claimWhenPaid(claim, mintUrl, quoteId);
+      sats = await claimWhenPaid(wallet, mintUrl, quoteId);
     } catch (error) {
       if (!String(error).includes("not been paid")) throw error;
       throw new Error(

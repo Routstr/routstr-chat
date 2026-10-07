@@ -80,7 +80,7 @@ export function useAutoRefill({
         const result = await payWithNWC(
           settings.amount,
           mintUrl,
-          from.claim,
+          from,
           {
             onPaymentSuccess: () => {
               updateNWCLastRefillTime();

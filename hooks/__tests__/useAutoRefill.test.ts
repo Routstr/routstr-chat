@@ -43,14 +43,11 @@ function App({ balance }: { balance: number }) {
 it("refills at a mint the provider takes for that amount, as Add does", async () => {
   const accepted = vi.fn((_sats: number) => ["https://takes.mint"]);
   (AcceptedMintsContext as unknown as { value: unknown }).value = accepted;
-  const claim = vi.fn(async () => 100);
-  (PurseContext as unknown as { value: unknown }).value = () => ({
-    balances: async () => ({}),
-    claim,
-  });
+  const from = { balances: async () => ({}) };
+  (PurseContext as unknown as { value: unknown }).value = () => from;
 
   App({ balance: 10 });
   await vi.waitFor(() => expect(state.payWithNWC).toHaveBeenCalled());
   expect(accepted).toHaveBeenCalledWith(100);
-  expect(state.payWithNWC.mock.calls[0].slice(0, 3)).toEqual([100, "https://takes.mint", claim]);
+  expect(state.payWithNWC.mock.calls[0].slice(0, 3)).toEqual([100, "https://takes.mint", from]);
 });

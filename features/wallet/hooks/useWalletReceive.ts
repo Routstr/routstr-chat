@@ -9,7 +9,6 @@ import {
   formatBalance,
   useTransactionHistoryStore,
 } from "@/features/wallet";
-import { createLightningInvoice } from "@/lib/cashuLightning";
 import { createPendingTransaction } from "@/utils/transactionUtils";
 import { getPendingCashuTokenAmount } from "@/utils/cashuUtils";
 import { usePurse, usePurseOf, useWallet } from "../view";
@@ -142,8 +141,10 @@ export function useWalletReceive(navigateToTab: (tab: "overview" | "invoice") =>
       try {
         setIsNip60Processing(true);
         setError("");
-        const invoiceData = await createLightningInvoice(cashuStore.activeMintUrl, amount);
-        setNip60Invoice(invoiceData.paymentRequest);
+        const purse = current();
+        if (!purse) throw new Error("User not logged in");
+        const invoiceData = await purse.deposit(cashuStore.activeMintUrl, amount);
+        setNip60Invoice(invoiceData.request);
         setNip60QuoteId(invoiceData.quoteId);
         setNip60ExpiresAt(invoiceData.expiresAt);
         nip60QuoteIdRef.current = invoiceData.quoteId;
@@ -151,7 +152,7 @@ export function useWalletReceive(navigateToTab: (tab: "overview" | "invoice") =>
           type: "mint",
           mintUrl: cashuStore.activeMintUrl,
           quoteId: invoiceData.quoteId,
-          paymentRequest: invoiceData.paymentRequest,
+          paymentRequest: invoiceData.request,
           amount,
           state: MintQuoteState.UNPAID,
           expiresAt: invoiceData.expiresAt,
@@ -162,7 +163,7 @@ export function useWalletReceive(navigateToTab: (tab: "overview" | "invoice") =>
           amount,
           mintUrl: cashuStore.activeMintUrl,
           quoteId: invoiceData.quoteId,
-          paymentRequest: invoiceData.paymentRequest,
+          paymentRequest: invoiceData.request,
         });
         transactionHistoryStore.addPendingTransaction(pendingTransaction);
         setNip60PendingTxId(pendingTransaction.id);
@@ -182,7 +183,7 @@ export function useWalletReceive(navigateToTab: (tab: "overview" | "invoice") =>
         setIsNip60Processing(false);
       }
     },
-    [cashuStore.activeMintUrl, transactionHistoryStore, addInvoice, checkNip60PaymentStatus]
+    [cashuStore.activeMintUrl, current, transactionHistoryStore, addInvoice, checkNip60PaymentStatus]
   );
 
   const handleCreateMintQuote = useCallback(async () => {

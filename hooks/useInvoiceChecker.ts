@@ -33,14 +33,6 @@ export function useInvoiceChecker() {
           return false;
         }
 
-        if (quoteStatus.state === MintQuoteState.PAID) {
-          await updateInvoice(invoice.id, {
-            state: MintQuoteState.PAID,
-            paidAt: invoice.paidAt || Date.now(),
-            claimError: undefined,
-          });
-        }
-
         // into the account that made the invoice, whoever is active now
         const purse = owner ? purseOf(owner) : current();
         if (!purse) throw new Error("User not logged in");
@@ -71,30 +63,18 @@ export function useInvoiceChecker() {
       } catch (error) {
         console.error(`Error checking mint invoice ${invoice.id}:`, error);
 
-        const retryCount = (invoice.retryCount || 0) + 1;
+        // the state stays as it was, so the next check claims it again; a
+        // paid one is also listed for the person to retry by hand
+        const paid =
+          remoteState === MintQuoteState.PAID ||
+          remoteState === MintQuoteState.ISSUED;
         await updateInvoice(invoice.id, {
-          state:
-            remoteState === MintQuoteState.ISSUED
-              ? MintQuoteState.ISSUED
-              : remoteState === MintQuoteState.PAID
-                ? MintQuoteState.PAID
-                : invoice.state,
-          paidAt:
-            remoteState === MintQuoteState.PAID ||
-            remoteState === MintQuoteState.ISSUED
-              ? invoice.paidAt || Date.now()
-              : invoice.paidAt,
-          retryCount,
-          claimError:
-            remoteState === MintQuoteState.ISSUED
-              ? "recovery_pending"
-              : invoice.claimError,
+          paidAt: paid ? invoice.paidAt || Date.now() : invoice.paidAt,
+          retryCount: (invoice.retryCount || 0) + 1,
+          claimError: paid ? "recovery_pending" : invoice.claimError,
         });
 
-        if (
-          remoteState === MintQuoteState.PAID ||
-          remoteState === MintQuoteState.ISSUED
-        ) {
+        if (paid && !invoice.claimError) {
           toast.error(
             "Payment confirmed, but sats have not reached the wallet. Retry from invoice history."
           );
