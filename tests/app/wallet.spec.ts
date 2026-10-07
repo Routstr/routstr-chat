@@ -282,6 +282,53 @@ test("pays an invoice at the mint that quoted it, though another mint is picked 
     .toBe("PAID");
 });
 
+test("quotes again at the mint picked when the quoting mint cannot cover the invoice, and pays from it", async ({
+  page,
+  kit,
+  appUrl,
+}) => {
+  await v2.open(page, appUrl);
+  await v2.receive(page, await kit.mintToken(40));
+  // the second mint holds too little, and is the one in use
+  await v2.receive(page, await kit.mintToken(4, { otherMint: true }));
+  await v2.useMint(page, kit.env.invoiceMintUrl);
+  const other = await kit.walletAt(kit.env.invoiceMintUrl);
+  const invoice = await other.createMintQuote(8);
+
+  await page
+    .getByRole("button", { name: /^Open wallet\./ })
+    .first()
+    .click();
+  await page
+    .getByRole("region", { name: "Wallet", exact: true })
+    .getByRole("button", { name: "Send", exact: true })
+    .click();
+  const send = page.getByRole("region", { name: "Send", exact: true });
+  await send.getByRole("tab", { name: "Lightning" }).click();
+  const field = send.getByRole("textbox", { name: "Lightning invoice" });
+  await field.fill(invoice.request);
+  await field.press("Enter");
+  await expect(send.getByText(/^Not enough on/)).toBeVisible({ timeout: 30_000 });
+  const pay = send.getByRole("button", { name: /^Pay 8 sats$/ });
+  await expect(pay).toBeHidden();
+
+  // the person picks the mint the note names: the invoice is quoted there
+  const host = new URL(kit.env.mintUrl).host.replace(/[.]/g, "\\.");
+  await page.getByRole("button", { name: /^Mint / }).click();
+  const menu = page.getByRole("menu", { name: "Mints" });
+  await menu.getByRole("menuitemradio", { name: new RegExp(host) }).click();
+  await expect(menu).toBeHidden();
+  await pay.click({ timeout: 30_000 });
+  await expect(
+    send.getByRole("button", { name: "Pay another invoice" })
+  ).toBeVisible({ timeout: 30_000 });
+  await expect
+    .poll(async () => (await other.checkMintQuote(invoice.quote)).state, {
+      timeout: 20_000,
+    })
+    .toBe("PAID");
+});
+
 test("pays an invoice on a second press, after the first payment did not go through", async ({
   page,
   kit,
