@@ -388,7 +388,7 @@ test("a token whose mint does not answer is kept and said so, then lands once it
 
   await page.goto(`${appUrl}/?cashu=${encodeURIComponent(byLink)}`);
   await v2.ready(page);
-  await expect(page.getByText("30 sats are waiting for their mint. They come in once it answers.")).toBeVisible();
+  await expect(page.getByText("Kept 30 sats. They land when the mint answers.")).toBeVisible();
   expect(await v2.balance(page)).toBe(50);
 
   // the mint answers: the next load takes both in, and they are money

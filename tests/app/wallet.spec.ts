@@ -323,8 +323,9 @@ test("pays an invoice on a second press, after the first payment did not go thro
   });
   expect(failed).toBe(true);
 
-  // tried again, it pays
+  // tried again, the invoice is read anew and its fresh quote paid
   await send.getByRole("button", { name: "Try again" }).click();
+  await pay.click({ timeout: 30_000 });
   await expect(
     send.getByRole("button", { name: "Pay another invoice" })
   ).toBeVisible({ timeout: 30_000 });
