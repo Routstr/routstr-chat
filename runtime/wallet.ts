@@ -90,7 +90,7 @@ const PULL_AFTER_MS = 2000;
 const RETRY_MS = 60_000;
 const RETRY_MAX_MS = 30 * 60_000;
 
-let bound: { owner: string; stop(): void } | null = null;
+let bound: { account: Account; stop(): void } | null = null;
 
 /**
  * Called by the composition root when the active account changes. Main's old
@@ -102,7 +102,9 @@ let bound: { owner: string; stop(): void } | null = null;
  * this one's signer.
  */
 export function bindWallet(account: Account | undefined): void {
-  if (bound?.owner === account?.pubkey) return;
+  // the account, not its key: one key can be in twice (an extension and an
+  // nsec), and each copy signs with its own signer
+  if (bound?.account === account) return;
   bound?.stop();
   bound = null;
   if (!browser || !account || !locks) return;
@@ -170,9 +172,10 @@ export function bindWallet(account: Account | undefined): void {
     }
   };
 
+  // a switch while the old lists are swept: nothing more runs for this one
   void sweepOld()
-    .then(pull)
-    .then(listMints)
+    .then(() => (stopped ? undefined : pull()))
+    .then(() => (stopped ? undefined : listMints()))
     .finally(() => {
       if (stopped) return;
       setWalletLoading(owner, false);
@@ -205,7 +208,7 @@ export function bindWallet(account: Account | undefined): void {
   window.addEventListener("online", online);
   window.addEventListener("storage", oldChanged);
   bound = {
-    owner,
+    account,
     stop() {
       stopped = true;
       offStore();
