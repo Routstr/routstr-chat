@@ -1,6 +1,6 @@
 "use client";
 
-import React, { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { memo, useEffect, useMemo, useRef, useState } from "react";
 import { PrismLight as Prism } from "react-syntax-highlighter";
 import bash from "react-syntax-highlighter/dist/esm/languages/prism/bash";
 import c from "react-syntax-highlighter/dist/esm/languages/prism/c";
@@ -63,20 +63,18 @@ function Code({ lang, code, live = false }: { lang: string; code: string; live?:
   const known = name in LANGS;
 
   // does a line run past the edge? Then Wrap is offered, and the edge fades.
-  // Not while its lines still arrive: that would lay the page out each frame.
-  useLayoutEffect(() => {
+  // Read by a ResizeObserver, which reports after the browser has laid the
+  // page out (first when it starts watching, then on each width change), so
+  // reading here never makes it lay out again. Not while lines still arrive.
+  useEffect(() => {
     const pre = fig.current?.querySelector<HTMLElement>(".rd-pre");
     if (!pre || live) return;
-    const check = () => {
-      setOver(pre.scrollWidth - pre.clientWidth > 1);
-      edgeFades(pre);
-    };
-    check();
-    let w = pre.clientWidth;
+    let w = -1;
     const ro = new ResizeObserver(() => {
       if (pre.clientWidth === w) return;
       w = pre.clientWidth;
-      check();
+      setOver(pre.scrollWidth - pre.clientWidth > 1);
+      edgeFades(pre);
     });
     ro.observe(pre);
     return () => ro.disconnect();

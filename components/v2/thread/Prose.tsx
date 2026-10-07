@@ -1,6 +1,6 @@
 "use client";
 
-import React, { memo, useLayoutEffect, useMemo, useRef } from "react";
+import React, { memo, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
@@ -143,23 +143,28 @@ export default memo(function Prose({ content, streaming, words, idle = false }: 
     }
     seen.current = { block: lastIdx, n: at };
   });
-  // tables and wide maths are measured once their block is whole: while
-  // words arrive only the growing block changes, and measuring the rest every
-  // frame would make the browser lay the whole answer out again each time
+  // tables and wide maths are watched once their block is whole: while words
+  // arrive only the growing block changes. Their fades are read by a
+  // ResizeObserver, after the browser's own layout, never inside a commit.
   const measured = useRef(0);
-  useLayoutEffect(() => {
+  const fades = useRef<ResizeObserver | null>(null);
+  useEffect(() => () => fades.current?.disconnect(), []);
+  useEffect(() => {
     const el = root.current;
     if (!el) return;
     // streaming, the blocks before the last are whole and never change again
     const whole = streaming ? lastIdx : blocks.length;
     const from = streaming && whole >= measured.current ? measured.current : 0;
     measured.current = whole;
-    for (const blk of Array.from(el.children).slice(from, whole)) {
+    const fresh = Array.from(el.children).slice(from, whole);
+    if (!fresh.length) return;
+    fades.current ??= new ResizeObserver((seen) => seen.forEach((s) => edgeFades(s.target as HTMLElement)));
+    for (const blk of fresh) {
       blk.querySelectorAll<HTMLElement>(".rd-table").forEach((t) => {
         tableNums(t);
-        edgeFades(t);
+        fades.current!.observe(t);
       });
-      blk.querySelectorAll<HTMLElement>(".katex-display").forEach(edgeFades);
+      blk.querySelectorAll<HTMLElement>(".katex-display").forEach((k) => fades.current!.observe(k));
     }
   }, [blocks, streaming, lastIdx]);
   return (
