@@ -1,6 +1,11 @@
-import { getTokenMetadata, type Proof } from "@cashu/cashu-ts";
+import {
+  getTokenMetadata,
+  type MeltQuoteBolt11Response,
+  type Proof,
+} from "@cashu/cashu-ts";
 import { WalletExecutor } from "@/features/book/executor";
 import type { Journal } from "@/features/book/journal";
+import type { MeltOutcome } from "@/features/book/settle";
 import type { ActivityLog, Coin, CoinStore } from "./ports";
 
 /** One account's money, for that account and no other, in whole sats. The one
@@ -18,6 +23,10 @@ export interface Purse {
     sats: number,
     handoff?: (token: string) => Promise<void>
   ): Promise<string>;
+  /** Pays a Lightning invoice's melt quote from this account's coins at the
+   *  mint. "pending" means the mint has not settled it yet: the coins stay out
+   *  of the wallet and the book settles it later. */
+  pay(mintUrl: string, quote: MeltQuoteBolt11Response): Promise<MeltOutcome>;
   /** Takes a token into this account's wallet; resolves with the sats it gave. */
   receive(token: string): Promise<number>;
   /** What a token says, without its mint: for a preview before receiving. */
@@ -96,6 +105,9 @@ export function createPurse(
       note({ direction: "out", sats });
       return token;
     },
+    pay: async (mintUrl, quote) =>
+      (await executor.pay(mintUrl, quote, () => coins.coins(owner, mintUrl)))
+        .state,
     receive: async (token) => {
       const got = await executor.receive(token);
       const sats = toSats(total(got), getTokenMetadata(token).unit);
