@@ -51,6 +51,7 @@ export function useWalletSend() {
   const meltQuoteRef = useRef<{
     mintUrl: string;
     quote: MeltQuoteResponse;
+    invoice: string;
   } | null>(null);
 
   // Unclaimed send tokens live in the wallet book, not this resettable UI state.
@@ -179,6 +180,7 @@ export function useWalletSend() {
 
       setNip60SendInvoice(value);
       // a quote made for another invoice is never paid for this one
+      meltQuoteRef.current = null;
       setNip60MeltQuoteId("");
       setInvoiceAmount(null);
       setInvoiceFeeReserve(null);
@@ -192,7 +194,7 @@ export function useWalletSend() {
         setIsNip60LoadingInvoice(true);
         const meltQuote = await createMeltQuote(mintUrl, value);
         if (!current()) return;
-        meltQuoteRef.current = { mintUrl, quote: meltQuote };
+        meltQuoteRef.current = { mintUrl, quote: meltQuote, invoice: value };
         setNip60MeltQuoteId(meltQuote.quote);
         // what Send shows and checks is in sats; the quote paid stays in the mint's unit
         const { amount, feeReserve } = quoteInSats(meltQuote);
@@ -256,8 +258,9 @@ export function useWalletSend() {
       setWarningMessage("");
       // the quote made for this invoice, kept with it (never one made
       // before), paid at the mint that made it, whichever mint is active now
+      // (a retry after an error has just quoted it again)
       const made = meltQuoteRef.current;
-      if (made?.quote.quote !== nip60MeltQuoteId) {
+      if (made?.invoice !== nip60SendInvoice) {
         throw new Error("The invoice's quote is not here any more; paste it again");
       }
       const { mintUrl, quote } = made;
@@ -275,14 +278,14 @@ export function useWalletSend() {
       const state = await from.pay(mintUrl, quote);
       const amount = `${formatBalance(invoiceAmount, "sat")}s`;
       if (state === "failed") {
-        await updateInvoice(nip60MeltQuoteId, { state: MeltQuoteState.UNPAID });
+        await updateInvoice(quote.quote, { state: MeltQuoteState.UNPAID });
         setError(
           "The payment did not go through. Your sats are back in the wallet."
         );
       } else {
         const paid = state === "paid";
         await updateInvoice(
-          nip60MeltQuoteId,
+          quote.quote,
           paid
             ? { state: MeltQuoteState.PAID, paidAt: Date.now() }
             : { state: MeltQuoteState.PENDING }
@@ -306,7 +309,6 @@ export function useWalletSend() {
     cashuStore.activeMintUrl,
     invoiceAmount,
     invoiceFeeReserve,
-    nip60MeltQuoteId,
     purse,
     error,
     handleNip60InvoiceInput,
