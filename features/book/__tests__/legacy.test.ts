@@ -1,3 +1,4 @@
+import { getEncodedTokenV4 } from "@cashu/cashu-ts";
 import { beforeEach, describe, expect, it } from "vitest";
 import { Journal, memoryStorage, PREFIX, storedKeys } from "../journal";
 import { adoptLegacy } from "../legacy";
@@ -152,5 +153,79 @@ describe("adoptLegacy", () => {
 
     expect(storage.getItem("pending_receive_proofs:alice_9")).toBe("{not json");
     expect(journal.list("alice")).toHaveLength(1);
+  });
+
+  it("turns main's paid, unclaimed invoice into a quote record once, and leaves the list", () => {
+    const invoice = (quoteId: string, type: string, state: string) => ({
+      id: `i-${quoteId}`,
+      type,
+      state,
+      quoteId,
+      mintUrl: `${mintUrl}/`,
+      amount: 21,
+      createdAt: 3,
+    });
+    const list = JSON.stringify({
+      invoices: [
+        invoice("paid", "mint", "PAID"),
+        invoice("unpaid", "mint", "UNPAID"),
+        invoice("issued", "mint", "ISSUED"),
+        invoice("melt", "melt", "PAID"),
+      ],
+    });
+    storage.setItem("lightning_invoices:alice", list);
+
+    adoptLegacy("alice", storage, journal, true);
+    expect(journal.list("alice")).toEqual([
+      {
+        v: 1,
+        kind: "quote",
+        id: "legacy-quote-paid",
+        owner: "alice",
+        mintUrl,
+        createdAt: 3,
+        quoteId: "paid",
+        amount: 21,
+      },
+    ]);
+    expect(storage.getItem("lightning_invoices:alice")).toBe(list);
+
+    // recovery claimed it; the next sign-in does not write it again
+    journal.remove("legacy-quote-paid");
+    adoptLegacy("alice", storage, journal, true);
+    expect(journal.list("alice")).toEqual([]);
+    // nor does another account take it
+    adoptLegacy("bob", storage, journal, true);
+    expect(journal.list("bob")).toEqual([]);
+  });
+
+  it("lists the tokens main kept for providers as tokens the person made, to take back", () => {
+    const token = getEncodedTokenV4({
+      mint: `${mintUrl}/`,
+      unit: "sat",
+      proofs: [proof("s9", 8)],
+    });
+    storage.setItem(
+      "local_cashu_tokens:alice",
+      JSON.stringify([{ baseUrl: "https://p/", token }])
+    );
+
+    adoptLegacy("alice", storage, journal, true);
+    expect(journal.list("alice")).toEqual([
+      {
+        v: 1,
+        kind: "token",
+        id: "legacy-local_cashu_tokens:alice-0",
+        owner: "alice",
+        mintUrl,
+        unit: "sat",
+        createdAt: 0,
+        token,
+        amount: 8,
+        baseUrl: "https://p/",
+      },
+    ]);
+    // no longer counted as pending beside it
+    expect(storage.getItem("local_cashu_tokens:alice")).toBeNull();
   });
 });
