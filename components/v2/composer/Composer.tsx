@@ -30,12 +30,11 @@ const isTouch = () => typeof window !== "undefined" && window.matchMedia("(hover
 const isPhone = () => typeof window !== "undefined" && window.innerWidth <= 760;
 const reduced = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-/** A rough price for this message: what the cheapest route charges for the
- *  words so far, the text of any attached files and a reply of ordinary
+/** A rough price for this message: what the provider it goes to charges for
+ *  the words so far, the text of any attached files and a reply of ordinary
  *  length. It holds still while you type (settling) and settles 600ms after
  *  the last key; a model or a file change re-rolls it at once. */
 function useEstimate(model: Model | null, draft: string, history: string, files: string) {
-  const catalog = useCatalogService();
   const [value, setValue] = useState<number | null>(null);
   const [settling, setSettling] = useState(false);
   const lastDraft = useRef<string | null>(null);
@@ -50,14 +49,12 @@ function useEstimate(model: Model | null, draft: string, history: string, files:
     lastDraft.current = draft;
     if (typed) setSettling(true);
     const t = window.setTimeout(() => {
-      const ranked = catalog?.routes(model.id) ?? [];
-      const priced = (ranked[0]?.model as unknown as Model | undefined) ?? model;
-      const v = estimateSats(priced, promptTokens(`${history} ${files}`, draft));
+      const v = estimateSats(model, promptTokens(`${history} ${files}`, draft));
       setValue(v > 0 ? v : null);
       setSettling(false);
     }, typed ? 600 : 0);
     return () => window.clearTimeout(t);
-  }, [model, draft, history, files, catalog]);
+  }, [model, draft, history, files]);
   return { value, settling };
 }
 
@@ -196,7 +193,8 @@ export default function Composer({ centred }: { centred: boolean }) {
 
   const history = useMemo(() => (slots ?? []).map((s) => textOf(s.displayed.content)).join(" "), [slots]);
   const fileText = useMemo(() => uploadedAttachments.map((a) => a.textContent ?? "").join(" "), [uploadedAttachments]);
-  const estimate = useEstimate(selectedModel, inputMessage, history, fileText);
+  // priced as the provider the send goes to prices it, the number the picker shows
+  const estimate = useEstimate(priced, inputMessage, history, fileText);
 
   const face = ui.face;
   // the back of the card stays drawn while it turns away
