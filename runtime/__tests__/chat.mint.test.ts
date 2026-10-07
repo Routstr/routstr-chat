@@ -288,6 +288,49 @@ describe("chat with real money", () => {
     chat.dispose();
   });
 
+  it("keeps a payout the wallet could not take in while its mint was down, and it lands later", async () => {
+    const { chat, wallet, credit } = await account();
+    const storage = credit.keys.storage();
+    // a key worth 40 sats at core, this account's
+    const made = await fetch(`${kit.coreUrl}v1/wallet/info`, {
+      headers: { Authorization: `Bearer ${await kit.mintToken(40)}` },
+    });
+    storage.setApiKey(kit.coreUrl, (await made.json()).api_key);
+
+    // the Refund button while this device cannot reach the mint: core pays
+    // the key out, and the wallet keeps the payout in its book
+    const real = globalThis.fetch;
+    const mint = kit.env.mintUrl.replace(/\/$/, "");
+    globalThis.fetch = (input, init) =>
+      String(input instanceof Request ? input.url : input).startsWith(mint)
+        ? Promise.reject(new TypeError("Failed to fetch"))
+        : real(input, init);
+    try {
+      expect(await chat.refund()).toEqual([
+        { baseUrl: kit.coreUrl, success: true },
+      ]);
+    } finally {
+      globalThis.fetch = real;
+    }
+    expect(storage.getAllApiKeys()).toEqual([]);
+    expect(wallet.sats).toBe(300);
+
+    // a reply on the same provider makes and funds a key there: core no longer
+    // replays that payout
+    const turn = await chat.chat.send("c", "[kit:usage=10,10] hello", model());
+    await turn.settled;
+    expect(turn.run.getSnapshot().phase).toBe("done");
+
+    // the mint is back: the wallet takes the payout in, and the new key's
+    // change comes home
+    await wallet.purse.retryPending();
+    await chat.refund();
+    // 300 funded, 40 paid out, the reply cost about a sat
+    expect(wallet.sats).toBeGreaterThanOrEqual(338);
+    await settledAndUnspent(wallet);
+    chat.dispose();
+  });
+
   it("loses nothing when the provider fails before answering", async () => {
     const { chat, wallet } = await account();
 

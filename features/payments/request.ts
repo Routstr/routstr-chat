@@ -56,7 +56,7 @@ export function sdkWallet(
       try {
         return {
           success: true,
-          amount: await purse.receive(token),
+          amount: (await purse.take(token)).sats,
           unit: "sat",
         };
       } catch (error) {

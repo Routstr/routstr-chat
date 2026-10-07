@@ -122,7 +122,7 @@ function lockingPurse(walletLock: ReturnType<typeof fakeLock>) {
         unlock();
       }
     },
-    receive: async () => 1,
+    take: async () => ({ sats: 1, pending: false }),
   };
   return { purse, answerSwap: () => answer() };
 }
@@ -209,7 +209,7 @@ describe("sdkWallet", () => {
 
   it("tells the SDK a refund did not land, so it keeps the token", async () => {
     const { purse } = fakePurse();
-    purse.receive.mockRejectedValueOnce(new Error("mint unreachable"));
+    purse.take.mockRejectedValueOnce(new Error("mint unreachable"));
 
     const result = await sdkWallet(purse, () => true, false).receiveToken(
       tokenOf(5)
@@ -229,7 +229,7 @@ describe("sdkWallet", () => {
 
     it("asks what the provider holds for it, and tells the SDK it is done", async () => {
       const { purse } = fakePurse();
-      purse.receive.mockRejectedValueOnce(spent());
+      purse.take.mockRejectedValueOnce(spent());
       const recover = vi.fn(async () => 0);
 
       const result = await sdkWallet(
@@ -246,7 +246,7 @@ describe("sdkWallet", () => {
 
     it("keeps the token when the provider does not answer, or is not asked", async () => {
       const { purse } = fakePurse();
-      purse.receive.mockRejectedValue(spent());
+      purse.take.mockRejectedValue(spent());
       const silent = vi.fn(async (): Promise<number> => {
         throw new Error("provider down");
       });
