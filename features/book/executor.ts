@@ -451,8 +451,10 @@ export class WalletExecutor {
     token: string,
     options: { requirePersisted?: boolean }
   ): Promise<Proof[]> {
-    const mintUrl = normalizeMintUrl(getTokenMetadata(token).mint);
-    const wallet = await this.open(mintUrl);
+    const { mint, unit } = getTokenMetadata(token);
+    const mintUrl = normalizeMintUrl(mint);
+    // in the token's unit: a mint that also counts msat still takes sat tokens
+    const wallet = await this.open(mintUrl, unit);
     const commit = this.deps.commitFor(mintUrl);
     const preview = await wallet.prepareSwapToReceive(token);
     const { id, keep } = await this.swap(wallet, mintUrl, preview, [], commit);

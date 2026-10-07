@@ -1,5 +1,10 @@
 // At a mint that offers msat: what Send shows is in sats, and the book pays the msat quote.
-import { Mint, Wallet, type Proof } from "@cashu/cashu-ts";
+import {
+  getEncodedTokenV4,
+  Mint,
+  Wallet,
+  type Proof,
+} from "@cashu/cashu-ts";
 import { describe, expect, it } from "vitest";
 import { getKit } from "@/tests/kit";
 import { WalletExecutor } from "@/features/book/executor";
@@ -82,5 +87,30 @@ describe("a mint that offers msat", () => {
     expect(await purse.claim(MSAT_MINT, invoice.quoteId)).toBe(50);
     expect(await purse.balances()).toEqual({ [MSAT_MINT]: 50 });
     expect(written).toEqual([{ direction: "in", sats: 50 }]);
+  });
+
+  it("takes in a sat token there, in sats, as most wallets send", async () => {
+    const wallet = new Wallet(new Mint(MSAT_MINT), { unit: "sat" });
+    await wallet.loadMint();
+    const deposit = await wallet.createMintQuote(8);
+    for (let i = 0; i < 40; i++) {
+      if ((await wallet.checkMintQuote(deposit.quote)).state === "PAID") break;
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    const proofs = await wallet.mintProofs(8, deposit.quote);
+    const token = getEncodedTokenV4({ mint: MSAT_MINT, unit: "sat", proofs });
+
+    const journal = new Journal(memoryStorage());
+    const executor = new WalletExecutor({
+      owner: "alice",
+      journal,
+      locks: navigator.locks,
+      commitFor: () => async () => undefined,
+    });
+    const taken = await executor.take(token);
+    expect(taken.pending).toBe(false);
+    expect(taken.unit).toBe("sat");
+    expect(sum(taken.proofs)).toBe(8);
+    expect(journal.list("alice")).toEqual([]);
   });
 });
