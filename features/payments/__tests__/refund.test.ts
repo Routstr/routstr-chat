@@ -544,6 +544,22 @@ describe("refundCredit: a payout the mint calls spent", () => {
     expect(deps.otherDevices.drop).toHaveBeenCalledWith(["sk-lost-device"]);
   });
 
+  it("is done for this device's own key on the Refund button too", async () => {
+    provider({ [LARGE]: 0 });
+    const { deps, direct, wallet } = await setup();
+    direct.setApiKey(LARGE, "sk-mine");
+    wallet.purse.receive.mockRejectedValue(
+      Object.assign(new Error("Token already spent"), { code: 11001 })
+    );
+    const adopt = vi.fn(async () => 0);
+
+    const results = await refundCredit({ ...deps, adopt }, true);
+
+    expect(adopt).toHaveBeenCalledWith(`refund-${LARGE}`, LARGE);
+    expect(results).toContainEqual({ baseUrl: LARGE, success: true });
+    expect(direct.getAllApiKeys()).toEqual([]);
+  });
+
   it("keeps the key when the provider does not say", async () => {
     const { deps } = await replayed();
 

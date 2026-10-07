@@ -126,6 +126,40 @@ describe("the Refund button against this node's core", () => {
     expect(received).toEqual([]);
   });
 
+  it("settles a payout already taken when Refund is pressed again, with no failure shown", async () => {
+    const exported = new ExportedKeys(
+      "alice",
+      memoryStorage(),
+      new BalanceManager({} as WalletAdapter, {} as StorageAdapter),
+      {
+        get: async () => undefined,
+        put: async () => {},
+        delete: async () => {},
+      }
+    );
+    const { chat, storage, hold, received } = await account(
+      [],
+      (token, baseUrl) => exported.adopt(token, baseUrl)
+    );
+    const key = await newKey(40);
+    hold(key);
+    expect(await chat.refund()).toEqual([
+      { baseUrl: kit.coreUrl, success: true },
+    ]);
+    expect(received).toEqual([40]);
+
+    // the key is back, as if forgetting it never reached the disk: core
+    // replays the payout this wallet already took, and the mint refuses it
+    hold(key);
+    expect(await chat.refund()).toEqual([
+      { baseUrl: kit.coreUrl, success: true },
+    ]);
+
+    expect(received).toEqual([40]);
+    expect(storage.getAllApiKeys()).toEqual([]);
+    expect(exported.list()).toEqual([]);
+  });
+
   it("keeps a key a reply elsewhere is still using, and refunds it after", async () => {
     const { chat, storage, hold, received } = await account();
     const key = await newKey(60);
