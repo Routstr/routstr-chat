@@ -4,13 +4,14 @@ import { Mint, Wallet, MintQuoteState, MeltQuoteState } from "@cashu/cashu-ts";
 import { toast } from "sonner";
 import { formatBalance } from "@/features/wallet";
 import { useTransactionHistoryStore } from "@/features/wallet";
-import { mintTokensFromPaidInvoice } from "@/lib/cashuLightning";
-import { MintRecoveryUnavailableError } from "@/lib/mintQuoteRecovery";
+import { usePurse, usePurseOf } from "@/features/wallet/view";
 
 export function useInvoiceChecker() {
   const { getPendingInvoices, updateInvoice, cleanupOldInvoices, owner } =
     useInvoiceSync();
   const transactionHistoryStore = useTransactionHistoryStore();
+  const purseOf = usePurseOf();
+  const current = usePurse();
   const [isChecking, setIsChecking] = useState(false);
   const checkIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const lastCheckRef = useRef<number>(0);
@@ -40,16 +41,11 @@ export function useInvoiceChecker() {
           });
         }
 
-        const proofs = await mintTokensFromPaidInvoice(
-          invoice.mintUrl,
-          invoice.quoteId,
-          invoice.amount,
-          1,
-          owner
-        );
-        if (proofs.length === 0) {
-          throw new Error("Mint returned no proofs for the paid quote");
-        }
+        // into the account that made the invoice, whoever is active now
+        const purse = owner ? purseOf(owner) : current();
+        if (!purse) throw new Error("User not logged in");
+        // 0: claimed already, here or by another tab or device
+        const sats = await purse.claim(invoice.mintUrl, invoice.quoteId);
 
         await updateInvoice(invoice.id, {
           state: MintQuoteState.ISSUED,
@@ -65,10 +61,12 @@ export function useInvoiceChecker() {
         if (pendingTx) {
           transactionHistoryStore.removePendingTransaction(pendingTx.id);
         }
-        toast.success(
-          `Received ${formatBalance(invoice.amount, "sats")} from Lightning`,
-          { duration: 5000 }
-        );
+        if (sats > 0) {
+          toast.success(
+            `Received ${formatBalance(invoice.amount, "sats")} from Lightning`,
+            { duration: 5000 }
+          );
+        }
         return true;
       } catch (error) {
         console.error(`Error checking mint invoice ${invoice.id}:`, error);
@@ -89,9 +87,7 @@ export function useInvoiceChecker() {
           retryCount,
           claimError:
             remoteState === MintQuoteState.ISSUED
-              ? error instanceof MintRecoveryUnavailableError
-                ? "missing_preview"
-                : "recovery_pending"
+              ? "recovery_pending"
               : invoice.claimError,
         });
 
@@ -100,15 +96,13 @@ export function useInvoiceChecker() {
           remoteState === MintQuoteState.ISSUED
         ) {
           toast.error(
-            error instanceof MintRecoveryUnavailableError
-              ? "Payment was issued, but its local recovery data is missing."
-              : "Payment confirmed, but sats have not reached the wallet. Retry from invoice history."
+            "Payment confirmed, but sats have not reached the wallet. Retry from invoice history."
           );
         }
         return false;
       }
     },
-    [owner, transactionHistoryStore, updateInvoice]
+    [owner, purseOf, current, transactionHistoryStore, updateInvoice]
   );
 
   // Check a single melt invoice
@@ -229,8 +223,8 @@ export function useInvoiceChecker() {
 
   // Set up automatic checking interval
   useEffect(() => {
-    // Check immediately on mount
-    checkPendingInvoices();
+    // Check right after mount, outside the effect: a check sets state
+    const first = setTimeout(checkPendingInvoices, 0);
 
     // Clean up old invoices on mount
     cleanupOldInvoices();
@@ -242,6 +236,7 @@ export function useInvoiceChecker() {
 
     // Clean up on unmount
     return () => {
+      clearTimeout(first);
       if (checkIntervalRef.current) {
         clearInterval(checkIntervalRef.current);
       }

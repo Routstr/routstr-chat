@@ -7,9 +7,7 @@ import {
   AutoRefillNWCSettings,
 } from "@/utils/storageUtils";
 import { payWithNWC, isNWCConnected } from "@/lib/nwcPayment";
-import { useCashuStore } from "@/features/wallet/state/cashuStore";
-import { currentOwner } from "@/features/session/owned";
-import { useCashuWallet } from "@/features/wallet";
+import { useDepositMint, usePurse } from "@/features/wallet/view";
 import { toast } from "sonner";
 
 // Cooldown period between auto-refills (5 minutes)
@@ -17,12 +15,6 @@ const AUTO_REFILL_COOLDOWN_MS = 5 * 60 * 1000;
 
 // Minimum interval between balance checks (5 seconds for testing, can increase later)
 const BALANCE_CHECK_INTERVAL_MS = 5 * 1000;
-
-export interface AutoRefillStatus {
-  nwcAutoRefillEnabled: boolean;
-  isProcessingNWCRefill: boolean;
-  lastNWCRefillAt: number | null;
-}
 
 interface UseAutoRefillProps {
   balance: number;
@@ -41,20 +33,13 @@ interface UseAutoRefillProps {
 export function useAutoRefill({
   balance,
   isWalletLoaded,
-}: UseAutoRefillProps): AutoRefillStatus {
-  const cashuStore = useCashuStore();
-  const { updateProofs } = useCashuWallet();
+}: UseAutoRefillProps): void {
+  const purse = usePurse();
+  const depositTo = useDepositMint();
 
   // Track processing states
   const isProcessingNWCRef = useRef(false);
   const lastCheckTimeRef = useRef(0);
-
-  // Track settings for status return
-  const settingsRef = useRef<{
-    nwc: AutoRefillNWCSettings;
-  }>({
-    nwc: loadAutoRefillNWCSettings(),
-  });
 
   /**
    * Check if we're within the cooldown period
@@ -73,8 +58,9 @@ export function useAutoRefill({
   const executeNWCRefill = useCallback(
     async (settings: AutoRefillNWCSettings) => {
       if (isProcessingNWCRef.current) return;
-      if (!cashuStore.activeMintUrl) return;
-      const owner = currentOwner();
+      // the account active now gets the refill, even if another is by the time it lands
+      const from = purse();
+      if (!from) return;
 
       try {
         isProcessingNWCRef.current = true;
@@ -85,24 +71,20 @@ export function useAutoRefill({
           return;
         }
 
+        // where the provider about to be paid can take it, as Add does
+        const balances = await from.balances();
+        const mintUrl = depositTo(balances, settings.amount);
+
         toast.info(`Auto-refilling ${settings.amount} sats from NWC wallet...`);
 
         const result = await payWithNWC(
           settings.amount,
-          cashuStore.activeMintUrl,
-          owner,
+          mintUrl,
+          from.claim,
           {
-            onPaymentSuccess: async (proofs, amount) => {
-              // Add proofs to wallet
-              if (proofs.length > 0 && cashuStore.activeMintUrl) {
-                await updateProofs({
-                  mintUrl: cashuStore.activeMintUrl,
-                  proofsToAdd: proofs,
-                  proofsToRemove: [],
-                });
-              }
+            onPaymentSuccess: () => {
               updateNWCLastRefillTime();
-              toast.success(`Auto-refilled ${amount} sats from NWC wallet!`);
+              toast.success(`Auto-refilled ${settings.amount} sats from NWC wallet!`);
             },
             onPaymentError: (error) => {
               console.error("[useAutoRefill] NWC payment error:", error);
@@ -121,7 +103,7 @@ export function useAutoRefill({
         isProcessingNWCRef.current = false;
       }
     },
-    [cashuStore.activeMintUrl, updateProofs]
+    [purse, depositTo]
   );
 
   /**
@@ -145,7 +127,6 @@ export function useAutoRefill({
 
       // Load current settings
       const nwcSettings = loadAutoRefillNWCSettings();
-      settingsRef.current = { nwc: nwcSettings };
 
       // Check NWC auto-refill
       if (nwcSettings.enabled && !isProcessingNWCRef.current) {
@@ -166,10 +147,4 @@ export function useAutoRefill({
     isInCooldown,
     executeNWCRefill,
   ]);
-
-  return {
-    nwcAutoRefillEnabled: settingsRef.current.nwc.enabled,
-    isProcessingNWCRefill: isProcessingNWCRef.current,
-    lastNWCRefillAt: settingsRef.current.nwc.lastRefillAt || null,
-  };
 }

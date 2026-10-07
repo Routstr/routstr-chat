@@ -1,6 +1,8 @@
 import {
   CheckStateEnum,
   MeltQuoteState,
+  MintOperationError,
+  MintQuoteState,
   type OutputData,
   type Proof,
   type Wallet,
@@ -10,6 +12,7 @@ import {
   loadOutputs,
   type LandedRecord,
   type MeltRecord,
+  type MintRecord,
   type SwapRecord,
 } from "./records";
 
@@ -128,6 +131,58 @@ export async function settleMelt(
     return { state: "failed", change: [] };
   }
   return { state: "pending", change: [] };
+}
+
+/**
+ * A deposit claim whose answer never came, from the quote's state (NUT-04)
+ * read first. ISSUED is final: the coins signed for our outputs come back from
+ * restore, and none means it was claimed elsewhere (another tab or device).
+ * PAID and unclaimed is asked again with the same outputs. Any other state
+ * (unpaid, or the mint still signing) waits. Returns the coins, or null while
+ * the record stays.
+ */
+export async function settleMint(
+  wallet: Wallet,
+  record: MintRecord,
+  commit: CommitProofs,
+  journal: Journal
+): Promise<Proof[] | null> {
+  const outputs = loadOutputs(record.outputs);
+  const quote = await wallet.checkMintQuoteBolt11(record.quoteId);
+  let proofs: Proof[];
+  if (quote.state === MintQuoteState.ISSUED) {
+    proofs = await restoreOutputs(wallet, record.keysetId, outputs);
+  } else if (quote.state === MintQuoteState.PAID) {
+    try {
+      proofs = await wallet.completeMint({
+        method: "bolt11",
+        payload: {
+          quote: record.quoteId,
+          outputs: outputs.map((o) => o.blindedMessage),
+        },
+        outputData: outputs,
+        keysetId: record.keysetId,
+        quote: record.quoteId,
+      });
+    } catch (error) {
+      // a keyset the mint retired since: it signed nothing, so the next
+      // claim asks again with a keyset it takes
+      if (
+        error instanceof MintOperationError &&
+        error.code >= 12001 &&
+        error.code <= 12003
+      ) {
+        journal.remove(record.id);
+        return null;
+      }
+      throw error;
+    }
+  } else {
+    return null;
+  }
+  if (proofs.length) await commit(proofs, []);
+  journal.remove(record.id);
+  return proofs;
 }
 
 /** New proofs the mint gave us that the wallet never stored: never handed to

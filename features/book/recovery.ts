@@ -5,6 +5,7 @@ import { openWallet } from "./mint";
 import {
   settleLanded,
   settleMelt,
+  settleMint,
   settleSwap,
   type CommitProofs,
   type MeltOutcome,
@@ -48,8 +49,8 @@ export class RecoveryHost {
   ) {
     const { journal } = this.deps;
     for (const record of journal.list(owner)) {
-      // a token waits for the person
-      if (record.kind === "token") continue;
+      // a token waits for the person; a receive is tried by the purse
+      if (record.kind === "token" || record.kind === "receive") continue;
       try {
         const wallet = await (this.deps.openWallet ?? openWallet)(
           record.mintUrl,
@@ -57,10 +58,23 @@ export class RecoveryHost {
         );
         const commit = commitFor(record.mintUrl);
         if (record.kind === "swap") {
-          await settleSwap(wallet, record, commit, journal);
+          const restored = await settleSwap(wallet, record, commit, journal);
+          // a waiting token whose swap landed after all is received
+          if (record.incoming && restored?.length) {
+            const inputs = new Set(record.inputs.map((p) => p.secret));
+            journal
+              .list(owner)
+              .filter(
+                (r) =>
+                  r.kind === "receive" && r.secrets.some((s) => inputs.has(s))
+              )
+              .forEach((r) => journal.remove(r.id));
+          }
         } else if (record.kind === "melt") {
           const { state } = await settleMelt(wallet, record, commit, journal);
           outcomes.set(record.quoteId, state);
+        } else if (record.kind === "mint") {
+          await settleMint(wallet, record, commit, journal);
         } else {
           await settleLanded(wallet, record, commit, journal);
         }

@@ -38,7 +38,8 @@ const oldToken = (id: string, amount: number) => ({
 // what the records hold, in sats, whatever their kind
 const sats = (records: BookRecord[]) =>
   records.reduce((sum, r) => {
-    if (r.kind === "token") return sum + r.amount;
+    if (r.kind === "token" || r.kind === "receive") return sum + r.amount;
+    if (r.kind === "mint") return sum;
     const proofs = r.kind === "melt" || r.kind === "swap" ? r.inputs : r.proofs;
     return sum + proofs.reduce((s, p) => s + p.amount, 0);
   }, 0);

@@ -21,16 +21,27 @@
 export type * from "./core/domain";
 
 // Core Services (Framework-agnostic business logic)
-export * from "./core/services";
+export * from "./core/services/MintService";
 
 // Core Utilities (Pure functions)
-export * from "./core/utils";
+export * from "./core/utils/balance";
+export * from "./core/utils/formatting";
 
 // State Management (Zustand stores)
-export * from "./state";
+export * from "./state/cashuStore";
+export * from "./state/nutzapStore";
+export * from "./state/transactionHistoryStore";
+export * from "./state/unclaimedTokensStore";
 
 // React Hooks (React integration)
-export * from "./hooks";
+export * from "./hooks/useCashuWallet";
+export * from "./hooks/useCashuToken";
+export { holdsRecords } from "./hooks/useBook";
+export * from "./hooks/useCreateCashuWallet";
+export * from "./hooks/useNutzaps";
+export * from "./hooks/useCashuHistory";
+export { useWalletSend } from "./hooks/useWalletSend";
+export { useWalletReceive } from "./hooks/useWalletReceive";
 
 
 // Constants

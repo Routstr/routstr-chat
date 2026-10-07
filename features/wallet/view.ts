@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useState,
   useSyncExternalStore,
 } from "react";
@@ -12,9 +13,14 @@ import { DEFAULT_MINT_URL } from "@/lib/utils";
 import { saveTransactionHistory } from "@/utils/storageUtils";
 import { depositMint } from "./depositMint";
 import { listMint, walletLoading } from "./hooks/purseBridge";
-import type { Purse } from "./purse";
+import type { UsageLog } from "./ports";
+import { toSats, type Purse } from "./purse";
 import { useCashuStore } from "./state/cashuStore";
-import { useTransactionHistoryStore } from "./state/transactionHistoryStore";
+import {
+  useTransactionHistoryStore,
+  type PendingTransaction,
+} from "./state/transactionHistoryStore";
+import { useUnclaimedTokensStore } from "./state/unclaimedTokensStore";
 
 export { peek } from "./purse";
 
@@ -34,6 +40,16 @@ export function usePurse(): () => Purse | null {
     const owner = currentOwner();
     return owner && purseFor ? purseFor(owner) : null;
   }, [purseFor]);
+}
+
+/** The purse of a given account, for work that began for it: a deposit is
+ *  claimed into the account that made the invoice, whoever is active now. */
+export function usePurseOf(): (owner: string) => Purse | null {
+  const purseFor = useContext(PurseContext);
+  return useCallback(
+    (owner) => (purseFor ? purseFor(owner) : null),
+    [purseFor]
+  );
 }
 
 /** This account's spendable sats per mint, read again when its coins change
@@ -92,7 +108,25 @@ export function useWallet(): {
  *  only read it, or clear the records. */
 export function useActivity() {
   const entries = useTransactionHistoryStore((s) => s.history);
-  const pending = useTransactionHistoryStore((s) => s.pendingTransactions);
+  const invoices = useTransactionHistoryStore((s) => s.pendingTransactions);
+  // received tokens whose mint could not be reached yet: not in the balance
+  const waiting = useUnclaimedTokensStore((s) => s.waitingTokens);
+  const pending = useMemo(
+    (): PendingTransaction[] => [
+      ...invoices,
+      ...waiting.map((t) => ({
+        id: t.id,
+        direction: "in" as const,
+        amount: String(toSats(t.amount, t.unit)),
+        timestamp: Math.floor(t.createdAt / 1000),
+        status: "pending" as const,
+        mintUrl: t.mintUrl,
+        quoteId: "",
+        paymentRequest: "",
+      })),
+    ],
+    [invoices, waiting]
+  );
   const clearHistory = useTransactionHistoryStore((s) => s.clearHistory);
   const clear = useCallback(() => {
     clearHistory();
@@ -102,18 +136,27 @@ export function useActivity() {
   return { entries, pending, clear };
 }
 
-/** The mints the provider about to be paid takes, read when money is added;
- *  filled by the composition root from the catalog, empty while none is known.
- *  The wallet never imports chat. */
-export const AcceptedMintsContext = createContext<() => string[]>(() => []);
+/** The SDK's usage log, the one replies are recorded in; filled by the
+ *  composition root. Without it Usage shows nothing. */
+export const UsageLogContext = createContext<UsageLog | null>(null);
 
-/** Where new money should go, so the provider can take it (see
+/** The mints the provider about to be paid takes, for `sats` of new money,
+ *  read when money is added; filled by the composition root from the catalog,
+ *  empty while none is known. The wallet never imports chat. */
+export const AcceptedMintsContext = createContext<(sats: number) => string[]>(
+  () => []
+);
+
+/** Where `sats` of new money should go, so the provider can take it (see
  *  depositMint), given the account's sats per mint. The wallet lists that mint
  *  and its keysets too, so what lands there counts at once. */
-export function useDepositMint(): (balances: Record<string, number>) => string {
+export function useDepositMint(): (
+  balances: Record<string, number>,
+  sats: number
+) => string {
   const accepted = useContext(AcceptedMintsContext);
   return useCallback(
-    (balances) => {
+    (balances, sats) => {
       const { activeMintUrl, userSelectedMintUrl, mints } =
         useCashuStore.getState();
       const url = depositMint({
@@ -121,7 +164,7 @@ export function useDepositMint(): (balances: Record<string, number>) => string {
         picked: !!activeMintUrl && activeMintUrl === userSelectedMintUrl,
         known: mints.map((m) => m.url),
         balances,
-        accepted: accepted(),
+        accepted: accepted(sats),
         fallback: DEFAULT_MINT_URL,
       });
       void listMint(useCashuStore.getState(), url);

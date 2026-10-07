@@ -193,6 +193,45 @@ test("shows and pays an invoice in sats at a mint that counts in msat", async ({
   expect(left).toBeGreaterThanOrEqual(41); // the network may keep a few msat
 });
 
+test("adds by Lightning at a mint that counts in msat, as many sats as asked", async ({
+  page,
+  kit,
+  appUrl,
+}) => {
+  await v2.open(page, appUrl);
+  // a small token first, so the wallet lists the msat mint
+  const mint = new Wallet(new Mint(kit.env.msatMintUrl), { unit: "msat" });
+  await mint.loadMint();
+  const quote = await mint.createMintQuote(10_000);
+  await expect
+    .poll(async () => (await mint.checkMintQuote(quote.quote)).state)
+    .toBe("PAID");
+  const proofs = await mint.mintProofs(10_000, quote.quote);
+  await v2.receive(
+    page,
+    getEncodedTokenV4({ mint: kit.env.msatMintUrl, unit: "msat", proofs })
+  );
+  await v2.useMint(page, kit.env.msatMintUrl);
+  expect(await v2.balance(page)).toBe(10);
+
+  await page
+    .getByRole("button", { name: /^Open wallet\./ })
+    .first()
+    .click();
+  await page
+    .getByRole("region", { name: "Wallet", exact: true })
+    .getByRole("button", { name: "Add", exact: true })
+    .click();
+  const add = page.getByRole("region", { name: "Add funds", exact: true });
+  await add.getByRole("tab", { name: "Lightning" }).click();
+  await add.getByRole("textbox", { name: "Amount in sats" }).fill("100");
+  await add.getByRole("button", { name: "Create invoice" }).click();
+  // the kit's FakeWallet pays it at once: 100 sats land, not a tenth of one
+  await expect
+    .poll(() => v2.balance(page), { timeout: 60_000 })
+    .toBe(110);
+});
+
 test("lands a token whose swap answer never arrives, and says it was added", async ({
   page,
   kit,

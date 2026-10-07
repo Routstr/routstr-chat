@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import {
   CheckStateEnum,
   MeltQuoteState,
+  MintOperationError,
+  MintQuoteState,
   OutputData,
   createBlindSignature,
   createNewMintKeys,
@@ -10,8 +12,13 @@ import {
   type Wallet,
 } from "@cashu/cashu-ts";
 import { Journal, memoryStorage } from "../journal";
-import { saveOutputs, type MeltRecord, type SwapRecord } from "../records";
-import { settleMelt, settleSwap } from "../settle";
+import {
+  saveOutputs,
+  type MeltRecord,
+  type MintRecord,
+  type SwapRecord,
+} from "../records";
+import { settleMelt, settleMint, settleSwap } from "../settle";
 
 const melt: MeltRecord = {
   v: 1,
@@ -133,5 +140,68 @@ describe("settleSwap", () => {
     expect(restored?.map((p) => p.amount)).toEqual([8]);
     expect(commit).toHaveBeenCalledWith(restored, []);
     expect(journal.list("alice")).toEqual([]);
+  });
+});
+
+describe("settleMint", () => {
+  const deposit: MintRecord = {
+    v: 1,
+    kind: "mint",
+    id: "d1",
+    owner: "alice",
+    mintUrl: "m",
+    createdAt: 0,
+    keysetId: "00ad268c4d1f5826",
+    quoteId: "q1",
+    amount: 8,
+    outputs: [],
+  };
+
+  it("drops a claim whose keyset the mint retired: it signed nothing, so the next claim asks again", async () => {
+    const journal = new Journal(memoryStorage());
+    journal.put(deposit);
+    const commit = vi.fn();
+    const wallet = {
+      checkMintQuoteBolt11: async () => ({ state: MintQuoteState.PAID }),
+      completeMint: async () => {
+        throw new MintOperationError(12002, "keyset inactive");
+      },
+    } as unknown as Wallet;
+
+    expect(await settleMint(wallet, deposit, commit, journal)).toBeNull();
+    expect(commit).not.toHaveBeenCalled();
+    expect(journal.list("alice")).toEqual([]);
+  });
+
+  it("waits while the quote is unpaid, and keeps the claim for any other failure", async () => {
+    const journal = new Journal(memoryStorage());
+    journal.put(deposit);
+    let state: string = MintQuoteState.UNPAID;
+    const wallet = {
+      checkMintQuoteBolt11: async () => ({ state }),
+      completeMint: async () => {
+        throw new Error("mint busy");
+      },
+    } as unknown as Wallet;
+
+    expect(await settleMint(wallet, deposit, vi.fn(), journal)).toBeNull();
+    state = MintQuoteState.PAID;
+    await expect(settleMint(wallet, deposit, vi.fn(), journal)).rejects.toThrow(
+      "mint busy"
+    );
+    expect(journal.list("alice")).toHaveLength(1);
+  });
+
+  it("keeps the claim while the mint is still signing, so its coins can be restored once issued", async () => {
+    const journal = new Journal(memoryStorage());
+    journal.put(deposit);
+    const restore = vi.fn(async () => ({ outputs: [], signatures: [] }));
+    const wallet = {
+      checkMintQuoteBolt11: async () => ({ state: "PENDING" }),
+      mint: { restore },
+    } as unknown as Wallet;
+
+    expect(await settleMint(wallet, deposit, vi.fn(), journal)).toBeNull();
+    expect(journal.list("alice")).toHaveLength(1);
   });
 });

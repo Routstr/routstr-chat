@@ -161,3 +161,34 @@ describe.each([
     expect(journal.list("alice")).toEqual([]);
   });
 });
+
+it("pays an invoice while a token is being made, from the coins the token left", async () => {
+  const mint = kit.env.mintUrl;
+  const { store, all } = memoryCoins(() => "sat");
+  const journal = new Journal(memoryStorage());
+  const purse = createPurse("alice", {
+    coins: store,
+    activity,
+    journal,
+    locks: navigator.locks,
+  });
+  await purse.receive(await kit.mintToken(64));
+  const quote = await (
+    await kit.walletAt(mint)
+  ).createMeltQuote(await kit.invoice(8));
+
+  // the token takes the lock first; the payment reads coins only after it
+  const [token, state] = await Promise.all([
+    purse.send(mint, 16, async () => undefined),
+    purse.pay(mint, quote),
+  ]);
+  expect(state).toBe("paid");
+  expect(await kit.redeem(token)).toBe(16);
+  const left = (await purse.balances())[mint];
+  expect(left).toBeLessThanOrEqual(64 - 16 - 8);
+  expect(left).toBeGreaterThanOrEqual(64 - 16 - 8 - quote.fee_reserve);
+  expect(journal.list("alice")).toEqual([]);
+  expect(await kit.coinStates(all() as Proof[], mint)).toEqual(
+    all().map(() => "UNSPENT")
+  );
+});

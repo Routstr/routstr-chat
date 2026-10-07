@@ -1,11 +1,6 @@
 "use client";
 
-import {
-  createLightningInvoice,
-  mintTokensFromPaidInvoice,
-} from "@/lib/cashuLightning";
-import { finalizeMintClaim } from "@/lib/mintQuoteRecovery";
-import { MintQuoteState, Proof } from "@cashu/cashu-ts";
+import { createLightningInvoice } from "@/lib/cashuLightning";
 
 /**
  * Check if NWC (Nostr Wallet Connect) is connected
@@ -55,31 +50,59 @@ export async function getNWCBalance(): Promise<number | null> {
 
 export interface NWCPaymentCallbacks {
   onInvoiceCreated?: (invoice: string, quoteId: string) => void;
-  onPaymentSuccess?: (proofs: Proof[], amount: number) => void | Promise<void>;
+  onPaymentSuccess?: (sats: number) => void | Promise<void>;
   onPaymentError?: (error: Error) => void;
 }
 
 export interface NWCPaymentResult {
   success: boolean;
-  proofs?: Proof[];
+  /** what reached the wallet */
+  sats?: number;
   error?: string;
+}
+
+/** Claims a paid deposit into the wallet it was made for; resolves with the
+ *  sats it gave and throws while the mint has not seen the payment. */
+export type ClaimDeposit = (
+  mintUrl: string,
+  quoteId: string
+) => Promise<number>;
+
+// the mint may see the payment a while after the wallet sends it, and the
+// payment has left by then: every failure is tried again for that long
+const CLAIM_TRIES = 40;
+const CLAIM_EVERY_MS = 3000;
+
+async function claimWhenPaid(
+  claim: ClaimDeposit,
+  mintUrl: string,
+  quoteId: string
+): Promise<number> {
+  for (let i = 1; ; i++) {
+    try {
+      return await claim(mintUrl, quoteId);
+    } catch (error) {
+      if (i >= CLAIM_TRIES) throw error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, CLAIM_EVERY_MS));
+  }
 }
 
 /**
  * Pay a Lightning invoice using the connected NWC wallet.
  * This creates an invoice via the Cashu mint, pays it via NWC,
- * then mints tokens from the paid invoice.
+ * then claims the deposit into the wallet.
  *
  * @param amount Amount in sats to pay
  * @param mintUrl The Cashu mint URL to create invoice against
- * @param owner The account the coins go to, even if another one is active by then
+ * @param claim Claims the deposit into the account it is for, even if another one is active by then
  * @param callbacks Optional callbacks for invoice creation, success, and error
  * @returns Promise resolving to payment result
  */
 export async function payWithNWC(
   amount: number,
   mintUrl: string,
-  owner: string | null,
+  claim: ClaimDeposit,
   callbacks?: NWCPaymentCallbacks
 ): Promise<NWCPaymentResult> {
   try {
@@ -98,63 +121,20 @@ export async function payWithNWC(
     // Pay with connected NWC wallet
     const mod = await import("@getalby/bitcoin-connect-react");
     const provider = await mod.requestProvider();
+    await provider.sendPayment(paymentRequest);
 
-    const res = await provider.sendPayment(paymentRequest);
-
-    // Check payment status - different wallets may return different formats
-    const preimage = (res as any)?.preimage || (res as any)?.payment_preimage;
-
-    if (preimage && preimage !== "") {
-      // Payment successful, mint tokens
-      const proofs = await mintTokensFromPaidInvoice(
-        mintUrl,
-        quoteId,
-        amount,
-        undefined,
-        owner
-      );
-
-      if (proofs.length > 0) {
-        await callbacks?.onPaymentSuccess?.(proofs, amount);
-        finalizeMintClaim(mintUrl, quoteId);
-        return { success: true, proofs };
-      } else {
-        return { success: true, proofs: [] };
-      }
-    } else {
-      // Empty or no preimage - payment might still be processing
-      // Poll for payment status (some wallets process async)
-
-      // Poll up to 30 seconds
-      const maxPolls = 15;
-      const pollInterval = 2000; // 2 seconds
-
-      for (let i = 0; i < maxPolls; i++) {
-        await new Promise((resolve) => setTimeout(resolve, pollInterval));
-
-        try {
-          const proofs = await mintTokensFromPaidInvoice(
-            mintUrl,
-            quoteId,
-            amount,
-            undefined,
-            owner
-          );
-          if (proofs.length > 0) {
-            await callbacks?.onPaymentSuccess?.(proofs, amount);
-            finalizeMintClaim(mintUrl, quoteId);
-            return { success: true, proofs };
-          }
-        } catch (e) {
-          // Invoice not paid yet, continue polling
-        }
-      }
-
-      // After polling, payment didn't complete
+    // some wallets answer before the payment settles: the claim waits for the mint
+    let sats: number;
+    try {
+      sats = await claimWhenPaid(claim, mintUrl, quoteId);
+    } catch (error) {
+      if (!String(error).includes("not been paid")) throw error;
       throw new Error(
         "Payment did not complete within timeout. Please check your wallet."
       );
     }
+    await callbacks?.onPaymentSuccess?.(sats);
+    return { success: true, sats };
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Unknown payment error";
@@ -163,26 +143,5 @@ export async function payWithNWC(
       error instanceof Error ? error : new Error(errorMessage)
     );
     return { success: false, error: errorMessage };
-  }
-}
-
-/**
- * Attempt to mint tokens from a previously paid invoice (for polling scenarios)
- * @param mintUrl The Cashu mint URL
- * @param quoteId The quote ID from the invoice creation
- * @param amount The expected amount
- * @returns Promise resolving to proofs if successful, empty array otherwise
- */
-export async function attemptMintFromQuote(
-  mintUrl: string,
-  quoteId: string,
-  amount: number
-): Promise<Proof[]> {
-  try {
-    const proofs = await mintTokensFromPaidInvoice(mintUrl, quoteId, amount);
-    if (proofs.length > 0) finalizeMintClaim(mintUrl, quoteId);
-    return proofs;
-  } catch {
-    return [];
   }
 }

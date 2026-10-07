@@ -115,6 +115,7 @@ export function createSdk({ extraProviders }: { extraProviders: string[] }) {
     mintDiscovery: new MintDiscovery(discoveryAdapter),
     request,
     cost,
+    usageTrackingDriver,
     torMode: isTorContext,
     client: (wallet: WalletAdapter, storage: StorageAdapter) =>
       new RoutstrClient(wallet, storage, discoveryAdapter, "min", "apikeys", {

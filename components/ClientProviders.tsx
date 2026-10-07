@@ -19,7 +19,7 @@ import { HistoryContext } from "@/features/history/view";
 import { activeChat } from "@/runtime/accountChat";
 import { AccountChatContext } from "@/features/chat/view";
 import { RelaysContext } from "@/features/relays/view";
-import { PurseContext } from "@/features/wallet/view";
+import { PurseContext, UsageLogContext } from "@/features/wallet/view";
 import { PurseContext as KeysPurseContext } from "@/features/keys/view";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -91,6 +91,7 @@ export default function ClientProviders({ children }: { children: ReactNode }) {
             <QueryClientProvider client={queryClient}>
               <HistoryContext.Provider value={history}>
                 <PurseContext.Provider value={walletPurseFor}>
+                <UsageLogContext.Provider value={routing.usage}>
                 <KeysPurseContext.Provider value={walletPurseFor}>
                 <AccountChatContext.Provider value={chat}>
                   <InvoiceRecoveryProvider key={generation}>
@@ -98,6 +99,7 @@ export default function ClientProviders({ children }: { children: ReactNode }) {
                   </InvoiceRecoveryProvider>
                 </AccountChatContext.Provider>
                 </KeysPurseContext.Provider>
+                </UsageLogContext.Provider>
                 </PurseContext.Provider>
               </HistoryContext.Provider>
             </QueryClientProvider>

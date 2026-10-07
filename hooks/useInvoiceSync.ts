@@ -35,7 +35,6 @@ import {
   configSyncEose$,
   type UserSignerInfo,
 } from "@/hooks/sync";
-import { finalizeMintClaim } from "@/lib/mintQuoteRecovery";
 import { currentOwner, owned } from "@/features/session/owned";
 
 export interface StoredInvoice {
@@ -358,14 +357,6 @@ export function useInvoiceSync() {
           : inv
       );
       saveLocalInvoices(updated);
-
-      if (
-        target.type === "mint" &&
-        (updates.state as string) === "ISSUED" &&
-        !updates.claimError
-      ) {
-        finalizeMintClaim(target.mintUrl, target.quoteId);
-      }
 
       // Sync to cloud
       await syncToCloud(updated);
