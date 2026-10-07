@@ -7,7 +7,6 @@ import { peek } from "@/features/wallet/view";
 import { useUi } from "../../ui";
 import { useMoney, usePayable } from "../../useMoney";
 import { useChatModel } from "../../useChatModel";
-import { needOf } from "../../price";
 import { useFunding } from "../../wallet/useFunding";
 import { PRESETS, fmt, reduced } from "./bits";
 
@@ -20,7 +19,9 @@ export type Pay = ReturnType<typeof usePay>;
 const TRY = 100;
 
 export function usePay(say: (t: string) => void) {
-  const { model: selectedModel, provider } = useChatModel();
+  const { model: selectedModel, priced, provider } = useChatModel();
+  // what the wallet must hold for the send: the SDK's own top-up, less any key's credit where it goes
+  const pay = usePayable();
   const isAuthenticated = useSession().pubkey !== null;
   const ui = useUi();
   const money = useMoney();
@@ -28,10 +29,7 @@ export function usePay(say: (t: string) => void) {
 
   const balance = money.total;
   const held = useHeldCredit();
-  // what is short is counted as the send counts it: at the provider the message goes to
-  const payable = usePayable();
-  const have = payable.at(provider);
-  const need = selectedModel ? Math.ceil(needOf(selectedModel)) : 0;
+  const need = priced ? pay.takes(priced, provider) : 0;
   // an account's first sats (nothing in the wallet or held at a provider): a small try, picked for you
   const trying = !money.loading && balance + held <= 0 && TRY >= need;
 
@@ -43,7 +41,7 @@ export function usePay(say: (t: string) => void) {
   const [tokFail, setTokFail] = useState(false);
   const [landed, setLanded] = useState(0);
 
-  const minOther = Math.max(1, need - have);
+  const minOther = Math.max(1, need - balance);
   // an invoice runs out at the mint's deadline; after that nobody should pay it
   const [ranOut, setRanOut] = useState<number | null>(null);
   useEffect(() => {
@@ -119,7 +117,7 @@ export function usePay(say: (t: string) => void) {
   // seal the card goes back to the amounts, whose head says what is still short
   const short = useRef(0);
   useEffect(() => {
-    short.current = selectedModel && !payable.covers(selectedModel, provider) ? Math.max(1, need - have) : 0;
+    short.current = priced && !pay.covers(priced, provider) ? Math.max(1, need - balance) : 0;
   });
   useEffect(() => {
     if (!landed || !holding) return;

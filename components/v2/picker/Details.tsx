@@ -232,11 +232,12 @@ function Details(props: DetailsProps) {
   const co = makerOf(m);
   const routes = cat.routesOf(m.id);
   const multi = routes.length > 1;
-  const rt = host ? cat.routeFor({ ...row, pin: null }, host) : routes[0] ?? cat.routeFor({ ...row, pin: null });
+  const rt = cat.routeFor({ ...row, pin: null }, host);
   const p = cat.cost(rt.model);
   const ok = cat.fits(rt);
-  const need = cat.needFor(rt.model);
-  const short = Math.max(0, Math.ceil(need - cat.spendable(rt)));
+  // what the wallet must hold for a message here, all of it held by the provider until used
+  const need = cat.needFor(rt);
+  const short = Math.max(0, Math.ceil(need - cat.balance));
   const base = routes[0] ? cat.cost(routes[0].model) : p;
   const x = p > 0 ? cat.scale.at(p) : null;
   const kicker = `${getCompanyMeta(co).label}${isPrivate(m) && !nameSaysPrivate(m) ? " · private" : ""}`;

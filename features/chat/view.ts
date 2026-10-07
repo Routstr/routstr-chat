@@ -19,10 +19,10 @@ export interface AccountChatView {
   held: {
     subscribe(listener: () => void): () => void;
     get(): number;
-    /** What its key at each provider holds while the next message there
-     *  spends it first (the API-key path), by address with the closing
-     *  slash; the same object until that changes. */
-    keys(): Readonly<Record<string, number>>;
+    /** What its key at each provider holds, by address with the closing
+     *  slash, the same object until that changes; null when the next message
+     *  spends no key (X-Cashu, or a node pays). */
+    keys(): Readonly<Record<string, number>> | null;
   };
   viewing(conversationId: string | null): void;
   /** The account's files: kept here, copied to Blossom. */
@@ -96,8 +96,8 @@ export function useHeldCredit(): number {
 const NO_CREDIT: Readonly<Record<string, number>> = {};
 
 /** What the active account's key at each provider will spend before the
- *  wallet, by address with the closing slash. */
-export function useKeyCredit(): Readonly<Record<string, number>> {
+ *  wallet, by address with the closing slash; null when no key is spent. */
+export function useKeyCredit(): Readonly<Record<string, number>> | null {
   const held = useAccountChat()?.held;
   return useSyncExternalStore(
     held?.subscribe ?? none,

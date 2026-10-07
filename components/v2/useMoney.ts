@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useBusy, useKeyCredit } from "@/features/chat/view";
 import { useNodePays, type RemoteNode } from "@/features/node/view";
+import { topUpFor } from "@/features/payments/view";
 import { useWallet } from "@/features/wallet/view";
 import type { Model } from "@/types/models";
 import { getPendingCashuTokenAmount } from "@/utils/cashuUtils";
@@ -59,26 +60,27 @@ export function MoneyProvider({ children }: { children: React.ReactNode }) {
 
 const slashed = (url: string) => (url.endsWith("/") ? url : `${url}/`);
 
-/** What can pay for a message at a provider, and whether that is enough: the
- *  wallet, and on the API-key path what this account's key there already
- *  holds, which the SDK spends first (`credit` is empty on the X-Cashu path,
- *  which pays every message from the wallet). */
-export function payable(total: number, credit: Readonly<Record<string, number>>, node: boolean) {
-  const at = (baseUrl: string | null | undefined) => total + (baseUrl ? credit[slashed(baseUrl)] ?? 0 : 0);
-  const most = Math.max(0, ...Object.values(credit));
-  /** `where` may be asked only when it matters: when the wallet alone is short
-   *  and some key holds enough to make up the rest. */
-  const covers = (model: Model, where: Where) => {
-    // a node pays for everything
-    if (node) return true;
-    // a model with no known price still needs something to pay with
-    const need = needOf(model);
-    const enough = (have: number) => (need > 0 ? have >= need : have > 0);
-    if (enough(total)) return true;
-    if (!enough(total + most)) return false;
-    return enough(at(typeof where === "function" ? where() : where));
-  };
-  return { at, covers };
+/** What a send takes from the wallet before it goes, by the SDK's own sizes
+ *  (topUpFor), and whether the wallet has it. On the API-key path a key's
+ *  credit at the provider the send goes to pays first; `credit` is null when
+ *  every message carries its own token (X-Cashu), and a node pays for all. */
+export function payable(total: number, credit: Readonly<Record<string, number>> | null, node: boolean) {
+  const keys = credit ? Object.values(credit) : [];
+  // null: no key at that provider yet
+  const keyAt = (baseUrl: string | null | undefined) => (credit && baseUrl ? credit[slashed(baseUrl)] ?? null : null);
+  const takesWith = (model: Model, key: number | null) =>
+    node ? 0 : topUpFor(needOf(model), key, credit ? "apikeys" : "xcashu").now;
+  const takes = (model: Model, where: string | null | undefined) => takesWith(model, keyAt(where));
+  /** Whether where the send goes changes the answer: the wallet alone is
+   *  short, and the most any key holds would make it enough. */
+  const decides = (model: Model) =>
+    keys.length > 0 && total < takesWith(model, null) && total >= takesWith(model, Math.max(...keys));
+  /** `where` is worked out only when it decides. */
+  const covers = (model: Model, where: Where) =>
+    decides(model)
+      ? total >= takes(model, typeof where === "function" ? where() : where)
+      : total >= takesWith(model, null);
+  return { takes, decides, covers };
 }
 
 /** The provider a message goes to, or a way to work it out. */

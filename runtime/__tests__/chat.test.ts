@@ -171,7 +171,7 @@ describe("createAccountChat", () => {
     expect(wallet.received).toHaveLength(2);
   });
 
-  it("names what each provider's key spends first, the same object until it changes, none when X-Cashu or a node pays", async () => {
+  it("names what each provider's key spends first, the same object until it changes, and no keys when X-Cashu or a node pays", async () => {
     let spending: Spending = { mode: "apikeys" };
     const { account, credit } = await setup(() => spending);
     expect(account.held.keys()).toEqual({});
@@ -186,9 +186,9 @@ describe("createAccountChat", () => {
     expect(account.held.keys()).toEqual({ "https://a.example/": 25 });
 
     spending = { mode: "xcashu" };
-    expect(account.held.keys()).toEqual({});
+    expect(account.held.keys()).toBeNull();
     spending = { mode: "apikeys", node: { url: "https://node.example/", apiKey: "sk-n" } };
-    expect(account.held.keys()).toEqual({});
+    expect(account.held.keys()).toBeNull();
     account.dispose();
   });
 });

@@ -9,7 +9,7 @@ import { useDraft } from "../ui";
 import { useChatModel } from "../useChatModel";
 import { useMoney, usePayable } from "../useMoney";
 import { textOf } from "../format";
-import { estimateSats, needOf, promptTokens } from "../price";
+import { estimateSats, promptTokens } from "../price";
 import { answers, baseKey, hostOf, parseKey, priceScale, type Route, type Row } from "./catalog";
 
 /** Development only: the lab hands the picker a catalogue with providers, so
@@ -24,7 +24,7 @@ export const CatalogStandInContext = createContext<CatalogStandIn | null>(null);
  *  message costs on each, what you can afford, what is in use. */
 export function useCatalog() {
   const catalog = useCatalogService();
-  const { models: all, model: selectedModel, chosen } = useChatModel();
+  const { models: all, model: selectedModel, chosen, routed } = useChatModel();
   const slots = useThread(useOpenChat().id);
   const { text } = useDraft();
   const standIn = useContext(CatalogStandInContext);
@@ -58,14 +58,16 @@ export function useCatalog() {
     return [...seen].map(([base, host]) => ({ base, host })).sort((a, b) => a.host.localeCompare(b.host));
   }, [routesById]);
 
-  /** The provider a row speaks for: its pin, the "Only from" host, or the
-   *  cheapest. A pin whose provider is gone resolves to what that provider
-   *  last listed, never to someone else's price. */
+  /** The provider a row speaks for: its pin, the "Only from" host, or where
+   *  the SDK sends it (the cheapest until it says). A pin whose provider is
+   *  gone resolves to what that provider last listed, never to someone else's
+   *  price. */
   const routeFor = useCallback(
     (row: Row, host: string | null = null, only: string | null = null): Route => {
       const rs = routesOf(row.model.id);
       const want = host ?? row.pin ?? only;
-      const hit = want ? rs.find((r) => r.base === want) : rs[0];
+      const sdk = routed[row.model.id];
+      const hit = want ? rs.find((r) => r.base === want) : ((sdk && rs.find((r) => r.base === baseKey(sdk))) || rs[0]);
       if (hit) return hit;
       if (want && !standIn) {
         const listed = catalog?.listedAt(want, row.model.id);
@@ -73,22 +75,24 @@ export function useCatalog() {
       }
       return rs[0] ?? { base: "", host: hostOf(null, row.model), model: row.model };
     },
-    [routesOf, catalog, standIn]
+    [routesOf, catalog, standIn, routed]
   );
 
   const balance = money.total;
-  const needFor = useCallback((m: Model) => (money.node ? 0 : needOf(m)), [money.node]);
   // a message by this route goes to its provider, where a key may already hold credit; a pin
-  // whose provider is gone is priced at its listing, but the message goes to the cheapest
+  // whose provider is gone is priced at its listing, but the message goes where the SDK sends it
   const goes = useCallback(
     (r: Route) => {
       const live = routesOf(r.model.id);
-      return live.some((x) => x.base === r.base) ? r.base : live[0]?.base;
+      if (live.some((x) => x.base === r.base)) return r.base;
+      const sdk = routed[r.model.id];
+      return ((sdk && live.find((x) => x.base === baseKey(sdk))) || live[0])?.base;
     },
-    [routesOf]
+    [routesOf, routed]
   );
+  /** What the wallet must hold for a message by this route. */
+  const needFor = useCallback((r: Route) => payable.takes(r.model, goes(r)), [payable, goes]);
   const fits = useCallback((r: Route) => payable.covers(r.model, goes(r)), [payable, goes]);
-  const spendable = useCallback((r: Route) => payable.at(goes(r)), [payable, goes]);
 
   const scale = useMemo(
     () => priceScale(models.map((m) => cost(routesOf(m.id)[0]?.model ?? m))),
@@ -113,8 +117,8 @@ export function useCatalog() {
 
   // one object per real change, so memoised rows and details can hold still
   return useMemo(
-    () => ({ models, routesOf, routeFor, cost, needFor, fits, spendable, scale, picks, web, current, balance, node: money.node, hosts }),
-    [models, routesOf, routeFor, cost, needFor, fits, spendable, scale, picks, web, current, balance, money.node, hosts]
+    () => ({ models, routesOf, routeFor, cost, needFor, fits, scale, picks, web, current, balance, node: money.node, hosts }),
+    [models, routesOf, routeFor, cost, needFor, fits, scale, picks, web, current, balance, money.node, hosts]
   );
 }
 

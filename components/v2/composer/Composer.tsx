@@ -144,7 +144,7 @@ function Tile({ a, reading, onRemove, onTip }: { a: MessageAttachment; reading: 
 export default function Composer({ centred }: { centred: boolean }) {
   const { id: activeConversationId } = useOpenChat();
   const { text: inputMessage, setText: setInputMessage, attachments: uploadedAttachments, setAttachments: setUploadedAttachments } = useDraft();
-  const { model: selectedModel, chosen, provider, loading: isLoadingModels } = useChatModel();
+  const { model: selectedModel, priced, chosen, provider, loading: isLoadingModels } = useChatModel();
   const catalog = useCatalogService();
   const chat = useAccountChat()?.chat;
   const isLoading = useAsking(activeConversationId);
@@ -160,7 +160,7 @@ export default function Composer({ centred }: { centred: boolean }) {
   const held = useHeldCredit();
   // the same rule the picker shows: what can pay at the provider the message goes to
   const payable = usePayable();
-  const lowBalanceWarningForModel = !!selectedModel && !payable.covers(selectedModel, provider);
+  const lowBalanceWarningForModel = !!priced && !payable.covers(priced, provider);
   const { send } = useActions();
   const field = useRef<HTMLTextAreaElement>(null);
   const island = useRef<HTMLDivElement>(null);

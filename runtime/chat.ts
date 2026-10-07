@@ -40,8 +40,6 @@ export interface AccountChat extends Omit<AccountChatView, "files"> {
   dispose(): void;
 }
 
-const NONE: Readonly<Record<string, number>> = {};
-
 export function createAccountChat(deps: AccountChatDeps): AccountChat {
   let live = true;
   const payments = { ...deps, live: () => live };
@@ -75,7 +73,7 @@ export function createAccountChat(deps: AccountChatDeps): AccountChat {
   const keysHold = () => {
     // X-Cashu pays every message from the wallet, a node pays for all of them
     const { mode, node } = deps.spending();
-    if (node || mode === "xcashu") return NONE;
+    if (node || mode === "xcashu") return null;
     const next = keyCredit(deps.keys.storage("direct"));
     const same =
       Object.keys(next).length === Object.keys(atEach).length &&
