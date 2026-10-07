@@ -10,7 +10,7 @@ import { useChatModel } from "../useChatModel";
 import { useNotes } from "./useNotes";
 import { shortModelName } from "../format";
 import { Icon } from "../icons";
-import { tokenMs } from "../motion";
+import { rootToken, tokenMs } from "../motion";
 import { Answer } from "./answer/Answer";
 import type { Go } from "./atoms/helpers";
 import { Mine } from "./mine/Mine";
@@ -103,6 +103,26 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
   const userScrolled = useRef(false);
   const pinned = useRef(true);
   const [away, setAway] = useState(false);
+  // "the way back" changes rarely: an update only when it does, never once per frame
+  const awayNow = useRef(false);
+  const showAway = useCallback((v: boolean) => {
+    if (awayNow.current === v) return;
+    awayNow.current = v;
+    setAway(v);
+  }, []);
+  // a scroll this thread made itself (following an answer, a phone's ride):
+  // the scroll handler leaves it alone, since nothing about the reader changed
+  const ours = useRef(false);
+  const riding = useRef(false);
+  // the browser reports a scroll before the next frame's callbacks: a scroll
+  // that moved nothing reports none, so the mark never outlives its frame
+  const scrollOurs = useCallback((el: HTMLElement, top: number) => {
+    ours.current = true;
+    el.scrollTop = top;
+    requestAnimationFrame(() => {
+      ours.current = false;
+    });
+  }, []);
   const lastUserKey = useRef<string | null>(null);
   const convRef = useRef<string | null | undefined>(undefined);
 
@@ -117,10 +137,10 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
     convRef.current = activeConversationId;
     lastUserKey.current = userKey;
     setReserve(0);
-    setAway(false);
+    showAway(false);
     pinned.current = true;
     const el = scroller.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (el) scrollOurs(el, el.scrollHeight);
   }, [activeConversationId, loadingFromUrl, slots.length > 0]);
 
   // a search hit: once its chat shows, the message it was found in comes into
@@ -177,9 +197,13 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
       if (!grew) return;
       if (!liveHere) {
         // a picture landed in a chat you are reading at its end: stay at the end
-        if (pinned.current && grew > 0) el.scrollTop = el.scrollHeight;
+        if (pinned.current && grew > 0) {
+          scrollOurs(el, el.scrollHeight);
+          showAway(false);
+          return;
+        }
         const gap = el.scrollHeight - reserveNow.current - (el.scrollTop + el.clientHeight);
-        setAway(gap > 240);
+        showAway(gap > 240);
         return;
       }
       if (grew < 0) {
@@ -193,13 +217,19 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
         // eat the reserved space first
         setReserve((r) => Math.max(0, r - grew));
       }
-      if (tailBelow > 0 && follow.current) el.scrollTop += tailBelow + 8;
+      const toTail = () => {
+        // following, the reader is at the tail: nothing to read again
+        scrollOurs(el, el.scrollTop + tailBelow + 8);
+        pinned.current = true;
+        showAway(false);
+      };
+      if (tailBelow > 0 && follow.current) toTail();
       else if (tailBelow > 0 && tailBelow < 140 && !userScrolled.current) {
         follow.current = true;
-        el.scrollTop += tailBelow + 8;
+        toTail();
       }
       // the answer grows below someone reading further up: the way back appears without a scroll
-      else setAway(el.scrollHeight - reserveNow.current - (el.scrollTop + el.clientHeight) > 240);
+      else showAway(el.scrollHeight - reserveNow.current - (el.scrollTop + el.clientHeight) > 240);
     });
     ro.observe(box);
     return () => ro.disconnect();
@@ -213,11 +243,16 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
       follow.current = false;
     };
     const onScroll = () => {
+      // a scroll the thread made itself: where the reader is did not change
+      if (ours.current) {
+        ours.current = false;
+        return;
+      }
       // a keyboard ride is running: its transform is not the reader scrolling away (it is worked out
       // again from the settled layout when the ride ends)
-      if (inner.current?.getAnimations().length) return;
-      const gap = el.scrollHeight - reserve - (el.scrollTop + el.clientHeight);
-      setAway(gap > 240);
+      if (riding.current) return;
+      const gap = el.scrollHeight - reserveNow.current - (el.scrollTop + el.clientHeight);
+      showAway(gap > 240);
       pinned.current = gap < 24;
       if (gap < 24) userScrolled.current = false;
     };
@@ -242,7 +277,7 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
       el.removeEventListener("pointerdown", grab);
       el.removeEventListener("scroll", onScroll);
     };
-  }, [reserve]);
+  }, [showAway]);
 
   useEffect(() => {
     if (!liveHere) userScrolled.current = false;
@@ -260,15 +295,20 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
         if (!inner.current || !window.matchMedia("(max-width: 760px)").matches || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
         const ride = inner.current.animate([{ transform: `translateY(${from}px)` }, { transform: "none" }], {
           duration: tokenMs(d),
-          easing: getComputedStyle(document.documentElement).getPropertyValue("--e-out").trim() || "ease-out",
+          easing: rootToken("--e-out") || "ease-out",
         });
+        riding.current = true;
         // settled: pinned and away are read again from the real layout
-        ride.finished.then(() => el.dispatchEvent(new Event("scroll"))).catch(() => undefined);
+        const settled = () => {
+          riding.current = false;
+          el.dispatchEvent(new Event("scroll"));
+        };
+        ride.finished.then(settled, () => (riding.current = false));
       };
       // the keyboard going down: the words ride down with the composer too (an exit, one step faster)
       if (h - lastH >= 40 && pinned.current) phoneRide(-(h - lastH), "--d-mid");
       if (h < lastH && pinned.current) {
-        el.scrollTop = el.scrollHeight - reserve - h;
+        scrollOurs(el, el.scrollHeight - reserveNow.current - h);
         // a phone's keyboard: the words ride up with the composer (its FLIP) instead of leaping ahead
         if (lastH - h >= 40) phoneRide(lastH - h, "--d-move");
       }
@@ -276,7 +316,7 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
     });
     ro.observe(el);
     return () => ro.disconnect();
-  }, [reserve]);
+  }, []);
 
   const onFold = useCallback((h: number, ms: number) => {
     if (!h) return;
