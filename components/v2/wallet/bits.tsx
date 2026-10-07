@@ -393,16 +393,28 @@ export function Pasted({ text, label, onClear }: { text: string; label: string; 
 }
 
 /* ── a code on its plate: square modules, no dots, straight on --qr-bg ───── */
-export function Code({ value, printed, copied, label, onCopy }: { value: string; printed: boolean; copied: boolean; label: string; onCopy: () => void }) {
-  const { n, d } = useMemo(() => {
+// a code is worked out once per value: the panes that show it mount again as
+// the wallet moves between views, and making one takes tens of milliseconds
+const drawn = new Map<string, { n: number; d: string }>();
+function draw(value: string) {
+  let c = drawn.get(value);
+  if (!c) {
     const q = qrcode(0, "M");
     q.addData(value || " ");
     q.make();
     const n = q.getModuleCount();
     let d = "";
     for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) if (q.isDark(y, x)) d += `M${x} ${y}h1v1h-1z`;
-    return { n, d };
-  }, [value]);
+    c = { n, d };
+    // a few invoices and tokens at most are open at a time
+    if (drawn.size >= 8) drawn.delete(drawn.keys().next().value!);
+    drawn.set(value, c);
+  }
+  return c;
+}
+
+export function Code({ value, printed, copied, label, onCopy }: { value: string; printed: boolean; copied: boolean; label: string; onCopy: () => void }) {
+  const { n, d } = useMemo(() => draw(value), [value]);
   return (
     <button type="button" className="wl-qr" aria-label={label} data-copied={copied ? "" : undefined} onClick={onCopy}>
       <svg className="wl-code" viewBox={`-0.5 -0.5 ${n + 1} ${n + 1}`} shapeRendering="crispEdges" aria-hidden="true">
