@@ -42,6 +42,10 @@ export function useTurn({
     const t1 = window.setTimeout(() => c?.classList.remove("is-turning"), reduced() ? 0 : turnMs + 40);
     if (!reduced()) shade.current?.animate([{ transform: "scaleX(1)" }, { transform: "scaleX(.08)", opacity: 0.6 }, { transform: "scaleX(1)" }], { duration: turnMs, easing: ease("--e-turn") });
     const t2 = window.setTimeout(() => {
+      // only while focus is still on the card that turned: what you opened
+      // meanwhile (the model picker, say) keeps it, and stays open
+      const a = document.activeElement;
+      if (a && a !== document.body && !root.current?.contains(a)) return;
       const el = ui.side === "wallet" ? root.current?.querySelector<HTMLElement>(".face.back .wl-back") : root.current?.querySelector<HTMLElement>(".sb-bal");
       el?.focus({ preventScroll: true });
     }, reduced() ? 0 : tokenMs("--d-slow"));
