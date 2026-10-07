@@ -24,8 +24,10 @@ export default function SWUpdater() {
       }
     });
 
-    wb.addEventListener("controlling", () => {
-      window.location.reload();
+    // only a new version taking over reloads; the first worker of a first
+    // visit takes over a page that is already current
+    wb.addEventListener("controlling", (event) => {
+      if (event.isUpdate) window.location.reload();
     });
 
     wb.register().catch(() => {
