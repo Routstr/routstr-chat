@@ -7,6 +7,8 @@
 //                 [--detail detail.json]   (causes: relay messages, reply timelines, CPU
 //                                          profiles; slows the run, so keep its numbers apart)
 //                 [--only reply|longReply|walletPay|walletMakeToken|accountSwitch|historyLoad]
+//                 [--css extra.css]   (a style sheet added to every page: try a CSS change
+//                                     without a rebuild)
 //   pnpm kit perf --compare a.json b.json        (just print the table)
 //
 // Every run is a fresh browser (no cache, no storage) and goes through the same steps a
@@ -30,7 +32,13 @@ import { addAccount, seedKitProvider } from "../app/seed";
 import { bundleSize, type BundleSize } from "./bundle";
 import { drivers, type Driver } from "../app/drivers";
 import { textShown } from "../app/drivers/wait";
-import { recordNetwork, relaySummary, startProfile, timeline } from "./detail";
+import {
+  recordNetwork,
+  relaySummary,
+  startProfile,
+  startTrace,
+  timeline,
+} from "./detail";
 import {
   collectPageMetrics,
   mainThreadTimer,
@@ -168,13 +176,15 @@ interface RunOptions {
   only?: string;
   /** the served build, to quote code in profiles */
   outDir?: string;
+  /** CSS added to every page */
+  css?: string;
 }
 
 async function oneRun(
   driver: Driver,
   kit: KitClient,
   appUrl: string,
-  { spend, detail, only, outDir }: RunOptions = {}
+  { spend, detail, only, outDir, css }: RunOptions = {}
 ): Promise<Sample> {
   const want = (name: string) => !only || name.startsWith(only);
   const browser = await chromium.launch({
@@ -187,6 +197,17 @@ async function oneRun(
     const context = await browser.newContext({ serviceWorkers: "block" });
     const sealed = await seal(context, kit.env, appUrl);
     await collectPageMetrics(context);
+    if (css)
+      await context.addInitScript((text) => {
+        const add = () =>
+          document.head.append(
+            Object.assign(document.createElement("style"), {
+              textContent: text,
+            })
+          );
+        if (document.head) add();
+        else document.addEventListener("DOMContentLoaded", add);
+      }, css);
     // main's Settings → Spend mode (API key by default); v2 ignores it
     if (spend)
       await context.addInitScript((mode) => {
@@ -350,6 +371,7 @@ async function oneRun(
     // long tasks and the main thread's total busy time from send until it is idle again.
     if (want("longReply")) {
       const busy = await mainThreadTimer(page);
+      const trace = detail && (await startTrace(page));
       await startFrames(page);
       const shownAt = await reply(
         "longReply",
@@ -362,6 +384,8 @@ async function oneRun(
       s["longReply.frameP95"] = frames.p95;
       s["longReply.frameMax"] = frames.max;
       s["longReply.mainThreadMs"] = await busy();
+      if (detail && trace)
+        Object.assign(detail.longReply as object, { trace: await trace() });
     }
     await heap("afterLongReply");
 
@@ -528,9 +552,13 @@ async function main(argv: string[]) {
   };
   // a detail run is slowed by its recording and an --only run is partial: neither may join
   // other runs' medians
-  if (json && fs.existsSync(json) && (arg("detail") || arg("only")))
+  if (
+    json &&
+    fs.existsSync(json) &&
+    (arg("detail") || arg("only") || arg("css"))
+  )
     throw new Error(
-      `--detail and --only runs cannot go into ${json}, which holds other runs`
+      `--detail, --only and --css runs cannot go into ${json}, which holds other runs`
     );
   const details: Record<string, unknown>[] | undefined = arg("detail")
     ? []
@@ -556,6 +584,7 @@ async function main(argv: string[]) {
             detail,
             only: arg("only"),
             outDir: outDir && path.resolve(outDir),
+            css: arg("css") && fs.readFileSync(arg("css")!, "utf8"),
           });
       if (coreOnlyRun) await coreOnly(kitClient(stack.env), sample);
       console.log(

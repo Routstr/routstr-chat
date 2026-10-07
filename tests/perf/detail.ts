@@ -179,7 +179,7 @@ function analyse(
   const top = (counts: Map<string, { ms: number; node: ProfileNode }>) =>
     [...counts.entries()]
       .sort((a, b) => b[1].ms - a[1].ms)
-      .slice(0, 8)
+      .slice(0, 12)
       .map(([name, { ms, node }]) => ({
         ms: Math.round(ms),
         name,
@@ -220,4 +220,187 @@ function analyse(
       withCallees: top(total),
     };
   });
+}
+
+interface TraceEvent {
+  name: string;
+  ph: string;
+  ts: number;
+  dur?: number;
+  pid: number;
+  tid: number;
+  args?: {
+    name?: string;
+    elementCount?: number;
+    beginData?: {
+      dirtyObjects?: number;
+      totalObjects?: number;
+      partialLayout?: boolean;
+    };
+    endData?: {
+      rootNode?: number;
+      layoutRoots?: { nodeId?: number }[];
+    };
+  };
+}
+
+/**
+ * Starts a Chromium trace of the page's main thread (devtools.timeline); the result stops it
+ * and says where the main thread went that JavaScript does not show: time of its own per kind
+ * of work (style, layout, paint, script...) overall and in the five longest tasks, and how
+ * many elements each style recalculation touched.
+ */
+export async function startTrace(page: Page) {
+  const cdp = await page.context().newCDPSession(page);
+  const events: TraceEvent[] = [];
+  cdp.on("Tracing.dataCollected", (e) =>
+    events.push(...(e.value as unknown as TraceEvent[]))
+  );
+  const complete = new Promise((r) => cdp.once("Tracing.tracingComplete", r));
+  await cdp.send("Tracing.start", {
+    categories:
+      "devtools.timeline,disabled-by-default-devtools.timeline,toplevel",
+    transferMode: "ReportEvents",
+  });
+  return async () => {
+    await cdp.send("Tracing.end");
+    await complete;
+    const summary = summarizeTrace(events);
+    // name the elements layout started from
+    await cdp.send("DOM.getDocument", { depth: 0 });
+    for (const root of summary.layouts.roots) {
+      try {
+        const { node } = await cdp.send("DOM.describeNode", {
+          backendNodeId: root.node,
+        });
+        const attrs = node.attributes ?? [];
+        const cls = attrs[attrs.indexOf("class") + 1];
+        root.element = `${node.nodeName.toLowerCase()}${attrs.includes("class") && cls ? `.${cls.split(" ").join(".")}` : ""}`;
+      } catch {
+        root.element = "(gone)";
+      }
+    }
+    await cdp.detach();
+    return summary;
+  };
+}
+
+function summarizeTrace(events: TraceEvent[]) {
+  // the renderer's main thread
+  const main = events.find(
+    (e) => e.name === "thread_name" && e.args?.name === "CrRendererMain"
+  );
+  const on = events
+    .filter(
+      (e) =>
+        e.ph === "X" &&
+        e.dur &&
+        main &&
+        e.pid === main.pid &&
+        e.tid === main.tid
+    )
+    .sort((a, b) => a.ts - b.ts || b.dur! - a.dur!);
+  // each event's own time: its length less the events nested in it; a layout or style
+  // recalculation inside script was forced by that script (a read after a write)
+  const own = new Map<TraceEvent, number>();
+  const forced = new Set<TraceEvent>();
+  const SCRIPT = new Set([
+    "FunctionCall",
+    "EventDispatch",
+    "TimerFire",
+    "FireAnimationFrame",
+    "EvaluateScript",
+  ]);
+  const stack: TraceEvent[] = [];
+  for (const e of on) {
+    while (stack.length && stack.at(-1)!.ts + stack.at(-1)!.dur! <= e.ts)
+      stack.pop();
+    const up = stack.at(-1);
+    if (up) own.set(up, own.get(up)! - e.dur!);
+    own.set(e, e.dur!);
+    if (stack.some((a) => SCRIPT.has(a.name))) forced.add(e);
+    stack.push(e);
+  }
+  const byName = (list: TraceEvent[]) => {
+    const ms: Record<string, number> = {};
+    for (const e of list) ms[e.name] = (ms[e.name] ?? 0) + own.get(e)! / 1000;
+    return Object.fromEntries(
+      Object.entries(ms)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .map(([k, v]) => [k, Math.round(v)])
+    );
+  };
+  const styles = on.filter((e) => e.name === "UpdateLayoutTree");
+  const counts = styles
+    .map((e) => e.args?.elementCount ?? 0)
+    .sort((a, b) => a - b);
+  const tasks = on
+    .filter((e) => e.name === "RunTask")
+    .sort((a, b) => b.dur! - a.dur!)
+    .slice(0, 5);
+  return {
+    busyMs: Math.round(
+      on.filter((e) => e.name === "RunTask").reduce((s, e) => s + e.dur!, 0) /
+        1000
+    ),
+    ownMsByKind: byName(on),
+    styleRecalcs: styles.length,
+    elementsRestyled: {
+      total: counts.reduce((s, n) => s + n, 0),
+      median: counts[Math.floor(counts.length / 2)] ?? 0,
+      max: counts.at(-1) ?? 0,
+    },
+    layouts: (() => {
+      const all = on.filter((e) => e.name === "Layout");
+      const objects = all
+        .map((e) => e.args?.beginData?.dirtyObjects ?? 0)
+        .sort((a, b) => a - b);
+      const ms = (list: TraceEvent[]) =>
+        Math.round(list.reduce((sum, e) => sum + own.get(e)!, 0) / 1000);
+      return {
+        count: all.length,
+        forcedByScript: all.filter((e) => forced.has(e)).length,
+        forcedMs: ms(all.filter((e) => forced.has(e))),
+        inFramesMs: ms(all.filter((e) => !forced.has(e))),
+        dirtyObjects: {
+          median: objects[Math.floor(objects.length / 2)] ?? 0,
+          max: objects.at(-1) ?? 0,
+        },
+        totalObjectsMax: Math.max(
+          0,
+          ...all.map((e) => e.args?.beginData?.totalObjects ?? 0)
+        ),
+        partial: all.filter((e) => e.args?.beginData?.partialLayout).length,
+        // where each layout started, by time spent
+        roots: (() => {
+          const by = new Map<number, { ms: number; count: number }>();
+          for (const e of all) {
+            const d = e.args?.endData;
+            const id = d?.layoutRoots?.[0]?.nodeId ?? d?.rootNode;
+            if (id === undefined) continue;
+            const r = by.get(id) ?? { ms: 0, count: 0 };
+            r.ms += own.get(e)! / 1000;
+            r.count++;
+            by.set(id, r);
+          }
+          return [...by]
+            .sort((a, b) => b[1].ms - a[1].ms)
+            .slice(0, 5)
+            .map(([node, r]) => ({
+              node,
+              element: "",
+              ms: Math.round(r.ms),
+              count: r.count,
+            }));
+        })(),
+      };
+    })(),
+    longestTasks: tasks.map((t) => ({
+      ms: Math.round(t.dur! / 1000),
+      ownMsByKind: byName(
+        on.filter((e) => e.ts >= t.ts && e.ts + e.dur! <= t.ts + t.dur!)
+      ),
+    })),
+  };
 }
