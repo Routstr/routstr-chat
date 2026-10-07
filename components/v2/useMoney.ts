@@ -65,14 +65,26 @@ const slashed = (url: string) => (url.endsWith("/") ? url : `${url}/`);
  *  which pays every message from the wallet). */
 export function payable(total: number, credit: Readonly<Record<string, number>>, node: boolean) {
   const at = (baseUrl: string | null | undefined) => total + (baseUrl ? credit[slashed(baseUrl)] ?? 0 : 0);
-  // a node pays for everything; a model with no known price still needs something to pay with
-  const covers = (model: Model, baseUrl: string | null | undefined) => {
+  const most = Math.max(0, ...Object.values(credit));
+  /** `where` may be asked only when it matters: when the wallet alone is short
+   *  and some key holds enough to make up the rest. */
+  const covers = (model: Model, where: Where) => {
+    // a node pays for everything
     if (node) return true;
+    // a model with no known price still needs something to pay with
     const need = needOf(model);
-    return need > 0 ? at(baseUrl) >= need : at(baseUrl) > 0;
+    const enough = (have: number) => (need > 0 ? have >= need : have > 0);
+    if (enough(total)) return true;
+    if (!enough(total + most)) return false;
+    return enough(at(typeof where === "function" ? where() : where));
   };
   return { at, covers };
 }
+
+/** The provider a message goes to, or a way to work it out. */
+type Where = string | null | undefined | (() => string | undefined);
+
+export type Payable = ReturnType<typeof payable>;
 
 /** `payable` for this account now. The picker and the send both ask it, so
  *  they never disagree. */

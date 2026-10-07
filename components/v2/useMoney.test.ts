@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { Model } from "@/types/models";
 import { payable } from "./useMoney";
 
@@ -35,5 +35,18 @@ describe("payable: what can pay for a message at the provider it goes to", () =>
     expect(payable(0, {}, true).covers(model(500), AT)).toBe(true);
     expect(payable(0, {}, false).covers(model(0), AT)).toBe(false);
     expect(payable(0, { [AT]: 1 }, false).covers(model(0), AT)).toBe(true);
+  });
+
+  it("works out where a message goes only when a key's credit decides it", () => {
+    const where = vi.fn(() => AT);
+    // the wallet alone pays: wherever it goes
+    expect(payable(30, { [AT]: 30 }, false).covers(model(20), where)).toBe(true);
+    // no key holds enough to make up the rest
+    expect(payable(5, { [AT]: 10 }, false).covers(model(20), where)).toBe(false);
+    expect(where).not.toHaveBeenCalled();
+    // short alone, and a key could make it up: only there
+    expect(payable(15, { [AT]: 10 }, false).covers(model(20), where)).toBe(true);
+    expect(payable(15, { [AT]: 10 }, false).covers(model(20), () => ELSEWHERE)).toBe(false);
+    expect(where).toHaveBeenCalledTimes(1);
   });
 });

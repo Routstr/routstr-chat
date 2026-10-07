@@ -93,18 +93,23 @@ describe("defaultModel", () => {
   const need: Record<string, number> = { cheap: 5, mid: 50, dear: 500, unknown: 0 };
   const list = ["cheap", "mid", "dear", "unknown"].map(model);
   const needOf = (m: Model) => need[m.id];
+  const within = (sats: number) => (m: Model) => needOf(m) <= sats;
 
   it("takes the first of Routstr's picks you can afford, in their order", () => {
-    expect(defaultModel(list, ["dear", "mid", "cheap"], 100, needOf)?.id).toBe("mid");
+    expect(defaultModel(list, ["dear", "mid", "cheap"], needOf, within(100))?.id).toBe("mid");
   });
 
   it("else the costliest you can afford, never one whose price is unknown", () => {
-    expect(defaultModel(list, ["dear"], 100, needOf)?.id).toBe("mid");
-    expect(defaultModel(list, [], 1000, needOf)?.id).toBe("dear");
-    expect(defaultModel([model("unknown")], ["unknown"], 1000, needOf)).toBeNull();
+    expect(defaultModel(list, ["dear"], needOf, within(100))?.id).toBe("mid");
+    expect(defaultModel(list, [], needOf, within(1000))?.id).toBe("dear");
+    expect(defaultModel([model("unknown")], ["unknown"], needOf, within(1000))).toBeNull();
   });
 
   it("picks nothing you cannot afford", () => {
-    expect(defaultModel(list, ["cheap"], 1, needOf)).toBeNull();
+    expect(defaultModel(list, ["cheap"], needOf, within(1))).toBeNull();
+  });
+
+  it("asks whether each model is affordable on its own: credit held where only one goes", () => {
+    expect(defaultModel(list, [], needOf, (m) => m.id === "dear")?.id).toBe("dear");
   });
 });

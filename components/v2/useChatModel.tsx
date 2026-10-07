@@ -1,21 +1,28 @@
 import React, { createContext, useCallback, useContext, useLayoutEffect, useMemo, useRef } from "react";
 import { useCatalogModels, useCatalogService } from "@/features/catalog/view";
+import { useKeyCredit } from "@/features/chat/view";
 import { AcceptedMintsContext } from "@/features/wallet/view";
 import type { Model } from "@/types/models";
 import { defaultModel, pickedModel, useModelPick, type Choice } from "./pick";
 import { needOf } from "./price";
-import { useMoney } from "./useMoney";
+import { payable, useMoney, usePayable, type Payable } from "./useMoney";
+
+/** With nothing chosen: what the app picks for what can pay, a key's credit
+ *  counted where each model's message would go. */
+const autoPick = (models: Model[], catalog: ReturnType<typeof useCatalogService>, chosen: Choice | null, pay: Payable) =>
+  defaultModel(models, catalog?.picks() ?? [], needOf, (m) =>
+    // a model is ranked only when a key's credit decides it
+    pay.covers(m, () => (catalog ? goesTo(m, chosen, catalog.routes(m.id)) : undefined))
+  );
 
 function useModelOf() {
   const catalog = useCatalogService();
   const { models, loading } = useCatalogModels();
   const pick = useModelPick();
-  const { total } = useMoney();
+  const pay = usePayable();
   const model = useMemo(
-    () =>
-      pickedModel(models, pick) ??
-      defaultModel(models, catalog?.picks() ?? [], total, needOf),
-    [models, pick, catalog, total]
+    () => pickedModel(models, pick) ?? autoPick(models, catalog, pick.chosen, pay),
+    [models, pick, catalog, pay]
   );
   // ranked again whenever the catalogue changes (a cooldown keeps the same models), not on
   // every render of the composer
@@ -34,18 +41,19 @@ const ChatModelContext = createContext<ReturnType<typeof useModelOf> | null>(nul
 export function ChatModelProvider({ children }: { children: React.ReactNode }) {
   const value = useModelOf();
   const catalog = useCatalogService();
-  const { total } = useMoney();
+  const { total, node } = useMoney();
+  const credit = useKeyCredit();
   // read when money comes in: the model and pin as they are then
-  const now = useRef({ value, total });
+  const now = useRef({ value, total, credit, node });
   useLayoutEffect(() => {
-    now.current = { value, total };
+    now.current = { value, total, credit, node };
   });
   const accepted = useCallback(
     (sats: number) => {
-      const { value, total } = now.current;
+      const { value, total, credit, node } = now.current;
       if (!catalog) return [];
       // with nothing chosen, the model the app will pick once these sats are in
-      const model = pickedModel(value.models, value) ?? defaultModel(value.models, catalog.picks(), total + sats, needOf);
+      const model = pickedModel(value.models, value) ?? autoPick(value.models, catalog, value.chosen, payable(total + sats, credit, !!node));
       if (!model) return [];
       const base = goesTo(model, value.chosen, catalog.routes(model.id));
       return base ? catalog.mintsOf(base) : [];

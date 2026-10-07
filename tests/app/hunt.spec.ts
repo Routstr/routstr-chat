@@ -273,11 +273,11 @@ async function holdAt(page: Page, nsec: string, baseUrl: string, sats: number) {
   await v2.ready(page);
 }
 
-/** What the app wants able to pay before a message to kit-cheap, by its own rule, from the
+/** What the app wants able to pay before a message to a kit model, by its own rule, from the
  *  core's own listing. */
-async function cheapNeed(kit: KitClient): Promise<number> {
+async function kitNeed(kit: KitClient, id: string): Promise<number> {
   const { data } = (await (await fetch(`${kit.coreUrl}v1/models`)).json()) as { data: Model[] };
-  return needOf(data.find((m) => m.id === "kit-cheap")!);
+  return needOf(data.find((m) => m.id === id)!);
 }
 
 /** Whether the picker marks the kit's model as needing more sats; closes it again. */
@@ -319,7 +319,7 @@ test("credit a provider holds pays for messages to it, and only to it", async ({
   await v2.waitIdle(page);
 
   // the wallet keeps a sat less than the model needs: short alone, enough with the core's credit
-  const keep = Math.ceil(await cheapNeed(kit)) - 1;
+  const keep = Math.ceil(await kitNeed(kit, "kit-cheap")) - 1;
   await v2.useMint(page, kit.env.mintUrl);
   const left = await v2.balance(page);
   expect(await kit.redeem(await v2.makeToken(page, left - keep))).toBe(left - keep);
@@ -332,6 +332,34 @@ test("credit a provider holds pays for messages to it, and only to it", async ({
   await v2.waitIdle(page);
   await expect(page.locator("article.rd-me")).toHaveCount(2);
   expect(await v2.balance(page)).toBe(keep);
+});
+
+// with nothing chosen the app picks the costliest model what can pay covers, and a key's credit
+// counts where that model's message goes
+test("with nothing chosen, credit a provider holds counts toward the model the app picks", async ({
+  page,
+  context,
+  kit,
+  appUrl,
+}) => {
+  await seedAccounts(context, [newKey()]);
+  await v2.open(page, appUrl);
+  await v2.receive(page, await kit.mintToken(300));
+  await v2.useMint(page, kit.env.mintUrl);
+  const chip = page.getByRole("main").getByRole("button", { name: /^Model: / });
+  await expect(chip).toHaveAccessibleName(/^Model: Kit Echo\./);
+  await v2.send(page, `${TINY} first`);
+  await v2.waitReplyText(page, "Echo: first");
+  await v2.waitIdle(page);
+
+  // the wallet keeps a sat less than Kit Echo needs; the core's key makes up the rest
+  const keep = Math.ceil(await kitNeed(kit, "kit-echo")) - 1;
+  const left = await v2.balance(page);
+  expect(await kit.redeem(await v2.makeToken(page, left - keep))).toBe(left - keep);
+  await expect.poll(() => v2.balance(page)).toBe(keep);
+  await page.reload();
+  await v2.ready(page);
+  await expect(chip).toHaveAccessibleName(/^Model: Kit Echo\./);
 });
 
 // with no pay mode picked the app pays through an API key (its credit waits at the provider

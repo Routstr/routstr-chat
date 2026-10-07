@@ -54,12 +54,10 @@ export const pickedModel = (models: Model[], pick: Pick<PickState, "chosen" | "l
 
 /** With nothing chosen, or the choice gone: the first of Routstr's picks you
  *  can afford, else the costliest you can afford, as main picked. `need` is
- *  what one message may take, in sats; a model whose need is unknown is skipped. */
-export function defaultModel(models: Model[], picks: string[], spendable: number, need: (m: Model) => number): Model | null {
-  const fits = (m: Model) => {
-    const n = need(m);
-    return n > 0 && spendable >= n;
-  };
+ *  what one message may take, in sats; a model whose need is unknown is
+ *  skipped. `affords` says whether what can pay covers a message to it. */
+export function defaultModel(models: Model[], picks: string[], need: (m: Model) => number, affords: (m: Model) => boolean): Model | null {
+  const fits = (m: Model) => need(m) > 0 && affords(m);
   for (const id of picks) {
     const m = models.find((x) => x.id === id);
     if (m && fits(m)) return m;
