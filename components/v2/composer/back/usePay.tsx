@@ -4,10 +4,10 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useHeldCredit } from "@/features/chat/view";
 import { useSession } from "@/features/session/view";
 import { peek } from "@/features/wallet/view";
-import { getRequiredSatsForModel } from "@/utils/modelUtils";
 import { useUi } from "../../ui";
 import { useMoney, usePayable } from "../../useMoney";
 import { useChatModel } from "../../useChatModel";
+import { needOf } from "../../price";
 import { useFunding } from "../../wallet/useFunding";
 import { PRESETS, fmt, reduced } from "./bits";
 
@@ -31,7 +31,7 @@ export function usePay(say: (t: string) => void) {
   // what is short is counted as the send counts it: at the provider the message goes to
   const payable = usePayable();
   const have = payable.at(provider);
-  const need = selectedModel ? Math.ceil(getRequiredSatsForModel(selectedModel) || 0) : 0;
+  const need = selectedModel ? Math.ceil(needOf(selectedModel)) : 0;
   // an account's first sats (nothing in the wallet or held at a provider): a small try, picked for you
   const trying = !money.loading && balance + held <= 0 && TRY >= need;
 

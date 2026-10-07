@@ -7,9 +7,9 @@ import { webSearchModels } from "@/lib/preconfiguredModels";
 import { keyOf } from "../pick";
 import { useDraft } from "../ui";
 import { useChatModel } from "../useChatModel";
-import { needOf, useMoney, usePayable } from "../useMoney";
+import { useMoney, usePayable } from "../useMoney";
 import { textOf } from "../format";
-import { estimateSats, promptTokens } from "../price";
+import { estimateSats, needOf, promptTokens } from "../price";
 import { answers, baseKey, hostOf, parseKey, priceScale, type Route, type Row } from "./catalog";
 
 /** Development only: the lab hands the picker a catalogue with providers, so

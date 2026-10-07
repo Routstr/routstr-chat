@@ -4,7 +4,7 @@ import { useNodePays, type RemoteNode } from "@/features/node/view";
 import { useWallet } from "@/features/wallet/view";
 import type { Model } from "@/types/models";
 import { getPendingCashuTokenAmount } from "@/utils/cashuUtils";
-import { getRequiredSatsForModel } from "@/utils/modelUtils";
+import { needOf } from "./price";
 
 export interface Money {
   /** What you can spend: the wallet plus sats held in provider tokens. */
@@ -56,15 +56,6 @@ export function MoneyProvider({ children }: { children: React.ReactNode }) {
   );
   return React.createElement(MoneyContext.Provider, { value: money }, children);
 }
-
-/** What one message to a model may take, in sats; 0 when its price is unknown. */
-export const needOf = (m: Model) => {
-  try {
-    return getRequiredSatsForModel(m) || 0;
-  } catch {
-    return 0;
-  }
-};
 
 const slashed = (url: string) => (url.endsWith("/") ? url : `${url}/`);
 

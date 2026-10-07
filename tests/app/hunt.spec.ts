@@ -6,6 +6,8 @@ import { expect, test } from "./fixtures";
 import { v2 } from "./drivers/v2";
 import { seedAccounts, seedKitProvider } from "./seed";
 import type { KitClient } from "../kit/client";
+import { needOf } from "../../components/v2/price";
+import type { Model } from "../../types/models";
 
 const newKey = () => nip19.nsecEncode(generateSecretKey());
 // each paid reply costs well under a sat: core charges at most one per reply
@@ -271,14 +273,11 @@ async function holdAt(page: Page, nsec: string, baseUrl: string, sats: number) {
   await v2.ready(page);
 }
 
-/** What the app wants able to pay before a message to kit-cheap, from the core's own listing
- *  (main's rule: room for 10,000 prompt tokens and the longest reply, 5% over). */
+/** What the app wants able to pay before a message to kit-cheap, by its own rule, from the
+ *  core's own listing. */
 async function cheapNeed(kit: KitClient): Promise<number> {
-  const { data } = (await (await fetch(`${kit.coreUrl}v1/models`)).json()) as {
-    data: { id: string; sats_pricing: { prompt: number; max_completion_cost: number; max_cost: number } }[];
-  };
-  const sp = data.find((m) => m.id === "kit-cheap")!.sats_pricing;
-  return sp.max_completion_cost ? (sp.prompt * 10_000 + sp.max_completion_cost) * 1.05 : sp.max_cost;
+  const { data } = (await (await fetch(`${kit.coreUrl}v1/models`)).json()) as { data: Model[] };
+  return needOf(data.find((m) => m.id === "kit-cheap")!);
 }
 
 /** Whether the picker marks the kit's model as needing more sats; closes it again. */

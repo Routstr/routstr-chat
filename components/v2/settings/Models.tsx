@@ -4,7 +4,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useCatalogModels, useCatalogService } from "@/features/catalog/view";
 import { renderCompanyIcon } from "@/components/v2/picker/display";
 import { getModelCompanyId } from "@/components/v2/picker/modelCompanies";
-import { parseModelKey } from "@/utils/modelUtils";
 import {
   getProviderEndpoints,
   isTorContext,
@@ -14,6 +13,7 @@ import type { Model } from "@/types/models";
 import { Icon } from "../icons";
 import { shortModelName } from "../format";
 import { useModelPick } from "../pick";
+import { parseKey } from "../picker/catalog";
 import {
   Btn,
   Fold,
@@ -120,7 +120,7 @@ export default function Models() {
   const favs = useMemo(
     () =>
       pick.configured.map((key) => {
-        const { id, base } = parseModelKey(key);
+        const { id, base } = parseKey(key);
         let model = models.find((m) => m.id === id);
         if (!model && base) {
           try {
@@ -354,7 +354,7 @@ function FavAdder() {
   const { models } = useCatalogModels();
   const catalog = useCatalogService();
   const [q, setQ] = useState("");
-  const favIds = useMemo(() => new Set(pick.configured.map((k) => parseModelKey(k).id)), [pick.configured]);
+  const favIds = useMemo(() => new Set(pick.configured.map((k) => parseKey(k).id)), [pick.configured]);
   const matches = useMemo(() => {
     const qq = q.trim().toLowerCase();
     if (!qq) return [];

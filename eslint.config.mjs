@@ -24,7 +24,6 @@ const LEGACY = [
   "./lib/version.ts",
   "./utils/cashuUtils.ts",
   "./utils/download.ts",
-  "./utils/modelUtils.ts",
   "./utils/storageUtils.ts",
   "./utils/torUtils.ts",
 ];

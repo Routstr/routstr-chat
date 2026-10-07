@@ -2,11 +2,9 @@ import React, { createContext, useCallback, useContext, useLayoutEffect, useMemo
 import { useCatalogModels, useCatalogService } from "@/features/catalog/view";
 import { AcceptedMintsContext } from "@/features/wallet/view";
 import type { Model } from "@/types/models";
-import { getRequiredSatsForModel } from "@/utils/modelUtils";
 import { defaultModel, pickedModel, useModelPick, type Choice } from "./pick";
+import { needOf } from "./price";
 import { useMoney } from "./useMoney";
-
-const need = (m: Model) => getRequiredSatsForModel(m);
 
 function useModelOf() {
   const catalog = useCatalogService();
@@ -16,7 +14,7 @@ function useModelOf() {
   const model = useMemo(
     () =>
       pickedModel(models, pick) ??
-      defaultModel(models, catalog?.picks() ?? [], total, need),
+      defaultModel(models, catalog?.picks() ?? [], total, needOf),
     [models, pick, catalog, total]
   );
   // ranked again whenever the catalogue changes (a cooldown keeps the same models), not on
@@ -47,7 +45,7 @@ export function ChatModelProvider({ children }: { children: React.ReactNode }) {
       const { value, total } = now.current;
       if (!catalog) return [];
       // with nothing chosen, the model the app will pick once these sats are in
-      const model = pickedModel(value.models, value) ?? defaultModel(value.models, catalog.picks(), total + sats, need);
+      const model = pickedModel(value.models, value) ?? defaultModel(value.models, catalog.picks(), total + sats, needOf);
       if (!model) return [];
       const base = goesTo(model, value.chosen, catalog.routes(model.id));
       return base ? catalog.mintsOf(base) : [];
