@@ -47,7 +47,11 @@ export function useWalletSend() {
   const [isNip60LoadingInvoice, setIsNip60LoadingInvoice] = useState(false);
   const nip60ProcessingInvoiceRef = useRef<string | null>(null);
   const reclaimsInFlightRef = useRef<Set<string>>(new Set());
-  const meltQuoteRef = useRef<MeltQuoteResponse | null>(null);
+  // the quote made for the pasted invoice, and the mint that made it
+  const meltQuoteRef = useRef<{
+    mintUrl: string;
+    quote: MeltQuoteResponse;
+  } | null>(null);
 
   // Unclaimed send tokens live in the wallet book, not this resettable UI state.
   const reset = useCallback(() => {
@@ -188,7 +192,7 @@ export function useWalletSend() {
         setIsNip60LoadingInvoice(true);
         const meltQuote = await createMeltQuote(mintUrl, value);
         if (!current()) return;
-        meltQuoteRef.current = meltQuote;
+        meltQuoteRef.current = { mintUrl, quote: meltQuote };
         setNip60MeltQuoteId(meltQuote.quote);
         // what Send shows and checks is in sats; the quote paid stays in the mint's unit
         const { amount, feeReserve } = quoteInSats(meltQuote);
@@ -250,12 +254,13 @@ export function useWalletSend() {
       setIsNip60Processing(true);
       setError("");
       setWarningMessage("");
-      const mintUrl = cashuStore.activeMintUrl;
-      // the quote made for this invoice, kept with it (never one made before)
-      const quote = meltQuoteRef.current;
-      if (quote?.quote !== nip60MeltQuoteId) {
+      // the quote made for this invoice, kept with it (never one made
+      // before), paid at the mint that made it, whichever mint is active now
+      const made = meltQuoteRef.current;
+      if (made?.quote.quote !== nip60MeltQuoteId) {
         throw new Error("The invoice's quote is not here any more; paste it again");
       }
+      const { mintUrl, quote } = made;
       const from = purse();
       if (!from) throw new Error("User not logged in");
       const have = (await from.balances())[mintUrl] ?? 0;

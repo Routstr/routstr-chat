@@ -162,9 +162,11 @@ export function bindWallet(account: Account | undefined): void {
       .pull()
       .then(({ answered, outcomes }) => {
         if (!stopped) {
+          // no relay at all (the person emptied the list) is no outage
+          const asked = Object.keys(outcomes).length > 0;
           setWalletCopy(
             owner,
-            answered.length ? "read" : "unanswered",
+            answered.length || !asked ? "read" : "unanswered",
             outcomes
           );
         }

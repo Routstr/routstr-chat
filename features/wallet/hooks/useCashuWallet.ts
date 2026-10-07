@@ -242,10 +242,11 @@ export function useCashuWallet() {
   // relays that did not answer the read of the wallet copy: App's notice,
   // until the person closes it (useWalletCopy is the wallet's own signal)
   const copy = useWalletCopy();
-  const [dismissed, setDismissed] = useState(false);
-  const unanswered = copy.status === "unanswered" && !dismissed;
+  // closed for this read only: the next one that goes unanswered shows again
+  const [closed, setClosed] = useState<object | null>(null);
+  const unanswered = copy.status === "unanswered" && closed !== copy;
   const close = (open: boolean) => {
-    if (!open) setDismissed(true);
+    if (!open) setClosed(copy);
   };
 
   return {

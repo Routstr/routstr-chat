@@ -232,6 +232,56 @@ test("adds by Lightning at a mint that counts in msat, as many sats as asked", a
     .toBe(110);
 });
 
+test("pays an invoice at the mint that quoted it, though another mint is picked before Pay", async ({
+  page,
+  kit,
+  appUrl,
+}) => {
+  await v2.open(page, appUrl);
+  await v2.receive(page, await kit.mintToken(40));
+  // the second mint is listed too
+  await v2.receive(page, await kit.mintToken(8, { otherMint: true }));
+  await v2.useMint(page, kit.env.mintUrl);
+  const other = await kit.walletAt(kit.env.invoiceMintUrl);
+  const invoice = await other.createMintQuote(8);
+
+  await page
+    .getByRole("button", { name: /^Open wallet\./ })
+    .first()
+    .click();
+  await page
+    .getByRole("region", { name: "Wallet", exact: true })
+    .getByRole("button", { name: "Send", exact: true })
+    .click();
+  const send = page.getByRole("region", { name: "Send", exact: true });
+  await send.getByRole("tab", { name: "Lightning" }).click();
+  const field = send.getByRole("textbox", { name: "Lightning invoice" });
+  await field.fill(invoice.request);
+  await field.press("Enter");
+  const pay = send.getByRole("button", { name: /^Pay 8 sats$/ });
+  await expect(pay).toBeVisible({ timeout: 30_000 });
+
+  // the other mint is picked at the foot while Send shows the quote
+  const host = new URL(kit.env.invoiceMintUrl).host.replace(/[.]/g, "\\.");
+  await page.getByRole("button", { name: /^Mint / }).click();
+  await page
+    .getByRole("menu", { name: "Mints" })
+    .getByRole("menuitemradio", { name: new RegExp(host) })
+    .click();
+  await page.keyboard.press("Escape");
+
+  await pay.click();
+  await expect(
+    send.getByRole("button", { name: "Pay another invoice" })
+  ).toBeVisible({ timeout: 30_000 });
+  // paid by the mint that made the quote: the invoice is settled
+  await expect
+    .poll(async () => (await other.checkMintQuote(invoice.quote)).state, {
+      timeout: 20_000,
+    })
+    .toBe("PAID");
+});
+
 test("lands a token whose swap answer never arrives, and says it was added", async ({
   page,
   kit,
