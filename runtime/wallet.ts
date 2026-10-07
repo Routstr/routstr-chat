@@ -116,17 +116,30 @@ export function bindWallet(account: Account | undefined): void {
   });
   const storage = window.localStorage;
   const old = [`cashu:${owner}`, ...(isMains(owner) ? ["cashu"] : [])];
+  // every key's old list on this device, so another key's money counts
+  // before it is active again (its outbox waits for it)
+  const others = () =>
+    Array.from({ length: storage.length }, (_, i) => storage.key(i) ?? "")
+      .map((key) => /^cashu:([0-9a-f]{64})$/.exec(key)?.[1])
+      .filter((pubkey): pubkey is string => !!pubkey && pubkey !== owner);
   const sweepOld = () =>
-    Promise.all(
-      old.map((key) =>
+    Promise.all([
+      ...old.map((key) =>
         sweep(owner, oldCoins(storage.getItem(key)), { into: store, locks })
-      )
-    );
+      ),
+      ...others().map((pubkey) =>
+        sweep(pubkey, oldCoins(storage.getItem(`cashu:${pubkey}`)), {
+          into: store,
+          locks,
+        })
+      ),
+    ]);
   let retrying: ReturnType<typeof setTimeout> | undefined;
   let wait = RETRY_MS;
   let stopped = false;
   const push = async () => {
     clearTimeout(retrying);
+    if (stopped) return;
     const done = await replica.push().catch((error) => {
       console.error("Could not publish the coins:", error);
       return false;
@@ -135,6 +148,8 @@ export function bindWallet(account: Account | undefined): void {
     if (done) {
       wait = RETRY_MS;
     } else {
+      // a push that overlapped this one may have set one already
+      clearTimeout(retrying);
       retrying = setTimeout(push, wait);
       wait = Math.min(wait * 2, RETRY_MAX_MS);
     }

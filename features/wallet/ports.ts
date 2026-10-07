@@ -65,6 +65,8 @@ export interface ReplicaStore {
       drop: Proof[];
       listed: Map<string, string>;
       events: string[];
+      /** events relays say are deleted: none of them is listed any more */
+      forget: string[];
       relist: boolean;
     }
   ): Promise<void>;

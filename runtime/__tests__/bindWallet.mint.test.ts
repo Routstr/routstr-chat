@@ -96,3 +96,30 @@ it("never publishes an account's coins under another's signer, and publishes the
   );
   bindWallet(undefined);
 }, 120_000);
+
+it("brings another key's old coins in too, so its money counts before it is active", async () => {
+  const active = account();
+  const other = account();
+  const mint = kit.env.mintUrl;
+  const proofs = await kit.mintProofs(12, mint);
+  const { keysets } = await (await kit.walletAt(mint)).mint.getKeySets();
+  window.localStorage.setItem(
+    `cashu:${other.pubkey}`,
+    JSON.stringify({
+      state: {
+        proofs,
+        mints: [{ url: mint, keysets: keysets.map((k) => ({ _id: k.id })) }],
+      },
+      version: 0,
+    })
+  );
+  bindWallet(active.account);
+  await vi.waitFor(
+    async () =>
+      expect((await walletPurseFor(other.pubkey).balances())[mint]).toBe(12),
+    { timeout: 20_000 }
+  );
+  // and nothing of it goes out under the active key
+  expect(await listed(other.pubkey, other.key)).toEqual([]);
+  bindWallet(undefined);
+}, 60_000);

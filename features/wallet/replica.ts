@@ -211,7 +211,12 @@ export class Replica {
       const gone = held.filter(
         (c) => c.eventId && deleted.has(c.eventId) && !listed.has(c.secret)
       );
-      const asked = [...fresh, ...gone];
+      const heldSecrets = new Set(held.map((c) => c.secret));
+      // listed still, by another device, though this one spent them
+      const stale = [...proofs.values()].filter(
+        (p) => known.has(p.secret) && !heldSecrets.has(p.secret)
+      );
+      const asked = [...fresh, ...gone, ...stale];
       let unspent = new Set<string>();
       let spent = new Set<string>();
       if (asked.length) {
@@ -228,7 +233,6 @@ export class Replica {
         unspent = new Set(answer.unspent.map((p) => p.secret));
         spent = new Set(answer.spent.map((p) => p.secret));
       }
-      const heldSecrets = new Set(held.map((c) => c.secret));
       await store.adopt(this.owner, mintUrl, {
         add: fresh
           .filter((p) => unspent.has(p.secret))
@@ -237,11 +241,13 @@ export class Replica {
         drop: gone.filter((c) => spent.has(c.secret)),
         listed,
         events: events.map((e) => e.id),
+        forget: [...deleted],
         // listed again by this device: still-unspent coins no event lists
-        // any more, and events that still list a coin this device spent
+        // any more, and events that still list a coin the mint says is
+        // spent (not one still on its way, which settles first)
         relist:
           gone.some((c) => unspent.has(c.secret)) ||
-          [...listed.keys()].some((s) => known.has(s) && !heldSecrets.has(s)),
+          stale.some((p) => spent.has(p.secret)),
       });
     });
   }

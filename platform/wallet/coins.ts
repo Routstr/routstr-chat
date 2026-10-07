@@ -102,12 +102,14 @@ export class IndexedCoins implements ReplicaStore {
       drop,
       listed,
       events,
+      forget,
       outbox,
     }: {
       add: { proof: Proof; eventId?: string }[];
       drop: Proof[];
       listed?: Map<string, string>;
       events?: string[];
+      forget?: string[];
       outbox: boolean;
     }
   ): Promise<void> {
@@ -153,6 +155,8 @@ export class IndexedCoins implements ReplicaStore {
       ...(events ?? []).map((id) =>
         tx.objectStore("events").put({ id, owner, mintUrl })
       ),
+      // only this owner's: an id is a hash, so another's never matches
+      ...(forget ?? []).map((id) => tx.objectStore("events").delete(id)),
       ...(outbox
         ? [
             tx.objectStore("outbox").put({
@@ -226,6 +230,7 @@ export class IndexedCoins implements ReplicaStore {
       drop: Proof[];
       listed: Map<string, string>;
       events: string[];
+      forget: string[];
       relist: boolean;
     }
   ): Promise<void> {

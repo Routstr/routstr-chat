@@ -184,3 +184,22 @@ it("splits a mint's coins over several events, so none grows past what relays ta
   );
   expect(events).toHaveLength(3);
 }, 60_000);
+
+it("forgets the events relays say are deleted, so its own next one carries no long list", async () => {
+  const a = device();
+  const b = device();
+  await a.purse.receive(await kit.mintToken(8));
+  await a.replica.push();
+  await b.replica.pull();
+  // a changes the mint three more times while b sits idle
+  for (const sats of [4, 2, 1]) {
+    await a.purse.receive(await kit.mintToken(sats));
+    await a.replica.push();
+  }
+  await b.replica.pull();
+  // only a's live event is left to b; the three a deleted are not
+  expect(await b.store.events(owner, MINT)).toEqual(
+    await a.store.events(owner, MINT)
+  );
+  expect(await b.sats()).toBe(15);
+}, 60_000);
