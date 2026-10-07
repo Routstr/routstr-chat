@@ -6,6 +6,36 @@ import { MARK_D } from "../icons";
 
 export type QrState = "making" | "ready" | "done" | "stale";
 
+// a code is worked out once per value: the pay card mounts again as it turns
+// and as a reply starts, and making one takes tens of milliseconds
+const cache = new Map<string, { n: number; d: string; c: number; m: number; k: number }>();
+function dots(value: string) {
+  const hit = cache.get(value);
+  if (hit) return hit;
+  const q = qrcode(0, "M");
+  q.addData(value || " ");
+  q.make();
+  const n = q.getModuleCount();
+  let hole = Math.round(n * 0.2);
+  if (hole % 2 === 0) hole++;
+  const h0 = (n - hole) / 2;
+  const h1 = h0 + hole;
+  const eye = (x: number, y: number) => (x < 8 && y < 8) || (x >= n - 8 && y < 8) || (x < 8 && y >= n - 8);
+  const r = 0.4;
+  let d = "";
+  for (let y = 0; y < n; y++)
+    for (let x = 0; x < n; x++) {
+      if (!q.isDark(y, x) || eye(x, y)) continue;
+      if (x >= h0 - 0.5 && x < h1 + 0.5 && y >= h0 - 0.5 && y < h1 + 0.5) continue;
+      d += `M${(x + 0.5 - r).toFixed(2)} ${y + 0.5}a${r} ${r} 0 1 0 ${2 * r} 0a${r} ${r} 0 1 0 ${-2 * r} 0`;
+    }
+  const made = { n, d, c: n / 2, m: hole * 0.78, k: n * 0.039 };
+  // a few invoices at most are open at a time
+  if (cache.size >= 8) cache.delete(cache.keys().next().value!);
+  cache.set(value, made);
+  return made;
+}
+
 /* A real QR code, drawn as round dots with rounded eyes and the Routstr mark
    in a clear centre (error correction M still reads it). While the invoice is
    made the mark breathes; the code develops from its centre out; paid, the
@@ -21,26 +51,7 @@ export default function Qr({
   label: string;
   onCopy?: () => void;
 }) {
-  const drawn = useMemo(() => {
-    const q = qrcode(0, "M");
-    q.addData(value || " ");
-    q.make();
-    const n = q.getModuleCount();
-    let hole = Math.round(n * 0.2);
-    if (hole % 2 === 0) hole++;
-    const h0 = (n - hole) / 2;
-    const h1 = h0 + hole;
-    const eye = (x: number, y: number) => (x < 8 && y < 8) || (x >= n - 8 && y < 8) || (x < 8 && y >= n - 8);
-    const r = 0.4;
-    let d = "";
-    for (let y = 0; y < n; y++)
-      for (let x = 0; x < n; x++) {
-        if (!q.isDark(y, x) || eye(x, y)) continue;
-        if (x >= h0 - 0.5 && x < h1 + 0.5 && y >= h0 - 0.5 && y < h1 + 0.5) continue;
-        d += `M${(x + 0.5 - r).toFixed(2)} ${y + 0.5}a${r} ${r} 0 1 0 ${2 * r} 0a${r} ${r} 0 1 0 ${-2 * r} 0`;
-      }
-    return { n, d, c: n / 2, m: hole * 0.78, k: n * 0.039 };
-  }, [value]);
+  const drawn = useMemo(() => dots(value), [value]);
   const { n, d, c, m, k } = drawn;
   const copyable = state === "ready" && !!onCopy;
 
