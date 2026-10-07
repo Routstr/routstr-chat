@@ -51,6 +51,16 @@ export const MODELS = [
     context: 8192,
     maxOut: 1024,
   },
+  {
+    // priced like kit-cheap, and takes pictures as well as text
+    id: "kit-vision",
+    name: "Kit Vision",
+    prompt: 0.000001,
+    completion: 0.000002,
+    context: 8192,
+    maxOut: 1024,
+    images: true,
+  },
 ];
 export const BTC_USD = 100_000; // 1 sat = $0.001
 export const API_KEY = "kit-upstream-key";
@@ -289,8 +299,8 @@ export async function startUpstream(): Promise<Upstream> {
             description: "kit model",
             context_length: m.context,
             architecture: {
-              modality: "text->text",
-              input_modalities: ["text"],
+              modality: "images" in m ? "text+image->text" : "text->text",
+              input_modalities: "images" in m ? ["text", "image"] : ["text"],
               output_modalities: ["text"],
               tokenizer: "Other",
               instruct_type: null,
