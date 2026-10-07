@@ -7,8 +7,7 @@ import { useSession } from "@/features/session/view";
 import { useAccountChat, useAnswering } from "@/features/chat/view";
 import { KeepAliveProvider, useKeepAliveContext } from "@/components/pwa/KeepAliveProvider";
 import { QueryTimeoutModal } from "@/components/QueryTimeoutModal";
-import { useCashuWallet } from "@/features/wallet";
-import { peek, usePurse } from "@/features/wallet/view";
+import { peek, usePurse, useWalletCopy } from "@/features/wallet/view";
 import { useAutoRefill } from "@/hooks/useAutoRefill";
 import { RoomProvider } from "./room/RoomProvider";
 import { UiProvider, useUi } from "./ui";
@@ -32,12 +31,11 @@ function Behaviour() {
   const accountChat = useAccountChat();
   const ui = useUi();
   const { startKeepAlive, stopKeepAlive, isEnabled: keepAliveEnabled } = useKeepAliveContext();
-  const {
-    showQueryTimeoutModal,
-    setShowQueryTimeoutModal,
-    didRelaysTimeout,
-    setDidRelaysTimeout,
-  } = useCashuWallet();
+  // relays that did not answer the read of the wallet's copy: a notice, until
+  // closed for this read (the next read that goes unanswered shows it again)
+  const copy = useWalletCopy();
+  const [closed, setClosed] = useState<object | null>(null);
+  const unanswered = copy.status === "unanswered" && closed !== copy;
   const money = useMoney();
   const isWalletLoading = money.loading;
   const purse = usePurse();
@@ -101,11 +99,8 @@ function Behaviour() {
   return (
     <div className="legacy">
       <QueryTimeoutModal
-        isOpen={showQueryTimeoutModal || (didRelaysTimeout && !isWalletLoading)}
-        onClose={() => {
-          setShowQueryTimeoutModal(false);
-          setDidRelaysTimeout(false);
-        }}
+        isOpen={unanswered && !isWalletLoading}
+        onClose={() => setClosed(copy)}
       />
     </div>
   );
