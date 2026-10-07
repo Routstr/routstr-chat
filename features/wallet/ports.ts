@@ -82,6 +82,8 @@ export interface WalletSigner {
 
 /** One account's relays (history's `relays.of(owner)`). */
 export interface WalletRelays {
+  /** The person's own relays (NIP-65) are known, or the lookup gave up. */
+  ready(): Promise<void>;
   fetch(filter: Filter): Promise<Fetched>;
   /** Resolves with the relays that took it; rejects when none did. */
   publish(event: NostrEvent): Promise<string[]>;

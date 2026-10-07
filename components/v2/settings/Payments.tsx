@@ -2,9 +2,7 @@
 
 import React, { useState } from "react";
 import { useBitcoinConnectStatus } from "@/hooks/useBitcoinConnect";
-import { useCashuWallet } from "@/features/wallet/hooks/useCashuWallet";
-import { useCashuToken } from "@/features/wallet/hooks/useCashuToken";
-import { useMints } from "@/features/wallet/view";
+import { listedMints, useMintActions, useMints } from "@/features/wallet/view";
 import { loadAutoRefillNWCSettings, saveAutoRefillNWCSettings, type AutoRefillNWCSettings } from "@/utils/storageUtils";
 import { Icon } from "../icons";
 import { useUi } from "../ui";
@@ -16,7 +14,7 @@ import { satUnit } from "../format";
 
 /* Where your sats are, how each reply is paid, and where top-ups come from.
    Mints are added, checked and removed through the wallet's own hooks
-   (useCashuToken); removing a mint forgets it here, its sats stay at the mint. */
+   (useMintActions); a removed mint that still holds sats stays listed until they are gone. */
 
 export default function Payments() {
   const ui = useUi();
@@ -46,9 +44,9 @@ export default function Payments() {
 
   /* ── mints ─────────────────────────────────────────────────────────────── */
   const cashu = useMints();
-  const { wallet } = useCashuWallet();
-  const { addMintIfNotExists, removeMint, cleanSpentProofs } = useCashuToken();
-  const urls = wallet?.mints?.length ? wallet.mints : cashu.mints.map((m) => m.url);
+  const { addMintIfNotExists, removeMint, cleanSpentProofs } = useMintActions();
+  // the wallet's own list, and every mint still holding sats: money is never hidden
+  const urls = listedMints(cashu.mints.map((m) => m.url), money.balances);
   const mints = urls.map((url) => ({ url, bal: money.balances[url] ?? 0 }));
   const tot = mints.reduce((a, x) => a + x.bal, 0) || 1;
   const [adding, setAdding] = useState(false);
@@ -77,10 +75,11 @@ export default function Payments() {
     try {
       await removeMint(url);
       if (cashu.activeMintUrl === url) {
-        const rest = urls.filter((u) => u !== url);
+        const rest = cashu.mints.map((m) => m.url).filter((u) => u !== url);
         if (rest.length) cashu.setActiveMintUrl(rest[0]);
       }
-      toast(`Removed ${hostOf(url)}`);
+      const bal = money.balances[url] ?? 0;
+      toast(bal > 0 ? `Removed ${hostOf(url)}. It stays listed while it holds ${n0(bal)} ${satUnit(bal)}` : `Removed ${hostOf(url)}`);
     } catch {
       toast("That mint could not be removed just now");
     } finally {
@@ -342,7 +341,7 @@ export default function Payments() {
             >
               {rmMint.bal > 0 ? (
                 <p>
-                  Remove <b>{hostOf(rmMint.url)}</b>? It still holds <b>{n0(rmMint.bal)} {satUnit(rmMint.bal)}</b>. They stay at the mint, but this wallet stops showing them. Send them out first to keep them here.
+                  Remove <b>{hostOf(rmMint.url)}</b>? It still holds <b>{n0(rmMint.bal)} {satUnit(rmMint.bal)}</b>. They stay at the mint and stay listed here until they are spent or sent out, but new sats stop going there.
                 </p>
               ) : (
                 <p>

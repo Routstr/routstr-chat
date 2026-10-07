@@ -18,8 +18,13 @@ export interface WalletStore {
   /** the active mint, when the person picked it themselves */
   userSelectedMintUrl?: string;
   privkey?: string;
+  /** mints the person removed: listed again only when they add one */
+  removed?: string[];
 
-  addMint: (url: string) => void;
+  /** lists a mint, unless the person removed it; `picked`: they add it */
+  addMint: (url: string, picked?: boolean) => void;
+  /** takes a mint off the list, for good unless the person adds it again */
+  removeMint: (url: string) => void;
   getMint: (url: string) => WalletMint | undefined;
   clearMint: (url: string) => void;
   setMintInfo: (url: string, mintInfo: GetInfoResponse) => void;
@@ -40,7 +45,7 @@ const OLD = "cashu";
 
 type Saved = Pick<
   WalletStore,
-  "mints" | "activeMintUrl" | "userSelectedMintUrl" | "privkey"
+  "mints" | "activeMintUrl" | "userSelectedMintUrl" | "privkey" | "removed"
 >;
 
 /** This store's own copy; until it has one, what main's old blob says of the
@@ -91,12 +96,22 @@ export const useWalletStore = ownedStore<WalletStore>()(
     (set, get) => ({
       mints: [],
 
-      addMint(url) {
-        if (get().mints.some((mint) => mint.url === url)) return;
+      addMint(url, picked = false) {
+        const { mints, removed = [] } = get();
+        if (removed.includes(url) && !picked) return;
+        if (mints.some((mint) => mint.url === url)) return;
         // the first mint is the one it pays from
         set({
-          mints: [...get().mints, { url }],
-          ...(get().mints.length === 0 ? { activeMintUrl: url } : {}),
+          mints: [...mints, { url }],
+          removed: removed.filter((u) => u !== url),
+          ...(mints.length === 0 ? { activeMintUrl: url } : {}),
+        });
+      },
+      removeMint(url) {
+        const { mints, removed = [] } = get();
+        set({
+          mints: mints.filter((mint) => mint.url !== url),
+          removed: removed.includes(url) ? removed : [...removed, url],
         });
       },
       getMint: (url) => get().mints.find((mint) => mint.url === url),
@@ -145,8 +160,20 @@ export const useWalletStore = ownedStore<WalletStore>()(
     {
       name: NAME,
       storage: createJSONStorage(() => walletStorage(window.localStorage)),
-      partialize: ({ mints, activeMintUrl, userSelectedMintUrl, privkey }) =>
-        ({ mints, activeMintUrl, userSelectedMintUrl, privkey }) as WalletStore,
+      partialize: ({
+        mints,
+        activeMintUrl,
+        userSelectedMintUrl,
+        privkey,
+        removed,
+      }) =>
+        ({
+          mints,
+          activeMintUrl,
+          userSelectedMintUrl,
+          privkey,
+          removed,
+        }) as WalletStore,
       // each copy loads only under its owner's name (ownedStore)
       skipHydration: true,
     }

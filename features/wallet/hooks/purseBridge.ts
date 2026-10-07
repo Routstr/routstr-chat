@@ -60,11 +60,13 @@ export function theBook(): Book {
 export async function listMint(
   store: Pick<
     WalletStore,
-    "mints" | "addMint" | "setMintInfo" | "setKeysets" | "setKeys"
+    "mints" | "removed" | "addMint" | "setMintInfo" | "setKeysets" | "setKeys"
   >,
   mintUrl: string,
   add: Proof[] = []
 ) {
+  // one the person removed is listed again only when they add it
+  if (store.removed?.includes(mintUrl)) return;
   const listed = store.mints.find((m) => m.url === mintUrl);
   const ids = new Set(listed?.keysets?.map((k) => keysetOf(k).id));
   if (ids.size && add.every((p) => ids.has(p.id))) return;

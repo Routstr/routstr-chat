@@ -7,8 +7,6 @@ import prettier from "eslint-config-prettier/flat";
 const LEGACY = [
   "./components/QueryTimeoutModal.tsx",
   "./components/pwa/KeepAliveProvider.tsx",
-  "./features/wallet/hooks/useCashuToken.ts",
-  "./features/wallet/hooks/useCashuWallet.ts",
   "./features/wallet/hooks/useSdkUsageHistory.ts",
   "./features/wallet/hooks/useWalletReceive.ts",
   "./features/wallet/hooks/useWalletSend.ts",

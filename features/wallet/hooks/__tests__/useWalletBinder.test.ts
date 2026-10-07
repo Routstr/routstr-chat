@@ -23,8 +23,8 @@ vi.mock("react", () => ({
   }),
   createContext: () => ({}),
 }));
-vi.mock("../useCashuWallet", () => ({
-  useCashuWallet: () => ({ owner: "alice", wallet: null, isLoading: false }),
+vi.mock("../useWalletEvent", () => ({
+  useWalletEvent: () => ({ owner: "alice", wallet: null, isLoading: false }),
 }));
 vi.mock("../useCreateCashuWallet", () => ({
   useCreateCashuWallet: () => ({ mutateAsync: state.createWallet }),
