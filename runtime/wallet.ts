@@ -8,13 +8,10 @@ import {
   setWalletLoading,
 } from "@/features/wallet/hooks/purseBridge";
 import { MintKeysets } from "@/features/wallet/mints";
-import type {
-  ActivityLog,
-  CoinStore,
-  WalletSigner,
-} from "@/features/wallet/ports";
+import type { ActivityLog, CoinStore } from "@/features/wallet/ports";
 import { createPurse, type Purse } from "@/features/wallet/purse";
 import { Replica } from "@/features/wallet/replica";
+import { signerOf } from "@/features/wallet/signer";
 import { useWalletStore } from "@/features/wallet/state/walletStore";
 import { oldCoins, sweep } from "@/features/wallet/sweep";
 import { IndexedCoins } from "@/platform/wallet/coins";
@@ -71,18 +68,6 @@ export const purseFor = (owner: string): Purse => cached(owner, localActivity);
 /** The purse of `owner` for the person's own moves: activity published. */
 export const walletPurseFor = (owner: string): Purse =>
   cached(owner, legacyActivity);
-
-const signerOf = (account: Account): WalletSigner => {
-  const nip44 = () => {
-    if (!account.nip44) throw new Error("Your signer cannot encrypt (NIP-44)");
-    return account.nip44;
-  };
-  return {
-    encrypt: (text) => nip44().encrypt(account.pubkey, text),
-    decrypt: (text) => nip44().decrypt(account.pubkey, text),
-    sign: (template) => account.signEvent(template),
-  };
-};
 
 const PUSH_AFTER_MS = 1000;
 const PULL_AFTER_MS = 2000;

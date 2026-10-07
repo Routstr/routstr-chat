@@ -3,6 +3,7 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { getKit } from "@/tests/kit";
 import { Journal, memoryStorage } from "@/features/book/journal";
+import { adoptLegacy } from "@/features/book/legacy";
 import { RecoveryHost } from "@/features/book/recovery";
 import { payWithNWC } from "@/lib/nwcPayment";
 import { createPurse, type Purse } from "../purse";
@@ -118,4 +119,39 @@ it("claims a deposit whose own claim failed, on the next recovery pass", async (
   expect(kinds()).toEqual([]);
   // the screen's own claim, later, finds it claimed
   expect(await purse.claim(MINT, quoteId)).toBe(0);
+});
+
+it("claims an invoice main left PAID on the first recovery pass, and only once", async () => {
+  const quote = await (await kit.walletAt(MINT)).createMintQuote(16);
+  await paid(quote.quote);
+  // main's invoice list: paid, never claimed, and no record in the book
+  const old = memoryStorage();
+  old.setItem(
+    "lightning_invoices:alice",
+    JSON.stringify({
+      invoices: [
+        {
+          id: "i1",
+          type: "mint",
+          state: "PAID",
+          quoteId: quote.quote,
+          mintUrl: MINT,
+          amount: 16,
+          createdAt: Date.now(),
+        },
+      ],
+    })
+  );
+
+  adoptLegacy("alice", old, journal, true);
+  await recover();
+  expect(await purse.balances()).toEqual({ [MINT]: 16 });
+  expect(kinds()).toEqual([]);
+  expect(claimed).toEqual([16]);
+
+  // signed in again: nothing more is claimed
+  adoptLegacy("alice", old, journal, true);
+  await recover();
+  expect(await purse.balances()).toEqual({ [MINT]: 16 });
+  expect(claimed).toEqual([16]);
 });

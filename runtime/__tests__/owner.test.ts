@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Proof } from "@cashu/cashu-ts";
+import { IDBFactory } from "fake-indexeddb";
+import "@/tests/kit/idb";
+import { IndexedCoins } from "@/platform/wallet/coins";
 
 class MemoryStorage {
   data = new Map<string, string>();
@@ -22,16 +25,9 @@ const load = async () => {
   vi.resetModules();
   vi.stubGlobal("window", { localStorage: storage });
   const { bindOwner } = await import("../owner");
-  const { useCashuStore } = await import("@/features/wallet/state/cashuStore");
   const { owned } = await import("@/features/session/owned");
   const bind = (pubkey: string | null) => bindOwner(pubkey, storage);
-  const secrets = () => useCashuStore.getState().proofs.map((p) => p.secret);
-  return {
-    bind,
-    useCashuStore,
-    owned,
-    secrets,
-  };
+  return { bind, owned };
 };
 const stored = (key: string) =>
   JSON.parse(storage.getItem(key) ?? "null")?.state;
@@ -75,78 +71,39 @@ describe("per-person local stores", () => {
       "pending_send_proofs:alice_1700000000000":
         legacy.pending_send_proofs_1700000000000,
     });
-    expect(m.secrets()).toEqual(["a"]);
     expect(m.owned("lightning_invoices")).toBe("lightning_invoices:alice");
   });
 
-  it("show only the active account's coins, and work begun for one settles there after a switch", async () => {
-    storage.setItem(
-      "cashu:alice",
-      saved({ proofs: [{ ...proof("a"), eventId: "e1" }] })
-    );
+  it("leave each account's coins in the coin store under it, whoever is active", async () => {
+    globalThis.indexedDB = new IDBFactory();
+    const coins = IndexedCoins.open(async () => "sat");
+    await coins.change("alice", "https://m", [proof("a")], []);
     const m = await load();
-    m.bind("alice");
-    const begunForAlice = m.useCashuStore.getState();
 
+    m.bind("alice");
     m.bind("bob");
-    expect(m.secrets()).toEqual([]);
-    m.useCashuStore.getState().addProofs([proof("b")], "e2");
-    begunForAlice.addProofs([proof("late")], "e3");
+    await coins.change("bob", "https://m", [proof("b")], []);
 
-    expect(m.secrets()).toEqual(["b"]);
-    m.bind("alice");
-    expect(m.secrets()).toEqual(["a", "late"]);
-    expect(stored("cashu:bob").proofs.map((p: Proof) => p.secret)).toEqual([
-      "b",
-    ]);
+    const secrets = async (owner: string) =>
+      (await coins.coins(owner)).map((c) => c.secret);
+    expect(await secrets("alice")).toEqual(["a"]);
+    expect(await secrets("bob")).toEqual(["b"]);
   });
 
-  it("let a first key take over what was begun before it existed", async () => {
-    const m = await load();
-    const asGuest = m.useCashuStore.getState();
-    asGuest.addMint("https://mint.test");
-
-    m.bind("carol");
-    asGuest.setActiveMintUrl("https://mint.test");
-
-    expect(m.useCashuStore.getState().activeMintUrl).toBe("https://mint.test");
-    expect(stored("cashu:carol").activeMintUrl).toBe("https://mint.test");
-    expect(storage.getItem("cashu")).toBeNull();
-  });
-
-  it("keep an account's own copy when it signs in over a guest", async () => {
-    storage.setItem(
-      "cashu:carol",
-      saved({ proofs: [{ ...proof("c"), eventId: "e1" }] })
-    );
-    const m = await load();
-    m.useCashuStore.getState().addMint("https://guest.test");
-
-    m.bind("carol");
-
-    expect(m.secrets()).toEqual(["c"]);
-    expect(m.useCashuStore.getState().mints).toEqual([]);
-    expect(stored("cashu").mints).toEqual([{ url: "https://guest.test" }]);
-  });
-
-  it("keep a signed-out account's coins for its next sign-in, and never give them to the next key", async () => {
-    storage.setItem(
-      "cashu:alice",
-      saved({ proofs: [{ ...proof("a"), eventId: "e1" }] })
-    );
+  it("keep a signed-out account's old coin list for its next sign-in, and never give it to the next key", async () => {
+    const alices = saved({ proofs: [{ ...proof("a"), eventId: "e1" }] });
+    storage.setItem("cashu:alice", alices);
     storage.setItem("pending_send_proofs:alice_1", "{}");
     const m = await load();
     m.bind("alice");
-    expect(m.secrets()).toEqual(["a"]);
 
     // the last account signs out, then a new key is made on this device
     m.bind(null);
-    expect(m.secrets()).toEqual([]);
     m.bind("carol");
-    expect(m.secrets()).toEqual([]);
+    expect(storage.getItem("cashu:carol")).toBeNull();
 
     m.bind("alice");
-    expect(m.secrets()).toEqual(["a"]);
+    expect(storage.getItem("cashu:alice")).toBe(alices);
     expect(storage.getItem("pending_send_proofs:alice_1")).toBe("{}");
   });
 
@@ -170,7 +127,9 @@ describe("per-person local stores", () => {
 
     m.bind("alice");
 
-    expect(m.secrets()).toEqual(["a"]);
+    expect(stored("cashu:alice").proofs.map((p: Proof) => p.secret)).toEqual([
+      "a",
+    ]);
     expect(storage.getItem("cashu")).not.toBeNull();
     expect(storage.getItem("cashu-history")).not.toBeNull();
   });

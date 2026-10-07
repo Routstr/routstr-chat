@@ -41,17 +41,6 @@ export function isMintValid(
 }
 
 /**
- * Get the active mint balance or 0 if not available
- */
-export function getCurrentMintBalance(
-  activeMintUrl: string | null | undefined,
-  mintBalances: MintBalances
-): number {
-  if (!activeMintUrl || !mintBalances) return 0;
-  return mintBalances[activeMintUrl] || 0;
-}
-
-/**
  * Compute total balance across mints in sats, converting msats -> sats
  */
 export function computeTotalBalanceSats(

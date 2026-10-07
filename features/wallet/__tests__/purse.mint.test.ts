@@ -60,7 +60,7 @@ describe.each([
       otherMint: mint !== kit.env.mintUrl,
     });
     expect(purse.peek(token)).toEqual({ mint, sats: 40 });
-    expect(await purse.receive(token)).toBe(40);
+    expect(await purse.receive(token)).toEqual({ sats: 40, pending: false });
     expect(await purse.balances()).toEqual({ [mint]: 40 });
 
     let handed = "";
@@ -95,7 +95,7 @@ describe.each([
     const token = await kit.mintToken(12, {
       otherMint: mint !== kit.env.mintUrl,
     });
-    expect(await purse.receive(token)).toBe(12);
+    expect(await purse.receive(token)).toEqual({ sats: 12, pending: false });
   });
 
   it("makes two tokens at once, the second from the coins the first left", async () => {
@@ -149,7 +149,7 @@ describe.each([
     const token = await kit.mintToken(40, {
       otherMint: mint !== kit.env.mintUrl,
     });
-    expect(await purse.receive(token)).toBe(40); // the mint swapped it: the sats are alice's
+    expect(await purse.receive(token)).toEqual({ sats: 40, pending: false }); // the mint swapped it: the sats are alice's
     expect(await purse.balances()).toEqual({});
     expect(journal.list("alice")).toHaveLength(1);
 

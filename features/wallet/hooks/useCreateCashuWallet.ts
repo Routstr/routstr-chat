@@ -1,11 +1,11 @@
 import { useMutation } from "@tanstack/react-query";
 import { useAccountManager } from "@/features/session/view";
 import { useObservableState } from "applesauce-react/hooks";
-import { useCashuWallet } from "./useCashuWallet";
 import { useWalletStore } from "../state/walletStore";
 import { defaultMints } from "../core/services/MintService";
 import { generateSecretKey } from "nostr-tools";
 import { bytesToHex } from "@noble/hashes/utils.js";
+import { useWalletEvent } from "./useWalletEvent";
 
 /**
  * Hook for creating a Cashu wallet using the user's Nostr identity
@@ -15,7 +15,7 @@ import { bytesToHex } from "@noble/hashes/utils.js";
 export function useCreateCashuWallet() {
   const { manager } = useAccountManager();
   const activeAccount = useObservableState(manager.active$);
-  const { createWalletAsync } = useCashuWallet();
+  const { publish } = useWalletEvent();
   const cashuStore = useWalletStore();
 
   return useMutation({
@@ -34,7 +34,7 @@ export function useCreateCashuWallet() {
         mints.push(...defaultMints);
 
         // awaited: whoever made this call holds the account's lock until it is out
-        await createWalletAsync({
+        await publish({
           privkey,
           mints,
         });

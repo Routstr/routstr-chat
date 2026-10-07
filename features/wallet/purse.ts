@@ -46,8 +46,14 @@ export interface Purse {
    *  wallet tries it again (retryPending). Throws only when nothing was kept
    *  (the mint refused it): the caller keeps its own record then. */
   take(token: string): Promise<{ sats: number; pending: boolean }>;
-  /** As take, the sats alone. */
-  receive(token: string): Promise<number>;
+  /** As take: a token pasted or paid out to this account. */
+  receive(token: string): Promise<{ sats: number; pending: boolean }>;
+  /** Redeems a token another record still holds (an API key, an X-Cashu
+   *  record): the mint first, and nothing kept when it fails, so that record
+   *  stays the token's; throws RedeemError ("unreachable", "spent",
+   *  "refused"). Resolves with the sats; the same token again resolves with
+   *  them again and swaps nothing. Pasted tokens and payouts go through take. */
+  redeem(token: string): Promise<number>;
   /** What a token says, without its mint: for a preview before receiving. */
   peek(token: string): { mint: string; sats: number };
   /** Tries again the tokens still waiting for their mint; resolves with the
@@ -93,6 +99,10 @@ export function peek(token: string): { mint: string; sats: number } {
   const { mint, amount, unit } = getTokenMetadata(token);
   return { mint, sats: toSats(amount, unit) };
 }
+
+// tokens redeemed in this tab, by account and proofs: asked again, the same
+// sats (the mint would call the proofs spent now)
+const redeemed = new Map<string, Promise<number>>();
 
 /** The purse of `owner`: every move goes through the wallet book. */
 export function createPurse(
@@ -150,7 +160,25 @@ export function createPurse(
         );
       return { sats, pending };
     },
-    receive: async (token) => (await purse.take(token)).sats,
+    receive: (token) => purse.take(token),
+    redeem: (token) => {
+      const secrets = getTokenMetadata(token).incompleteProofs.map(
+        (p) => p.secret
+      );
+      const key = [owner, ...secrets.sort()].join(" ");
+      let sats = redeemed.get(key);
+      if (!sats) {
+        sats = executor.redeem(token).then(({ proofs, unit }) => {
+          const got = toSats(total(proofs), unit);
+          note({ direction: "in", sats: got });
+          return got;
+        });
+        redeemed.set(key, sats);
+        // nothing was taken in: the next call asks the mint again
+        sats.catch(() => redeemed.delete(key));
+      }
+      return sats;
+    },
     peek,
     retryPending: async () => {
       let sats = 0;

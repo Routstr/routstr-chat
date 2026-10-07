@@ -1,9 +1,11 @@
 import {
   getEncodedTokenV4,
   getTokenMetadata,
+  HttpResponseError,
   MeltQuoteState,
   Mint,
   MintOperationError,
+  NetworkError,
   MintQuoteState,
   type MeltQuoteBolt11Response,
   type MintQuoteBolt11Response,
@@ -70,6 +72,24 @@ const read = async (coins: Coins) =>
 
 // how long a mint gets to show it is there before a token for it waits
 const REACH_MS = 10_000;
+// NUT-00: the token's proofs were spent already
+const SPENT = 11001;
+
+/** Why a redeem took nothing in: its mint could not be reached (try again
+ *  later), the mint says the token is spent, or it refused it otherwise. */
+export class RedeemError extends Error {
+  constructor(
+    readonly reason: "unreachable" | "spent" | "refused",
+    cause: unknown
+  ) {
+    super(
+      `The token was not redeemed (${reason}): ${
+        cause instanceof Error ? cause.message : String(cause)
+      }`
+    );
+    this.name = "RedeemError";
+  }
+}
 
 /**
  * Claims a paid quote's coins. Its record turns into a `mint` record holding
@@ -331,6 +351,42 @@ export class WalletExecutor {
   }
 
   /**
+   * Redeems a token another record still holds (an API key, an X-Cashu
+   * record): the mint is asked first and nothing is written down for the
+   * token, so on any failure the caller keeps its own record, and RedeemError
+   * says why. The swap itself is written down as ever: coins the mint signed
+   * are restored even after a crash.
+   */
+  async redeem(token: string): Promise<{ proofs: Proof[]; unit: string }> {
+    if (!this.deps.locks) {
+      throw new Error(
+        "This browser cannot safely coordinate payments across tabs."
+      );
+    }
+    const { mint, unit = "sat" } = getTokenMetadata(token);
+    if (!(await this.reachable(normalizeMintUrl(mint)))) {
+      throw new RedeemError("unreachable", "the mint did not answer");
+    }
+    try {
+      return {
+        proofs: await this.locked(() => this.receiveLocked(token, {})),
+        unit,
+      };
+    } catch (error) {
+      throw new RedeemError(
+        error instanceof MintOperationError
+          ? error.code === SPENT
+            ? "spent"
+            : "refused"
+          : error instanceof NetworkError || error instanceof HttpResponseError
+            ? "unreachable"
+            : "refused",
+        error
+      );
+    }
+  }
+
+  /**
    * Takes a token into the wallet. It is written down first, before any
    * network step, so a token whose mint cannot be reached stays in the book
    * and is tried again (retryReceives); the same token twice is one record.
@@ -451,8 +507,10 @@ export class WalletExecutor {
     token: string,
     options: { requirePersisted?: boolean }
   ): Promise<Proof[]> {
-    const mintUrl = normalizeMintUrl(getTokenMetadata(token).mint);
-    const wallet = await this.open(mintUrl);
+    const { mint, unit } = getTokenMetadata(token);
+    const mintUrl = normalizeMintUrl(mint);
+    // in the token's unit: a mint that also counts msat still takes sat tokens
+    const wallet = await this.open(mintUrl, unit);
     const commit = this.deps.commitFor(mintUrl);
     const preview = await wallet.prepareSwapToReceive(token);
     const { id, keep } = await this.swap(wallet, mintUrl, preview, [], commit);

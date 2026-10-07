@@ -7,11 +7,15 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+import type { Proof } from "@cashu/cashu-ts";
+import { normalizeMintUrl } from "@/features/book/mint";
 import { currentOwner } from "@/features/session/owned";
 import { useSession } from "@/features/session/view";
 import { DEFAULT_MINT_URL } from "@/lib/utils";
 import { saveTransactionHistory } from "@/utils/storageUtils";
+import { MintService } from "./core/services/MintService";
 import { depositMint } from "./depositMint";
+import { takeOffMint } from "./mintList";
 import {
   listMint,
   walletCoins,
@@ -19,9 +23,11 @@ import {
   walletLoading,
   type CopyStatus,
 } from "./hooks/purseBridge";
+import { useWalletEvent } from "./hooks/useWalletEvent";
 import type { RelayOutcome } from "@/features/relays/service";
 import type { UsageLog } from "./ports";
 import { toSats, type Purse } from "./purse";
+import { dropSpent } from "./spent";
 import { useWalletStore } from "./state/walletStore";
 import {
   useTransactionHistoryStore,
@@ -30,6 +36,7 @@ import {
 import { useUnclaimedTokensStore } from "./state/unclaimedTokensStore";
 
 export { peek } from "./purse";
+export { listedMints } from "./mintList";
 
 /** The signed-in account's mints (every one that holds a coin, and the ones
  *  it added), the one it pays from, and whether the person picked that one:
@@ -233,4 +240,96 @@ export function useDepositMint(): (
     },
     [accepted]
   );
+}
+
+/** Settings → Payments' edits of the wallet's mints: add one (its keysets
+ *  asked for, and put in the wallet event), take one off (takeOffMint), and
+ *  drop the coins a mint says are spent. */
+export function useMintActions() {
+  const cashuStore = useWalletStore();
+  const { wallet, publish } = useWalletEvent();
+
+  const ensureMintInitialized = async (mintUrl: string) => {
+    const normalizedMintUrl = normalizeMintUrl(mintUrl);
+    const existingMint = cashuStore.mints.find(
+      (mint) => mint.url === normalizedMintUrl
+    );
+    const needsActivation =
+      !existingMint ||
+      !existingMint.mintInfo ||
+      !existingMint.keysets?.length ||
+      !existingMint.keys?.length ||
+      !existingMint.keysets[0].id;
+
+    if (!existingMint) {
+      cashuStore.addMint(normalizedMintUrl, true);
+    }
+
+    if (needsActivation) {
+      try {
+        const mintService = new MintService();
+        const { mintInfo, keysets, keys } =
+          await mintService.activateMint(normalizedMintUrl);
+        cashuStore.setMintInfo(normalizedMintUrl, mintInfo);
+        cashuStore.setKeysets(normalizedMintUrl, keysets);
+        cashuStore.setKeys(normalizedMintUrl, keys);
+      } catch (err) {
+        console.error("Failed to initialize mint data:", err);
+      }
+    }
+
+    return normalizedMintUrl;
+  };
+
+  const addMintIfNotExists = async (mintUrl: string) => {
+    const normalizedMintUrl = await ensureMintInitialized(mintUrl);
+
+    try {
+      new URL(normalizedMintUrl);
+    } catch (err) {
+      throw new Error("Invalid mint URL: " + mintUrl);
+    }
+
+    if (!wallet) {
+      console.warn(
+        "Wallet not loaded when trying to add mint URL:",
+        normalizedMintUrl
+      );
+      return normalizedMintUrl;
+    }
+
+    if (!wallet.mints.includes(normalizedMintUrl)) {
+      try {
+        await publish({
+          privkey: wallet.privkey,
+          mints: [...wallet.mints, normalizedMintUrl],
+        });
+      } catch (err) {
+        console.error("Failed to persist mint URL to wallet:", err);
+      }
+    }
+
+    return normalizedMintUrl;
+  };
+
+  const removeMint = (mintUrl: string) =>
+    takeOffMint(mintUrl, { event: wallet, publish, store: cashuStore });
+
+  /** The account's coins at this mint that the mint says are spent leave
+   *  the wallet; resolves with them. */
+  const cleanSpentProofs = async (mintUrl: string): Promise<Proof[]> => {
+    const owner = currentOwner();
+    const locks = globalThis.navigator?.locks;
+    if (!owner || !locks) return [];
+    return dropSpent(owner, normalizeMintUrl(mintUrl), {
+      coins: walletCoins(),
+      locks,
+    });
+  };
+
+  return {
+    cleanSpentProofs,
+    addMintIfNotExists,
+    removeMint,
+  };
 }

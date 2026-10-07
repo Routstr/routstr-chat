@@ -9,8 +9,8 @@ import { dropSpent } from "../spent";
 import { useWalletStore } from "../state/walletStore";
 import { useBalances, usePurseOf } from "../view";
 import { walletCoins } from "./purseBridge";
-import { useCashuWallet } from "./useCashuWallet";
 import { useCreateCashuWallet } from "./useCreateCashuWallet";
+import { useWalletEvent } from "./useWalletEvent";
 
 // one wallet made at a time per account in this tab (a double effect, a second mount)
 const making = new Map<string, Promise<unknown>>();
@@ -28,7 +28,7 @@ const making = new Map<string, Promise<unknown>>();
  */
 export function useWalletBinder() {
   const relays = useContext(RelaysContext);
-  const { owner, wallet, isLoading } = useCashuWallet();
+  const { owner, wallet, isLoading } = useWalletEvent();
   const { mutateAsync: createWallet } = useCreateCashuWallet();
   const balances = useBalances(owner ?? null);
   const purseOf = usePurseOf();
@@ -99,8 +99,9 @@ export function useWalletBinder() {
     // a choice the person saved wins, even an empty mint
     if (userSelectedMintUrl === activeMintUrl) return;
     if ((balances[activeMintUrl] ?? 0) > 0) return;
+    // never one the person removed, though it still holds sats
     const [best] = Object.entries(balances)
-      .filter(([, sats]) => sats > 0)
+      .filter(([url, sats]) => sats > 0 && !cashuStore.removed?.includes(url))
       .sort((a, b) => b[1] - a[1]);
     if (best) cashuStore.setActiveMintUrl(best[0]);
   }, [balances, activeMintUrl, userSelectedMintUrl, cashuStore]);

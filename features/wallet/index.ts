@@ -7,7 +7,7 @@
  * @example
  * ```typescript
  * // Use React hooks
- * import { useCashuWallet, useCashuToken } from '@/features/wallet';
+ * import { useWalletSend } from '@/features/wallet';
  *
  * // Use services directly (framework-agnostic)
  * import { MintService } from '@/features/wallet';
@@ -24,7 +24,6 @@ export type * from "./core/domain";
 export * from "./core/services/MintService";
 
 // Core Utilities (Pure functions)
-export * from "./core/utils/balance";
 export * from "./core/utils/formatting";
 
 // State Management (Zustand stores)
@@ -33,8 +32,6 @@ export * from "./state/transactionHistoryStore";
 export * from "./state/unclaimedTokensStore";
 
 // React Hooks (React integration)
-export * from "./hooks/useCashuWallet";
-export * from "./hooks/useCashuToken";
 export { holdsRecords } from "./hooks/useBook";
 export * from "./hooks/useCreateCashuWallet";
 export * from "./hooks/useNutzaps";

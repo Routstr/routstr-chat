@@ -282,6 +282,60 @@ test("pays an invoice at the mint that quoted it, though another mint is picked 
     .toBe("PAID");
 });
 
+test("pays an invoice on a second press, after the first payment did not go through", async ({
+  page,
+  kit,
+  appUrl,
+}) => {
+  await v2.open(page, appUrl);
+  await v2.receive(page, await kit.mintToken(40));
+  await v2.useMint(page, kit.env.mintUrl);
+  const other = await kit.walletAt(kit.env.invoiceMintUrl);
+  const invoice = await other.createMintQuote(8);
+  // the first payment does not go through: the mint answers that its quote is still unpaid
+  let failed = false;
+  await page.route(`${kit.env.mintUrl}/v1/melt/bolt11`, async (route) => {
+    if (failed) return route.fallback();
+    failed = true;
+    const { quote } = route.request().postDataJSON() as { quote: string };
+    const unpaid = await page.request.get(
+      `${kit.env.mintUrl}/v1/melt/quote/bolt11/${quote}`
+    );
+    await route.fulfill({ json: await unpaid.json() });
+  });
+
+  await page
+    .getByRole("button", { name: /^Open wallet\./ })
+    .first()
+    .click();
+  await page
+    .getByRole("region", { name: "Wallet", exact: true })
+    .getByRole("button", { name: "Send", exact: true })
+    .click();
+  const send = page.getByRole("region", { name: "Send", exact: true });
+  await send.getByRole("tab", { name: "Lightning" }).click();
+  const field = send.getByRole("textbox", { name: "Lightning invoice" });
+  await field.fill(invoice.request);
+  await field.press("Enter");
+  const pay = send.getByRole("button", { name: /^Pay 8 sats$/ });
+  await pay.click({ timeout: 30_000 });
+  await expect(send.getByText(/did not finish/)).toBeVisible({
+    timeout: 30_000,
+  });
+  expect(failed).toBe(true);
+
+  // tried again, it pays
+  await send.getByRole("button", { name: "Try again" }).click();
+  await expect(
+    send.getByRole("button", { name: "Pay another invoice" })
+  ).toBeVisible({ timeout: 30_000 });
+  await expect
+    .poll(async () => (await other.checkMintQuote(invoice.quote)).state, {
+      timeout: 20_000,
+    })
+    .toBe("PAID");
+});
+
 test("lands a token whose swap answer never arrives, and says it was added", async ({
   page,
   kit,
