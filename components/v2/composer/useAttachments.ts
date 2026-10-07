@@ -17,6 +17,25 @@ const newId = () =>
     ? crypto.randomUUID()
     : `attachment-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
+/** Why a file cannot be attached, or null when it can: images and PDFs (a
+ *  pasted PDF is never meant), 10 MB each, no SVG, and images only when the
+ *  model reads them. */
+export function refusal(
+  file: { type: string; size: number },
+  source: "pick" | "paste" | "drop",
+  images: boolean
+): string | null {
+  const isImage = file.type.startsWith("image/");
+  if (file.type === "image/svg+xml") return "SVG is not supported";
+  if (!isImage && !(file.type === "application/pdf" && source !== "paste")) return "Only images and PDFs";
+  if (isImage && !images) return TEXT_ONLY;
+  if (file.size > MAX_BYTES) return `Over ${MAX_MB} MB`;
+  return null;
+}
+
+/** What is said when a text-only model is offered a picture. */
+export const TEXT_ONLY = "This model reads text only";
+
 const toDataUrl = (file: File) =>
   new Promise<string>((resolve, reject) => {
     const r = new FileReader();
@@ -27,7 +46,8 @@ const toDataUrl = (file: File) =>
 
 export function useAttachments(
   setAttachments: React.Dispatch<React.SetStateAction<MessageAttachment[]>>,
-  say: (problem: string) => void
+  say: (problem: string) => void,
+  images: boolean
 ) {
   // PDFs whose text is still being read
   const [reading, setReading] = useState<ReadonlySet<string>>(new Set());
@@ -49,16 +69,10 @@ export function useAttachments(
       for (const file of list) {
         const isImage = file.type.startsWith("image/");
         const isPdf = file.type === "application/pdf";
-        if (file.type === "image/svg+xml") {
-          say("SVG is not supported");
-          continue;
-        }
-        if (!isImage && !(isPdf && source !== "paste")) {
-          if (source !== "paste") say("Only images and PDFs");
-          continue;
-        }
-        if (file.size > MAX_BYTES) {
-          say(`Over ${MAX_MB} MB`);
+        const no = refusal(file, source, images);
+        if (no) {
+          // a paste of something else (text, a link) is not an attachment at all
+          if (!(no === "Only images and PDFs" && source === "paste")) say(no);
           continue;
         }
         try {
@@ -119,7 +133,7 @@ export function useAttachments(
         }
       }
     },
-    [store, blossomSyncEnabled, pnsKeys, patch, setAttachments, say]
+    [store, blossomSyncEnabled, pnsKeys, patch, setAttachments, say, images]
   );
 
   const remove = useCallback(

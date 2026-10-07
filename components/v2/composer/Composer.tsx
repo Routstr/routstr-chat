@@ -17,7 +17,7 @@ import { useSend } from "../useActions";
 import { useChatModel } from "../useChatModel";
 import { useMoney, usePayable } from "../useMoney";
 import { sats, satUnit, shortModelName, textOf } from "../format";
-import { useAttachments } from "./useAttachments";
+import { TEXT_ONLY, useAttachments } from "./useAttachments";
 import { estimateSats, promptTokens } from "../price";
 import { settle, takeFlight } from "./landing";
 import { tokenMs } from "../motion";
@@ -86,6 +86,8 @@ const SHORT: Record<string, string> = {
   "SVG is not supported": "No SVG",
   "Only images and PDFs": "Images or PDFs",
   "Storage full, may not be kept": "Storage full",
+  [TEXT_ONLY]: "Text only",
+  "Picture taken out, this model reads text only": "Picture taken out",
 };
 
 const size = (b?: number) => (!b ? "" : b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
@@ -189,7 +191,22 @@ export default function Composer({ centred }: { centred: boolean }) {
     const t = window.setTimeout(() => setProblem(null), 2500);
     return () => window.clearTimeout(t);
   }, [problem]);
-  const { addFiles, remove, reading } = useAttachments(setUploadedAttachments, say);
+  const takesImages = (selectedModel?.architecture?.input_modalities ?? []).some(
+    (m) => normalizeModality(m) === "image"
+  );
+  // with no model chosen yet nothing is refused; the engine refuses at send
+  const imagesOk = !selectedModel || takesImages;
+  const { addFiles, remove, reading } = useAttachments(setUploadedAttachments, say, imagesOk);
+  // a model that reads text only: pictures already in the draft are taken out, and said
+  const pictures = uploadedAttachments.filter((a) => a.type === "image").length;
+  useEffect(() => {
+    if (imagesOk || !pictures) return;
+    const t = window.setTimeout(() => {
+      setUploadedAttachments((prev) => prev.filter((a) => a.type !== "image"));
+      say(pictures === 1 ? "Picture taken out, this model reads text only" : `${pictures} pictures taken out, this model reads text only`);
+    });
+    return () => window.clearTimeout(t);
+  }, [imagesOk]);
 
   const history = useMemo(() => (slots ?? []).map((s) => textOf(s.displayed.content)).join(" "), [slots]);
   const fileText = useMemo(() => uploadedAttachments.map((a) => a.textContent ?? "").join(" "), [uploadedAttachments]);
@@ -247,9 +264,6 @@ export default function Composer({ centred }: { centred: boolean }) {
   useEffect(() => () => window.clearTimeout(turnT.current), []);
   const hasContent = inputMessage.trim().length > 0 || uploadedAttachments.length > 0;
   const busy = isLoadingModels || (isWalletLoading && isAuthenticated);
-  const takesImages = (selectedModel?.architecture?.input_modalities ?? []).some(
-    (m) => normalizeModality(m) === "image"
-  );
   // "loading" lasts until the app has made its own pick, not just until models arrive
   const modelState = selectedModel ? "ready" : isAuthenticated && busy ? "loading" : "none";
 
@@ -587,7 +601,7 @@ export default function Composer({ centred }: { centred: boolean }) {
               type="file"
               multiple
               hidden
-              accept="image/*,application/pdf"
+              accept={imagesOk ? "image/*,application/pdf" : "application/pdf"}
               onChange={(e) => {
                 if (e.target.files) void addFiles(e.target.files, "pick");
                 e.target.value = "";
