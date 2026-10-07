@@ -207,6 +207,18 @@ async function refundKeys(
         forceRefund: force,
       })
     );
+    // A payout the wallet could not take in still emptied the key at the
+    // provider: show what it holds now, not what it held before
+    if (!success && storage.getApiKey(key.baseUrl)?.key === key.key) {
+      const after = await balances.getTokenBalance(key.key, key.baseUrl);
+      if (!after.balanceUnknown && !after.isInvalidApiKey) {
+        storage.updateApiKeyBalance(
+          key.baseUrl,
+          after.amount / 1000,
+          after.reserved / 1000
+        );
+      }
+    }
     results.push({ baseUrl: key.baseUrl, success });
   }
   return results;

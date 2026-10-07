@@ -160,6 +160,22 @@ describe("the Refund button against this node's core", () => {
     expect(exported.list()).toEqual([]);
   });
 
+  it("shows a key empty after a payout the wallet could not take in", async () => {
+    const { chat, storage, hold, received, state } = await account();
+    const key = await newKey(40);
+    hold(key);
+    storage.updateApiKeyBalance(kit.coreUrl, 40);
+
+    state.mintDown = true;
+    expect(await chat.refund()).toEqual([
+      { baseUrl: kit.coreUrl, success: false },
+    ]);
+
+    expect(received).toEqual([]);
+    expect(storage.getAllApiKeys()).toMatchObject([{ key, balance: 0 }]);
+    expect(chat.held.get()).toBe(0);
+  });
+
   it("keeps a key a reply elsewhere is still using, and refunds it after", async () => {
     const { chat, storage, hold, received } = await account();
     const key = await newKey(60);

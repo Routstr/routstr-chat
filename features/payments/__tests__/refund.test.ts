@@ -272,6 +272,22 @@ describe("refundCredit", () => {
     expect(deps.otherDevices.drop).toHaveBeenCalledWith(["sk-gone-device"]);
   });
 
+  it("shows this device's key empty after a payout the wallet could not take in", async () => {
+    provider({ [LARGE]: 120_000 });
+    const { deps, direct, wallet } = await setup();
+    direct.setApiKey(LARGE, "sk-mine");
+    direct.updateApiKeyBalance(LARGE, 120);
+    wallet.purse.receive.mockRejectedValueOnce(new Error("Failed to fetch"));
+
+    const results = await refundCredit(deps, true);
+
+    expect(results).toContainEqual({ baseUrl: LARGE, success: false });
+    // kept, so a refund later is paid out again, and empty, as the provider says
+    expect(direct.getAllApiKeys()).toMatchObject([
+      { key: "sk-mine", balance: 0 },
+    ]);
+  });
+
   it("keeps a lost device's key when its payout could not be received", async () => {
     provider({ [LARGE]: 120_000 });
     const { deps, others, wallet } = await setup();
