@@ -239,7 +239,7 @@ test("pays an invoice at the mint that quoted it, though another mint is picked 
 }) => {
   await v2.open(page, appUrl);
   await v2.receive(page, await kit.mintToken(40));
-  // the second mint is listed too
+  // the second mint is listed too, with less than the invoice needs
   await v2.receive(page, await kit.mintToken(8, { otherMint: true }));
   await v2.useMint(page, kit.env.mintUrl);
   const other = await kit.walletAt(kit.env.invoiceMintUrl);
@@ -261,7 +261,8 @@ test("pays an invoice at the mint that quoted it, though another mint is picked 
   const pay = send.getByRole("button", { name: /^Pay 8 sats$/ });
   await expect(pay).toBeVisible({ timeout: 30_000 });
 
-  // the other mint is picked at the foot while Send shows the quote
+  // the other mint is picked at the foot while Send shows the quote: Pay is still
+  // offered, since the quoting mint pays
   const host = new URL(kit.env.invoiceMintUrl).host.replace(/[.]/g, "\\.");
   await page.getByRole("button", { name: /^Mint / }).click();
   const menu = page.getByRole("menu", { name: "Mints" });

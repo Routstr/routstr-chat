@@ -40,6 +40,8 @@ export function useWalletSend() {
   const [nip60MeltQuoteId, setNip60MeltQuoteId] = useState("");
   const [invoiceAmount, setInvoiceAmount] = useState<number | null>(null);
   const [invoiceFeeReserve, setInvoiceFeeReserve] = useState<number | null>(null);
+  // the mint that made the quote, which pays it whichever is active by then
+  const [quoteMintUrl, setQuoteMintUrl] = useState<string | null>(null);
   const [isNip60Processing, setIsNip60Processing] = useState(false);
   const [isNip60LoadingInvoice, setIsNip60LoadingInvoice] = useState(false);
   const nip60ProcessingInvoiceRef = useRef<string | null>(null);
@@ -178,6 +180,7 @@ export function useWalletSend() {
       setNip60SendInvoice(value);
       // a quote made for another invoice is never paid for this one
       meltQuoteRef.current = null;
+      setQuoteMintUrl(null);
       setNip60MeltQuoteId("");
       setInvoiceAmount(null);
       setInvoiceFeeReserve(null);
@@ -192,6 +195,7 @@ export function useWalletSend() {
         const meltQuote = await createMeltQuote(mintUrl, value);
         if (!current()) return;
         meltQuoteRef.current = { mintUrl, quote: meltQuote, invoice: value };
+        setQuoteMintUrl(mintUrl);
         setNip60MeltQuoteId(meltQuote.quote);
         // what Send shows and checks is in sats; the quote paid stays in the mint's unit
         const { amount, feeReserve } = quoteInSats(meltQuote);
@@ -328,6 +332,7 @@ export function useWalletSend() {
     nip60MeltQuoteId,
     invoiceAmount,
     invoiceFeeReserve,
+    quoteMintUrl,
     isNip60Processing,
     isNip60LoadingInvoice,
     // actions
