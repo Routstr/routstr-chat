@@ -18,4 +18,15 @@ export async function openWallet(
   return wallet;
 }
 
+/** The book moves coins only at a mint that can say what became of a lost
+ *  request (NUT-07 and NUT-09). */
+export function assertRecoverable(wallet: Wallet, mintUrl: string): void {
+  const info = wallet.getMintInfo();
+  if (!info.isSupported(7).supported || !info.isSupported(9).supported) {
+    throw new Error(
+      `${mintUrl} cannot report what happened to a lost payment (NUT-07 and NUT-09), so the wallet does not move coins there.`
+    );
+  }
+}
+
 export const normalizeMintUrl = (url: string) => url.replace(/\/+$/, "");

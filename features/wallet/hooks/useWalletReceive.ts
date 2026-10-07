@@ -9,12 +9,10 @@ import {
   formatBalance,
   useTransactionHistoryStore,
 } from "@/features/wallet";
-import { useCashuWallet } from "@/features/wallet";
-import { createLightningInvoice, mintTokensFromPaidInvoice } from "@/lib/cashuLightning";
+import { createLightningInvoice } from "@/lib/cashuLightning";
 import { createPendingTransaction } from "@/utils/transactionUtils";
 import { getPendingCashuTokenAmount } from "@/utils/cashuUtils";
-import { useWallet } from "../view";
-import { useActiveMintUnit } from "./useActiveMintUnit";
+import { usePurse, usePurseOf, useWallet } from "../view";
 import {
   requestBitcoinConnectProvider,
   useBitcoinConnectStatus,
@@ -22,11 +20,11 @@ import {
 
 export function useWalletReceive(navigateToTab: (tab: "overview" | "invoice") => void) {
   const { total: balance } = useWallet();
-  const currentMintUnit = useActiveMintUnit();
   const { addInvoice, updateInvoice, owner } = useInvoiceSync();
   const { receiveToken } = useCashuToken();
   const cashuStore = useCashuStore();
-  const { updateProofs } = useCashuWallet();
+  const purseOf = usePurseOf();
+  const current = usePurse();
   const transactionHistoryStore = useTransactionHistoryStore();
   const { status: bcStatus, balance: bcBalance, connect: connectWallet } = useBitcoinConnectStatus();
 
@@ -89,36 +87,34 @@ export function useWalletReceive(navigateToTab: (tab: "overview" | "invoice") =>
       pendingTxId: string,
       invoiceId: string
     ) => {
-      // asks again every 5 s while this quote is the one on screen
+      // asks again every 5 s while this quote is the one on screen; a mint
+      // that fails to answer is asked again for about two minutes
+      let failures = 0;
       const check = async (): Promise<void> => {
         try {
-          const proofs = await mintTokensFromPaidInvoice(mintUrl, quoteId, amount, undefined, owner);
-          if (proofs.length > 0) {
-            await updateProofs({ mintUrl, proofsToAdd: proofs, proofsToRemove: [] });
-            await updateInvoice(invoiceId, {
-              state: MintQuoteState.ISSUED,
-              paidAt: Date.now(),
-              claimError: undefined,
-            });
-            transactionHistoryStore.removePendingTransaction(pendingTxId);
-            setNip60PendingTxId(null);
-            setSuccessMessage(`Received ${formatBalance(amount, currentMintUnit)}s!`);
-            setNip60Invoice("");
-            setNip60QuoteId("");
-            nip60QuoteIdRef.current = "";
-            nip60InvoiceIdRef.current = "";
-            setMintAmount("");
-            navigateToTab("overview");
-            setTimeout(() => setSuccessMessage(""), 5000);
-          } else {
-            setTimeout(() => {
-              if (nip60QuoteIdRef.current === quoteId) {
-                void check();
-              }
-            }, 5000);
-          }
+          // into the account that made the invoice, whoever is active now
+          const purse = owner ? purseOf(owner) : current();
+          if (!purse) throw new Error("User not logged in");
+          // resolves once the coins are in the wallet (0: claimed already)
+          await purse.claim(mintUrl, quoteId);
+          await updateInvoice(invoiceId, {
+            state: MintQuoteState.ISSUED,
+            paidAt: Date.now(),
+            claimError: undefined,
+          });
+          transactionHistoryStore.removePendingTransaction(pendingTxId);
+          setNip60PendingTxId(null);
+          setSuccessMessage(`Received ${formatBalance(amount, "sat")}s!`);
+          setNip60Invoice("");
+          setNip60QuoteId("");
+          nip60QuoteIdRef.current = "";
+          nip60InvoiceIdRef.current = "";
+          setMintAmount("");
+          navigateToTab("overview");
+          setTimeout(() => setSuccessMessage(""), 5000);
         } catch (err) {
-          if (!(err instanceof Error && err.message.includes("not been paid"))) {
+          const unpaid = err instanceof Error && err.message.includes("not been paid");
+          if (!unpaid && ++failures >= 24) {
             setError(
               "Failed to check payment status: " +
                 (err instanceof Error ? err.message : String(err))
@@ -134,7 +130,7 @@ export function useWalletReceive(navigateToTab: (tab: "overview" | "invoice") =>
       };
       return check();
     },
-    [owner, updateProofs, updateInvoice, transactionHistoryStore, currentMintUnit, navigateToTab]
+    [owner, purseOf, current, updateInvoice, transactionHistoryStore, navigateToTab]
   );
 
   const createNip60Invoice = useCallback(

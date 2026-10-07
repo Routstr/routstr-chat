@@ -5,6 +5,7 @@ import { openWallet } from "./mint";
 import {
   settleLanded,
   settleMelt,
+  settleMint,
   settleSwap,
   type CommitProofs,
   type MeltOutcome,
@@ -61,6 +62,8 @@ export class RecoveryHost {
         } else if (record.kind === "melt") {
           const { state } = await settleMelt(wallet, record, commit, journal);
           outcomes.set(record.quoteId, state);
+        } else if (record.kind === "mint") {
+          await settleMint(wallet, record, commit, journal);
         } else {
           await settleLanded(wallet, record, commit, journal);
         }

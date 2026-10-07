@@ -1,3 +1,4 @@
+import { assertRecoverable } from "@/features/book/mint";
 import { useCashuStore } from "@/features/wallet";
 import {
   Mint,
@@ -7,7 +8,6 @@ import {
   MintQuoteState,
   Proof,
 } from "@cashu/cashu-ts";
-import { claimPaidMintQuote } from "./mintQuoteRecovery";
 
 export interface MintQuote {
   mintUrl: string;
@@ -54,9 +54,13 @@ export async function createLightningInvoice(
 
     // Load mint keysets
     await wallet.loadMint();
+    // the wallet claims deposits only where a lost answer can be restored
+    assertRecoverable(wallet, mintUrl);
 
-    // Create a mint quote
-    const mintQuote = await wallet.createMintQuote(amount);
+    // Create a mint quote, in the keyset's unit: `amount` is in sats
+    const mintQuote = await wallet.createMintQuote(
+      preferredUnit === "msat" ? amount * 1000 : amount
+    );
     useCashuStore.getState().addMintQuote(mintUrl, mintQuote);
 
     // Return the invoice and quote information
@@ -82,35 +86,6 @@ export async function createLightningInvoice(
       );
     }
     console.error("Error creating Lightning invoice:", error);
-    throw error;
-  }
-}
-
-/**
- * Mint tokens after a Lightning invoice has been paid
- * @param mintUrl The URL of the mint to use
- * @param quoteId The quote ID from the invoice
- * @param amount Amount in satoshis
- * @param owner The account the invoice was made for; the active one if left out or a guest
- * @returns The minted proofs
- */
-export async function mintTokensFromPaidInvoice(
-  mintUrl: string,
-  quoteId: string,
-  amount: number,
-  maxAttempts: number = 40,
-  owner?: string | null
-): Promise<Proof[]> {
-  try {
-    return await claimPaidMintQuote(
-      mintUrl,
-      quoteId,
-      amount,
-      maxAttempts,
-      owner
-    );
-  } catch (error) {
-    console.error("Error minting tokens from paid invoice:", error);
     throw error;
   }
 }

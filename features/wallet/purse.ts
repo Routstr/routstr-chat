@@ -27,6 +27,10 @@ export interface Purse {
    *  mint. "pending" means the mint has not settled it yet: the coins stay out
    *  of the wallet and the book settles it later. */
   pay(mintUrl: string, quote: MeltQuoteBolt11Response): Promise<MeltOutcome>;
+  /** Claims a paid deposit (a mint quote made for this account) into this
+   *  account's wallet; resolves with the sats it gave, 0 when it was claimed
+   *  already (here or elsewhere). Throws while the invoice is unpaid. */
+  claim(mintUrl: string, quoteId: string): Promise<number>;
   /** Takes a token into this account's wallet; resolves with the sats it gave. */
   receive(token: string): Promise<number>;
   /** What a token says, without its mint: for a preview before receiving. */
@@ -108,6 +112,12 @@ export function createPurse(
     pay: async (mintUrl, quote) =>
       (await executor.pay(mintUrl, quote, () => coins.coins(owner, mintUrl)))
         .state,
+    claim: async (mintUrl, quoteId) => {
+      const { proofs, unit } = await executor.claim(mintUrl, quoteId);
+      const sats = toSats(total(proofs), unit);
+      if (sats) note({ direction: "in", sats });
+      return sats;
+    },
     receive: async (token) => {
       const got = await executor.receive(token);
       const sats = toSats(total(got), getTokenMetadata(token).unit);
