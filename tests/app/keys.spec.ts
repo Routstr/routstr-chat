@@ -33,7 +33,7 @@ test("funds a key from the wallet, keeps it through a reload, and empties it bac
   appUrl,
 }) => {
   await v2.open(page, appUrl);
-  await seedKitProvider(page, kit.coreUrl, "kit-cheap");
+  await seedKitProvider(page, kit.coreUrl, "kit-cheap", { mainStore: false });
   await v2.fund(page, appUrl, await kit.mintToken(100));
   await expect.poll(() => wallet(page)).toBe(100);
 

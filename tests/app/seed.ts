@@ -5,12 +5,24 @@ import type { BrowserContext, Page } from "@playwright/test";
 import { PrivateKeyAccount } from "applesauce-accounts/accounts";
 import { nip19 } from "nostr-tools";
 
-/** Call on a loaded app page; reloads it so the SDK reads the new list. */
+/** Call on a loaded app page; reloads it so the SDK reads the new list. `mainStore: false`
+ *  only picks the model: v2 finds the kit's core on its own (the build names it), so a v2
+ *  test without main's provider store proves a fresh device works. */
 export async function seedKitProvider(
   page: Page,
   coreUrl: string,
-  model: string
+  model: string,
+  { mainStore = true }: { mainStore?: boolean } = {}
 ): Promise<void> {
+  if (!mainStore) {
+    await page.evaluate(
+      ({ url, model }) =>
+        localStorage.setItem("lastUsedModel", JSON.stringify(`${model}@@${url}`)),
+      { url: coreUrl, model }
+    );
+    await page.reload();
+    return;
+  }
   // the SDK creates its database on start; wait for it rather than create it with the wrong shape
   await page.waitForFunction(
     async () =>

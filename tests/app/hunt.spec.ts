@@ -25,7 +25,7 @@ async function funded(
   sats: number
 ) {
   await v2.open(page, appUrl);
-  await seedKitProvider(page, kit.coreUrl, "kit-cheap");
+  await seedKitProvider(page, kit.coreUrl, "kit-cheap", { mainStore: false });
   await v2.receive(page, await kit.mintToken(sats));
   await v2.useMint(page, kit.env.mintUrl);
 }
@@ -202,7 +202,7 @@ test("first run: who's writing, a new account, 100 sats by Lightning, then the h
   appUrl,
 }) => {
   await v2.open(page, appUrl);
-  await seedKitProvider(page, kit.coreUrl, "kit-cheap");
+  await seedKitProvider(page, kit.coreUrl, "kit-cheap", { mainStore: false });
 
   const composer = page.getByRole("textbox", { name: "Message" });
   await composer.fill(`${TINY} my first message`);
