@@ -30,18 +30,25 @@ const ChatModelContext = createContext<ReturnType<typeof useModelOf> | null>(nul
 export function ChatModelProvider({ children }: { children: React.ReactNode }) {
   const value = useModelOf();
   const catalog = useCatalogService();
+  const { total } = useMoney();
   // read when money comes in: the model and pin as they are then
-  const now = useRef(value);
+  const now = useRef({ value, total });
   useLayoutEffect(() => {
-    now.current = value;
+    now.current = { value, total };
   });
-  const accepted = useCallback(() => {
-    const { model, chosen } = now.current;
-    if (!model || !catalog) return [];
-    const routes = catalog.routes(model.id);
-    const base = chatModelOf(model, chosen, routes).provider ?? routes[0]?.baseUrl;
-    return base ? catalog.mintsOf(base) : [];
-  }, [catalog]);
+  const accepted = useCallback(
+    (sats: number) => {
+      const { value, total } = now.current;
+      if (!catalog) return [];
+      // with nothing chosen, the model the app will pick once these sats are in
+      const model = pickedModel(value.models, value) ?? defaultModel(value.models, catalog.picks(), total + sats, need);
+      if (!model) return [];
+      const routes = catalog.routes(model.id);
+      const base = chatModelOf(model, value.chosen, routes).provider ?? routes[0]?.baseUrl;
+      return base ? catalog.mintsOf(base) : [];
+    },
+    [catalog]
+  );
   return (
     <ChatModelContext.Provider value={value}>
       <AcceptedMintsContext.Provider value={accepted}>{children}</AcceptedMintsContext.Provider>
