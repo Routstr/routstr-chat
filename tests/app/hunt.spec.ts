@@ -1,7 +1,7 @@
 // Money bugs hunted the way a person would cause them, on the real app, the kit's real core
 // and mints. Every check ends on the mint's answer: what the wallet shows must be money.
 import type { BrowserContext, Page } from "@playwright/test";
-import { generateSecretKey, nip19 } from "nostr-tools";
+import { generateSecretKey, getPublicKey, nip19 } from "nostr-tools";
 import { expect, test } from "./fixtures";
 import { v2 } from "./drivers/v2";
 import { seedAccounts, seedKitProvider } from "./seed";
@@ -240,6 +240,99 @@ test(`first run${chosen ? "" : ", nothing chosen"}: who's writing, a new account
     .toBeGreaterThanOrEqual(99);
   const left = await v2.balance(page);
   expect(await kit.redeem(await v2.makeToken(page, left))).toBe(left);
+});
+
+/** Puts `sats` of credit in a key of the account's at `baseUrl` (main's key store, the SDK's
+ *  format), used just now so no automatic return takes it, then reloads. */
+async function holdAt(page: Page, nsec: string, baseUrl: string, sats: number) {
+  const pubkey = getPublicKey(nip19.decode(nsec).data as Uint8Array);
+  const db = `routstr-chat-payments:${pubkey}:direct`;
+  // the app makes the store when the account opens: write into it, never make it
+  await page.waitForFunction(
+    async (db) => (await indexedDB.databases()).some((d) => d.name === db),
+    db,
+    { timeout: 30_000 }
+  );
+  await page.evaluate(
+    ({ db, entry }) =>
+      new Promise<void>((resolve, reject) => {
+        const open = indexedDB.open(db);
+        open.onerror = () => reject(open.error);
+        open.onsuccess = () => {
+          const tx = open.result.transaction("sdk_storage", "readwrite");
+          tx.objectStore("sdk_storage").put(JSON.stringify([entry]), "api_keys");
+          tx.oncomplete = () => (open.result.close(), resolve());
+          tx.onerror = () => reject(tx.error);
+        };
+      }),
+    { db, entry: { baseUrl, key: "sk-held", balance: sats, reserved: 0, lastUsed: Date.now() } }
+  );
+  await page.reload();
+  await v2.ready(page);
+}
+
+/** What the app wants able to pay before a message to kit-cheap, from the core's own listing
+ *  (main's rule: room for 10,000 prompt tokens and the longest reply, 5% over). */
+async function cheapNeed(kit: KitClient): Promise<number> {
+  const { data } = (await (await fetch(`${kit.coreUrl}v1/models`)).json()) as {
+    data: { id: string; sats_pricing: { prompt: number; max_completion_cost: number; max_cost: number } }[];
+  };
+  const sp = data.find((m) => m.id === "kit-cheap")!.sats_pricing;
+  return sp.max_completion_cost ? (sp.prompt * 10_000 + sp.max_completion_cost) * 1.05 : sp.max_cost;
+}
+
+/** Whether the picker marks the kit's model as needing more sats; closes it again. */
+async function cheapIsShort(page: Page): Promise<boolean> {
+  await page.getByRole("button", { name: /^Model: Kit Cheap\./ }).click();
+  const row = page.getByRole("option", { name: /Kit Cheap/ });
+  await expect(row).toBeVisible();
+  const short = (await row.getAttribute("data-short")) !== null;
+  await page.keyboard.press("Escape");
+  await expect(row).toBeHidden();
+  return short;
+}
+
+// on the API-key path a provider spends the credit it holds for you before the wallet, so the
+// picker and the send count it for messages to that provider, and for no other
+test("credit a provider holds pays for messages to it, and only to it", async ({
+  page,
+  context,
+  kit,
+  appUrl,
+}) => {
+  const nsec = newKey();
+  await seedAccounts(context, [nsec]);
+  await v2.open(page, appUrl);
+  await seedKitProvider(page, kit.coreUrl, "kit-cheap", { mainStore: false });
+
+  // 500 sats at a provider that does not serve the model, nothing in the wallet
+  await holdAt(page, nsec, "http://elsewhere.localhost/", 500);
+  expect(await cheapIsShort(page)).toBe(true);
+  await v2.send(page, `${TINY} held message`);
+  await expect(
+    page.getByRole("heading", { name: "Add a few sats to send" })
+  ).toBeVisible();
+  await expect(page.locator("article.rd-me")).toHaveCount(0);
+
+  // sats land: the held message goes to the kit's core, whose key keeps the rest of its deposit
+  await v2.receive(page, await kit.mintToken(300));
+  await v2.waitReplyText(page, "Echo: held message");
+  await v2.waitIdle(page);
+
+  // the wallet keeps a sat less than the model needs: short alone, enough with the core's credit
+  const keep = Math.ceil(await cheapNeed(kit)) - 1;
+  await v2.useMint(page, kit.env.mintUrl);
+  const left = await v2.balance(page);
+  expect(await kit.redeem(await v2.makeToken(page, left - keep))).toBe(left - keep);
+  await expect.poll(() => v2.balance(page)).toBe(keep);
+  expect(await cheapIsShort(page)).toBe(false);
+
+  // and the send agrees: it goes, paid by the core's credit, the wallet untouched
+  await v2.send(page, `${TINY} paid by the credit`);
+  await v2.waitReplyText(page, "Echo: paid by the credit");
+  await v2.waitIdle(page);
+  await expect(page.locator("article.rd-me")).toHaveCount(2);
+  expect(await v2.balance(page)).toBe(keep);
 });
 
 // with no pay mode picked the app pays through an API key (its credit waits at the provider

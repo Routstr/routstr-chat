@@ -11,6 +11,7 @@ import { LAB_MODELS, PICKS, labRoutes } from "@/components/v2/lab/catalog";
    turn as the app does without spending sats. ?fail=1 ?nothink=1 ?loading=1 */
 
 const LAB_SYNC = { on: false, servers: DEFAULT_FILE_SERVERS };
+const NO_CREDIT = {};
 
 const memory = (): Pick<Storage, "getItem" | "setItem"> => {
   const map = new Map<string, string>();
@@ -66,7 +67,7 @@ export function labChat(history: ChatHistory, params: URLSearchParams): AccountC
     chat,
     costs,
     refund: async () => [],
-    held: { subscribe: () => () => {}, get: () => 0 },
+    held: { subscribe: () => () => {}, get: () => 0, keys: () => NO_CREDIT },
     viewing: () => {},
     // files stay inline in the lab: nothing is kept or copied
     files: {

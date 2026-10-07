@@ -72,7 +72,7 @@ export function useSections({
       if (only) {
         if (r.pin ? r.pin !== only : !cat.routesOf(m.id).some((x) => x.base === only)) return false;
       }
-      if (f.fits && !cat.fits(routeOf(r).model)) return false;
+      if (f.fits && !cat.fits(routeOf(r))) return false;
       return true;
     };
     const measure = measureFor(sort, priceOf, (id) => cat.routesOf(id).length);

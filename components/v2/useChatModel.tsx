@@ -19,7 +19,13 @@ function useModelOf() {
       defaultModel(models, catalog?.picks() ?? [], total, need),
     [models, pick, catalog, total]
   );
-  return { ...pick, models, loading, model };
+  // ranked again whenever the catalogue changes (a cooldown keeps the same models), not on
+  // every render of the composer
+  const provider = useMemo(
+    () => (model && catalog ? goesTo(model, pick.chosen, catalog.routes(model.id)) : undefined),
+    [model, pick.chosen, catalog, models]
+  );
+  return { ...pick, models, loading, model, provider };
 }
 
 const ChatModelContext = createContext<ReturnType<typeof useModelOf> | null>(null);
@@ -43,8 +49,7 @@ export function ChatModelProvider({ children }: { children: React.ReactNode }) {
       // with nothing chosen, the model the app will pick once these sats are in
       const model = pickedModel(value.models, value) ?? defaultModel(value.models, catalog.picks(), total + sats, need);
       if (!model) return [];
-      const routes = catalog.routes(model.id);
-      const base = chatModelOf(model, value.chosen, routes).provider ?? routes[0]?.baseUrl;
+      const base = goesTo(model, value.chosen, catalog.routes(model.id));
       return base ? catalog.mintsOf(base) : [];
     },
     [catalog]
@@ -57,8 +62,8 @@ export function ChatModelProvider({ children }: { children: React.ReactNode }) {
 }
 
 /** The model you talk to: your pick (or a "?model=" link) as the catalogue has
- *  it now, else the one the app picks for what you can spend. With the
- *  catalogue and the pick's own state. */
+ *  it now, else the one the app picks for what you can spend; the provider a
+ *  message to it goes to. With the catalogue and the pick's own state. */
 export function useChatModel() {
   const value = useContext(ChatModelContext);
   if (!value) throw new Error("useChatModel must be used inside ChatModelProvider");
@@ -81,4 +86,10 @@ export function chatModelOf(
   const inputs = model.architecture?.input_modalities;
   // unknown inputs are not taken as text only
   return { id: model.id, provider: pinned, images: inputs ? inputs.includes("image") : undefined };
+}
+
+/** Where a message to this model goes: its pin while routing still serves it
+ *  there, else the cheapest provider, as the SDK routes it. */
+export function goesTo(model: Model, chosen: Choice | null, routes: { baseUrl: string }[]): string | undefined {
+  return chatModelOf(model, chosen, routes).provider ?? routes[0]?.baseUrl;
 }

@@ -12,7 +12,7 @@ import {
   MINT,
   tokenOf,
 } from "@/features/payments/__tests__/fakes";
-import type { Sdk } from "@/features/payments/ports";
+import type { Sdk, Spending } from "@/features/payments/ports";
 import { createAccountChat } from "../chat";
 
 type RequestArgs = Parameters<Sdk["request"]>;
@@ -23,7 +23,7 @@ const model = { id: "m" };
 
 /** An account's chat over a provider the test drives through the real
  *  payment path (lock, wallet binding, SDK call). */
-async function setup() {
+async function setup(spending: () => Spending = () => ({ mode: "apikeys" })) {
   const credit = fakeKeys();
   await credit.keys.ready();
   const wallet = fakePurse();
@@ -43,7 +43,7 @@ async function setup() {
     keys: credit.keys,
     purse: wallet.purse,
     sdk,
-    spending: () => ({ mode: "apikeys" }),
+    spending,
     ...emptyDevice(),
   });
   /** Credit at a provider, last used long ago, so an automatic refund takes it. */
@@ -169,5 +169,26 @@ describe("createAccountChat", () => {
     await tick();
     expect(credit.keys.lock.mock.calls.length).toBe(locks);
     expect(wallet.received).toHaveLength(2);
+  });
+
+  it("names what each provider's key spends first, the same object until it changes, none when X-Cashu or a node pays", async () => {
+    let spending: Spending = { mode: "apikeys" };
+    const { account, credit } = await setup(() => spending);
+    expect(account.held.keys()).toEqual({});
+
+    const storage = credit.keys.storage();
+    storage.setApiKey("https://a.example/", "sk-a");
+    storage.updateApiKeyBalance("https://a.example/", 30);
+    const held = account.held.keys();
+    expect(held).toEqual({ "https://a.example/": 30 });
+    expect(account.held.keys()).toBe(held);
+    storage.updateApiKeyBalance("https://a.example/", 25);
+    expect(account.held.keys()).toEqual({ "https://a.example/": 25 });
+
+    spending = { mode: "xcashu" };
+    expect(account.held.keys()).toEqual({});
+    spending = { mode: "apikeys", node: { url: "https://node.example/", apiKey: "sk-n" } };
+    expect(account.held.keys()).toEqual({});
+    account.dispose();
   });
 });

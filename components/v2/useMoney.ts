@@ -1,8 +1,10 @@
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { useBusy } from "@/features/chat/view";
+import { useBusy, useKeyCredit } from "@/features/chat/view";
 import { useNodePays, type RemoteNode } from "@/features/node/view";
 import { useWallet } from "@/features/wallet/view";
+import type { Model } from "@/types/models";
 import { getPendingCashuTokenAmount } from "@/utils/cashuUtils";
+import { getRequiredSatsForModel } from "@/utils/modelUtils";
 
 export interface Money {
   /** What you can spend: the wallet plus sats held in provider tokens. */
@@ -53,6 +55,40 @@ export function MoneyProvider({ children }: { children: React.ReactNode }) {
     [wallet.total, wallet.balances, wallet.loading, pending, node]
   );
   return React.createElement(MoneyContext.Provider, { value: money }, children);
+}
+
+/** What one message to a model may take, in sats; 0 when its price is unknown. */
+export const needOf = (m: Model) => {
+  try {
+    return getRequiredSatsForModel(m) || 0;
+  } catch {
+    return 0;
+  }
+};
+
+const slashed = (url: string) => (url.endsWith("/") ? url : `${url}/`);
+
+/** What can pay for a message at a provider, and whether that is enough: the
+ *  wallet, and on the API-key path what this account's key there already
+ *  holds, which the SDK spends first (`credit` is empty on the X-Cashu path,
+ *  which pays every message from the wallet). */
+export function payable(total: number, credit: Readonly<Record<string, number>>, node: boolean) {
+  const at = (baseUrl: string | null | undefined) => total + (baseUrl ? credit[slashed(baseUrl)] ?? 0 : 0);
+  // a node pays for everything; a model with no known price still needs something to pay with
+  const covers = (model: Model, baseUrl: string | null | undefined) => {
+    if (node) return true;
+    const need = needOf(model);
+    return need > 0 ? at(baseUrl) >= need : at(baseUrl) > 0;
+  };
+  return { at, covers };
+}
+
+/** `payable` for this account now. The picker and the send both ask it, so
+ *  they never disagree. */
+export function usePayable() {
+  const { total, node } = useMoney();
+  const credit = useKeyCredit();
+  return useMemo(() => payable(total, credit, !!node), [total, node, credit]);
 }
 
 /** A number that counts to its new value once, and never while you read. */

@@ -234,9 +234,9 @@ function Details(props: DetailsProps) {
   const multi = routes.length > 1;
   const rt = host ? cat.routeFor({ ...row, pin: null }, host) : routes[0] ?? cat.routeFor({ ...row, pin: null });
   const p = cat.cost(rt.model);
-  const ok = cat.fits(rt.model);
+  const ok = cat.fits(rt);
   const need = cat.needFor(rt.model);
-  const short = Math.max(0, Math.ceil(need - cat.balance));
+  const short = Math.max(0, Math.ceil(need - cat.spendable(rt)));
   const base = routes[0] ? cat.cost(routes[0].model) : p;
   const x = p > 0 ? cat.scale.at(p) : null;
   const kicker = `${getCompanyMeta(co).label}${isPrivate(m) && !nameSaysPrivate(m) ? " · private" : ""}`;

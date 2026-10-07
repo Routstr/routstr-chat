@@ -10,13 +10,12 @@ import { renderCompanyIcon } from "@/components/v2/picker/display";
 import { normalizeModality } from "@/components/v2/picker/modality";
 import type { MessageAttachment } from "@/types/chat";
 import type { Model } from "@/types/models";
-import { isModelAvailable } from "@/utils/modelUtils";
 import { Icon } from "../icons";
 import { useChipRef, useDraft, useUi } from "../ui";
 import { useOpenChat } from "../openChat";
 import { useActions } from "../useActions";
 import { useChatModel } from "../useChatModel";
-import { useMoney } from "../useMoney";
+import { useMoney, usePayable } from "../useMoney";
 import { sats, satUnit, shortModelName, textOf } from "../format";
 import { useAttachments } from "./useAttachments";
 import { estimateSats, promptTokens } from "../price";
@@ -145,7 +144,7 @@ function Tile({ a, reading, onRemove, onTip }: { a: MessageAttachment; reading: 
 export default function Composer({ centred }: { centred: boolean }) {
   const { id: activeConversationId } = useOpenChat();
   const { text: inputMessage, setText: setInputMessage, attachments: uploadedAttachments, setAttachments: setUploadedAttachments } = useDraft();
-  const { model: selectedModel, chosen, loading: isLoadingModels } = useChatModel();
+  const { model: selectedModel, chosen, provider, loading: isLoadingModels } = useChatModel();
   const catalog = useCatalogService();
   const chat = useAccountChat()?.chat;
   const isLoading = useAsking(activeConversationId);
@@ -157,9 +156,11 @@ export default function Composer({ centred }: { centred: boolean }) {
   const ui = useUi();
   const money = useMoney();
   const isWalletLoading = money.loading;
-  // what a provider holds for you pays the next reply first
+  // credit held at any provider: the account has money, if not there
   const held = useHeldCredit();
-  const lowBalanceWarningForModel = !!selectedModel && !isModelAvailable(selectedModel, money.total + held);
+  // the same rule the picker shows: what can pay at the provider the message goes to
+  const payable = usePayable();
+  const lowBalanceWarningForModel = !!selectedModel && !payable.covers(selectedModel, provider);
   const { send } = useActions();
   const field = useRef<HTMLTextAreaElement>(null);
   const island = useRef<HTMLDivElement>(null);

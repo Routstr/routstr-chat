@@ -81,7 +81,7 @@ export function useChoose({
       const route = cat.routeFor(r, pin);
       const name = shortModelName(r.model.name, r.model.id);
       onClose();
-      if (!cat.fits(route.model)) {
+      if (!cat.fits(route)) {
         say(`${name} chosen. It needs ${fmt(cat.needFor(route.model))} sats to start, so add a few first.`);
         ui.setFace("pay");
         return;

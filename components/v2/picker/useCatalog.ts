@@ -3,12 +3,11 @@ import { useOpenChat } from "../openChat";
 import { useCatalogService } from "@/features/catalog/view";
 import { useThread } from "@/features/history/view";
 import type { Model } from "@/types/models";
-import { getRequiredSatsForModel } from "@/utils/modelUtils";
 import { webSearchModels } from "@/lib/preconfiguredModels";
 import { keyOf } from "../pick";
 import { useDraft } from "../ui";
 import { useChatModel } from "../useChatModel";
-import { useMoney } from "../useMoney";
+import { needOf, useMoney, usePayable } from "../useMoney";
 import { textOf } from "../format";
 import { estimateSats, promptTokens } from "../price";
 import { answers, baseKey, hostOf, parseKey, priceScale, type Route, type Row } from "./catalog";
@@ -21,14 +20,6 @@ export interface CatalogStandIn {
 }
 export const CatalogStandInContext = createContext<CatalogStandIn | null>(null);
 
-const needOf = (m: Model) => {
-  try {
-    return getRequiredSatsForModel(m) || 0;
-  } catch {
-    return 0;
-  }
-};
-
 /** Everything the picker reads, in one place: models, who serves them, what a
  *  message costs on each, what you can afford, what is in use. */
 export function useCatalog() {
@@ -38,6 +29,7 @@ export function useCatalog() {
   const { text } = useDraft();
   const standIn = useContext(CatalogStandInContext);
   const money = useMoney();
+  const payable = usePayable();
 
   // the same estimate the composer shows: this conversation plus the draft
   const history = useMemo(() => (slots ?? []).map((s) => textOf(s.displayed.content)).join(" "), [slots]);
@@ -86,10 +78,17 @@ export function useCatalog() {
 
   const balance = money.total;
   const needFor = useCallback((m: Model) => (money.node ? 0 : needOf(m)), [money.node]);
-  const fits = useCallback((m: Model) => {
-    const n = needFor(m);
-    return n <= 0 || balance >= n;
-  }, [needFor, balance]);
+  // a message by this route goes to its provider, where a key may already hold credit; a pin
+  // whose provider is gone is priced at its listing, but the message goes to the cheapest
+  const goes = useCallback(
+    (r: Route) => {
+      const live = routesOf(r.model.id);
+      return live.some((x) => x.base === r.base) ? r.base : live[0]?.base;
+    },
+    [routesOf]
+  );
+  const fits = useCallback((r: Route) => payable.covers(r.model, goes(r)), [payable, goes]);
+  const spendable = useCallback((r: Route) => payable.at(goes(r)), [payable, goes]);
 
   const scale = useMemo(
     () => priceScale(models.map((m) => cost(routesOf(m.id)[0]?.model ?? m))),
@@ -114,8 +113,8 @@ export function useCatalog() {
 
   // one object per real change, so memoised rows and details can hold still
   return useMemo(
-    () => ({ models, routesOf, routeFor, cost, needFor, fits, scale, picks, web, current, balance, node: money.node, hosts }),
-    [models, routesOf, routeFor, cost, needFor, fits, scale, picks, web, current, balance, money.node, hosts]
+    () => ({ models, routesOf, routeFor, cost, needFor, fits, spendable, scale, picks, web, current, balance, node: money.node, hosts }),
+    [models, routesOf, routeFor, cost, needFor, fits, spendable, scale, picks, web, current, balance, money.node, hosts]
   );
 }
 
