@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { useBitcoinConnectStatus } from "@/hooks/useBitcoinConnect";
+import { useCashuWallet } from "@/features/wallet/hooks/useCashuWallet";
 import { useCashuToken } from "@/features/wallet/hooks/useCashuToken";
 import { useMints } from "@/features/wallet/view";
 import { loadAutoRefillNWCSettings, saveAutoRefillNWCSettings, type AutoRefillNWCSettings } from "@/utils/storageUtils";
@@ -44,10 +45,10 @@ export default function Payments() {
   });
 
   /* ── mints ─────────────────────────────────────────────────────────────── */
-  // the wallet's own list: its event's mints, main's list once, and every mint holding a coin
   const cashu = useMints();
+  const { wallet } = useCashuWallet();
   const { addMintIfNotExists, removeMint, cleanSpentProofs } = useCashuToken();
-  const urls = cashu.mints.map((m) => m.url);
+  const urls = wallet?.mints?.length ? wallet.mints : cashu.mints.map((m) => m.url);
   const mints = urls.map((url) => ({ url, bal: money.balances[url] ?? 0 }));
   const tot = mints.reduce((a, x) => a + x.bal, 0) || 1;
   const [adding, setAdding] = useState(false);
