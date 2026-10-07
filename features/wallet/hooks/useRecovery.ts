@@ -4,7 +4,7 @@ import { recovery } from "@/runtime/book";
 import {
   registerCommitter,
   registerRecorder,
-  setWalletLoading,
+  walletCoins,
 } from "./purseBridge";
 import { useBook } from "./useBook";
 import { useCashuHistory } from "./useCashuHistory";
@@ -14,12 +14,12 @@ import { useCashuHistory } from "./useCashuHistory";
  * the tab comes back, and every minute. Mount it once for the app; the
  * recovery host already keeps it to one pass per account across tabs. While
  * mounted, the account's purse stores coins and writes activity through its
- * wallet, and the wallet view hears whether its coins are still loading.
+ * wallet.
  */
 export function useRecovery(
   onMeltSettled: (quoteId: string, outcome: MeltOutcome) => void
 ) {
-  const { owner, commitFor, isLoading } = useBook();
+  const { owner, commitFor } = useBook();
   const { createHistory } = useCashuHistory();
   const report = useRef(onMeltSettled);
   useEffect(() => {
@@ -33,13 +33,14 @@ export function useRecovery(
     if (owner) return registerRecorder(owner, createHistory);
   }, [owner, createHistory]);
   useEffect(() => {
-    setWalletLoading(owner ?? null, isLoading);
-  }, [owner, isLoading]);
-
-  useEffect(() => {
     if (!owner) return;
     const run = async () => {
-      const outcomes = await recovery.settle(owner, commitFor(owner));
+      // into the wallet's own store, for this account whoever is active by then
+      const outcomes = await recovery.settle(
+        owner,
+        (mintUrl) => (add, remove) =>
+          walletCoins().change(owner, mintUrl, add, remove)
+      );
       outcomes.forEach((outcome, quoteId) => report.current(quoteId, outcome));
     };
     const onVisible = () => {
@@ -54,5 +55,5 @@ export function useRecovery(
       window.removeEventListener("focus", run);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [owner, commitFor]);
+  }, [owner]);
 }

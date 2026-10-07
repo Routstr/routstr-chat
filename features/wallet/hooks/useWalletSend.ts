@@ -4,7 +4,6 @@ import { useState, useCallback, useRef } from "react";
 import { MeltQuoteState } from "@cashu/cashu-ts";
 import { useInvoiceSync } from "@/hooks/useInvoiceSync";
 import {
-  useCashuToken,
   useCashuStore,
   useUnclaimedTokensStore,
   formatBalance,
@@ -22,7 +21,6 @@ import { toast } from "sonner";
 export function useWalletSend() {
   const currentMintUnit = useActiveMintUnit();
   const { addInvoice, updateInvoice } = useInvoiceSync();
-  const { receiveToken } = useCashuToken();
   const cashuStore = useCashuStore();
   const unclaimedTokensStore = useUnclaimedTokensStore();
   const purse = usePurse();
@@ -123,12 +121,17 @@ export function useWalletSend() {
         setReclaimingTokenId(entry.id);
         setError("");
         setWarningMessage("");
-        // Strict: only counts as reclaimed once the proofs are stored, so
-        // the entry is never removed while the funds are in limbo.
-        const proofs = await receiveToken(entry.token, true);
-        const total = proofs.reduce((sum, p) => sum + p.amount, 0);
+        const from = purse();
+        if (!from) throw new Error("User not logged in");
+        // the wallet owns it once this resolves: taken in, or waiting for its
+        // mint in the book, so the listed token can go
+        const { sats, pending } = await from.take(entry.token);
         dismissToken(entry.id);
-        setSuccessMessage(`Reclaimed ${formatBalance(total, entry.unit)} back to your wallet`);
+        setSuccessMessage(
+          pending
+            ? `${formatBalance(sats, "sat")}s wait for their mint, and land once it answers`
+            : `Reclaimed ${formatBalance(sats, "sat")}s back to your wallet`
+        );
         setTimeout(() => setSuccessMessage(""), 5000);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -147,7 +150,7 @@ export function useWalletSend() {
         setReclaimingTokenId(null);
       }
     },
-    [receiveToken]
+    [purse]
   );
 
   const handleNip60InvoiceInput = useCallback(

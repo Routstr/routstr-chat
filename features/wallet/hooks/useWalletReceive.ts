@@ -1,10 +1,9 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
-import { getTokenMetadata, MintQuoteState } from "@cashu/cashu-ts";
+import { MintQuoteState } from "@cashu/cashu-ts";
 import { useInvoiceSync } from "@/hooks/useInvoiceSync";
 import {
-  useCashuToken,
   useCashuStore,
   formatBalance,
   useTransactionHistoryStore,
@@ -20,7 +19,6 @@ import {
 export function useWalletReceive(navigateToTab: (tab: "overview" | "invoice") => void) {
   const { total: balance } = useWallet();
   const { addInvoice, updateInvoice, owner } = useInvoiceSync();
-  const { receiveToken } = useCashuToken();
   const cashuStore = useCashuStore();
   const purseOf = usePurseOf();
   const current = usePurse();
@@ -205,11 +203,13 @@ export function useWalletReceive(navigateToTab: (tab: "overview" | "invoice") =>
       setError("");
       setSuccessMessage("");
       setIsImporting(true);
-      const unit = getTokenMetadata(tokenToImport).unit;
-      const proofs = await receiveToken(tokenToImport);
-      const totalAmount = proofs.reduce((sum, p) => sum + p.amount, 0);
+      const purse = current();
+      if (!purse) throw new Error("User not logged in");
+      const { sats, pending } = await purse.take(tokenToImport);
       setSuccessMessage(
-        `Received ${formatBalance(totalAmount, unit ? `${unit}s` : "sats")} successfully!`
+        pending
+          ? `${formatBalance(sats, "sat")}s wait for their mint, and land once it answers.`
+          : `Received ${formatBalance(sats, "sat")}s successfully!`
       );
       setTokenToImport("");
     } catch (err) {
@@ -217,7 +217,7 @@ export function useWalletReceive(navigateToTab: (tab: "overview" | "invoice") =>
     } finally {
       setIsImporting(false);
     }
-  }, [tokenToImport, receiveToken]);
+  }, [tokenToImport, current]);
 
   const handlePayWithBitcoinConnect = useCallback(
     async (invoice: string, quoteId: string) => {

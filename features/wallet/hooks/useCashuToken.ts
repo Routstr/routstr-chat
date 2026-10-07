@@ -4,18 +4,12 @@ import { useCashuWallet } from "./useCashuWallet";
 import { useCashuHistory } from "./useCashuHistory";
 import { useBook } from "./useBook";
 import { peek, toSats } from "../purse";
-import {
-  Mint,
-  Wallet,
-  Proof,
-  getTokenMetadata,
-  CheckStateEnum,
-} from "@cashu/cashu-ts";
+import { Proof, getTokenMetadata } from "@cashu/cashu-ts";
+import { normalizeMintUrl } from "@/features/book/mint";
+import { currentOwner } from "@/features/session/owned";
 import { MintService } from "../core/services/MintService";
-import { hashToCurve } from "@cashu/crypto/modules/common";
-
-// Global map to track active cleanSpentProofs operations per mint
-const activeCleanupPromises = new Map<string, Promise<Proof[]>>();
+import { dropSpent } from "../spent";
+import { walletCoins } from "./purseBridge";
 
 export function useCashuToken() {
   const [isLoading, setIsLoading] = useState(false);
@@ -239,97 +233,16 @@ export function useCashuToken() {
     }
   };
 
-  const cleanSpentProofs = async (mintUrl: string, keysetId?: string) => {
-    // Normalize the mint URL first to ensure consistent cache keys
-    const normalizedMintUrl = mintUrl.replace(/\/+$/, "");
-
-    // Create a unique cache key that includes keysetId if provided
-    const cacheKey = keysetId
-      ? `${normalizedMintUrl}:${keysetId}`
-      : normalizedMintUrl;
-
-    // If there's already an active cleanup for this mint/keyset, return that promise
-    const existingPromise = activeCleanupPromises.get(cacheKey);
-    if (existingPromise) {
-      return existingPromise;
-    }
-
-    // Create a new cleanup promise
-    const cleanupPromise = (async () => {
-      setIsLoading(true);
-      setError(null);
-
-      try {
-        const finalMintUrl = await addMintIfNotExists(normalizedMintUrl);
-        const mintDetails = cashuStore.getMint(finalMintUrl);
-        const mint = new Mint(finalMintUrl);
-
-        // Get preferred unit: msat over sat if both are active
-        let keysets = mintDetails?.keysets;
-
-        const activeKeysets = keysets?.filter((k) => k.active || (k as any)._active);
-        const units = [...new Set(activeKeysets?.map((k) => k.unit || (k as any)._unit))];
-        const preferredUnit = units?.includes("msat")
-          ? "msat"
-          : units?.includes("sat")
-            ? "sat"
-            : (units?.[0] || "sat");
-
-        const wallet = new Wallet(mint, {
-          unit: preferredUnit,
-        });
-
-        try {
-          await wallet.loadMint();
-        } catch (err) {
-          console.log(activeKeysets, units);
-          console.log(err, finalMintUrl, keysets, preferredUnit);
-        }
-
-        let proofs = await cashuStore.getMintProofs(finalMintUrl);
-
-        // If keysetId is provided, filter proofs to only those matching the keyset
-        if (keysetId) {
-          proofs = proofs.filter((p) => p.id === keysetId);
-          console.log(
-            `Cleaning spent proofs for keyset ${keysetId}: ${proofs.length} proofs`
-          );
-        }
-
-        const proofStates = await wallet.checkProofsStates(proofs);
-        const spentProofsStates = proofStates.filter(
-          (p) => p.state == CheckStateEnum.SPENT
-        );
-        const enc = new TextEncoder();
-        const spentProofs = proofs.filter((p) =>
-          spentProofsStates.find(
-            (s) => s.Y == hashToCurve(enc.encode(p.secret)).toHex(true)
-          )
-        );
-        // console.log('rdlogs pd', spentProofs)
-
-        await updateProofs({
-          mintUrl: finalMintUrl,
-          proofsToAdd: [],
-          proofsToRemove: spentProofs,
-        });
-
-        return spentProofs;
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        setError(`Failed to clean spent proofs: ${message}`);
-        throw error;
-      } finally {
-        setIsLoading(false);
-        // Remove from active cleanups when done
-        activeCleanupPromises.delete(cacheKey);
-      }
-    })();
-
-    // Store the promise in the map
-    activeCleanupPromises.set(cacheKey, cleanupPromise);
-
-    return cleanupPromise;
+  /** The account's coins at this mint that the mint says are spent leave
+   *  the wallet; resolves with them. */
+  const cleanSpentProofs = async (mintUrl: string): Promise<Proof[]> => {
+    const owner = currentOwner();
+    const locks = globalThis.navigator?.locks;
+    if (!owner || !locks) return [];
+    return dropSpent(owner, normalizeMintUrl(mintUrl), {
+      coins: walletCoins(),
+      locks,
+    });
   };
 
   return {

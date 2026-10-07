@@ -1,11 +1,23 @@
 import type { Proof } from "@cashu/cashu-ts";
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
-import type { Coin } from "@/features/wallet/ports";
+import type { Coin, ReplicaStore } from "@/features/wallet/ports";
 
 interface Schema extends DBSchema {
   coins: { key: string; value: Coin; indexes: { owner: string } };
   // every secret this device has held, and whose it was
   held: { key: string; value: { secret: string; owner: string } };
+  // a mint whose coins changed since its relay copy was published
+  outbox: {
+    key: [string, string];
+    value: { owner: string; mintUrl: string; version: number };
+    indexes: { owner: string };
+  };
+  // this device's token events (NIP-60) for each owner and mint
+  events: {
+    key: string;
+    value: { id: string; owner: string; mintUrl: string };
+    indexes: { mint: [string, string] };
+  };
 }
 
 const NAME = "routstr-wallet";
@@ -19,7 +31,7 @@ const bare = ({ id, amount, secret, C }: Proof) => ({ id, amount, secret, C });
  * copy. A secret this device ever held stays known, so a spent coin never
  * comes back from an old store and a coin never moves to another account.
  */
-export class IndexedCoins {
+export class IndexedCoins implements ReplicaStore {
   private readonly listeners = new Set<() => void>();
 
   constructor(
@@ -37,13 +49,24 @@ export class IndexedCoins {
   static open(
     unitOf: (mintUrl: string, keysetId: string) => Promise<string>
   ): IndexedCoins {
-    const db = openDB<Schema>(NAME, 1, {
-      upgrade(db) {
-        db.createObjectStore("coins", { keyPath: "secret" }).createIndex(
-          "owner",
-          "owner"
-        );
-        db.createObjectStore("held", { keyPath: "secret" });
+    const db = openDB<Schema>(NAME, 2, {
+      upgrade(db, from) {
+        if (from < 1) {
+          db.createObjectStore("coins", { keyPath: "secret" }).createIndex(
+            "owner",
+            "owner"
+          );
+          db.createObjectStore("held", { keyPath: "secret" });
+        }
+        if (from < 2) {
+          db.createObjectStore("outbox", {
+            keyPath: ["owner", "mintUrl"],
+          }).createIndex("owner", "owner");
+          db.createObjectStore("events", { keyPath: "id" }).createIndex(
+            "mint",
+            ["owner", "mintUrl"]
+          );
+        }
       },
     });
     const channel =
@@ -62,30 +85,156 @@ export class IndexedCoins {
     add: Proof[],
     remove: Proof[]
   ): Promise<void> {
-    // before the transaction: it closes at the first wait that is not its own
-    const units = await Promise.all(add.map((p) => this.unitOf(mintUrl, p.id)));
-    const tx = (await this.db).transaction(["coins", "held"], "readwrite", {
-      durability: "strict",
+    await this.write(owner, mintUrl, {
+      add: add.map((proof) => ({ proof })),
+      drop: remove,
+      outbox: true,
     });
+  }
+
+  /** One transaction: coins in and out for this owner at this mint, held
+   *  coins re-listed, events noted, and the mint's outbox entry. */
+  private async write(
+    owner: string,
+    mintUrl: string,
+    {
+      add,
+      drop,
+      listed,
+      events,
+      forget,
+      outbox,
+    }: {
+      add: { proof: Proof; eventId?: string }[];
+      drop: Proof[];
+      listed?: Map<string, string>;
+      events?: string[];
+      forget?: string[];
+      outbox: boolean;
+    }
+  ): Promise<void> {
+    // before the transaction: it closes at the first wait that is not its own
+    const units = await Promise.all(
+      add.map(({ proof }) => this.unitOf(mintUrl, proof.id))
+    );
+    const tx = (await this.db).transaction(
+      ["coins", "held", "outbox", "events"],
+      "readwrite",
+      { durability: "strict" }
+    );
     const coins = tx.objectStore("coins");
     const held = tx.objectStore("held");
-    const holders = await Promise.all(add.map((p) => held.get(p.secret)));
+    const holders = await Promise.all(
+      add.map(({ proof }) => held.get(proof.secret))
+    );
     if (holders.some((h) => h && h.owner !== owner)) {
       tx.abort();
       await tx.done.catch(() => undefined);
       throw new Error("A coin here belongs to another account on this device.");
     }
+    const relisted = listed
+      ? (await coins.index("owner").getAll(owner)).filter(
+          (c) =>
+            c.mintUrl === mintUrl &&
+            listed.has(c.secret) &&
+            listed.get(c.secret) !== c.eventId
+        )
+      : [];
+    const entry = outbox
+      ? await tx.objectStore("outbox").get([owner, mintUrl])
+      : undefined;
     await Promise.all([
-      ...remove.map((p) => coins.delete(p.secret)),
-      ...add.flatMap((p, i) => [
-        coins.put({ ...bare(p), owner, mintUrl, unit: units[i] }),
-        held.put({ secret: p.secret, owner }),
+      ...drop.map((p) => coins.delete(p.secret)),
+      ...add.flatMap(({ proof, eventId }, i) => [
+        coins.put({ ...bare(proof), owner, mintUrl, unit: units[i], eventId }),
+        held.put({ secret: proof.secret, owner }),
       ]),
+      ...relisted.map((c) =>
+        coins.put({ ...c, eventId: listed!.get(c.secret) })
+      ),
+      ...(events ?? []).map((id) =>
+        tx.objectStore("events").put({ id, owner, mintUrl })
+      ),
+      // only this owner's: an id is a hash, so another's never matches
+      ...(forget ?? []).map((id) => tx.objectStore("events").delete(id)),
+      ...(outbox
+        ? [
+            tx.objectStore("outbox").put({
+              owner,
+              mintUrl,
+              version: (entry?.version ?? 0) + 1,
+            }),
+          ]
+        : []),
       tx.done,
     ]);
     // other tabs first: a listener here that throws must not keep them stale
     this.channel?.postMessage(CHANGED);
     this.emit();
+  }
+
+  async outbox(owner: string): Promise<{ mintUrl: string; version: number }[]> {
+    return (
+      await (await this.db).getAllFromIndex("outbox", "owner", owner)
+    ).map(({ mintUrl, version }) => ({ mintUrl, version }));
+  }
+
+  async events(owner: string, mintUrl: string): Promise<string[]> {
+    return (
+      await (await this.db).getAllFromIndex("events", "mint", [owner, mintUrl])
+    ).map((e) => e.id);
+  }
+
+  async publishing(
+    owner: string,
+    mintUrl: string,
+    eventId: string
+  ): Promise<void> {
+    await (await this.db).put("events", { id: eventId, owner, mintUrl });
+  }
+
+  async published(
+    owner: string,
+    mintUrl: string,
+    {
+      version,
+      replaced,
+      listed,
+    }: { version: number; replaced: string[]; listed: Map<string, string> }
+  ): Promise<void> {
+    const tx = (await this.db).transaction(
+      ["coins", "outbox", "events"],
+      "readwrite",
+      { durability: "strict" }
+    );
+    const coins = tx.objectStore("coins");
+    const outbox = tx.objectStore("outbox");
+    const mine = (await coins.index("owner").getAll(owner)).filter(
+      (c) => c.mintUrl === mintUrl && listed.has(c.secret)
+    );
+    const entry = await outbox.get([owner, mintUrl]);
+    await Promise.all([
+      ...replaced.map((id) => tx.objectStore("events").delete(id)),
+      ...mine.map((c) => coins.put({ ...c, eventId: listed.get(c.secret) })),
+      // changed again while this one went out: it goes out again
+      ...(entry?.version === version ? [outbox.delete([owner, mintUrl])] : []),
+      tx.done,
+    ]);
+  }
+
+  async adopt(
+    owner: string,
+    mintUrl: string,
+    from: {
+      add: { proof: Proof; eventId: string }[];
+      drop: Proof[];
+      listed: Map<string, string>;
+      events: string[];
+      forget: string[];
+      relist: boolean;
+    }
+  ): Promise<void> {
+    await this.write(owner, mintUrl, { ...from, outbox: from.relist });
   }
 
   /** This owner's coins, at one mint or at all of them. */

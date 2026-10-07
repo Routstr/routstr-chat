@@ -3,12 +3,8 @@
 import React, { useState } from "react";
 import { nip19 } from "nostr-tools";
 import { useAccountManager, type Account } from "@/features/session/view";
-import {
-  calculateBalanceByMint,
-  computeTotalBalanceSats,
-  holdsRecords,
-  useCashuStore,
-} from "@/features/wallet";
+import { holdsRecords } from "@/features/wallet";
+import { useBalances } from "@/features/wallet/view";
 import { useSwitchAccount } from "../useSwitchAccount";
 import Light from "../light/Light";
 import { readKeyFlag } from "../wallet/bits";
@@ -17,18 +13,19 @@ import { Btn, Fold, Grp, Ib, Say, narrow, plural, short } from "./parts";
 
 // Another key's coins stay on this device when it is removed, but only that
 // key opens them again
-const heldBy = (pubkey: string) => {
-  const { proofs, mints } = useCashuStore.of(pubkey).getState();
-  // counted as the wallet counts its balance: per mint, msat mints in sats
-  const { balances, units } = calculateBalanceByMint(proofs, mints);
+const heldBy = (pubkey: string, balances: Record<string, number> | null) => ({
+  // as the wallet counts its balance: per mint, in sats
+  sats: Object.values(balances ?? {}).reduce((sum, n) => sum + n, 0),
   // a token not claimed yet, or a payment still settling, is money too (the wallet book)
-  return { sats: computeTotalBalanceSats(balances, units), settling: holdsRecords(pubkey) };
-};
+  settling: holdsRecords(pubkey),
+});
 
 export default function OtherKeys({ others }: { others: Account[] }) {
   const { session } = useAccountManager();
   const switchTo = useSwitchAccount();
   const [rm, setRm] = useState<string | null>(null);
+  // what the key about to be removed holds, from the wallet's own store
+  const balances = useBalances(others.find((o) => o.id === rm)?.pubkey ?? null);
   return (
     <Grp id="g-others" k="Other keys">
       <div className="st-items">
@@ -39,7 +36,7 @@ export default function OtherKeys({ others }: { others: Account[] }) {
           } catch {
             // keep the hex
           }
-          const held = rm === o.id ? heldBy(o.pubkey) : null;
+          const held = rm === o.id ? heldBy(o.pubkey, balances) : null;
           const unsaved =
             o.type === "nsec" && readKeyFlag(o.pubkey) !== "saved";
           return (

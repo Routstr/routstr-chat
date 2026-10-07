@@ -94,6 +94,16 @@ export const legacyCoins: CoinStore = {
   },
 };
 
+let coinStore: CoinStore = legacyCoins;
+
+/** Where purses keep coins: the IndexedDB store once the runtime registers
+ *  it, for the wallet's own hooks (spent cleanup, recovery's commits). */
+export function registerCoins(store: CoinStore): void {
+  coinStore = store;
+}
+
+export const walletCoins = (): CoinStore => coinStore;
+
 /** Coins of a mint or keyset the store does not list are stored but never
  *  counted: list the mint and its keysets first (also for a mint about to be
  *  paid into). The coins are stored either way; a mint that does not answer is
