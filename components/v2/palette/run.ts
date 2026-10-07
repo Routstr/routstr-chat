@@ -65,7 +65,9 @@ export function runItem(
     const cur = current(x.chat);
     close({ keepRoom: true, composer: true });
     ui.setDrawer(false);
-    if (!cur) loadConversation(x.chat.id);
+    // a search hit opens at the message it was found in, even in the chat already open
+    const at = x.found ? x.chat.messages[x.found.idx]?._eventId : undefined;
+    if (!cur || at) loadConversation(x.chat.id, at);
     return;
   }
   if (x.kind === "fallback") {

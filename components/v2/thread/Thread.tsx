@@ -5,6 +5,7 @@ import { useOpenChat } from "../openChat";
 import { useAccountChat, useAsking, useReplyCosts } from "@/features/chat/view";
 import { useHistory, useThread, type ThreadSlot } from "@/features/history/view";
 import { useTurnActions } from "../useActions";
+import { hitIn } from "./hit";
 import { useChatModel } from "../useChatModel";
 import { useNotes } from "./useNotes";
 import { shortModelName } from "../format";
@@ -22,7 +23,7 @@ const NO_SLOTS: ThreadSlot[] = [];
 
 /* ══ the thread ════════════════════════════════════════════════════════════ */
 export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) {
-  const { id: activeConversationId } = useOpenChat();
+  const { id: activeConversationId, target, reached } = useOpenChat();
   const { models, model: selectedModel } = useChatModel();
   // the versions picked live in history, so the model is sent the branch shown here
   const history = useHistory();
@@ -121,6 +122,19 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
     const el = scroller.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [activeConversationId, loadingFromUrl, slots.length > 0]);
+
+  // a search hit: once its chat shows, the message it was found in comes into
+  // view (its version is shown first); one not on this thread leaves the end
+  useLayoutEffect(() => {
+    if (!target || target.chat !== activeConversationId || !slots.length) return;
+    const hit = hitIn(slots, target.message);
+    if (hit && "other" in hit && history) return history.selectVersion(target.chat, hit.other, target.message);
+    if (hit && "shown" in hit) {
+      pinned.current = false;
+      scroller.current?.querySelector<HTMLElement>(`[data-index="${hit.shown}"]`)?.scrollIntoView({ block: "center" });
+    }
+    reached();
+  }, [target, activeConversationId, slots]);
 
   // you sent something: make room under it and bring it to the top
   useLayoutEffect(() => {

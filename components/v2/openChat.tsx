@@ -13,7 +13,11 @@ import { showQuery } from "./address";
 export interface OpenChat {
   /** The open chat; null is a new chat not yet asked. */
   id: string | null;
-  open: (id: string) => void;
+  /** Opens a chat; with `at`, that message comes into view (a search hit). */
+  open: (id: string, at?: string) => void;
+  /** The message to bring into view once its chat shows, until `reached`. */
+  target: { chat: string; message: string } | null;
+  reached: () => void;
   openNew: () => void;
   /** The open chat now, for code that runs after an await. */
   current: () => string | null;
@@ -74,15 +78,18 @@ export function OpenChatProvider({ initial, children }: { initial?: string | nul
     showQuery(p.toString());
   }, [id, qs, initial]);
 
-  const open = useCallback((next: string) => {
+  const [target, setTarget] = useState<OpenChat["target"]>(null);
+  const open = useCallback((next: string, at?: string) => {
     now.current = next;
     setId(next);
+    setTarget(at ? { chat: next, message: at } : null);
   }, []);
+  const reached = useCallback(() => setTarget(null), []);
   const openNew = useCallback(() => {
     now.current = null;
     setId(null);
   }, []);
   const current = useCallback(() => now.current, []);
-  const value = useMemo(() => ({ id, open, openNew, current }), [id, open, openNew, current]);
+  const value = useMemo(() => ({ id, open, openNew, current, target, reached }), [id, open, openNew, current, target, reached]);
   return <OpenChatContext.Provider value={value}>{children}</OpenChatContext.Provider>;
 }
