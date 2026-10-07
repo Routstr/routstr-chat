@@ -40,7 +40,12 @@ async function underWorker(p: Page, app: typeof main | typeof v2) {
     "the app's service worker to take the page over",
     60_000
   );
-  await p.reload();
+  // such a build may be reloading right now, and then ours gives way to it: until one of ours lands
+  await until(
+    () => p.reload().then(() => true),
+    "a reload of our own to land",
+    30_000
+  );
   await app.ready(p);
 }
 
