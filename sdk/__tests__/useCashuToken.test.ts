@@ -13,7 +13,10 @@ vi.mock("react", () => ({
   useCallback: (fn: unknown) => fn,
   useRef: (current: unknown) => ({ current }),
 }));
-vi.mock("@/features/session/owned", () => ({ currentOwner: () => "alice" }));
+vi.mock("@/features/session/owned", async (actual) => ({
+  ...(await actual<object>()),
+  currentOwner: () => "alice",
+}));
 vi.mock("@/features/wallet/state/cashuStore", () => ({
   useCashuStore: Object.assign(
     () => ({ mints: [state.mint], getMint: () => state.mint }),
