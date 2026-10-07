@@ -13,7 +13,12 @@ export default function SWUpdater() {
     if (process.env.NODE_ENV === "development") return;
 
     // its scope is the folder it is served from: the base, never main's root
-    const wb = new Workbox(withBase("/sw.js"), { scope: withBase("/") });
+    const script = withBase("/sw.js");
+    const wb = new Workbox(script, { scope: withBase("/") });
+    // a page this app's own worker already runs: only then is a worker taking
+    // over a new version. Beside main, main's worker (scope /) may hold the
+    // page first, and this one taking it from main is no update.
+    const ours = navigator.serviceWorker.controller?.scriptURL === new URL(script, window.location.href).href;
     let prompted = false;
 
     wb.addEventListener("waiting", () => {
@@ -24,10 +29,10 @@ export default function SWUpdater() {
       }
     });
 
-    // only a new version taking over reloads; the first worker of a first
-    // visit takes over a page that is already current
-    wb.addEventListener("controlling", (event) => {
-      if (event.isUpdate) window.location.reload();
+    // only a new version of this app's worker reloads the page; its first
+    // worker takes over a page that is already current
+    wb.addEventListener("controlling", () => {
+      if (ours) window.location.reload();
     });
 
     wb.register().catch(() => {
