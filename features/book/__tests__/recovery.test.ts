@@ -106,6 +106,39 @@ describe("RecoveryHost", () => {
     expect(storage.getItem(`${PREFIX}corrupt`)).toBe("{not json");
   });
 
+  it("takes no lock when nothing is due: a made token and a waiting receive are left alone", async () => {
+    const journal = new Journal(memoryStorage());
+    journal.put({
+      v: 1,
+      kind: "token",
+      id: "t",
+      owner: "alice",
+      mintUrl: "m",
+      createdAt: 0,
+      token: "cashuB",
+      amount: 8,
+      unit: "sat",
+    });
+    journal.put({
+      v: 1,
+      kind: "receive",
+      id: "r",
+      owner: "alice",
+      mintUrl: "m",
+      createdAt: 0,
+      token: "cashuB",
+      amount: 8,
+      secrets: ["s"],
+    });
+    const request = vi.fn();
+    await new RecoveryHost({
+      journal,
+      openWallet,
+      locks: { request } as unknown as LockManager,
+    }).settle("alice", () => commit);
+    expect(request).not.toHaveBeenCalled();
+  });
+
   it("waits while an operation of the account holds its wallet lock, in any tab", async () => {
     const journal = new Journal(memoryStorage());
     journal.put(landed("alice"));

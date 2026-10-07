@@ -192,7 +192,9 @@ export function bindWallet(account: Account | undefined): void {
   const live = relays
     .of(owner)
     .live({ kinds: [7375, 5], authors: [owner] })
-    .subscribe(() => {
+    .subscribe((event) => {
+      // relays echo what this tab published: that needs no pull
+      if (replica.published(event.id)) return;
       clearTimeout(pulling);
       pulling = setTimeout(pull, PULL_AFTER_MS);
     });

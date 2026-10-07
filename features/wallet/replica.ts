@@ -57,6 +57,14 @@ export class Replica {
     }
   ) {}
 
+  // what this tab published: relays echo it back, and it needs no pull
+  private readonly wrote = new Set<string>();
+
+  /** This tab published the event: nothing in it is new here. */
+  published(id: string): boolean {
+    return this.wrote.has(id);
+  }
+
   // token events read before: an event never changes, so it is read once
   private readonly read = new Map<
     string,
@@ -106,19 +114,20 @@ export class Replica {
       });
       // rejects when no relay took it: then it is on none, and a retry signs anew
       await relays.publish(event);
+      this.wrote.add(event.id);
       // a later failure in this push leaves it listed for the retry to delete
       await store.publishing(this.owner, mintUrl, event.id);
       proofs.forEach((p) => listed.set(p.secret, event.id));
     }
     if (replaced.length) {
-      await relays.publish(
-        await signer.sign({
-          kind: DELETE,
-          content: "",
-          tags: [...replaced.map((id) => ["e", id]), ["k", String(TOKEN)]],
-          created_at: now(),
-        })
-      );
+      const deletion = await signer.sign({
+        kind: DELETE,
+        content: "",
+        tags: [...replaced.map((id) => ["e", id]), ["k", String(TOKEN)]],
+        created_at: now(),
+      });
+      await relays.publish(deletion);
+      this.wrote.add(deletion.id);
     }
     await store.published(this.owner, mintUrl, { version, replaced, listed });
   }
@@ -193,6 +202,33 @@ export class Replica {
     }
   }
 
+  /** The store already holds these events' coins, events and links, and
+   *  none of the deleted ones: a pull would change nothing. */
+  private async unchanged(
+    mintUrl: string,
+    events: Listed[],
+    listed: Map<string, string>,
+    deleted: Set<string>
+  ): Promise<boolean> {
+    const { store } = this.deps;
+    const held = new Map(
+      (await store.coins(this.owner, mintUrl)).map((c) => [c.secret, c])
+    );
+    for (const [secret, eventId] of listed) {
+      if (held.get(secret)?.eventId !== eventId) return false;
+    }
+    for (const c of held.values()) {
+      if (c.eventId && deleted.has(c.eventId) && !listed.has(c.secret)) {
+        return false;
+      }
+    }
+    const stored = new Set(await store.events(this.owner, mintUrl));
+    return (
+      events.every((e) => stored.has(e.id)) &&
+      ![...deleted].some((id) => stored.has(id))
+    );
+  }
+
   private async pullMint(
     mintUrl: string,
     events: Listed[],
@@ -207,6 +243,8 @@ export class Replica {
         proofs.set(p.secret, p);
       }
     }
+    // nothing here this device does not have already: no lock, nothing written
+    if (await this.unchanged(mintUrl, events, listed, deleted)) return;
     await locks.request(walletLock(this.owner), async () => {
       const held = await store.coins(this.owner, mintUrl);
       const known = await store.known([...proofs.keys()]);
