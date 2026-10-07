@@ -1,25 +1,19 @@
 import { useEffect, useRef } from "react";
 import type { MeltOutcome } from "@/features/book/settle";
-import { recovery } from "@/runtime/book";
-import {
-  registerCommitter,
-  registerRecorder,
-  walletCoins,
-} from "./purseBridge";
-import { useBook } from "./useBook";
+import { useSession } from "@/features/session/view";
+import { registerRecorder, theBook, walletCoins } from "./purseBridge";
 import { useCashuHistory } from "./useCashuHistory";
 
 /**
  * Settles what the signed-in account's operations left behind: on start, when
  * the tab comes back, and every minute. Mount it once for the app; the
  * recovery host already keeps it to one pass per account across tabs. While
- * mounted, the account's purse stores coins and writes activity through its
- * wallet.
+ * mounted, the account's purse writes activity through its wallet.
  */
 export function useRecovery(
   onMeltSettled: (quoteId: string, outcome: MeltOutcome) => void
 ) {
-  const { owner, commitFor } = useBook();
+  const { pubkey: owner } = useSession();
   const { createHistory } = useCashuHistory();
   const report = useRef(onMeltSettled);
   useEffect(() => {
@@ -27,16 +21,13 @@ export function useRecovery(
   });
 
   useEffect(() => {
-    if (owner) return registerCommitter(owner, commitFor(owner));
-  }, [owner, commitFor]);
-  useEffect(() => {
     if (owner) return registerRecorder(owner, createHistory);
   }, [owner, createHistory]);
   useEffect(() => {
     if (!owner) return;
     const run = async () => {
       // into the wallet's own store, for this account whoever is active by then
-      const outcomes = await recovery.settle(
+      const outcomes = await theBook().recovery.settle(
         owner,
         (mintUrl) => (add, remove) =>
           walletCoins().change(owner, mintUrl, add, remove)

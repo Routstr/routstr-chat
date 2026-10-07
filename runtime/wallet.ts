@@ -1,7 +1,6 @@
 import type { Account } from "@/features/session/service";
 import {
   legacyActivity,
-  legacyCoins,
   listMint,
   localActivity,
   registerCoins,
@@ -41,7 +40,8 @@ const coins: CoinStore = {
     await indexed().change(owner, mintUrl, add, remove);
   },
   coins: (owner, mintUrl) => indexed().coins(owner, mintUrl),
-  activeMint: legacyCoins.activeMint,
+  activeMint: (owner) =>
+    useWalletStore.of(owner).getState().activeMintUrl ?? "",
   subscribe: (_, listener) => indexed().subscribe(listener),
 };
 if (browser) registerCoins(coins);
@@ -54,7 +54,7 @@ function cached(owner: string, activity: ActivityLog): Purse {
   let purse = purses.get(owner);
   if (!purse) {
     purse = createPurse(owner, {
-      coins: browser ? coins : legacyCoins,
+      coins,
       activity,
       journal,
       locks,

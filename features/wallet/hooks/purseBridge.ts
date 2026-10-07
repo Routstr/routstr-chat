@@ -1,111 +1,57 @@
 import type { Proof } from "@cashu/cashu-ts";
-import type { CommitProofs } from "@/features/book/settle";
+import type { Journal } from "@/features/book/journal";
+import type { RecoveryHost } from "@/features/book/recovery";
 import type { RelayOutcome } from "@/features/relays/service";
 import { MintService } from "../core/services/MintService";
-import type { ActivityLog, Coin, CoinStore } from "../ports";
-import { useCashuStore } from "../state/cashuStore";
-import { useWalletStore, type WalletStore } from "../state/walletStore";
+import type { ActivityLog, CoinStore } from "../ports";
+import type { WalletStore } from "../state/walletStore";
 import { useTransactionHistoryStore } from "../state/transactionHistoryStore";
 
 /*
- * Until the wallet layer has its own coin store, an account's coins are the old
- * store's copy for that account, and storing them goes through the old wallet's
- * updateProofs, which only the account's open wallet hooks hold (the app's
- * recovery hook hands it over here). An account whose wallet is not open
- * cannot store yet: the book keeps its coins in a record until it can.
+ * What the runtime hands the wallet's own hooks, which may not import it:
+ * the tab's coin store and wallet book.
  */
-
-const committers = new Map<string, (mintUrl: string) => CommitProofs>();
 
 // keysets are stored as cashu-ts objects, which come back from storage with
 // their fields as _id and _unit
 type StoredKeyset = {
   id?: string;
-  unit?: string;
   _id?: string;
-  _unit?: string;
 };
 const keysetOf = (keyset: object) => {
   const k = keyset as StoredKeyset;
-  return { id: k.id ?? k._id, unit: k.unit ?? k._unit ?? "sat" };
+  return { id: k.id ?? k._id };
 };
 
-/** Lets purses store coins for `owner` through this commit; the returned
- *  function takes it back. */
-export function registerCommitter(
-  owner: string,
-  commitFor: (mintUrl: string) => CommitProofs
-): () => void {
-  committers.set(owner, commitFor);
-  return () => committers.delete(owner);
-}
+let coinStore: CoinStore | null = null;
 
-export const legacyCoins: CoinStore = {
-  async change(owner, mintUrl, add, remove) {
-    const commitFor = committers.get(owner);
-    if (!commitFor) {
-      throw new Error("This account's wallet is not open; this waits for it.");
-    }
-    await listMint(useWalletStore.of(owner).getState(), mintUrl, add);
-    await commitFor(mintUrl)(add, remove);
-  },
-  async coins(owner, mintUrl) {
-    const store = useCashuStore.of(owner);
-    // another tab may have spent or added coins since this copy loaded; a
-    // send reads them under the account's lock, so what is saved is current
-    await store.persist.rehydrate();
-    const { proofs, mints } = store.getState();
-    // a coin's mint and unit are its keyset's
-    const keysets = new Map(
-      mints.flatMap((m) =>
-        (m.keysets ?? []).map((stored) => {
-          const k = keysetOf(stored);
-          return [k.id, { mintUrl: m.url, unit: k.unit }];
-        })
-      )
-    );
-    return proofs.flatMap((proof): Coin[] => {
-      const keyset = keysets.get(proof.id);
-      if (!keyset || (mintUrl && keyset.mintUrl !== mintUrl)) return [];
-      return [{ ...proof, owner, ...keyset }];
-    });
-  },
-  activeMint: (owner) =>
-    useWalletStore.of(owner).getState().activeMintUrl ?? "",
-  subscribe(owner, listener) {
-    const store = useCashuStore.of(owner);
-    // only what balances read: a reload with the same coins is no change
-    // (reading coins reloads the store, so anything more would loop)
-    const what = () => {
-      const { proofs, mints } = store.getState();
-      const ids = mints.flatMap((m) =>
-        (m.keysets ?? []).map((k) => `${m.url}:${keysetOf(k).id}`)
-      );
-      return `${proofs.map((p) => p.secret).sort()}|${ids.sort()}`;
-    };
-    let last = what();
-    // after the save: zustand tells listeners first, and a listener that reads
-    // (and so reloads) the coins then would reload them without this change
-    return store.subscribe(() =>
-      queueMicrotask(() => {
-        const now = what();
-        if (now === last) return;
-        last = now;
-        listener();
-      })
-    );
-  },
-};
-
-let coinStore: CoinStore = legacyCoins;
-
-/** Where purses keep coins: the IndexedDB store once the runtime registers
- *  it, for the wallet's own hooks (spent cleanup, recovery's commits). */
+/** Where purses keep coins (IndexedDB), registered by the runtime, for the
+ *  wallet's own hooks (spent cleanup, recovery's commits). */
 export function registerCoins(store: CoinStore): void {
   coinStore = store;
 }
 
-export const walletCoins = (): CoinStore => coinStore;
+export function walletCoins(): CoinStore {
+  if (!coinStore) throw new Error("The wallet's coin store is not set up");
+  return coinStore;
+}
+
+/** The tab's wallet book: its journal, locks and recovery host. */
+export interface Book {
+  journal: Journal;
+  locks?: LockManager;
+  recovery: RecoveryHost;
+}
+let book: Book | null = null;
+
+export function registerBook(registered: Book): void {
+  book = registered;
+}
+
+export function theBook(): Book {
+  if (!book) throw new Error("The wallet book is not set up");
+  return book;
+}
 
 /** Coins of a mint or keyset the store does not list are stored but never
  *  counted: list the mint and its keysets first (also for a mint about to be

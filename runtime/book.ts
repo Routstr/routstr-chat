@@ -3,7 +3,10 @@ import { adoptLegacy } from "@/features/book/legacy";
 import { RecoveryHost } from "@/features/book/recovery";
 import { tokensOf, waitingOf } from "@/features/book/tokens";
 import { currentOwner } from "@/features/session/owned";
-import { legacyActivity } from "@/features/wallet/hooks/purseBridge";
+import {
+  legacyActivity,
+  registerBook,
+} from "@/features/wallet/hooks/purseBridge";
 import { toSats } from "@/features/wallet/purse";
 import { useUnclaimedTokensStore } from "@/features/wallet/state/unclaimedTokensStore";
 
@@ -30,6 +33,9 @@ export const recovery = new RecoveryHost({
       ),
     }),
 });
+
+// the wallet's own hooks get the book here: they may not import the runtime
+registerBook({ journal, locks, recovery });
 
 const showTokens = () => {
   const owner = currentOwner();

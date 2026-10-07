@@ -1,5 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
-import { useAccountManager } from "@/components/ClientProviders";
+import { useAccountManager } from "@/features/session/view";
 import { useObservableState } from "applesauce-react/hooks";
 import { useCashuWallet } from "./useCashuWallet";
 import { useWalletStore } from "../state/walletStore";

@@ -28,7 +28,6 @@ export * from "./core/utils/balance";
 export * from "./core/utils/formatting";
 
 // State Management (Zustand stores)
-export * from "./state/cashuStore";
 export * from "./state/nutzapStore";
 export * from "./state/transactionHistoryStore";
 export * from "./state/unclaimedTokensStore";

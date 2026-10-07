@@ -1,6 +1,5 @@
 // Types and utilities for Cashu wallet (NIP-60)
 
-import { useCashuStore } from "@/features/wallet/state/cashuStore";
 import {
   Mint,
   Proof,
@@ -48,34 +47,6 @@ export const CASHU_EVENT_KINDS = {
 };
 
 export const defaultMints = ["https://mint.minibits.cash/Bitcoin"];
-
-// Helper function to calculate total balance from tokens
-export function calculateBalance(proofs: Proof[]): {
-  balances: Record<string, number>;
-  units: Record<string, string>;
-} {
-  const balances: { [mint: string]: number } = {};
-  const units: { [mint: string]: string } = {};
-  const mints = useCashuStore.getState().mints;
-  for (const mint of mints) {
-    balances[mint.url] = 0;
-    units[mint.url] = "sat";
-    const keysets = mint.keysets;
-    if (!keysets) continue;
-    for (const keyset of keysets) {
-      // select all proofs with id == keyset.id
-      const proofsForKeyset = proofs.filter((proof) => proof.id === keyset.id);
-      if (proofsForKeyset.length) {
-        balances[mint.url] += proofsForKeyset.reduce(
-          (acc, proof) => acc + proof.amount,
-          0
-        );
-        units[mint.url] = keyset.unit;
-      }
-    }
-  }
-  return { balances, units };
-}
 
 // Helper function to add thousands separator to a number
 function addThousandsSeparator(num: number): string {
