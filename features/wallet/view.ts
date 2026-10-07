@@ -12,7 +12,7 @@ import { useSession } from "@/features/session/view";
 import { DEFAULT_MINT_URL } from "@/lib/utils";
 import { saveTransactionHistory } from "@/utils/storageUtils";
 import { depositMint } from "./depositMint";
-import { listMint, walletLoading } from "./hooks/purseBridge";
+import { listMint, walletCoins, walletLoading } from "./hooks/purseBridge";
 import type { UsageLog } from "./ports";
 import { toSats, type Purse } from "./purse";
 import { useCashuStore } from "./state/cashuStore";
@@ -101,6 +101,28 @@ export function useWallet(): {
     total: Object.values(balances ?? {}).reduce((sum, n) => sum + n, 0),
     loading: arriving || (!!pubkey && !balances),
   };
+}
+
+/** How many coins the signed-in account holds (Settings → Console). */
+export function useCoinCount(): number {
+  const { pubkey } = useSession();
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    if (!pubkey) return;
+    const coins = walletCoins();
+    let live = true;
+    const load = () =>
+      void coins.coins(pubkey).then((all) => {
+        if (live) setCount(all.length);
+      });
+    load();
+    const stop = coins.subscribe(pubkey, load);
+    return () => {
+      live = false;
+      stop();
+    };
+  }, [pubkey]);
+  return pubkey ? count : 0;
 }
 
 /** The signed-in account's activity, newest first: what its wallet sent and
