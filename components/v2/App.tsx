@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { useSession } from "@/features/session/view";
 import { useAccountChat, useAnswering } from "@/features/chat/view";
@@ -12,6 +12,7 @@ import { peek, usePurse } from "@/features/wallet/view";
 import { useAutoRefill } from "@/hooks/useAutoRefill";
 import { RoomProvider } from "./room/RoomProvider";
 import { UiProvider, useUi } from "./ui";
+import { showQuery } from "./address";
 import { OpenChatProvider, useOpenChat } from "./openChat";
 import { MoneyProvider, useMoney } from "./useMoney";
 import { useEnsureAccount } from "./useEnsureAccount";
@@ -23,8 +24,6 @@ import "./styles/index.css";
    auto-refill, the relay timeout notice, a ?cashu= link, and the chat in
    the address bar. The drawing is Shell. */
 function Behaviour() {
-  const router = useRouter();
-  const pathname = usePathname();
   const searchParams = useSearchParams();
   const { pubkey, ready: authChecked } = useSession();
   const isAuthenticated = pubkey !== null;
@@ -61,8 +60,7 @@ function Behaviour() {
   const replaceQuery = (mutate: (p: URLSearchParams) => void) => {
     const p = new URLSearchParams(qs);
     mutate(p);
-    const next = p.toString();
-    router.replace(`${pathname}${next ? `?${next}` : ""}`, { scroll: false });
+    showQuery(p.toString());
   };
 
   // ?tab=apikeys opens settings where the keys live

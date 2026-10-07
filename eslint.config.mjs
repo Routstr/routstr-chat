@@ -81,6 +81,10 @@ const packages = [
 // A hand-written absolute path breaks when the app is served under a base path (/v2 beside main):
 // it goes through withBase (lib/base.ts). Next adds the base to its own links, router and assets.
 const RAW_PATH = "Write an absolute path as withBase(\"/…\") (lib/base.ts), so the app also works under /v2.";
+// Under a base path the router fetches the root page's file from outside the base (/v2.txt), a
+// 404 that becomes a full reload: a change of the query alone goes through showQuery.
+const QUERY_ONLY = "Change only the query with showQuery (components/v2/address.ts); the router would reload the page under /v2.";
+const ROUTER = 'CallExpression[callee.object.name="router"][callee.property.name=/^(replace|push)$/]';
 const basePaths = {
   files: ["**/*.{ts,tsx}"],
   ignores: ["tests/**", "lib/base.ts", "next.config.ts", ...TESTS],
@@ -89,6 +93,8 @@ const basePaths = {
       "error",
       { selector: 'Literal[value=/^\\/[A-Za-z_]/]:not(CallExpression[callee.name="withBase"] > Literal)', message: RAW_PATH },
       { selector: "TemplateLiteral[expressions.length=0] > TemplateElement[value.raw=/^\\/[A-Za-z_]/]", message: RAW_PATH },
+      { selector: `${ROUTER}[arguments.0.expressions.0.name="pathname"]`, message: QUERY_ONLY },
+      { selector: `${ROUTER}[arguments.0.value=/^\\?/]`, message: QUERY_ONLY },
     ],
   },
 };

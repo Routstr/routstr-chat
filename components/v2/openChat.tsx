@@ -1,9 +1,10 @@
 "use client";
 
 import React, { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useConversations, useHistoryLoaded } from "@/features/history/view";
 import { useSession } from "@/features/session/view";
+import { showQuery } from "./address";
 
 /* Which chat is open in this tab. Each account keeps its own: a switch opens
    that account's last chat here, or a new one. A ?chatId= link wins when the
@@ -30,8 +31,6 @@ export function useOpenChat(): OpenChat {
 const tab = { lastOpen: new Map<string, string | null>(), linkTaken: false };
 
 export function OpenChatProvider({ initial, children }: { initial?: string | null; children: React.ReactNode }) {
-  const router = useRouter();
-  const pathname = usePathname();
   const params = useSearchParams();
   const linked = params.get("chatId");
   // the same key added twice is two accounts, each with its own chats
@@ -72,9 +71,8 @@ export function OpenChatProvider({ initial, children }: { initial?: string | nul
     if ((p.get("chatId") ?? null) === id) return;
     if (id) p.set("chatId", id);
     else p.delete("chatId");
-    const next = p.toString();
-    router.replace(`${pathname}${next ? `?${next}` : ""}`, { scroll: false });
-  }, [id, qs, pathname, router, initial]);
+    showQuery(p.toString());
+  }, [id, qs, initial]);
 
   const open = useCallback((next: string) => {
     now.current = next;
