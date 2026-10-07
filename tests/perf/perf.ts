@@ -4,6 +4,9 @@
 //   pnpm kit perf --driver v2|main [--out <static export dir> | --url <running app>]
 //                 [--runs 5] [--label name] [--json result.json] [--compare base.json]
 //                 [--spend x-cashu]   (main: pay per request instead of its default API key)
+//                 [--detail detail.json]   (causes: relay messages, reply timelines, CPU
+//                                          profiles; slows the run, so keep its numbers apart)
+//                 [--only reply|longReply|walletPay|walletMakeToken|accountSwitch|historyLoad]
 //   pnpm kit perf --compare a.json b.json        (just print the table)
 //
 // Every run is a fresh browser (no cache, no storage) and goes through the same steps a
@@ -27,6 +30,7 @@ import { addAccount, seedKitProvider } from "../app/seed";
 import { bundleSize, type BundleSize } from "./bundle";
 import { drivers, type Driver } from "../app/drivers";
 import { textShown } from "../app/drivers/wait";
+import { recordNetwork, relaySummary, startProfile, timeline } from "./detail";
 import {
   collectPageMetrics,
   mainThreadTimer,
@@ -156,12 +160,23 @@ async function coreOnly(kit: KitClient, s: Sample) {
   record("apikey", await reply(auth));
 }
 
+interface RunOptions {
+  spend?: string;
+  /** keep causes here (perf --detail) */
+  detail?: Record<string, unknown>;
+  /** only this step after the setup every step needs (sign in, funds) */
+  only?: string;
+  /** the served build, to quote code in profiles */
+  outDir?: string;
+}
+
 async function oneRun(
   driver: Driver,
   kit: KitClient,
   appUrl: string,
-  spend?: string
+  { spend, detail, only, outDir }: RunOptions = {}
 ): Promise<Sample> {
+  const want = (name: string) => !only || name.startsWith(only);
   const browser = await chromium.launch({
     executablePath: chromiumPath(),
     headless: true,
@@ -188,6 +203,19 @@ async function oneRun(
       },
     };
     const mintOrigins = [kit.env.mintUrl, kit.env.invoiceMintUrl];
+    if (detail) sealed.frames = [];
+    const frames = sealed.frames ?? [];
+    const net = detail ? recordNetwork(context) : [];
+    const service = (url: string) => {
+      const place = mintOrigins.some((m) => url.startsWith(m))
+        ? "mint"
+        : url.startsWith(kit.coreUrl) || url.startsWith(PROVIDER_ALIAS)
+          ? "core"
+          : url.startsWith(appUrl)
+            ? "app"
+            : new URL(url).host;
+      return `${place} ${new URL(url).pathname}`;
+    };
     context.on("request", (r) => {
       const url = r.url();
       if (mintOrigins.some((m) => url.startsWith(m))) calls.mint++;
@@ -199,7 +227,13 @@ async function oneRun(
     const step = async (name: string, fn: () => Promise<unknown>) => {
       const from = await mark(page);
       const c0 = { ...calls };
+      const t0 = Date.now();
       s[name] = await time(fn);
+      if (detail)
+        detail[name] = {
+          relays: relaySummary(frames, t0, Date.now()),
+          timeline: timeline(net, frames, t0, Date.now(), service),
+        };
       s[`${name}.mintCalls`] = calls.mint - c0.mint;
       s[`${name}.coreCalls`] = calls.core - c0.core;
       s[`${name}.relayMsgs`] = calls.relayMsgs - c0.relayMsgs;
@@ -254,6 +288,7 @@ async function oneRun(
       const before = (await kit.upstream.requests()).length;
       const from = await mark(page);
       const c0 = { ...calls };
+      const profile = detail && (await startProfile(page, outDir));
       await driver.send(page, prompt);
       const sent = await lastInput(page);
       const at = (t: number) => Math.round(t - sent);
@@ -272,18 +307,48 @@ async function oneRun(
       s[`${name}.inp`] = after.inp;
       s[`${name}.blockedMs`] = Math.round(after.blocked);
       s[`${name}.longTasks`] = after.longTasks;
+      if (detail && profile) {
+        // Send to paid, paid to idle, and the five longest tasks of the reply
+        const sentAt = from.origin + sent;
+        const paid = paidAt ? paidAt - from.origin : sent;
+        const idle = sent + s[`${name}.idle`]!;
+        const tasks = (
+          await page.evaluate(
+            (start) => window.__kitPerf!.longTasks.filter(([t]) => t >= start),
+            sent
+          )
+        )
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 5)
+          .map(([t, d], i) => ({
+            name: `long task ${i + 1} (${Math.round(d)} ms, at +${Math.round(t - sent)} ms)`,
+            from: t,
+            to: t + d,
+          }));
+        detail[name] = {
+          paidAfterMs: paidAt && Math.round(paidAt - sentAt),
+          timeline: timeline(net, frames, sentAt, from.origin + idle, service),
+          relays: relaySummary(frames, sentAt, from.origin + idle),
+          cpu: await profile([
+            { name: "send to paid", from: sent, to: paid },
+            { name: "paid to idle", from: paid, to: idle },
+            ...tasks,
+          ]),
+        };
+      }
       return shownAt;
     };
 
     // three replies; the first pays cold (a new key at the provider), the others warm
-    for (let i = 1; i <= 3; i++)
-      await reply(`reply${i}`, PROMPT(i), `start${i}`, `end${i}`);
+    if (want("reply") || want("longReply"))
+      for (let i = 1; i <= 3; i++)
+        await reply(`reply${i}`, PROMPT(i), `start${i}`, `end${i}`);
     await heap("afterReplies");
 
     // rendering a long streamed reply: about 4,600 words of markdown, a word every 2 ms
     // upstream (usage pinned small, so it costs what a short reply does). Frame times,
     // long tasks and the main thread's total busy time from send until it is idle again.
-    {
+    if (want("longReply")) {
       const busy = await mainThreadTimer(page);
       await startFrames(page);
       const shownAt = await reply(
@@ -300,15 +365,21 @@ async function oneRun(
     }
     await heap("afterLongReply");
 
-    const invoice = await kit.invoice(10);
-    await step("walletPay", () => driver.payInvoice(page, invoice));
-    await step("walletMakeToken", () => driver.makeToken(page, 5));
-    await addAccount(page, nip19.nsecEncode(generateSecretKey()));
-    await driver.ready(page);
-    // to the other key, until it is active and the app takes a message
-    await step("accountSwitch", () => driver.switchAccount(page));
+    if (want("walletPay")) {
+      const invoice = await kit.invoice(10);
+      await step("walletPay", () => driver.payInvoice(page, invoice));
+    }
+    if (want("walletMakeToken"))
+      await step("walletMakeToken", () => driver.makeToken(page, 5));
+    if (want("accountSwitch")) {
+      await addAccount(page, nip19.nsecEncode(generateSecretKey()));
+      await driver.ready(page);
+      // to the other key, until it is active and the app takes a message
+      await step("accountSwitch", () => driver.switchAccount(page));
+    }
     await heap("end");
     await context.close();
+    if (!want("historyLoad")) return s;
 
     // history on a new device: sign in with the same key, until the chat is listed (all four
     // replies, the long one included, went into one chat)
@@ -455,6 +526,15 @@ async function main(argv: string[]) {
     median: {},
     worst: {},
   };
+  // a detail run is slowed by its recording and an --only run is partial: neither may join
+  // other runs' medians
+  if (json && fs.existsSync(json) && (arg("detail") || arg("only")))
+    throw new Error(
+      `--detail and --only runs cannot go into ${json}, which holds other runs`
+    );
+  const details: Record<string, unknown>[] | undefined = arg("detail")
+    ? []
+    : undefined;
   const result = json && fs.existsSync(json) ? read(json) : fresh;
   for (const k of ["driver", "versions"] as const)
     if (JSON.stringify(result[k]) !== JSON.stringify(fresh[k]))
@@ -468,14 +548,29 @@ async function main(argv: string[]) {
   try {
     if (outDir) result.bundle ??= bundleSize(path.resolve(outDir));
     for (let i = 0, runs = Number(arg("runs") ?? 1); i < runs; i++) {
+      const detail = details && {};
       const sample: Sample = coreOnlyRun
         ? { freeMb: freeMb(), load1: load1() }
-        : await oneRun(driver, kitClient(stack.env), appUrl!, arg("spend"));
+        : await oneRun(driver, kitClient(stack.env), appUrl!, {
+            spend: arg("spend"),
+            detail,
+            only: arg("only"),
+            outDir: outDir && path.resolve(outDir),
+          });
       if (coreOnlyRun) await coreOnly(kitClient(stack.env), sample);
       console.log(
         `[perf] run ${result.runs.length + 1}: ${JSON.stringify(sample)}`
       );
       result.runs.push(sample);
+      if (detail) {
+        details!.push(detail);
+        const file = arg("detail")!;
+        fs.writeFileSync(
+          file,
+          JSON.stringify({ ...fresh, runs: details }, null, 2)
+        );
+        console.log(`[perf] detail: ${path.resolve(file)}`);
+      }
     }
   } finally {
     await server?.close();

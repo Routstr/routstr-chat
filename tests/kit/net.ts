@@ -19,6 +19,43 @@ export interface Seal {
   relays: Set<string>;
   /** messages the page sent to relays */
   relayMessages: number;
+  /** every relay message both ways, kept only once set to an array (perf --detail) */
+  frames?: RelayFrame[];
+}
+
+export interface RelayFrame {
+  /** Date.now() */
+  at: number;
+  relay: string;
+  dir: "out" | "in";
+  /** REQ, EVENT, CLOSE, OK, EOSE, ... */
+  type: string;
+  /** the event's kind, or the kinds a REQ asks for */
+  kinds: number[];
+}
+
+function frame(
+  relay: string,
+  dir: RelayFrame["dir"],
+  data: string
+): RelayFrame {
+  let msg: unknown[] = [];
+  try {
+    msg = JSON.parse(data);
+  } catch {
+    /* not JSON: counted as "?" */
+  }
+  const type = typeof msg[0] === "string" ? msg[0] : "?";
+  const event = (dir === "out" ? msg[1] : msg[2]) as
+    | { kind?: number }
+    | undefined;
+  const kinds =
+    type === "EVENT" && typeof event?.kind === "number"
+      ? [event.kind]
+      : type === "REQ"
+        ? msg.slice(2).flatMap((f) => (f as { kinds?: number[] })?.kinds ?? [])
+        : [];
+  return { at: Date.now(), relay, dir, type, kinds };
 }
 
 export function chromiumPath(): string | undefined {
@@ -92,11 +129,16 @@ export async function seal(
     const local = new WebSocket(env.relayUrl);
     const pending: string[] = [];
     local.on("open", () => pending.splice(0).forEach((m) => local.send(m)));
-    local.on("message", (data) => page.send(String(data)));
+    const relay = new URL(url).host;
+    local.on("message", (data) => {
+      state.frames?.push(frame(relay, "in", String(data)));
+      page.send(String(data));
+    });
     local.on("close", () => page.close());
     local.on("error", () => page.close());
     page.onMessage((m) => {
       state.relayMessages++;
+      state.frames?.push(frame(relay, "out", String(m)));
       if (local.readyState === WebSocket.OPEN) local.send(String(m));
       else pending.push(String(m));
     });
