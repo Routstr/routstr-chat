@@ -229,8 +229,8 @@ export function useInvoiceChecker() {
 
   // Set up automatic checking interval
   useEffect(() => {
-    // Check immediately on mount
-    checkPendingInvoices();
+    // Check right after mount, outside the effect: a check sets state
+    const first = setTimeout(checkPendingInvoices, 0);
 
     // Clean up old invoices on mount
     cleanupOldInvoices();
@@ -242,6 +242,7 @@ export function useInvoiceChecker() {
 
     // Clean up on unmount
     return () => {
+      clearTimeout(first);
       if (checkIntervalRef.current) {
         clearInterval(checkIntervalRef.current);
       }

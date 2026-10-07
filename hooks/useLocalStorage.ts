@@ -43,22 +43,6 @@ export function useLocalStorage<T>(
     }
   };
 
-  // Hydrate from localStorage on client mount
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    try {
-      const item = localStorage.getItem(key);
-      if (item) {
-        setState(deserialize(item));
-      }
-    } catch (error) {
-      console.warn(`Failed to hydrate ${key} from localStorage:`, error);
-    }
-  }, []); // Run once on mount
-
   // Sync with localStorage changes from other tabs
   useEffect(() => {
     // Only set up storage listener in the browser
