@@ -115,7 +115,7 @@ export default function Rail() {
     groups[0]?.items[0]?.id ||
     null;
 
-  const { edges, onScroll } = useGlide({ root, list, finding, activeConversationId, hideTip });
+  const { edges, onScroll } = useGlide({ root, list, finding, activeConversationId, hideTip, rows: groups });
   const setFold = useFold({ root, list, shade, folded, isSidebarCollapsed, setIsSidebarCollapsed, hideTip, rollBack, closeMenus, edges, say });
   const turn = useTurn({ root, clip, shade, ui, folded, setFold, hideTip, closeMenus });
   const { delta, zero, waitN, balWait } = useBalance(money, isAuthenticated);

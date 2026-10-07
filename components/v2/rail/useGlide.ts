@@ -9,12 +9,15 @@ export function useGlide({
   finding,
   activeConversationId,
   hideTip,
+  rows,
 }: {
   root: RefObject<HTMLElement | null>;
   list: RefObject<HTMLElement | null>;
   finding: boolean;
   activeConversationId: string | null;
   hideTip: (now?: boolean) => void;
+  /** the list's rows: its fades are read again when they change */
+  rows: unknown;
 }) {
   const glideFrom = useRef<DOMRect | null>(null);
   const hostKey = finding ? "" : activeConversationId ?? "new";
@@ -45,6 +48,6 @@ export function useGlide({
     l.toggleAttribute("data-more", l.scrollHeight - l.scrollTop - l.clientHeight > 2);
     l.toggleAttribute("data-scrolled", l.scrollTop > 2);
   };
-  useLayoutEffect(edges);
+  useLayoutEffect(edges, [list, hostKey, rows]);
   return { edges, onScroll };
 }

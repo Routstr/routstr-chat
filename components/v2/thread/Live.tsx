@@ -194,7 +194,6 @@ export default function Live({
       const top = w.querySelector<HTMLElement>(".la-topic .la-w:not([data-out])");
       line.style.setProperty("--tail", `${Math.ceil(main.scrollWidth + (topic && top ? top.scrollWidth + 18 : 0))}px`);
     };
-    measure();
     const raf = requestAnimationFrame(measure);
     return () => cancelAnimationFrame(raf);
   }, [verb, topic, fold]);

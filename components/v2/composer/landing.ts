@@ -7,7 +7,7 @@
    runs right after the panel has re-laid out as a chat. settle() is the same
    shrinking top edge for a send from the dock. */
 
-import { tokenMs } from "../motion";
+import { rootToken, tokenMs } from "../motion";
 
 interface Words {
   node: HTMLTextAreaElement;
@@ -35,7 +35,7 @@ let next: Flight | null = null;
 let running: Animation[] = [];
 
 const reduced = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-const tok = (name: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const tok = rootToken;
 const ms = tokenMs;
 const ease = (name: string) => tok(name) || "ease";
 
