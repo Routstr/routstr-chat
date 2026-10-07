@@ -7,9 +7,9 @@ import {
   AutoRefillNWCSettings,
 } from "@/utils/storageUtils";
 import { payWithNWC, isNWCConnected } from "@/lib/nwcPayment";
-import { useCashuStore } from "@/features/wallet/state/cashuStore";
 import { currentOwner } from "@/features/session/owned";
 import { useCashuWallet } from "@/features/wallet";
+import { useDepositMint, usePurse } from "@/features/wallet/view";
 import { toast } from "sonner";
 
 // Cooldown period between auto-refills (5 minutes)
@@ -36,8 +36,9 @@ export function useAutoRefill({
   balance,
   isWalletLoaded,
 }: UseAutoRefillProps): void {
-  const cashuStore = useCashuStore();
   const { updateProofs } = useCashuWallet();
+  const purse = usePurse();
+  const depositTo = useDepositMint();
 
   // Track processing states
   const isProcessingNWCRef = useRef(false);
@@ -60,7 +61,6 @@ export function useAutoRefill({
   const executeNWCRefill = useCallback(
     async (settings: AutoRefillNWCSettings) => {
       if (isProcessingNWCRef.current) return;
-      if (!cashuStore.activeMintUrl) return;
       const owner = currentOwner();
 
       try {
@@ -72,18 +72,22 @@ export function useAutoRefill({
           return;
         }
 
+        // where the provider about to be paid can take it, as Add does
+        const balances = (await purse()?.balances()) ?? {};
+        const mintUrl = depositTo(balances, settings.amount);
+
         toast.info(`Auto-refilling ${settings.amount} sats from NWC wallet...`);
 
         const result = await payWithNWC(
           settings.amount,
-          cashuStore.activeMintUrl,
+          mintUrl,
           owner,
           {
             onPaymentSuccess: async (proofs, amount) => {
               // Add proofs to wallet
-              if (proofs.length > 0 && cashuStore.activeMintUrl) {
+              if (proofs.length > 0) {
                 await updateProofs({
-                  mintUrl: cashuStore.activeMintUrl,
+                  mintUrl,
                   proofsToAdd: proofs,
                   proofsToRemove: [],
                 });
@@ -108,7 +112,7 @@ export function useAutoRefill({
         isProcessingNWCRef.current = false;
       }
     },
-    [cashuStore.activeMintUrl, updateProofs]
+    [updateProofs, purse, depositTo]
   );
 
   /**
