@@ -8,8 +8,14 @@ import { bundleSize } from "../bundle";
 function exportAt(base: string) {
   const out = fs.mkdtempSync(path.join(os.tmpdir(), "bundle-"));
   fs.mkdirSync(path.join(out, "_next/static"), { recursive: true });
-  fs.writeFileSync(path.join(out, "_next/static/app.js"), "console.log('app');".repeat(20));
-  fs.writeFileSync(path.join(out, "_next/static/app.css"), "body{color:red}".repeat(20));
+  fs.writeFileSync(
+    path.join(out, "_next/static/app.js"),
+    "console.log('app');".repeat(20)
+  );
+  fs.writeFileSync(
+    path.join(out, "_next/static/app.css"),
+    "body{color:red}".repeat(20)
+  );
   fs.writeFileSync(
     path.join(out, "index.html"),
     `<link rel="stylesheet" href="${base}/_next/static/app.css"><script src="${base}/_next/static/app.js"></script>`

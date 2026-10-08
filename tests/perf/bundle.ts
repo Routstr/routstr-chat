@@ -39,7 +39,9 @@ export function bundleSize(outDir: string): BundleSize {
       ),
     ]
       // a build for a sub-path (/v2) names its files under it; they sit in out/_next all the same
-      .map((src) => path.join(outDir, src.split("?")[0].replace(/^.*(?=\/_next\/)/, "")))
+      .map((src) =>
+        path.join(outDir, src.split("?")[0].replace(/^.*(?=\/_next\/)/, ""))
+      )
       .filter((f) => fs.existsSync(f));
   const homeJs = named(/<script[^>]*>/g, /src="([^"]+\.js[^"]*)"/);
   const homeCss = named(/<link[^>]*>/g, /href="([^"]+\.css[^"]*)"/);
