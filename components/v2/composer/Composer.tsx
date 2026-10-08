@@ -263,9 +263,12 @@ export default function Composer({ centred }: { centred: boolean }) {
   }, [face, back]);
   useEffect(() => () => window.clearTimeout(turnT.current), []);
   const hasContent = inputMessage.trim().length > 0 || uploadedAttachments.length > 0;
-  const busy = isLoadingModels || (isWalletLoading && isAuthenticated);
+  const loading = isLoadingModels || (isWalletLoading && isAuthenticated);
+  // a PDF still in the draft and being read would go without its text
+  const readingNow = uploadedAttachments.some((a) => reading.has(a.id));
+  const busy = loading || readingNow;
   // "loading" lasts until the app has made its own pick, not just until models arrive
-  const modelState = selectedModel ? "ready" : isAuthenticated && busy ? "loading" : "none";
+  const modelState = selectedModel ? "ready" : isAuthenticated && loading ? "loading" : "none";
 
   // grow with the words, instantly; never animate the box a caret lives in.
   // Past the cap it scrolls, and only the edge that hides words dissolves.
@@ -356,7 +359,7 @@ export default function Composer({ centred }: { centred: boolean }) {
       setRefused(Date.now());
       if (liveSay.current) {
         liveSay.current.textContent = "";
-        const why = isWalletLoading && isAuthenticated ? "Your wallet is still loading" : "Models are still loading";
+        const why = readingNow ? "A file is still being read" : isWalletLoading && isAuthenticated ? "Your wallet is still loading" : "Models are still loading";
         window.setTimeout(() => liveSay.current && (liveSay.current.textContent = why), 30);
       }
       return;
@@ -365,7 +368,7 @@ export default function Composer({ centred }: { centred: boolean }) {
     if (first.need || needsMoney) return first.hold();
     if (ui.sendWhenFunded) ui.setSendWhenFunded(false);
     launch();
-  }, [isLoading, hasContent, first, busy, isWalletLoading, isAuthenticated, selectedModel, needsMoney, launch, ui]);
+  }, [isLoading, hasContent, first, busy, readingNow, isWalletLoading, isAuthenticated, selectedModel, needsMoney, launch, ui]);
 
   useEffect(() => {
     if (!refused) return;
