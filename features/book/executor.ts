@@ -529,17 +529,24 @@ export class WalletExecutor {
     }
   }
 
+  /** The token's record: a new one for its proofs no waiting token holds yet
+   *  (those land with the token that holds them), or the one already holding
+   *  them all. */
   private holdReceive(token: string): ReceiveRecord {
     const { journal, owner } = this.deps;
-    const { mint, unit, amount, incompleteProofs } = getTokenMetadata(token);
-    const secrets = incompleteProofs.map((p) => p.secret);
-    const held = journal
+    const { mint, unit, incompleteProofs } = getTokenMetadata(token);
+    const waiting = journal
       .list(owner)
-      .find(
-        (r): r is ReceiveRecord =>
-          r.kind === "receive" && r.secrets.some((s) => secrets.includes(s))
-      );
-    if (held) return held;
+      .filter((r): r is ReceiveRecord => r.kind === "receive");
+    const held = new Set(waiting.flatMap((r) => r.secrets));
+    const fresh = incompleteProofs.filter((p) => !held.has(p.secret));
+    if (incompleteProofs.length && !fresh.length) {
+      return waiting.find((r) =>
+        r.secrets.includes(incompleteProofs[0].secret)
+      )!;
+    }
+    const secrets = fresh.map((p) => p.secret);
+    const amount = fresh.reduce((sum, p) => sum + p.amount, 0);
     const record: ReceiveRecord = {
       v: 1,
       kind: "receive",
@@ -570,7 +577,7 @@ export class WalletExecutor {
       );
     }
     try {
-      const proofs = await this.receiveLocked(record.token, {});
+      const proofs = await this.receiveLocked(record.token, {}, record.secrets);
       journal.remove(record.id);
       return { proofs, unit, pending: false };
     } catch (error) {
@@ -587,16 +594,27 @@ export class WalletExecutor {
     }
   }
 
+  /** Swaps the token's proofs into the wallet, or only those of `secrets`
+   *  (the rest belong to another waiting token's record). */
   private async receiveLocked(
     token: string,
-    options: { requirePersisted?: boolean }
+    options: { requirePersisted?: boolean },
+    secrets?: string[]
   ): Promise<Proof[]> {
     const { mint, unit } = getTokenMetadata(token);
     const mintUrl = normalizeMintUrl(mint);
     // in the token's unit: a mint that also counts msat still takes sat tokens
     const wallet = await this.open(mintUrl, unit);
     const commit = this.deps.commitFor(mintUrl);
-    const preview = await wallet.prepareSwapToReceive(token);
+    const decoded = wallet.decodeToken(token);
+    const preview = await wallet.prepareSwapToReceive(
+      secrets
+        ? {
+            ...decoded,
+            proofs: decoded.proofs.filter((p) => secrets.includes(p.secret)),
+          }
+        : decoded
+    );
     const { id, keep } = await this.swap(wallet, mintUrl, preview, [], commit);
     try {
       await commit(keep, []);

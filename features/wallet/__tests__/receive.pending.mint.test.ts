@@ -1,5 +1,6 @@
 // A token received while its mint cannot be reached is the wallet's: written to the book before
 // the mint is asked, landed once the mint answers, and never counted twice.
+import { getEncodedTokenV4, Mint, Wallet } from "@cashu/cashu-ts";
 import { beforeEach, expect, it, vi } from "vitest";
 import { getKit } from "@/tests/kit";
 import { walletLock } from "@/features/book/executor";
@@ -166,6 +167,38 @@ it("keeps a waiting token through a passing mint failure, and lands it after", a
   expect(await purse.retryPending()).toBe(16);
   expect(kinds()).toEqual([]);
   expect(await purse.balances()).toEqual({ [MINT]: 16 });
+});
+
+it("keeps the new proofs of a token that shares some with a waiting one, and lands both", async () => {
+  // a sender wallet took back an unclaimed send and put its proofs in a bigger one
+  const wallet = new Wallet(new Mint(MINT));
+  await wallet.loadMint();
+  const first = await kit.mintToken(8);
+  const more = await kit.mintToken(16);
+  const bigger = getEncodedTokenV4({
+    mint: MINT,
+    unit: "sat",
+    proofs: [
+      ...wallet.decodeToken(first).proofs,
+      ...wallet.decodeToken(more).proofs,
+    ],
+  });
+
+  const restore = cutOff(MINT);
+  try {
+    expect(await purse.take(first)).toEqual({ sats: 8, pending: true });
+    expect(await purse.take(bigger)).toEqual({ sats: 24, pending: true });
+    // the same tokens again add nothing
+    await purse.take(bigger);
+    await purse.take(first);
+  } finally {
+    restore();
+  }
+  expect(kinds()).toEqual(["receive", "receive"]);
+
+  expect(await purse.retryPending()).toBe(24);
+  expect(kinds()).toEqual([]);
+  expect(await purse.balances()).toEqual({ [MINT]: 24 });
 });
 
 it("throws and keeps nothing when the mint refuses the token", async () => {
