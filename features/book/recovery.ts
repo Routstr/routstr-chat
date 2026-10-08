@@ -22,6 +22,23 @@ import {
 const QUOTE_MS = 10_000;
 // a quote is over only this long after its expiry, in case clocks differ
 const EXPIRY_GRACE_MS = 5 * 60_000;
+// A mint that refuses to say what became of a quote may only be failing for
+// now: nutshell answers "quote not found" and any passing failure alike, as
+// code 0. Such a quote is over only this long after its expiry
+const REFUSED_GRACE_MS = 24 * 60 * 60_000;
+const REFUSED = "refused";
+
+/** An invoice nobody paid in time, judged by when the mint answered, not by
+ *  when a pass gets to it. */
+const over = (
+  record: BookRecord,
+  answer: { state: string; at: number }
+): boolean =>
+  record.kind === "quote" &&
+  !!record.expiresAt &&
+  answer.at >
+    record.expiresAt +
+      (answer.state === REFUSED ? REFUSED_GRACE_MS : EXPIRY_GRACE_MS);
 
 export interface RecoveryDeps {
   journal: Journal;
@@ -44,8 +61,8 @@ function due(
 ): boolean {
   if (record.kind === "token" || record.kind === "receive") return false;
   if (record.kind !== "quote") return true;
-  if (answer?.state === MintQuoteState.UNPAID) {
-    return !!record.expiresAt && answer.at > record.expiresAt + EXPIRY_GRACE_MS;
+  if (answer?.state === MintQuoteState.UNPAID || answer?.state === REFUSED) {
+    return over(record, answer);
   }
   return (
     answer?.state === MintQuoteState.PAID ||
@@ -105,12 +122,10 @@ export class RecoveryHost {
           ]);
           states.set(record.id, { state: quote.state, at: Date.now() });
         } catch (error) {
-          // the mint says it does not know it (purged once expired): unpaid
+          // the mint refused to say: it may not know the quote, or it may
+          // only be failing for now
           if (error instanceof MintOperationError) {
-            states.set(record.id, {
-              state: MintQuoteState.UNPAID,
-              at: Date.now(),
-            });
+            states.set(record.id, { state: REFUSED, at: Date.now() });
           }
           // no answer: the quote waits for the next pass
         } finally {
@@ -133,15 +148,11 @@ export class RecoveryHost {
       if (record.kind === "token" || record.kind === "receive") continue;
       if (record.kind === "quote") {
         const answer = quotes.get(record.id);
-        if (answer?.state === MintQuoteState.UNPAID) {
-          // an invoice nobody paid in time is over: judged by when the mint
-          // said unpaid, not by when this pass got to it
-          if (
-            record.expiresAt &&
-            answer.at > record.expiresAt + EXPIRY_GRACE_MS
-          ) {
-            journal.remove(record.id);
-          }
+        if (
+          answer?.state === MintQuoteState.UNPAID ||
+          answer?.state === REFUSED
+        ) {
+          if (over(record, answer)) journal.remove(record.id);
           continue;
         }
         if (answer?.state === MintQuoteState.ISSUED) {

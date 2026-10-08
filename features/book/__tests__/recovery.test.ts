@@ -203,6 +203,48 @@ describe("RecoveryHost", () => {
     expect(journal.list("alice")).toEqual([]);
   });
 
+  it("keeps a deposit quote its mint refuses to tell about until a day past its expiry", async () => {
+    // nutshell answers "quote not found" and a passing failure alike: 400, code 0
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({ detail: "database is locked", code: 0 }),
+            {
+              status: 400,
+            }
+          )
+      )
+    );
+    const journal = new Journal(memoryStorage());
+    const quote = (id: string, expiredAgo: number) => ({
+      v: 1 as const,
+      kind: "quote" as const,
+      id,
+      owner: "alice",
+      mintUrl: "https://mint.example",
+      unit: "sat",
+      createdAt: 0,
+      quoteId: `q-${id}`,
+      amount: 100,
+      expiresAt: Date.now() - expiredAgo,
+    });
+    journal.put(quote("hour", 60 * 60_000));
+    journal.put(quote("days", 2 * 24 * 60 * 60_000));
+    try {
+      await new RecoveryHost({
+        journal,
+        openWallet,
+        locks: navigator.locks,
+      }).settle("alice", () => commit);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    // it may have been paid: only one refused for so long is over
+    expect(journal.list("alice").map((r) => r.id)).toEqual(["hour"]);
+  });
+
   it("settles nothing without Web Locks", async () => {
     const journal = new Journal(memoryStorage());
     journal.put(landed("alice"));

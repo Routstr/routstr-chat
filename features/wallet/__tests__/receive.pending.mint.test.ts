@@ -43,6 +43,22 @@ function dropAfterSwap(url: string) {
   return () => void (globalThis.fetch = real);
 }
 
+/** the mint answers every swap as nutshell answers a passing failure: 400, code 0 */
+function failSwaps(url: string) {
+  const real = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const target = input instanceof Request ? input.url : String(input);
+    if (target.startsWith(url) && target.endsWith("/v1/swap")) {
+      return new Response(
+        JSON.stringify({ detail: "database is locked", code: 0 }),
+        { status: 400 }
+      );
+    }
+    return real(input, init);
+  }) as typeof fetch;
+  return () => void (globalThis.fetch = real);
+}
+
 let held: Coin[];
 let journal: Journal;
 let written: { direction: string; sats: number }[];
@@ -128,6 +144,28 @@ it("drops a waiting token the mint says was spent elsewhere, and tries it no mor
   expect(await purse.retryPending()).toBe(0);
   expect(kinds()).toEqual([]);
   expect(await purse.balances()).toEqual({});
+});
+
+it("keeps a waiting token through a passing mint failure, and lands it after", async () => {
+  const token = await kit.mintToken(16);
+  const restore = cutOff(MINT);
+  try {
+    expect((await purse.take(token)).pending).toBe(true);
+  } finally {
+    restore();
+  }
+  // the mint is back but fails for now: that says nothing of the token
+  const unfail = failSwaps(MINT);
+  try {
+    expect(await purse.retryPending()).toBe(0);
+  } finally {
+    unfail();
+  }
+  expect(kinds()).toEqual(["receive"]);
+
+  expect(await purse.retryPending()).toBe(16);
+  expect(kinds()).toEqual([]);
+  expect(await purse.balances()).toEqual({ [MINT]: 16 });
 });
 
 it("throws and keeps nothing when the mint refuses the token", async () => {
