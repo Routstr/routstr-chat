@@ -31,6 +31,26 @@ const RECENT_MS = 5 * 60 * 1000;
 const due = (key: ApiKeyEntry) =>
   !key.lastUsed || Date.now() - key.lastUsed >= RECENT_MS;
 
+// A refund holds the payment lock, so every reply waits for it: a provider
+// that does not say what a key holds in this long keeps the key for the next
+// refund
+const ASK_MS = 15_000;
+
+/** What the provider says the key holds, or null when it does not answer in time. */
+async function askBalance(balances: BalanceManager, key: ApiKeyEntry) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      balances.getTokenBalance(key.key, key.baseUrl),
+      new Promise<null>((resolve) => {
+        timer = setTimeout(() => resolve(null), ASK_MS);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** Credit a refund would act on; `force` counts keys just used too. */
 const hasCredit = (storage: StorageAdapter, force = true) =>
   storage.getAllApiKeys().some((key) => force || due(key)) ||
@@ -180,7 +200,11 @@ async function refundKeys(
   const results: RefundResult[] = [];
   // asking the provider about a key just used would only hold the lock longer
   for (const key of storage.getAllApiKeys().filter((k) => force || due(k))) {
-    const balance = await balances.getTokenBalance(key.key, key.baseUrl);
+    const balance = await askBalance(balances, key);
+    if (!balance) {
+      results.push({ baseUrl: key.baseUrl, success: false });
+      continue;
+    }
     // a key the provider forgot is done
     if (balance.isInvalidApiKey) {
       storage.removeApiKey(key.baseUrl);
@@ -212,8 +236,8 @@ async function refundKeys(
     // have emptied the key at the provider: show what it holds now, not what
     // it held before
     if (!success && storage.getApiKey(key.baseUrl)?.key === key.key) {
-      const after = await balances.getTokenBalance(key.key, key.baseUrl);
-      if (!after.balanceUnknown && !after.isInvalidApiKey) {
+      const after = await askBalance(balances, key);
+      if (after && !after.balanceUnknown && !after.isInvalidApiKey) {
         storage.updateApiKeyBalance(
           key.baseUrl,
           after.amount / 1000,
@@ -268,11 +292,12 @@ async function refundOthers(
     // A key the provider forgot is done. Every other one goes to the
     // provider, even when it reads empty: a payout this wallet missed is
     // paid again.
-    const { isInvalidApiKey } = await balances.getTokenBalance(
-      key.key,
-      key.baseUrl
-    );
-    const { success } = isInvalidApiKey
+    const balance = await askBalance(balances, key);
+    if (!balance) {
+      results.push({ baseUrl: key.baseUrl, success: false });
+      continue;
+    }
+    const { success } = balance.isInvalidApiKey
       ? { success: true }
       : await payingOut(key.baseUrl, () =>
           balances.refundApiKey({

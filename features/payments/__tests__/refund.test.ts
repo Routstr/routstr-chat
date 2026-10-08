@@ -255,6 +255,34 @@ describe("refundCredit", () => {
     expect(deps.otherDevices.drop).toHaveBeenCalledWith(["sk-lost-device"]);
   });
 
+  it("keeps the key of a provider that never answers for the next refund, and refunds the rest", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const refunded = provider({ [LARGE]: 120_000 });
+      const answers = fetch as unknown as (url: string) => Promise<Response>;
+      // SMALL takes the request and never answers it
+      vi.stubGlobal(
+        "fetch",
+        vi.fn((url: string) =>
+          String(url).startsWith(SMALL) ? new Promise(() => {}) : answers(url)
+        )
+      );
+      const { deps, direct } = await setup();
+      direct.setApiKey(SMALL, "sk-stalled");
+      direct.setApiKey(LARGE, "sk-fine");
+
+      const done = refundCredit(deps, true);
+      await vi.advanceTimersByTimeAsync(20_000);
+      const results = await done;
+
+      expect(results).toContainEqual({ baseUrl: SMALL, success: false });
+      expect(refunded).toEqual([LARGE]);
+      expect(direct.getApiKey(SMALL)?.key).toBe("sk-stalled");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("leaves another device's key used in the last five minutes: that device may still be paying with it", async () => {
     const refunded = provider({ [LARGE]: 120_000 });
     const { deps, others } = await setup();
