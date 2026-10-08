@@ -4,7 +4,8 @@ import React, { useEffect, useState } from "react";
 import type { MessageContent } from "@/types/chat";
 import { useFiles, useFileSync } from "@/features/chat/view";
 import { useHistoryKeys } from "@/features/history/view";
-import Picture, { Thumb } from "./Picture";
+import { isRemote } from "./links";
+import Picture, { RemotePicture, Thumb } from "./Picture";
 
 // one object URL per stored image for the life of the page: the bytes stay
 // out of script memory
@@ -76,5 +77,7 @@ export default function StoredImage({
       </div>
     );
   }
+  // a picture an answer names by its address on another host waits for a click, as in its words
+  if (isRemote(url)) return <RemotePicture src={url} alt={caption ?? ""} />;
   return thumb ? <Thumb src={url} alt={caption ?? "Attached picture"} /> : <Picture src={url} alt={caption ?? ""} />;
 }

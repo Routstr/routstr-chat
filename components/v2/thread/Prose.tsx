@@ -9,7 +9,7 @@ import "katex/dist/katex.min.css";
 import Code from "./Code";
 import Picture, { RemotePicture } from "./Picture";
 import { splitBlocks } from "./splitBlocks";
-import { cleanUrl, safeHref, safeImageSrc, stripParensAroundLinks } from "./links";
+import { cleanUrl, isRemote, safeHref, safeImageSrc, stripParensAroundLinks } from "./links";
 import { rehypeWords } from "./words";
 
 const REMARK = [remarkMath, remarkGfm];
@@ -58,7 +58,7 @@ const COMPONENTS: Components = {
   img: ({ src, alt }) => {
     const ok = safeImageSrc(src);
     if (!ok) return null;
-    return /^https?:/i.test(ok) ? <RemotePicture src={ok} alt={alt ?? ""} /> : <Picture src={ok} alt={alt ?? ""} />;
+    return isRemote(ok) ? <RemotePicture src={ok} alt={alt ?? ""} /> : <Picture src={ok} alt={alt ?? ""} />;
   },
   table: ({ children }) => (
     <div className="rd-table scroll" tabIndex={0}>

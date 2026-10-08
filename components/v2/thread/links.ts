@@ -13,6 +13,19 @@ export const safeHref = (href?: string) => {
   return null;
 };
 
+/** Whether a picture would be fetched from another server, however its address is written
+ *  ("//host", "http:host", "/\\host" all are): anything but this app's own files and the
+ *  pictures held in the page itself (data:, blob:). */
+export const isRemote = (src: string) => {
+  if (/^(data|blob):/i.test(src)) return false;
+  const here = typeof location === "undefined" ? "https://app.invalid/" : location.href;
+  try {
+    return new URL(src, here).origin !== new URL(here).origin;
+  } catch {
+    return true;
+  }
+};
+
 export const safeImageSrc = (src?: string | Blob) => {
   if (!src || typeof src !== "string") return null;
   if (src.startsWith("/")) return src;
