@@ -335,6 +335,33 @@ describe("AccountRelays", () => {
     expect(settled.event?.content).toBe("new");
   });
 
+  it("passes over a newer copy that is not the author's own signed event", async () => {
+    const net = network();
+    const d = [["d", "routstr-chat-sdk-api-keys-v1"]];
+    const good = sign(30078, 10, d, "good");
+    // one relay holds a newer copy whose content was changed after signing
+    // (as JSON from the wire: no "already checked" mark nostr-tools keeps on what it signs)
+    const forged = {
+      ...JSON.parse(JSON.stringify(sign(30078, 20, d, "real"))),
+      content: "forged",
+    };
+    net.relay(R1).events.set(good.id, good);
+    net.relay(R2).events.set(forged.id, forged);
+    const account = new Relays(net.port, memoryStorage()).of(OWNER);
+
+    const settled = await firstValueFrom(
+      account
+        .watchLatest({
+          kinds: [30078],
+          authors: [OWNER],
+          "#d": ["routstr-chat-sdk-api-keys-v1"],
+        })
+        .pipe(filter((latest) => latest.settled))
+    );
+
+    expect(settled.event?.content).toBe("good");
+  });
+
   it("never says settled while no relay answered", async () => {
     const net = network();
     DEFAULT_RELAYS.forEach((url) => (net.relay(url).down = true));

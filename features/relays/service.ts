@@ -345,6 +345,9 @@ export class AccountRelays {
     return new Observable<Latest>((observer) => {
       let latest: Latest = { event: null, settled: false };
       const consider = (event: NostrEvent) => {
+        // a relay may answer with anything: only an author's own signed copy counts
+        if (filter.authors && !filter.authors.includes(event.pubkey)) return;
+        if (!verifyEvent(event)) return;
         if (latest.event && !newer(event, latest.event)) return;
         latest = { ...latest, event };
         observer.next(latest);
