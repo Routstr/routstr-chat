@@ -177,8 +177,10 @@ export class RecoveryHost {
             commit,
             journal
           );
-          if (spent) this.deps.paid?.(owner, spent, wallet.unit);
+          // its outcome first: the invoice's state then follows even when
+          // the activity cannot be written
           outcomes.set(record.quoteId, state);
+          if (spent) this.deps.paid?.(owner, spent, wallet.unit);
         } else if (record.kind === "mint") {
           const proofs = await settleMint(wallet, record, commit, journal);
           if (proofs?.length) this.deps.claimed?.(owner, proofs, wallet.unit);
