@@ -496,9 +496,14 @@ export class WalletExecutor {
    *  what landed. One the mint refuses (spent, invalid) is dropped. */
   async retryReceives(): Promise<{ proofs: Proof[]; unit: string }[]> {
     const landed: { proofs: Proof[]; unit: string }[] = [];
+    // each mint asked once a round, however many of its tokens wait
+    const answers = new Map<string, Promise<boolean>>();
     for (const record of this.deps.journal.list(this.deps.owner)) {
       if (record.kind !== "receive") continue;
-      if (!(await this.reachable(record.mintUrl))) continue;
+      if (!answers.has(record.mintUrl)) {
+        answers.set(record.mintUrl, this.reachable(record.mintUrl));
+      }
+      if (!(await answers.get(record.mintUrl))) continue;
       const got = await this.locked(record.mintUrl, () =>
         this.landReceive(record)
       ).catch((error) => {

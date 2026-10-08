@@ -448,6 +448,28 @@ test("a token whose mint does not answer is kept and said so, then lands once it
   expect(await kit.redeem(await v2.makeToken(page, 120))).toBe(120);
 });
 
+// a token kept while its mint did not answer lands once it answers, with the wallet still open:
+// tried on the recovery beat (each minute, and when the tab comes back), no reload needed
+test("a kept token lands once its mint answers, without a reload", async ({
+  page,
+  context,
+  kit,
+  appUrl,
+}) => {
+  await seedAccounts(context, [newKey()]);
+  await funded(page, kit, appUrl, 50);
+  const mint = `${new URL(kit.env.mintUrl).origin}/**`;
+  await page.route(mint, (route) => route.abort("connectionrefused"));
+  await page.goto(`${appUrl}/?cashu=${encodeURIComponent(await kit.mintToken(30))}`);
+  await v2.ready(page);
+  await expect(page.getByText("Kept 30 sats. They land when the mint answers.")).toBeVisible();
+
+  await page.unroute(mint);
+  // the person comes back to the tab
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect.poll(() => v2.balance(page).catch(() => 0), { timeout: 30_000 }).toBe(80);
+});
+
 // with no pay mode picked the app pays through an API key (its credit waits at the provider
 // until Return), and Settings → Payments names that mode, not per request
 test("Settings names the way replies are really paid", async ({
