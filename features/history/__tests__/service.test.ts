@@ -591,6 +591,33 @@ describe("HistoryService: sync", () => {
     );
   });
 
+  it("stops taking messages from relays once sync is turned off, and takes them again once on", async () => {
+    const net = network();
+    const who = person();
+    const k = await keyringOn(net, who);
+    const storage = memoryStorage();
+    const { history } = device({ net, who, storage });
+    history.start();
+    await ready(history);
+
+    storage.setItem(SYNC_KEY, "false");
+    net.publishElsewhere(
+      R2,
+      encodeMessage("c8", ask("while off"), who.pubkey, NOW, k.keys)
+    );
+    // past the live batch window, as a message that shows would have
+    await new Promise((r) => setTimeout(r, 500));
+    expect(
+      history.getConversations().some((c) => c.title === "while off")
+    ).toBe(false);
+
+    storage.setItem(SYNC_KEY, "true");
+    await history.sync();
+    await until(() =>
+      history.getConversations().some((c) => c.title === "while off")
+    );
+  });
+
   it("takes a burst from another device in one disk write and one redraw", async () => {
     const net = network();
     const who = person();

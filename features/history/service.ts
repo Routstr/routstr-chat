@@ -395,8 +395,10 @@ export class HistoryService {
     });
   }
 
-  /** Events from relays: checked, then shown and written to this device. */
+  /** Events from relays: checked, then shown and written to this device.
+   *  With sync turned off none are taken; turning it on pulls them again. */
   private receive(events: NostrEvent[], keys: PnsKeys): void {
+    if (!this.syncOn()) return;
     const fresh = events.filter(
       (event) =>
         !this.authorOf.has(event.id) &&
