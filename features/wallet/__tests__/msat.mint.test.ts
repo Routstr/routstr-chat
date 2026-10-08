@@ -180,7 +180,8 @@ describe("a mint that offers msat", () => {
       expect(paid.state).toBe("paid");
       expect(journal.list("alice")).toEqual([]);
       // the sat coins paid it; the msat ones are untouched
-      expect(sum(held.coins.filter((p) => p.unit === "sat"))).toBeLessThan(8);
+      const satLeft = sum(held.coins.filter((p) => p.unit === "sat"));
+      expect(paid.spent).toBe(8 - satLeft);
       expect(sum(held.coins.filter((p) => p.unit === "msat"))).toBe(2_000);
     });
 

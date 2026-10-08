@@ -30,6 +30,9 @@ export interface RecoveryDeps {
   locks?: LockManager;
   /** Coins of a deposit recovery claimed, for the account's activity. */
   claimed?: (owner: string, proofs: Proof[], unit: string) => void;
+  /** What a Lightning payment recovery found paid took (in `unit`), for the
+   *  account's activity: one whose answer the payer never got. */
+  paid?: (owner: string, spent: number, unit: string) => void;
 }
 
 /** Whether a pass has anything to do with this record: a token waits for the
@@ -168,7 +171,13 @@ export class RecoveryHost {
               .forEach((r) => journal.remove(r.id));
           }
         } else if (record.kind === "melt") {
-          const { state } = await settleMelt(wallet, record, commit, journal);
+          const { state, spent } = await settleMelt(
+            wallet,
+            record,
+            commit,
+            journal
+          );
+          if (spent) this.deps.paid?.(owner, spent, wallet.unit);
           outcomes.set(record.quoteId, state);
         } else if (record.kind === "mint") {
           const proofs = await settleMint(wallet, record, commit, journal);

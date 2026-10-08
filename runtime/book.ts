@@ -32,6 +32,12 @@ export const recovery = new RecoveryHost({
         unit
       ),
     }),
+  // and so is a Lightning payment it found paid
+  paid: (owner, spent, unit) =>
+    legacyActivity.record(owner, {
+      direction: "out",
+      sats: toSats(spent, unit),
+    }),
 });
 
 // the wallet's own hooks get the book here: they may not import the runtime

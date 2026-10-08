@@ -9,6 +9,7 @@ import {
 } from "@cashu/cashu-ts";
 import type { Journal } from "./journal";
 import {
+  amountOf,
   loadOutputs,
   type LandedRecord,
   type MeltRecord,
@@ -89,14 +90,15 @@ export async function settleSwap(
 
 /**
  * A melt, from the payment's state (NUT-05) and its coins' states (NUT-07).
- * Anything they do not settle stays reserved.
+ * Anything they do not settle stays reserved. `spent` is what a paid melt of
+ * ours took for good, in the record's unit: its coins less the change.
  */
 export async function settleMelt(
   wallet: Wallet,
   record: MeltRecord,
   commit: CommitProofs,
   journal: Journal
-): Promise<{ state: MeltOutcome; change: Proof[] }> {
+): Promise<{ state: MeltOutcome; change: Proof[]; spent: number }> {
   // coins first: a quote still UNPAID after this read means the melt never ran,
   // so a coin the mint saw spent was a stale copy that made it refuse the melt
   const { states, unspent } = await unspentOf(wallet, record.inputs);
@@ -105,7 +107,7 @@ export async function settleMelt(
     // a paid quote is final, so coins read after it say whose payment it was
     const after = await unspentOf(wallet, record.inputs);
     if (after.states.some((s) => s.state === CheckStateEnum.PENDING)) {
-      return { state: "pending", change: [] };
+      return { state: "pending", change: [], spent: 0 };
     }
     // a melt spends all its coins at once: unless all are spent, another
     // request paid the quote and these never left
@@ -120,7 +122,13 @@ export async function settleMelt(
       : after.unspent;
     await commit(back, []);
     journal.remove(record.id);
-    return { state: "paid", change: ours ? back : [] };
+    return ours
+      ? {
+          state: "paid",
+          change: back,
+          spent: amountOf(record.inputs) - amountOf(back),
+        }
+      : { state: "paid", change: [], spent: 0 };
   }
   if (
     quote.state === MeltQuoteState.UNPAID &&
@@ -128,9 +136,9 @@ export async function settleMelt(
   ) {
     await commit(unspent, []);
     journal.remove(record.id);
-    return { state: "failed", change: [] };
+    return { state: "failed", change: [], spent: 0 };
   }
-  return { state: "pending", change: [] };
+  return { state: "pending", change: [], spent: 0 };
 }
 
 /**

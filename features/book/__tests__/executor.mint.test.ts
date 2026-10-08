@@ -143,12 +143,16 @@ describe(`the book against a real mint (${PAY_STATE})`, () => {
       expect(journal.list("alice")).toEqual([]);
       // the unused fee reserve came back as change
       expect(sum(wallet.get())).toBeGreaterThan(64 - 10 - quote.fee_reserve);
+      // what it says it took is what the wallet lost
+      expect(result.spent).toBe(64 - sum(wallet.get()));
     } else if (PAY_STATE === "FAILED") {
       expect(result.state).toBe("failed");
+      expect(result.spent).toBe(0);
       expect(journal.list("alice")).toEqual([]);
       expect(sum(wallet.get())).toBe(64);
     } else {
       expect(result.state).toBe("pending");
+      expect(result.spent).toBe(0);
       // what the wallet holds plus what the journal holds is still everything
       expect(sum(wallet.get()) + held(journal.list("alice"))).toBe(64);
       expect(journal.list("alice").map((r) => r.kind)).toEqual(["melt"]);
@@ -187,6 +191,22 @@ describe(`the book against a real mint (${PAY_STATE})`, () => {
   );
 
   it.skipIf(!SETTLED)(
+    "settles a payment whose answer is lost, and says what it took",
+    async () => {
+      const wallet = walletStore(await funded(64));
+      const quote = await meltQuote(10);
+      const restore = loseAnswer("/v1/melt/bolt11");
+      const result = await executorFor(wallet)
+        .pay(MINT, quote, wallet.get())
+        .finally(restore);
+      expect(result.state).toBe("paid");
+      expect(journal.list("alice")).toEqual([]);
+      expect(result.spent).toBe(64 - sum(wallet.get()));
+      expect(result.spent).toBeGreaterThanOrEqual(10);
+    }
+  );
+
+  it.skipIf(!SETTLED)(
     "gives the coins back when the quote was already paid by another payment",
     async () => {
       const quote = await meltQuote(10);
@@ -199,6 +219,8 @@ describe(`the book against a real mint (${PAY_STATE})`, () => {
       const second = walletStore(await funded(32));
       const result = await executorFor(second).pay(MINT, quote, second.get());
       expect(result.state).toBe("paid");
+      // none of it was this payment's
+      expect(result.spent).toBe(0);
       expect(sum(second.get())).toBe(32);
       expect(await states(second.get())).toEqual(
         new Set([CheckStateEnum.UNSPENT])

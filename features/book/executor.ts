@@ -93,6 +93,15 @@ const worth = (proofs: Proof[], unit: string) => {
   return unit === "msat" ? Math.floor(sum / 1000) : unit === "sat" ? sum : 0;
 };
 
+/** How a payment ended. `spent` is what a paid melt took for good, in the
+ *  quote's unit: its coins less the change (0 unless it is paid). */
+export interface Payment {
+  state: MeltOutcome;
+  fee: number;
+  change: Proof[];
+  spent: number;
+}
+
 /** Why a redeem took nothing in: its mint could not be reached (try again
  *  later), the mint says the token is spent, or it refused it otherwise. */
 export class RedeemError extends Error {
@@ -222,7 +231,7 @@ export class WalletExecutor {
     mintUrl: string,
     quote: MeltQuoteBolt11Response,
     coins: Coins
-  ): Promise<{ state: MeltOutcome; fee: number; change: Proof[] }> {
+  ): Promise<Payment> {
     return this.locked(mintUrl, async () =>
       this.payLocked(mintUrl, quote, await read(coins))
     );
@@ -232,7 +241,7 @@ export class WalletExecutor {
     mintUrl: string,
     quote: MeltQuoteBolt11Response,
     proofs: Proof[]
-  ): Promise<{ state: MeltOutcome; fee: number; change: Proof[] }> {
+  ): Promise<Payment> {
     const { journal, owner } = this.deps;
     const wallet = await this.open(mintUrl, quote.unit);
     // only coins in the quote's unit pay it
@@ -314,11 +323,12 @@ export class WalletExecutor {
         () => journal.remove(melt.id),
         (error) => console.error("Could not store the change yet:", error)
       );
-      return { state: "paid", fee, change };
+      const spent = amountOf(send) - amountOf(change);
+      return { state: "paid", fee, change, spent };
     }
     // UNPAID, PENDING or no answer: only the mint's own states decide
     const settled = await settleMelt(wallet, melt, commit, journal).catch(
-      () => ({ state: "pending" as const, change: [] })
+      () => ({ state: "pending" as const, change: [], spent: 0 })
     );
     return { ...settled, fee };
   }

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { walletLock } from "../executor";
-import type { Wallet } from "@cashu/cashu-ts";
+import { CheckStateEnum, MeltQuoteState, type Wallet } from "@cashu/cashu-ts";
 import { Journal, memoryStorage, PREFIX } from "../journal";
 import { RecoveryHost } from "../recovery";
 
@@ -157,6 +157,50 @@ describe("RecoveryHost", () => {
     expect(openWallet).not.toHaveBeenCalled();
     finish();
     await running;
+  });
+
+  it("says what a payment it finds paid took, and nothing for one that failed", async () => {
+    const journal = new Journal(memoryStorage());
+    const melt = (id: string, quoteId: string) => ({
+      v: 1 as const,
+      kind: "melt" as const,
+      id,
+      owner: "alice",
+      mintUrl: "m",
+      unit: "sat",
+      createdAt: 0,
+      keysetId: proof.id,
+      quoteId,
+      inputs: [{ ...proof, secret: id }],
+      blanks: [],
+    });
+    journal.put(melt("paid", "q-paid"));
+    journal.put(melt("failed", "q-failed"));
+    const wallet = {
+      unit: "sat",
+      checkProofsStates: async (ps: { secret: string }[]) =>
+        ps.map((p) => ({
+          state:
+            p.secret === "paid" ? CheckStateEnum.SPENT : CheckStateEnum.UNSPENT,
+        })),
+      checkMeltQuote: async (quote: string) => ({
+        state: quote === "q-paid" ? MeltQuoteState.PAID : MeltQuoteState.UNPAID,
+      }),
+    } as unknown as Wallet;
+    const paid = vi.fn();
+    const outcomes = await new RecoveryHost({
+      journal,
+      openWallet: async () => wallet,
+      locks: navigator.locks,
+      paid,
+    }).settle("alice", () => commit);
+
+    expect(Object.fromEntries(outcomes)).toEqual({
+      "q-paid": "paid",
+      "q-failed": "failed",
+    });
+    expect(paid.mock.calls).toEqual([["alice", 8, "sat"]]);
+    expect(journal.list("alice")).toEqual([]);
   });
 
   it("settles nothing without Web Locks", async () => {

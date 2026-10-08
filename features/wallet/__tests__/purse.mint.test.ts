@@ -194,6 +194,25 @@ it("pays an invoice while a token is being made, from the coins the token left",
   );
 });
 
+it("writes a paid invoice to the activity, as what the wallet lost", async () => {
+  const mint = kit.env.mintUrl;
+  const { store } = memoryCoins(() => "sat");
+  const purse = createPurse("alice", {
+    coins: store,
+    activity,
+    journal: new Journal(memoryStorage()),
+    locks: navigator.locks,
+  });
+  await purse.receive(await kit.mintToken(64));
+  const quote = await purse.quote(mint, await kit.invoice(8));
+  expect(await purse.pay(mint, quote)).toBe("paid");
+  const left = (await purse.balances())[mint];
+  expect(written).toEqual([
+    { direction: "in", sats: 64 },
+    { direction: "out", sats: 64 - left },
+  ]);
+});
+
 it("keeps the provider a token went to on its listing when the handoff fails, for Reclaim to ask", async () => {
   const mint = kit.env.mintUrl;
   const { store } = memoryCoins(() => "sat");

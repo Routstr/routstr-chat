@@ -59,9 +59,10 @@ describe("settleMelt", () => {
       checkMeltQuote: async () => ({ state: MeltQuoteState.PAID }),
     } as unknown as Wallet;
 
-    const { state } = await settleMelt(wallet, melt, commit, journal);
+    const { state, spent } = await settleMelt(wallet, melt, commit, journal);
 
     expect(state).toBe("paid");
+    expect(spent).toBe(0);
     expect(commit).toHaveBeenCalledWith(melt.inputs, []);
     expect(journal.list("alice")).toEqual([]);
   });
@@ -77,11 +78,12 @@ describe("settleMelt", () => {
       mint: { restore: async () => ({ outputs: [], signatures: [] }) },
     } as unknown as Wallet;
 
-    const { state } = await settleMelt(wallet, melt, commit, journal);
+    const { state, spent } = await settleMelt(wallet, melt, commit, journal);
 
     expect(state).toBe("paid");
     // its coins were spent by its own payment: nothing of them comes back
     expect(commit).toHaveBeenCalledWith([], []);
+    expect(spent).toBe(8);
     expect(journal.list("alice")).toEqual([]);
   });
 });
