@@ -18,7 +18,7 @@ interface RefundDeps {
   purse: Purse;
   sdk: Sdk;
   oldCredit: OldCredit;
-  otherDevices: Pick<OtherDevices, "keys" | "drop" | "checked">;
+  otherDevices: Pick<OtherDevices, "keys" | "drop">;
   adopt: Adopt;
   live(): boolean;
 }
@@ -52,7 +52,6 @@ export async function refundCredit(
 ): Promise<RefundResult[]> {
   const { keys } = deps;
   const [, old] = await Promise.all([keys.ready(), deps.oldCredit.load()]);
-  if (!force) await checkOtherDevices(deps);
   if (!force && !hasCredit(keys.storage("direct"), false) && !hasCredit(old)) {
     return [];
   }
@@ -227,10 +226,13 @@ async function refundKeys(
   return results;
 }
 
-/** Asks the provider what each of the other devices' keys holds now, so held
- *  counts that: their backup keeps the balance of when the key was made. */
+/** Asks each provider what the other devices' keys there hold now, so held
+ *  counts that: their backup keeps the balance of when the key was made. All
+ *  at once: one provider that does not answer holds up no other. */
 export async function checkOtherDevices(
-  deps: Pick<RefundDeps, "keys" | "purse" | "sdk" | "otherDevices" | "live">
+  deps: Pick<RefundDeps, "keys" | "purse" | "sdk" | "live"> & {
+    otherDevices: Pick<OtherDevices, "keys" | "checked">;
+  }
 ) {
   const balances = deps.sdk
     .client(
@@ -238,13 +240,15 @@ export async function checkOtherDevices(
       deps.keys.storage("direct")
     )
     .getBalanceManager();
-  for (const key of deps.otherDevices.keys()) {
-    const balance = await balances.getTokenBalance(key.key, key.baseUrl);
-    if (balance.isInvalidApiKey) deps.otherDevices.checked(key.key, 0);
-    else if (!balance.balanceUnknown) {
-      deps.otherDevices.checked(key.key, balance.amount / 1000);
-    }
-  }
+  await Promise.all(
+    deps.otherDevices.keys().map(async (key) => {
+      const balance = await balances.getTokenBalance(key.key, key.baseUrl);
+      if (balance.isInvalidApiKey) deps.otherDevices.checked(key.key, 0);
+      else if (!balance.balanceUnknown) {
+        deps.otherDevices.checked(key.key, balance.amount / 1000);
+      }
+    })
+  );
 }
 
 /** A lost device's keys live only in the relay backup. */

@@ -83,7 +83,16 @@ export function createAccountChat(deps: AccountChatDeps): AccountChat {
   };
   const refund = (force: boolean) =>
     refundCredit(payments, force).finally(readOld);
-  const auto = new AutoRefund(() => refund(false));
+  // what the other devices' keys hold, asked beside each automatic refund
+  // and never holding one up: a provider may not answer for minutes
+  const checkOthers = () =>
+    void checkOtherDevices(payments).catch((error) =>
+      console.warn("Could not ask what other devices' keys hold", error)
+    );
+  const auto = new AutoRefund(() => {
+    checkOthers();
+    return refund(false);
+  });
   const unfollow = chat.subscribe(() => auto.activity(chat.busy()));
   auto.start();
   // the backup arrives after the account opens: keys it lists that this tab
@@ -97,9 +106,7 @@ export function createAccountChat(deps: AccountChatDeps): AccountChat {
       .join(" ");
     if (listed === asked) return;
     asked = listed;
-    checkOtherDevices(payments).catch((error) =>
-      console.warn("Could not ask what other devices' keys hold", error)
-    );
+    checkOthers();
   });
   return {
     chat,

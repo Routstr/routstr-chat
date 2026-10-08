@@ -251,4 +251,33 @@ describe("held", () => {
     expect(fetch).toHaveBeenCalledTimes(2);
     account.dispose();
   });
+  it("asks the providers about the other devices' keys at account open, beside the automatic refund", async () => {
+    const credit = fakeKeys();
+    await credit.keys.ready();
+    let others: ApiKeyEntry[] = [
+      { baseUrl: "https://a.example/", key: "sk-a", balance: 157, lastUsed: 0 },
+    ];
+    // the beforeEach provider holds 120 on every key
+    const account = createAccountChat({
+      owner: "alice",
+      storage: memoryStorage(),
+      history: new FakeHistory(),
+      attachments: passThroughAttachments(),
+      keys: credit.keys,
+      purse: fakePurse().purse,
+      sdk: fakeSdk(),
+      spending: () => ({ mode: "apikeys" }),
+      ...emptyDevice(),
+      otherDevices: {
+        keys: () => others,
+        drop: async () => {},
+        checked: (key, sats) => {
+          others = others.map((k) => (k.key === key ? { ...k, balance: sats } : k));
+        },
+        subscribe: () => () => {},
+      },
+    });
+    await vi.waitFor(() => expect(account.held.get()).toBe(120));
+    account.dispose();
+  });
 });

@@ -6,7 +6,7 @@ import {
   type StorageAdapter,
 } from "@routstr/sdk/wallet";
 import type { Sdk } from "../ports";
-import { refundCredit } from "../refund";
+import { checkOtherDevices, refundCredit } from "../refund";
 import { sdkWallet } from "../request";
 import {
   fakeKeys,
@@ -253,26 +253,6 @@ describe("refundCredit", () => {
     expect(refunded).toEqual([SMALL, LARGE]);
     expect(wallet.received).toContain(`refund-${LARGE}`);
     expect(deps.otherDevices.drop).toHaveBeenCalledWith(["sk-lost-device"]);
-  });
-
-  it("asks the provider what another device's key holds now, also with no credit of its own", async () => {
-    // the other device made it with 157 and has spent 100 of it since
-    provider({ [LARGE]: 57_000 });
-    const { deps, others } = await setup();
-    others.push({
-      baseUrl: LARGE,
-      key: "sk-other-device",
-      balance: 157,
-      lastUsed: Date.now() - 60_000,
-    });
-
-    await refundCredit(deps, false);
-
-    expect(deps.otherDevices.checked).toHaveBeenCalledWith(
-      "sk-other-device",
-      57
-    );
-    expect(deps.otherDevices.drop).not.toHaveBeenCalled();
   });
 
   it("leaves another device's key used in the last five minutes: that device may still be paying with it", async () => {
@@ -638,5 +618,34 @@ describe("refundCredit: a payout the mint calls spent", () => {
 
     expect(result.success).toBe(false);
     expect(adopt).not.toHaveBeenCalled();
+  });
+});
+
+describe("checkOtherDevices", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("asks each provider what another device's key holds now, and one that never answers holds up no other", async () => {
+    // the other device made each with 157: it spent 100 at LARGE, SMALL hangs
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: string) =>
+        String(url).startsWith(SMALL)
+          ? new Promise<Response>(() => {})
+          : Promise.resolve(
+              new Response(JSON.stringify({ balance: 57_000, reserved: 0 }))
+            )
+      )
+    );
+    const { deps, others } = await setup();
+    for (const baseUrl of [SMALL, LARGE]) {
+      others.push({ baseUrl, key: `sk-${baseUrl}`, balance: 157, lastUsed: 0 });
+    }
+
+    void checkOtherDevices(deps);
+
+    await vi.waitFor(() =>
+      expect(deps.otherDevices.checked).toHaveBeenCalledWith(`sk-${LARGE}`, 57)
+    );
+    expect(deps.otherDevices.checked).toHaveBeenCalledTimes(1);
   });
 });
