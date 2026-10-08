@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useObservableState } from "applesauce-react/hooks";
 import { useAccountChat, useHeldCredit } from "@/features/chat/view";
 import { useAccountManager } from "@/features/session/view";
-import { useActivity, useMints, useWallet } from "@/features/wallet/view";
+import { useActivity, useMints, usePurse, useWallet } from "@/features/wallet/view";
 import { useUnclaimedTokensStore } from "@/features/wallet/state/unclaimedTokensStore";
 import { useInvoiceSync } from "@/hooks/useInvoiceSync";
 import { useInvoiceChecker } from "@/hooks/useInvoiceChecker";
@@ -240,6 +240,28 @@ function usePaidUnclaimed() {
   return { list, busy, failed, receive };
 }
 
+/* ── tokens kept while their mint does not answer ────────────────────────── */
+/* Never dropped and never called an invoice: one stays listed until its mint takes it in or refuses
+   it. Trying again asks every waiting token's mint, as opening the wallet does. */
+function useWaitingTokens() {
+  const { waiting } = useActivity();
+  const purse = usePurse();
+  const [busy, setBusy] = useState(false);
+  const [still, setStill] = useState(false);
+  const retry = async () => {
+    setBusy(true);
+    setStill(false);
+    try {
+      if (!(await purse()?.retryPending())) setStill(true);
+    } catch {
+      setStill(true);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return { list: waiting, busy, still, retry };
+}
+
 /* ── home ────────────────────────────────────────────────────────────────── */
 function Home({ go, freeze, bloom }: { go: (v: View, o?: { reopen?: Reopen | null }) => void; freeze: number | null; bloom: number }) {
   const money = useMoney();
@@ -249,6 +271,7 @@ function Home({ go, freeze, bloom }: { go: (v: View, o?: { reopen?: Reopen | nul
   const tokens = useUnclaimedTokensStore((s) => s.unclaimedTokens);
   const invoices = usePendingInvoices();
   const paid = usePaidUnclaimed();
+  const waiting = useWaitingTokens();
   const { per, name } = usePerReply();
   const hero = useRef<HTMLDivElement>(null);
   const ui = useUi();
@@ -537,7 +560,7 @@ function Home({ go, freeze, bloom }: { go: (v: View, o?: { reopen?: Reopen | nul
         </div>
       )}
 
-      {(invoices.length > 0 || tokens.length > 0 || paid.list.length > 0) && (
+      {(invoices.length > 0 || tokens.length > 0 || paid.list.length > 0 || waiting.list.length > 0) && (
         <div className="wl-sec">
           <p className="wl-sec-t">
             <span>Waiting</span>
@@ -562,6 +585,28 @@ function Home({ go, freeze, bloom }: { go: (v: View, o?: { reopen?: Reopen | nul
                   ) : (
                     <button type="button" className="wl-link" aria-label={`Receive the ${fmt(x.amount)} sats from this paid invoice`} disabled={!!paid.busy} onClick={() => void paid.receive(x)}>
                       Receive
+                    </button>
+                  )}
+                </span>
+              </div>
+            ))}
+            {waiting.list.map((x) => (
+              <div className="wl-row wl-held" key={x.id}>
+                <span className="wl-row-t">
+                  <span>Token for {fmt(x.sats)} sats</span>
+                </span>
+                <span className="wl-row-s">
+                  {waiting.still ? `${host(x.mintUrl)} still has not taken it in. The token stays here.` : `Kept. ${host(x.mintUrl)} has not taken it in yet, so it comes in once it does.`}
+                </span>
+                <span className="wl-row-r">
+                  {waiting.busy ? (
+                    <span className="wl-link" data-busy="" aria-disabled="true">
+                      <span className="spin sm" role="status" aria-label="Trying" />
+                      Trying
+                    </span>
+                  ) : (
+                    <button type="button" className="wl-link" aria-label={`Try the ${fmt(x.sats)} sats token again`} onClick={() => void waiting.retry()}>
+                      Try again
                     </button>
                   )}
                 </span>

@@ -448,6 +448,41 @@ test("a token whose mint does not answer is kept and said so, then lands once it
   expect(await kit.redeem(await v2.makeToken(page, 120))).toBe(120);
 });
 
+// a waiting token is listed as what it is for as long as it waits, never as an invoice that
+// runs out, and Try again takes it in once its mint answers
+test("a waiting token is listed as a token until it lands, and Try again takes it in", async ({
+  page,
+  context,
+  kit,
+  appUrl,
+}) => {
+  await seedAccounts(context, [newKey()]);
+  await funded(page, kit, appUrl, 50);
+  const token = await kit.mintToken(40);
+  const mint = `${new URL(kit.env.mintUrl).origin}/**`;
+  await page.route(mint, (route) => route.abort("connectionrefused"));
+  await page.goto(`${appUrl}/?cashu=${encodeURIComponent(token)}`);
+  await v2.ready(page);
+  await expect(page.getByText("Kept 40 sats. They land when the mint answers.")).toBeVisible();
+
+  await page.getByRole("button", { name: /^Open wallet\./ }).first().click();
+  const home = page.getByRole("region", { name: "Wallet", exact: true });
+  await expect(home.getByText("Token for 40 sats")).toBeVisible();
+  await expect(home.getByText(/^Invoice for/)).toHaveCount(0);
+  const again = home.getByRole("button", { name: "Try the 40 sats token again" });
+  // still no answer: it stays, and says so
+  await again.click();
+  await expect(home.getByText(/still has not taken it in\. The token stays here\./)).toBeVisible({ timeout: 30_000 });
+
+  await page.unroute(mint);
+  await again.click();
+  await expect(home.getByText("Token for 40 sats")).toBeHidden({ timeout: 30_000 });
+  await page.keyboard.press("Escape");
+  await expect.poll(() => v2.balance(page).catch(() => 0), { timeout: 30_000 }).toBe(90);
+  await v2.useMint(page, kit.env.mintUrl);
+  expect(await kit.redeem(await v2.makeToken(page, 90))).toBe(90);
+});
+
 // a token kept while its mint did not answer lands once it answers, with the wallet still open:
 // tried on the recovery beat (each minute, and when the tab comes back), no reload needed
 test("a kept token lands once its mint answers, without a reload", async ({

@@ -29,10 +29,7 @@ import type { UsageLog } from "./ports";
 import { toSats, type Purse } from "./purse";
 import { dropSpent } from "./spent";
 import { useWalletStore } from "./state/walletStore";
-import {
-  useTransactionHistoryStore,
-  type PendingTransaction,
-} from "./state/transactionHistoryStore";
+import { useTransactionHistoryStore } from "./state/transactionHistoryStore";
 import { useUnclaimedTokensStore } from "./state/unclaimedTokensStore";
 
 export { peek } from "./purse";
@@ -164,28 +161,23 @@ export function useCoinCount(): number {
 }
 
 /** The signed-in account's activity, newest first: what its wallet sent and
- *  received, and Lightning invoices not paid yet. The wallet writes it; screens
- *  only read it, or clear the records. */
+ *  received, Lightning invoices not paid yet, and received tokens still
+ *  waiting for their mint. The wallet writes it; screens only read it, or
+ *  clear the records. */
 export function useActivity() {
   const entries = useTransactionHistoryStore((s) => s.history);
-  const invoices = useTransactionHistoryStore((s) => s.pendingTransactions);
-  // received tokens whose mint could not be reached yet: not in the balance
-  const waiting = useUnclaimedTokensStore((s) => s.waitingTokens);
-  const pending = useMemo(
-    (): PendingTransaction[] => [
-      ...invoices,
-      ...waiting.map((t) => ({
+  const pending = useTransactionHistoryStore((s) => s.pendingTransactions);
+  // received tokens whose mint could not be reached yet: not in the balance,
+  // and listed until their mint takes them in or refuses them
+  const tokens = useUnclaimedTokensStore((s) => s.waitingTokens);
+  const waiting = useMemo(
+    () =>
+      tokens.map((t) => ({
         id: t.id,
-        direction: "in" as const,
-        amount: String(toSats(t.amount, t.unit)),
-        timestamp: Math.floor(t.createdAt / 1000),
-        status: "pending" as const,
+        sats: toSats(t.amount, t.unit),
         mintUrl: t.mintUrl,
-        quoteId: "",
-        paymentRequest: "",
       })),
-    ],
-    [invoices, waiting]
+    [tokens]
   );
   const clearHistory = useTransactionHistoryStore((s) => s.clearHistory);
   const clear = useCallback(() => {
@@ -193,7 +185,7 @@ export function useActivity() {
     // and the old chat engine's own payment records
     saveTransactionHistory([]);
   }, [clearHistory]);
-  return { entries, pending, clear };
+  return { entries, pending, waiting, clear };
 }
 
 /** Asks the provider a token was handed to what it holds for it (keys'
