@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { useCatalogModels } from "@/features/catalog/view";
 import {
   useExportedKeys,
@@ -40,6 +40,8 @@ export default function Keys() {
   // one fold open at a time: "new", "top:<key>" or "rm:<key>"
   const [open, setOpen] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  // a second press while one runs (Enter and Space still reach a busy button) moves no more money
+  const running = useRef(false);
   // a removal the provider could not finish: the key stays until asked again
   const [failed, setFailed] = useState<{ key: string; why: string } | null>(null);
   const [sats, setSats] = useState("");
@@ -77,6 +79,8 @@ export default function Keys() {
     setOpen((o) => (o === fold ? null : fold));
   };
   const run = async (what: string, job: () => Promise<void>, ok: string, onError: (why: string) => void = toast) => {
+    if (running.current) return;
+    running.current = true;
     setBusy(what);
     try {
       await job();
@@ -86,6 +90,7 @@ export default function Keys() {
     } catch (e) {
       onError(e instanceof Error ? e.message : "That did not work. Nothing was lost.");
     } finally {
+      running.current = false;
       setBusy(null);
     }
   };

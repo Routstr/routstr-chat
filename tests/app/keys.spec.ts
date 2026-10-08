@@ -78,3 +78,28 @@ test("funds a key from the wallet, keeps it through a reload, and empties it bac
   await openKeys(page);
   await expect(keysGroup(page)).toContainText("No keys yet");
 });
+
+// a second press while a key is being made (Enter and Space still reach a busy button)
+// moves no more money
+test("makes one key when Make key is pressed twice", async ({ page, kit, appUrl }) => {
+  await v2.open(page, appUrl);
+  await seedKitProvider(page, kit.coreUrl, "kit-cheap");
+  await v2.fund(page, appUrl, await kit.mintToken(100));
+  await expect.poll(() => wallet(page)).toBe(100);
+
+  await openKeys(page);
+  await keysGroup(page).getByRole("button", { name: "Make a key" }).click();
+  await keysGroup(page).getByLabel("Key name").fill("twice");
+  await keysGroup(page).getByLabel("Sats to put on the key").fill("30");
+  await keysGroup(page).getByRole("button", { name: "Make key" }).focus();
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Enter");
+  await expect(row(page, "twice").first()).toContainText("30 sats", {
+    timeout: 30_000,
+  });
+  // a second key would land just after the first
+  await page.waitForTimeout(5_000);
+  await expect(row(page, "twice")).toHaveCount(1);
+  await closeSettings(page);
+  expect(await wallet(page)).toBe(70);
+});
