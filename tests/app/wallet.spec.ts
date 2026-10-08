@@ -405,3 +405,48 @@ test("lands a token whose swap answer never arrives, and says it was added", asy
   expect(await v2.balance(page)).toBe(30);
   expect(new Set(await kit.tokenStates(token))).toEqual(new Set(["SPENT"]));
 });
+
+// an invoice screen that goes away (here with its account) stops asking the mint about its
+// invoice: the account's own background checker and recovery claim it whenever it is paid
+test("stops asking about an unpaid invoice once its screen is gone", async ({
+  page,
+  context,
+  kit,
+  appUrl,
+}) => {
+  await seedAccounts(context, [newKey(), newKey()]);
+  await v2.open(page, appUrl);
+  await v2.receive(page, await kit.mintToken(10));
+  await v2.useMint(page, kit.env.mintUrl);
+  // the mint says unpaid each time an invoice is asked about
+  await context.route("**/v1/mint/quote/bolt11/*", async (route) => {
+    if (route.request().method() !== "GET") return route.fallback();
+    const res = await route.fetch();
+    await route.fulfill({ response: res, json: { ...(await res.json()), state: "UNPAID" } });
+  });
+  await page
+    .getByRole("button", { name: /^Open wallet\./ })
+    .first()
+    .click();
+  await page
+    .getByRole("region", { name: "Wallet", exact: true })
+    .getByRole("button", { name: "Add", exact: true })
+    .click();
+  const add = page.getByRole("region", { name: "Add funds", exact: true });
+  await add.getByRole("tab", { name: "Lightning" }).click();
+  await add.getByRole("textbox", { name: "Amount in sats" }).fill("100");
+  await add.getByRole("button", { name: "Create invoice" }).click();
+  await expect(add.getByText("Waiting for payment")).toBeVisible();
+  // up from Add to the wallet, and from the wallet back to the chats
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("button", { name: /Accounts and settings$/ }).first()).toBeVisible();
+
+  await v2.switchAccount(page);
+  let asked = 0;
+  page.on("request", (r) => {
+    if (r.method() === "GET" && /\/v1\/mint\/quote\/bolt11\/./.test(r.url())) asked++;
+  });
+  await page.waitForTimeout(12_000);
+  expect(asked).toBe(0);
+});

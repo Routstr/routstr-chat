@@ -56,6 +56,14 @@ export function useWalletReceive(navigateToTab: (tab: "overview" | "invoice") =>
   const [nip60QuoteId, setNip60QuoteId] = useState("");
   const [nip60ExpiresAt, setNip60ExpiresAt] = useState<number | undefined>(undefined);
   const nip60QuoteIdRef = useRef<string>("");
+  // a screen that closes stops asking about its invoice: the background
+  // checker and recovery still claim it whenever it is paid
+  useEffect(
+    () => () => {
+      nip60QuoteIdRef.current = "";
+    },
+    []
+  );
   const nip60InvoiceIdRef = useRef<string>("");
   const [nip60PendingTxId, setNip60PendingTxId] = useState<string | null>(null);
 
