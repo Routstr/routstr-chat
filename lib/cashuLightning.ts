@@ -1,10 +1,4 @@
-import {
-  Mint,
-  Wallet,
-  MeltQuoteResponse,
-  MeltQuoteState,
-  Proof,
-} from "@cashu/cashu-ts";
+import { MeltQuoteResponse, MeltQuoteState, Proof } from "@cashu/cashu-ts";
 
 export interface MeltQuote {
   mintUrl: string;
@@ -13,42 +7,6 @@ export interface MeltQuote {
   quoteId: string;
   state: MeltQuoteState;
   expiresAt?: number;
-}
-
-/**
- * Create a melt quote for a Lightning invoice
- * @param mintUrl The URL of the mint to use
- * @param paymentRequest The Lightning invoice to pay
- * @returns The melt quote
- */
-export async function createMeltQuote(
-  mintUrl: string,
-  paymentRequest: string
-): Promise<MeltQuoteResponse> {
-  try {
-    const mint = new Mint(mintUrl);
-    const keysets = await mint.getKeySets();
-
-    // Get preferred unit: msat over sat if both are active
-    const activeKeysets = keysets.keysets.filter((k) => k.active);
-    const units = [...new Set(activeKeysets.map((k) => k.unit))];
-    const preferredUnit = units.includes("msat")
-      ? "msat"
-      : units.includes("sat")
-        ? "sat"
-        : "not supported";
-
-    const wallet = new Wallet(mint, { unit: preferredUnit });
-
-    // Load mint keysets
-    await wallet.loadMint();
-
-    // Create a melt quote
-    return await wallet.createMeltQuote(paymentRequest);
-  } catch (error) {
-    console.error("Error creating melt quote:", error);
-    throw error;
-  }
 }
 
 /** What a melt quote asks, in whole sats rounded up: a mint that offers msat

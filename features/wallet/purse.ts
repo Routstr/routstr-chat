@@ -25,6 +25,9 @@ export interface Purse {
     /** the provider the handoff gives it to, for Reclaim to ask */
     to?: string
   ): Promise<string>;
+  /** A melt quote for a Lightning invoice at the mint, in a unit this
+   *  account's coins there can pay it in. */
+  quote(mintUrl: string, invoice: string): Promise<MeltQuoteBolt11Response>;
   /** Pays a Lightning invoice's melt quote from this account's coins at the
    *  mint. "pending" means the mint has not settled it yet: the coins stay out
    *  of the wallet and the book settles it later. */
@@ -137,6 +140,8 @@ export function createPurse(
       note({ direction: "out", sats });
       return token;
     },
+    quote: (mintUrl, invoice) =>
+      executor.quote(mintUrl, invoice, () => coins.coins(owner, mintUrl)),
     pay: async (mintUrl, quote) =>
       (await executor.pay(mintUrl, quote, () => coins.coins(owner, mintUrl)))
         .state,

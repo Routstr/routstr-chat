@@ -189,6 +189,34 @@ export const walletLock = (owner: string) => `routstr-chat-wallet:${owner}`;
 export class WalletExecutor {
   constructor(private readonly deps: ExecutorDeps) {}
 
+  /**
+   * A melt quote for this Lightning invoice, in the unit of these coins that
+   * can pay it: the mint's default (msat when it offers it), else another
+   * unit they hold there that covers it (a sat token taken where msat is the
+   * default). Asked outside the lock: pay reads the coins again under it.
+   */
+  async quote(
+    mintUrl: string,
+    invoice: string,
+    coins: Coins
+  ): Promise<MeltQuoteBolt11Response> {
+    const url = normalizeMintUrl(mintUrl);
+    const proofs = await read(coins);
+    const covers = (quote: MeltQuoteBolt11Response, unit: string) =>
+      amountOf(inUnit(proofs, unit)) >= quote.amount + quote.fee_reserve;
+    const wallet = await this.open(url);
+    const quote = await wallet.createMeltQuoteBolt11(invoice);
+    if (covers(quote, wallet.unit)) return quote;
+    for (const unit of new Set(proofs.map(unitOf))) {
+      if (!unit || unit === wallet.unit) continue;
+      const other = await (
+        await this.open(url, unit)
+      ).createMeltQuoteBolt11(invoice);
+      if (covers(other, unit)) return other;
+    }
+    return quote;
+  }
+
   /** Pays a Lightning melt quote from these coins of the wallet. */
   pay(
     mintUrl: string,

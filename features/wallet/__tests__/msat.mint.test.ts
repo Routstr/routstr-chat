@@ -165,11 +165,23 @@ describe("a mint that offers msat", () => {
         amount: 5000,
       });
 
-      const wallet = new Wallet(new Mint(MSAT_MINT), { unit: "msat" });
-      await wallet.loadMint();
-      const quote = await wallet.createMeltQuote(await kit.invoice(3));
+      const quote = await executor.quote(MSAT_MINT, await kit.invoice(3), read);
+      expect(quote.unit).toBe("msat");
       expect((await executor.pay(MSAT_MINT, quote, read)).state).toBe("paid");
       expect(journal.list("alice")).toEqual([]);
+    });
+
+    it("quotes and pays an invoice from the sat coins when only they cover it", async () => {
+      // 2 sats in msat coins and 8 in sat coins: Send shows 10
+      const { executor, journal, held, read } = await holding(2_000, 8);
+      const quote = await executor.quote(MSAT_MINT, await kit.invoice(3), read);
+      expect(quote.unit).toBe("sat");
+      const paid = await executor.pay(MSAT_MINT, quote, read);
+      expect(paid.state).toBe("paid");
+      expect(journal.list("alice")).toEqual([]);
+      // the sat coins paid it; the msat ones are untouched
+      expect(sum(held.coins.filter((p) => p.unit === "sat"))).toBeLessThan(8);
+      expect(sum(held.coins.filter((p) => p.unit === "msat"))).toBe(2_000);
     });
 
     it("sends from the sat coins when only they cover it", async () => {

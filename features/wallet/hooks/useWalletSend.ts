@@ -9,7 +9,7 @@ import {
   formatBalance,
   type UnclaimedToken,
 } from "@/features/wallet";
-import { createMeltQuote, quoteInSats } from "@/lib/cashuLightning";
+import { quoteInSats } from "@/lib/cashuLightning";
 import { toSats } from "../purse";
 import { reclaim } from "../reclaim";
 import { useWalletStore } from "../state/walletStore";
@@ -196,7 +196,10 @@ export function useWalletSend() {
         nip60ProcessingInvoiceRef.current === value && quoteSeq.current === seq;
       try {
         setIsNip60LoadingInvoice(true);
-        const meltQuote = await createMeltQuote(mintUrl, value);
+        const from = purse();
+        if (!from) throw new Error("User not logged in");
+        // in a unit the account's coins at the mint can pay it in
+        const meltQuote = await from.quote(mintUrl, value);
         if (!current()) return;
         meltQuoteRef.current = { mintUrl, quote: meltQuote, invoice: value };
         setQuoteMintUrl(mintUrl);
@@ -228,7 +231,7 @@ export function useWalletSend() {
         }
       }
     },
-    [cashuStore.activeMintUrl, addInvoice]
+    [cashuStore.activeMintUrl, addInvoice, purse]
   );
 
   const handleNip60PaymentCancel = useCallback(() => {
