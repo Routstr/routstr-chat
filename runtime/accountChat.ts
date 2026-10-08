@@ -1,3 +1,4 @@
+import { createMemoryDriver } from "@routstr/sdk/storage";
 import { createAttachments, filesIn } from "@/features/chat/attachments";
 import { owned } from "@/features/session/owned";
 import type { OtherDevices } from "@/features/keys/backup";
@@ -7,6 +8,7 @@ import { keysFor } from "@/features/keys/service";
 import { createFileStore } from "@/platform/files";
 import { mainStoreDriver } from "@/platform/sdk";
 import type { AccountChatView } from "@/features/chat/view";
+import { isMains } from "./book";
 import { createAccountChat, type AccountChat } from "./chat";
 import { node } from "./node";
 import { activeHistory } from "./nostr";
@@ -27,7 +29,8 @@ let current: {
   chat: ActiveChat;
 } | null = null;
 const listeners = new Set<() => void>();
-// main's old store, opened once per tab and shared by every account
+// main's old store, opened once per tab. Its credit is the account main had
+// signed in, as main's coins are (book.ts isMains): any other sees none
 let mainOld: ReturnType<typeof mainStoreDriver> | undefined;
 const mainStore = () => (mainOld ??= mainStoreDriver());
 
@@ -77,7 +80,10 @@ function build(
             : "apikeys",
         node: node.paysFor(owner) ?? undefined,
       }),
-      oldCredit: oldCredit(() => node.paysFor(owner)?.url, mainStore()),
+      oldCredit: oldCredit(
+        () => node.paysFor(owner)?.url,
+        isMains(owner) ? mainStore() : createMemoryDriver()
+      ),
       otherDevices,
       adopt: (token, baseUrl) => exportedKeysFor(owner).adopt(token, baseUrl),
     }),

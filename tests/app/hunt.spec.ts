@@ -245,6 +245,54 @@ test(`first run${chosen ? "" : ", nothing chosen"}: who's writing, a new account
   expect(await kit.redeem(await v2.makeToken(page, left))).toBe(left);
 });
 
+// main's old shared credit is the account main had signed in (the first v2 opened with on
+// this device), as main's coins are: another account that opens first never takes it
+test("main's old provider credit goes to main's account, not to another that opens first", async ({
+  page,
+  context,
+  kit,
+  appUrl,
+}) => {
+  const [other, mains] = [newKey(), newKey()];
+  const mainsPubkey = getPublicKey(nip19.decode(mains).data as Uint8Array);
+  await seedAccounts(context, [other, mains]);
+  await context.addInitScript((pubkey) => {
+    if (!localStorage.getItem("cashu_op:main-owner")) {
+      localStorage.setItem("cashu_op:main-owner", pubkey);
+    }
+  }, mainsPubkey);
+  await v2.open(page, appUrl);
+  await seedKitProvider(page, kit.coreUrl, "kit-cheap");
+  // main left a token at the kit's core as a key, in its own shared store
+  const key = await kit.mintToken(20);
+  await page.evaluate(
+    ({ entry }) =>
+      new Promise<void>((resolve, reject) => {
+        const open = indexedDB.open("routstr-sdk");
+        open.onupgradeneeded = () => open.result.createObjectStore("sdk_storage");
+        open.onerror = () => reject(open.error);
+        open.onsuccess = () => {
+          const tx = open.result.transaction("sdk_storage", "readwrite");
+          tx.objectStore("sdk_storage").put(JSON.stringify([entry]), "api_keys");
+          tx.oncomplete = () => (open.result.close(), resolve());
+          tx.onerror = () => reject(tx.error);
+        };
+      }),
+    { entry: { baseUrl: kit.coreUrl, key, balance: 0, reserved: 0, lastUsed: null } }
+  );
+  await page.reload();
+  await v2.ready(page);
+  // the other account's automatic refund runs at open: it leaves main's credit alone
+  await page.waitForTimeout(8_000);
+  expect(await v2.balance(page)).toBe(0);
+
+  await v2.switchAccount(page);
+  await expect.poll(() => v2.balance(page).catch(() => 0), { timeout: 30_000 }).toBeGreaterThanOrEqual(19);
+  const left = await v2.balance(page);
+  await v2.useMint(page, kit.env.mintUrl);
+  expect(await kit.redeem(await v2.makeToken(page, left))).toBe(left);
+});
+
 /** Puts `sats` of credit in a key of the account's at `baseUrl` (main's key store, the SDK's
  *  format), used just now so no automatic return takes it, then reloads. */
 async function holdAt(page: Page, nsec: string, baseUrl: string, sats: number) {
