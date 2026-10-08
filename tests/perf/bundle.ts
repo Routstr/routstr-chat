@@ -38,7 +38,8 @@ export function bundleSize(outDir: string): BundleSize {
           .filter((src): src is string => !!src)
       ),
     ]
-      .map((src) => path.join(outDir, src.split("?")[0]))
+      // a build for a sub-path (/v2) names its files under it; they sit in out/_next all the same
+      .map((src) => path.join(outDir, src.split("?")[0].replace(/^.*(?=\/_next\/)/, "")))
       .filter((f) => fs.existsSync(f));
   const homeJs = named(/<script[^>]*>/g, /src="([^"]+\.js[^"]*)"/);
   const homeCss = named(/<link[^>]*>/g, /href="([^"]+\.css[^"]*)"/);
