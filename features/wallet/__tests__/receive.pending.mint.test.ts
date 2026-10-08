@@ -230,6 +230,21 @@ it("throws and keeps nothing when the mint refuses the token", async () => {
   expect(kinds()).toEqual([]);
 });
 
+it("throws and keeps nothing for a token whose proofs the mint cannot verify", async () => {
+  const wallet = new Wallet(new Mint(MINT));
+  await wallet.loadMint();
+  const real = wallet.decodeToken(await kit.mintToken(8)).proofs;
+  // a proof whose signature is someone else's: never receivable
+  const other = wallet.decodeToken(await kit.mintToken(8)).proofs;
+  const forged = getEncodedTokenV4({
+    mint: MINT,
+    unit: "sat",
+    proofs: [{ ...real[0], C: other[0].C }],
+  });
+  await expect(purse.take(forged)).rejects.toThrow();
+  expect(kinds()).toEqual([]);
+});
+
 it("claims nothing for a token another tab settled while this one waited for the lock", async () => {
   const token = await kit.mintToken(24);
   let release!: () => void;

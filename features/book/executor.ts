@@ -79,10 +79,11 @@ const read = async (coins: Coins) =>
 const REACH_MS = 10_000;
 // NUT-00: the token's proofs were spent already
 const SPENT = 11001;
-// The codes that say a token's proofs can never be received: spent, not
-// valid, of a keyset the mint does not know, or given twice. Any other refusal
-// may pass (nutshell answers every unexpected failure with code 0)
-const UNUSABLE = new Set([SPENT, 10003, 12001, 11007]);
+// The codes that say a token's proofs can never be received: spent, not valid
+// (10003, and nutshell's 10001), locked by conditions this wallet cannot meet
+// (nutshell's 11000), of a keyset the mint does not know, or given twice. Any
+// other refusal may pass (nutshell answers every unexpected failure with code 0)
+const UNUSABLE = new Set([SPENT, 10001, 10003, 11000, 11007, 12001]);
 
 /** A stored coin's unit (the coin store writes it); none on a bare proof. */
 const unitOf = (proof: Proof) => (proof as { unit?: string }).unit;
