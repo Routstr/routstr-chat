@@ -406,6 +406,49 @@ test("lands a token whose swap answer never arrives, and says it was added", asy
   expect(new Set(await kit.tokenStates(token))).toEqual(new Set(["SPENT"]));
 });
 
+// an invoice is marked paid only by its own claim: other money of about its size landing
+// while it waits (a refund, a token received in another tab) leaves it waiting
+test("keeps an invoice waiting while other money of its size lands", async ({
+  page,
+  context,
+  kit,
+  appUrl,
+}) => {
+  await seedAccounts(context, [newKey()]);
+  await v2.open(page, appUrl);
+  await v2.receive(page, await kit.mintToken(10));
+  await v2.useMint(page, kit.env.mintUrl);
+  // the mint says unpaid each time an invoice is asked about, in every tab
+  await context.route("**/v1/mint/quote/bolt11/*", async (route) => {
+    if (route.request().method() !== "GET") return route.fallback();
+    const res = await route.fetch();
+    await route.fulfill({ response: res, json: { ...(await res.json()), state: "UNPAID" } });
+  });
+
+  await page
+    .getByRole("button", { name: /^Open wallet\./ })
+    .first()
+    .click();
+  await page
+    .getByRole("region", { name: "Wallet", exact: true })
+    .getByRole("button", { name: "Add", exact: true })
+    .click();
+  const add = page.getByRole("region", { name: "Add funds", exact: true });
+  await add.getByRole("tab", { name: "Lightning" }).click();
+  await add.getByRole("textbox", { name: "Amount in sats" }).fill("100");
+  await add.getByRole("button", { name: "Create invoice" }).click();
+  await expect(add.getByText("Waiting for payment")).toBeVisible();
+
+  // 100 sats of other money, received in another tab
+  const other = await context.newPage();
+  await v2.open(other, appUrl);
+  await v2.receive(other, await kit.mintToken(100));
+  await expect.poll(() => v2.balance(page), { timeout: 30_000 }).toBe(110);
+  await page.waitForTimeout(2_000);
+  await expect(add.getByText("Added to your wallet")).toBeHidden();
+  await expect(add.getByText("Waiting for payment")).toBeVisible();
+});
+
 // an invoice screen that goes away (here with its account) stops asking the mint about its
 // invoice: the account's own background checker and recovery claim it whenever it is paid
 test("stops asking about an unpaid invoice once its screen is gone", async ({

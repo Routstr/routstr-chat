@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { peek, useDepositMint, useMints, usePurse, useWallet } from "@/features/wallet/view";
 import { useWalletReceive } from "@/features/wallet/hooks/useWalletReceive";
+import { useInvoiceSync } from "@/hooks/useInvoiceSync";
 import { useEnsureAccount } from "../useEnsureAccount";
 
 export type FundStatus = "idle" | "creating" | "waiting" | "paid" | "error";
@@ -11,7 +12,7 @@ export type FundStatus = "idle" | "creating" | "waiting" | "paid" | "error";
  *  the first swap runs. */
 export type Redeemed = { sats: number; pending: boolean } | "refused" | "busy";
 
-/** What a kept token says: the wallet tries it again when it next loads. */
+/** What a kept token says: the wallet tries it again on its own. */
 export const KEPT = "Kept. Its mint did not answer yet, so these sats come in once it does.";
 
 /* Adding money, for every surface that asks for it. It never handles proofs
@@ -20,7 +21,8 @@ export const KEPT = "Kept. Its mint did not answer yet, so these sats come in on
    the background checker if this surface closes), tokens through the
    account's purse. This file only sequences and describes. */
 export function useFunding() {
-  const { total: balance, balances } = useWallet();
+  const { balances } = useWallet();
+  const { invoices } = useInvoiceSync();
   const cashuStore = useMints();
   const purse = usePurse();
   const ensureAccount = useEnsureAccount();
@@ -28,11 +30,9 @@ export function useFunding() {
   const [amount, setAmount] = useState(0);
   const [tokenBusy, setTokenBusy] = useState(false);
   const [message, setMessage] = useState("");
-  const baseline = useRef<number | null>(null);
   const amountRef = useRef(0);
 
   const done = useCallback((sats: number) => {
-    baseline.current = null;
     // what actually landed is what the surfaces show and say
     setAmount(sats);
     setStatus("paid");
@@ -43,17 +43,14 @@ export function useFunding() {
     if (tab === "overview") done(amountRef.current);
   });
 
-  // the background checker can mint it too; either way the balance rises.
-  // Only a rise the size of this invoice counts as this invoice: money from
-  // somewhere else (an older invoice paid late, a reply spending) moves the
-  // baseline instead, and this one keeps waiting
+  // the background checker can claim it too: then its own invoice says so.
+  // Never a balance that happens to rise by about as much (a refund, an older
+  // invoice paid late): that is other money, and this one keeps waiting
+  const quoteId = receive.nip60QuoteId;
+  const claimed = !!quoteId && invoices.some((i) => i.quoteId === quoteId && (i.state as string) === "ISSUED");
   useEffect(() => {
-    if (status === "paid" || baseline.current === null) return;
-    const rise = balance - baseline.current;
-    const want = amountRef.current;
-    if (rise >= want * 0.98 && rise <= want * 1.02 + 2) done(want);
-    else if (rise < 0 || rise > want * 1.02 + 2) baseline.current = balance;
-  }, [balance, status, done]);
+    if (claimed && status !== "paid") done(amountRef.current);
+  }, [claimed, status, done]);
 
   const [seenError, setSeenError] = useState("");
   if (receive.error !== seenError) {
@@ -98,7 +95,6 @@ export function useFunding() {
   useEffect(() => {
     if (!queued || made.current === queued || !cashuStore.activeMintUrl) return;
     made.current = queued;
-    baseline.current = balance;
     void receive.createNip60Invoice(queued.sats).then(() =>
       setStatus((s) => (s === "creating" ? "waiting" : s))
     );
@@ -107,7 +103,6 @@ export function useFunding() {
   const reset = useCallback(() => {
     setStatus("idle");
     setMessage("");
-    baseline.current = null;
     receive.reset();
   }, [receive.reset]);
 
