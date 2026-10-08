@@ -504,8 +504,12 @@ export class WalletExecutor {
         answers.set(record.mintUrl, this.reachable(record.mintUrl));
       }
       if (!(await answers.get(record.mintUrl))) continue;
-      const got = await this.locked(record.mintUrl, () =>
-        this.landReceive(record)
+      const { journal, owner } = this.deps;
+      // taken in meanwhile (by the take that wrote it, another round or tab): done
+      const got = await this.locked(record.mintUrl, async () =>
+        journal.list(owner).some((r) => r.id === record.id)
+          ? this.landReceive(record)
+          : null
       ).catch((error) => {
         console.error("A waiting token was refused:", error);
         return null;

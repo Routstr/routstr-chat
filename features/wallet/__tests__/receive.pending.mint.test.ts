@@ -201,6 +201,28 @@ it("keeps the new proofs of a token that shares some with a waiting one, and lan
   expect(await purse.balances()).toEqual({ [MINT]: 24 });
 });
 
+it("lands a waiting token once when two rounds try it at once, and calls neither a refusal", async () => {
+  const token = await kit.mintToken(12);
+  const restore = cutOff(MINT);
+  try {
+    expect((await purse.take(token)).pending).toBe(true);
+  } finally {
+    restore();
+  }
+  const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
+  try {
+    const rounds = await Promise.all([
+      purse.retryPending(),
+      purse.retryPending(),
+    ]);
+    expect(rounds.sort()).toEqual([0, 12]);
+    expect(errors).not.toHaveBeenCalled();
+  } finally {
+    errors.mockRestore();
+  }
+  expect(await purse.balances()).toEqual({ [MINT]: 12 });
+});
+
 it("throws and keeps nothing when the mint refuses the token", async () => {
   const token = await kit.mintToken(8);
   await kit.redeem(token); // spent before it ever reaches this wallet
