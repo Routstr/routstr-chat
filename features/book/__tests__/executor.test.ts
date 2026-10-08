@@ -212,4 +212,38 @@ describe("WalletExecutor", () => {
 
     expect((await executor.pay("m", quote, proofs)).state).toBe("paid");
   });
+  it("quotes an invoice in a bitcoin unit only, never in usd coins the balance does not count", async () => {
+    const asked: string[] = [];
+    const openWallet = vi.fn(
+      async (_url: string, unit = "msat") =>
+        ({
+          unit,
+          getMintInfo: () => ({ isSupported: () => ({ supported: true }) }),
+          createMeltQuoteBolt11: async () => {
+            asked.push(unit);
+            return {
+              quote: unit,
+              amount: unit === "msat" ? 10_000_000 : 600,
+              fee_reserve: 0,
+              unit,
+            };
+          },
+        }) as unknown as Wallet
+    );
+    const executor = new WalletExecutor({
+      owner: "alice",
+      journal: new Journal(memoryStorage()),
+      commitFor: () => vi.fn(),
+      openWallet,
+      locks: navigator.locks,
+    });
+    // 5,000 sats in msat coins and 700 usd cents
+    const coins = [
+      { id: "00aa", amount: 5_000_000, secret: "m", C: "02", unit: "msat" },
+      { id: "00bb", amount: 700, secret: "u", C: "02", unit: "usd" },
+    ];
+    const quote = await executor.quote("m", "lnbc1", coins);
+    expect(quote.unit).toBe("msat");
+    expect(asked).toEqual(["msat"]);
+  });
 });

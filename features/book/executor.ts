@@ -217,7 +217,8 @@ export class WalletExecutor {
     const quote = await wallet.createMeltQuoteBolt11(invoice);
     if (covers(quote, wallet.unit)) return quote;
     for (const unit of new Set(proofs.map(unitOf))) {
-      if (!unit || unit === wallet.unit) continue;
+      // another bitcoin unit only: what Send shows and checks is in sats
+      if (unit === wallet.unit || (unit !== "sat" && unit !== "msat")) continue;
       const other = await (
         await this.open(url, unit)
       ).createMeltQuoteBolt11(invoice);
