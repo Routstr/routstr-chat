@@ -88,6 +88,55 @@ describe("settleMelt", () => {
   });
 });
 
+describe("a request whose answer never came, still in flight", () => {
+  const unspent = {
+    checkProofsStates: async () => [{ state: CheckStateEnum.UNSPENT }],
+    checkMeltQuote: async () => ({ state: MeltQuoteState.UNPAID }),
+    mint: { restore: async () => ({ outputs: [], signatures: [] }) },
+  } as unknown as Wallet;
+  const swap: SwapRecord = {
+    v: 1,
+    kind: "swap",
+    id: "s0",
+    owner: "alice",
+    mintUrl: "m",
+    createdAt: 0,
+    keysetId: melt.keysetId,
+    inputs: melt.inputs,
+    outputs: [],
+  };
+
+  it("keeps a swap the mint has not run yet, coins and all, since it may still run it", async () => {
+    const journal = new Journal(memoryStorage());
+    const young = { ...swap, createdAt: Date.now() };
+    journal.put(young);
+    const commit = vi.fn();
+    expect(await settleSwap(unspent, young, commit, journal)).toBeNull();
+    expect(commit).not.toHaveBeenCalled();
+    expect(journal.list("alice")).toHaveLength(1);
+
+    // the mint refused it: it ran, so the coins come back at once
+    expect(await settleSwap(unspent, young, commit, journal, true)).toEqual([]);
+    expect(commit).toHaveBeenCalledWith(melt.inputs, []);
+    expect(journal.list("alice")).toEqual([]);
+  });
+
+  it("keeps an unpaid melt pending while it may still run, and fails it once the mint answered", async () => {
+    const journal = new Journal(memoryStorage());
+    const young = { ...melt, createdAt: Date.now() };
+    journal.put(young);
+    const commit = vi.fn();
+    expect((await settleMelt(unspent, young, commit, journal)).state).toBe(
+      "pending"
+    );
+    expect(commit).not.toHaveBeenCalled();
+    expect(
+      (await settleMelt(unspent, young, commit, journal, true)).state
+    ).toBe("failed");
+    expect(commit).toHaveBeenCalledWith(melt.inputs, []);
+  });
+});
+
 describe("settleSwap", () => {
   it("restores a lost answer's coins from a keyset the mint has since rotated out", async () => {
     // a keyset the wallet has no keys loaded for any more

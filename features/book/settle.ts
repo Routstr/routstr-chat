@@ -22,6 +22,15 @@ import {
  * lost or the app was closed. Anything the mint cannot answer yet stays.
  */
 
+/** How long a request whose answer never came may still run at the mint (it
+ *  may sit in a queue there after the connection broke). Until then a record
+ *  the mint has not acted on yet stays, its coins kept out of the wallet, so
+ *  a request that runs late still finds its outputs written down. A mint's
+ *  own refusal is an answer: the request ran, and nothing waits. */
+export const IN_FLIGHT_MS = 2 * 60_000;
+const mayStillRun = (record: { createdAt: number }, answered: boolean) =>
+  !answered && Date.now() - record.createdAt < IN_FLIGHT_MS;
+
 /** Stores proofs in the wallet of the record's account (and removes others). */
 export type CommitProofs = (add: Proof[], remove: Proof[]) => Promise<unknown>;
 
@@ -62,17 +71,19 @@ async function restoreOutputs(
 }
 
 /**
- * A swap whose answer never came. If the mint signed our outputs they come
- * back from restore. If it signed nothing, our own unspent inputs come back;
- * a received token's inputs are the sender's, so they stay with the token.
- * Returns the coins restored, or null while the mint is still working on it
- * (the record stays).
+ * A swap whose answer never came, or that the mint refused (`answered`). If
+ * the mint signed our outputs they come back from restore. If it signed
+ * nothing, our own unspent inputs come back; a received token's inputs are the
+ * sender's, so they stay with the token. Returns the coins restored, or null
+ * while the mint is still working on it or may still run it (the record
+ * stays).
  */
 export async function settleSwap(
   wallet: Wallet,
   record: SwapRecord,
   commit: CommitProofs,
-  journal: Journal
+  journal: Journal,
+  answered = false
 ): Promise<Proof[] | null> {
   // coins first: a swap still running holds its inputs PENDING, so restore runs only after
   const { states, unspent } = await unspentOf(wallet, record.inputs);
@@ -82,6 +93,7 @@ export async function settleSwap(
     record.keysetId,
     loadOutputs(record.outputs)
   );
+  if (!restored.length && mayStillRun(record, answered)) return null;
   if (restored.length) await commit(restored, []);
   else if (!record.incoming) await commit(unspent, []);
   journal.remove(record.id);
@@ -90,14 +102,17 @@ export async function settleSwap(
 
 /**
  * A melt, from the payment's state (NUT-05) and its coins' states (NUT-07).
- * Anything they do not settle stays reserved. `spent` is what a paid melt of
- * ours took for good, in the record's unit: its coins less the change.
+ * Anything they do not settle stays reserved, as does an unpaid one whose
+ * request may still run (`answered`: the mint answered it). `spent` is what a
+ * paid melt of ours took for good, in the record's unit: its coins less the
+ * change.
  */
 export async function settleMelt(
   wallet: Wallet,
   record: MeltRecord,
   commit: CommitProofs,
-  journal: Journal
+  journal: Journal,
+  answered = false
 ): Promise<{ state: MeltOutcome; change: Proof[]; spent: number }> {
   // coins first: a quote still UNPAID after this read means the melt never ran,
   // so a coin the mint saw spent was a stale copy that made it refuse the melt
@@ -132,7 +147,8 @@ export async function settleMelt(
   }
   if (
     quote.state === MeltQuoteState.UNPAID &&
-    !states.some((s) => s.state === CheckStateEnum.PENDING)
+    !states.some((s) => s.state === CheckStateEnum.PENDING) &&
+    !mayStillRun(record, answered)
   ) {
     await commit(unspent, []);
     journal.remove(record.id);

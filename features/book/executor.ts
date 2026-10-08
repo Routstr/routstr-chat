@@ -305,10 +305,14 @@ export class WalletExecutor {
       await commit([], send);
     }
     let answer;
+    // the mint refusing it is an answer too: then the request ran
+    let answered = false;
     try {
       answer = await wallet.completeMelt(preview);
+      answered = true;
     } catch (error) {
       console.error("Melt request did not complete:", error);
+      answered = error instanceof MintOperationError;
       await afterLostAnswer();
     }
     if (answer?.quote.state === MeltQuoteState.PAID) {
@@ -332,9 +336,13 @@ export class WalletExecutor {
       return { state: "paid", fee, change, spent };
     }
     // UNPAID, PENDING or no answer: only the mint's own states decide
-    const settled = await settleMelt(wallet, melt, commit, journal).catch(
-      () => ({ state: "pending" as const, change: [], spent: 0 })
-    );
+    const settled = await settleMelt(
+      wallet,
+      melt,
+      commit,
+      journal,
+      answered
+    ).catch(() => ({ state: "pending" as const, change: [], spent: 0 }));
     return { ...settled, fee };
   }
 
@@ -747,9 +755,13 @@ export class WalletExecutor {
     } catch (error) {
       // no answer is not "no swap": settle from what the mint holds
       await afterLostAnswer();
-      const restored = await settleSwap(wallet, record, commit, journal).catch(
-        () => null
-      );
+      const restored = await settleSwap(
+        wallet,
+        record,
+        commit,
+        journal,
+        error instanceof MintOperationError
+      ).catch(() => null);
       // a token received: the coins the mint signed for it are ours, so it went through
       if (!ours.length && restored?.length) {
         return { id: record.id, keep: restored, send: [] };

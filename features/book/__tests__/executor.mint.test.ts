@@ -14,7 +14,7 @@
  * the rules v2 adds: token send and receive journaled, owners, one pass across tabs.
  */
 import fs from "fs";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   CheckStateEnum,
   getEncodedTokenV4,
@@ -28,7 +28,7 @@ import { Journal, memoryStorage, storedKeys } from "../journal";
 import { openWallet } from "../mint";
 import { RecoveryHost } from "../recovery";
 import type { BookRecord, MeltRecord } from "../records";
-import { settleMelt } from "../settle";
+import { IN_FLIGHT_MS, settleMelt } from "../settle";
 
 // the shared kit's mints, unless a run names its own (the FAILED and PENDING modes)
 const MINT = process.env.CASHU_TEST_MINT ?? getKit().env.mintUrl;
@@ -124,6 +124,17 @@ function executorFor(wallet: ReturnType<typeof walletStore>, owner = "alice") {
 
 function recovery() {
   return new RecoveryHost({ journal, locks: navigator.locks });
+}
+
+/** Runs `step` once a request whose answer was lost can no longer run. */
+async function later<T>(step: () => Promise<T>): Promise<T> {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(Date.now() + IN_FLIGHT_MS + 1_000);
+  try {
+    return await step();
+  } finally {
+    vi.useRealTimers();
+  }
 }
 
 beforeEach(() => {
@@ -396,7 +407,7 @@ describe(`the book against a real mint (${PAY_STATE})`, () => {
   );
 
   it.skipIf(!SETTLED)(
-    "gets the coins back when a token send never reached the mint",
+    "keeps a token send's coins out while its request may still run, then gives them back",
     async () => {
       const wallet = walletStore(await funded(64));
       const real = globalThis.fetch;
@@ -414,9 +425,57 @@ describe(`the book against a real mint (${PAY_STATE})`, () => {
       } finally {
         globalThis.fetch = real;
       }
-      // nothing was swapped, so the coins taken out for it come back as they were
+      // the request may still be queued at the mint: its coins wait in the book
+      expect(sum(wallet.get())).toBe(0);
+      expect(held(journal.list("alice"))).toBe(64);
+      await recovery().settle("alice", () => wallet.commit);
+      expect(sum(wallet.get())).toBe(0);
+
+      // it never ran: once it no longer can, the coins come back as they were
+      await later(() => recovery().settle("alice", () => wallet.commit));
       expect(sum(wallet.get())).toBe(64);
       expect(journal.list("alice")).toEqual([]);
+      expect(await states(wallet.get())).toEqual(
+        new Set([CheckStateEnum.UNSPENT])
+      );
+    }
+  );
+
+  it.skipIf(!SETTLED)(
+    "restores a swap the mint runs only after its answer was lost and the coins were checked",
+    async () => {
+      const wallet = walletStore(await funded(64));
+      const real = globalThis.fetch;
+      let ran: Promise<unknown> = Promise.resolve();
+      // the request sits in a queue at the mint: it runs well after the client gave up
+      globalThis.fetch = (async (
+        input: RequestInfo | URL,
+        init?: RequestInit
+      ) => {
+        if (String(input).endsWith("/v1/swap")) {
+          ran = new Promise((r) => setTimeout(r, 3_000)).then(() =>
+            real(input, init)
+          );
+          throw new TypeError("network error (answer lost on purpose)");
+        }
+        return real(input, init);
+      }) as typeof fetch;
+      try {
+        await expect(
+          executorFor(wallet).send(MINT, 21, wallet.get(), { track: true })
+        ).rejects.toThrow();
+      } finally {
+        globalThis.fetch = real;
+      }
+      await ran;
+
+      // the outputs it signed are still written down: they come back
+      await recovery().settle("alice", () => wallet.commit);
+      expect(sum(wallet.get())).toBe(64);
+      expect(journal.list("alice")).toEqual([]);
+      expect(await states(wallet.get())).toEqual(
+        new Set([CheckStateEnum.UNSPENT])
+      );
     }
   );
 
@@ -590,8 +649,11 @@ describe(`the book against a real mint (${PAY_STATE})`, () => {
       }
       // the sender's coins are not ours until the mint swaps them
       expect(wallet.get()).toEqual([]);
-      expect(journal.list("alice")).toEqual([]);
       expect(sum(await executorFor(wallet).receive(token))).toBe(16);
+      // the first swap may still have run: its record goes once it no longer can
+      await later(() => recovery().settle("alice", () => wallet.commit));
+      expect(journal.list("alice")).toEqual([]);
+      expect(sum(wallet.get())).toBe(16);
     }
   );
 
