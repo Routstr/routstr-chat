@@ -195,7 +195,16 @@ describe("createAccountChat", () => {
 });
 
 describe("held", () => {
-  it("counts the keys the account's other devices backed up, and follows them", async () => {
+  it("counts the keys the account's other devices backed up, and follows what their providers say", async () => {
+    // a.example says its key holds 50 now; b.example does not answer
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) =>
+        String(url).startsWith("https://a.example/")
+          ? new Response(JSON.stringify({ balance: 50_000, reserved: 0 }))
+          : new Response("down", { status: 502 })
+      )
+    );
     const credit = fakeKeys();
     await credit.keys.ready();
     let others: ApiKeyEntry[] = [];
@@ -213,6 +222,10 @@ describe("held", () => {
       otherDevices: {
         keys: () => others,
         drop: async () => {},
+        checked: (key, sats) => {
+          others = others.map((k) => (k.key === key ? { ...k, balance: sats } : k));
+          listeners.forEach((listener) => listener());
+        },
         subscribe: (listener) => {
           listeners.add(listener);
           return () => listeners.delete(listener);
@@ -233,6 +246,9 @@ describe("held", () => {
 
     expect(told).toBe(1);
     expect(account.held.get()).toBe(157);
+    // its providers are asked once: the one that answered counts what it said
+    await vi.waitFor(() => expect(account.held.get()).toBe(127));
+    expect(fetch).toHaveBeenCalledTimes(2);
     account.dispose();
   });
 });

@@ -160,4 +160,20 @@ describe("KeyBackup", () => {
         .sort()
     ).toEqual(["sk-lost", "sk-other"]);
   });
+  it("counts what a provider says another device's key holds, and never publishes it", async () => {
+    const t = await setup();
+    await t.backup.apply([entry("other-device", "https://b.test/", "sk-b")]);
+    const sent = t.published.length;
+    let told = 0;
+    t.backup.subscribe(() => told++);
+
+    t.backup.checkedOther("sk-b", 57);
+    expect(t.backup.otherKeys()).toMatchObject([{ key: "sk-b", balance: 57 }]);
+    expect(told).toBe(1);
+    // the same answer again changes nothing
+    t.backup.checkedOther("sk-b", 57);
+    expect(told).toBe(1);
+    await t.tick();
+    expect(t.published).toHaveLength(sent);
+  });
 });

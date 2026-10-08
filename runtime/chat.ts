@@ -13,7 +13,7 @@ import type {
   Sdk,
   Spending,
 } from "@/features/payments/ports";
-import { refundCredit } from "@/features/payments/refund";
+import { checkOtherDevices, refundCredit } from "@/features/payments/refund";
 import { createPay } from "@/features/payments/request";
 import { owned } from "@/features/session/owned";
 
@@ -86,6 +86,21 @@ export function createAccountChat(deps: AccountChatDeps): AccountChat {
   const auto = new AutoRefund(() => refund(false));
   const unfollow = chat.subscribe(() => auto.activity(chat.busy()));
   auto.start();
+  // the backup arrives after the account opens: keys it lists that this tab
+  // has not asked their providers about are asked now, not at the next refund
+  let asked = "";
+  const unwatch = deps.otherDevices.subscribe(() => {
+    const listed = deps.otherDevices
+      .keys()
+      .map((k) => k.key)
+      .sort()
+      .join(" ");
+    if (listed === asked) return;
+    asked = listed;
+    checkOtherDevices(payments).catch((error) =>
+      console.warn("Could not ask what other devices' keys hold", error)
+    );
+  });
   return {
     chat,
     costs,
@@ -112,6 +127,7 @@ export function createAccountChat(deps: AccountChatDeps): AccountChat {
     dispose() {
       live = false;
       unfollow();
+      unwatch();
       auto.dispose();
       chat.dispose();
     },

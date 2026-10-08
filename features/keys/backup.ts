@@ -18,6 +18,8 @@ export type SyncedApiKey = ApiKeyEntry & { device: string };
 export interface OtherDevices {
   keys(): SyncedApiKey[];
   drop(keys: string[]): Promise<void>;
+  /** What the provider says one of those keys holds now, in sats. */
+  checked(key: string, sats: number): void;
   /** Runs when those keys change. */
   subscribe(listener: () => void): () => void;
 }
@@ -54,6 +56,10 @@ export class KeyBackup {
   private others: SyncedApiKey[] = [];
   // keys that left this device this session; the relays may still list them
   private readonly removed = new Set<string>();
+  // what providers said lately that the other devices' keys hold: the backup
+  // keeps a key's balance of when the key set last changed, since a balance
+  // alone is never published (each reply would ask the signer)
+  private readonly balances = new Map<string, number>();
   private readonly listeners = new Set<() => void>();
 
   constructor(
@@ -85,9 +91,21 @@ export class KeyBackup {
     };
   }
 
-  /** Keys other devices of this account hold (refund can recover them). */
+  /** Keys other devices of this account hold (refund can recover them),
+   *  each with what its provider said it holds once asked. */
   otherKeys(): SyncedApiKey[] {
-    return this.others;
+    return this.others.map((k) =>
+      this.balances.has(k.key)
+        ? { ...k, balance: this.balances.get(k.key)! }
+        : k
+    );
+  }
+
+  /** What a provider says one of those keys holds now. */
+  checkedOther(key: string, sats: number): void {
+    if (this.balances.get(key) === sats) return;
+    this.balances.set(key, sats);
+    this.listeners.forEach((listener) => listener());
   }
 
   /** Runs when the other devices' keys change. */

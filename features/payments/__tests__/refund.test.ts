@@ -68,6 +68,7 @@ async function setup(shared?: Awaited<ReturnType<typeof device>>) {
     otherDevices: {
       keys: () => others,
       drop: vi.fn(async (_keys: string[]) => {}),
+      checked: vi.fn(),
     },
     adopt: noAdopt,
     live: () => true,
@@ -252,6 +253,26 @@ describe("refundCredit", () => {
     expect(refunded).toEqual([SMALL, LARGE]);
     expect(wallet.received).toContain(`refund-${LARGE}`);
     expect(deps.otherDevices.drop).toHaveBeenCalledWith(["sk-lost-device"]);
+  });
+
+  it("asks the provider what another device's key holds now, also with no credit of its own", async () => {
+    // the other device made it with 157 and has spent 100 of it since
+    provider({ [LARGE]: 57_000 });
+    const { deps, others } = await setup();
+    others.push({
+      baseUrl: LARGE,
+      key: "sk-other-device",
+      balance: 157,
+      lastUsed: Date.now() - 60_000,
+    });
+
+    await refundCredit(deps, false);
+
+    expect(deps.otherDevices.checked).toHaveBeenCalledWith(
+      "sk-other-device",
+      57
+    );
+    expect(deps.otherDevices.drop).not.toHaveBeenCalled();
   });
 
   it("leaves another device's key used in the last five minutes: that device may still be paying with it", async () => {

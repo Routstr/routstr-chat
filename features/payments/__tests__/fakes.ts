@@ -181,6 +181,7 @@ export function emptyDevice() {
     otherDevices: {
       keys: () => [],
       drop: async () => {},
+      checked: () => {},
       subscribe: () => () => {},
     },
     adopt: noAdopt,
