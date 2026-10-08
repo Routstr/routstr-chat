@@ -1,6 +1,7 @@
 "use client";
 
-import React, { createContext, useCallback, useContext, useMemo, useRef, useState, type SetStateAction } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type SetStateAction } from "react";
+import { currentOwner } from "@/features/session/view";
 import type { MessageAttachment } from "@/types/chat";
 import { ModelPick, PickContext } from "./pick";
 
@@ -56,6 +57,28 @@ const readFold = () => {
   }
 };
 
+// The draft's words outlive a reload of the tab (a new version of the app, Reload now in
+// Settings, paying in a wallet app on a phone), and so does a hold on them while it waits for
+// money: for this tab and the account that wrote it (or one written before any was in use).
+// Files are not kept, so a draft with files keeps no hold.
+const DRAFT_KEY = "draft";
+const readDraft = (): { text: string; hold: string | null } => {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(DRAFT_KEY) ?? "null");
+    const mine = saved?.owner === null || saved?.owner === currentOwner();
+    if (typeof saved?.text === "string" && mine) {
+      return { text: saved.text, hold: typeof saved.hold === "string" ? saved.hold : null };
+    }
+  } catch {
+    // storage blocked or unreadable: a fresh draft
+  }
+  return { text: "", hold: null };
+};
+// A hold is the tab's that made it, under a Web Lock named after it for as long as it lasts: a
+// reloaded page finds the lock free and takes the hold back; a copy of the tab (which copies
+// sessionStorage) finds it held and keeps only the words, so one message is never sent twice.
+const holdLock = (id: string) => `routstr-chat-hold:${id}`;
+
 export const useUi = () => {
   const v = useContext(UiContext);
   if (!v) throw new Error("useUi must be used inside UiProvider");
@@ -104,10 +127,40 @@ export function UiProvider({ children }: { children: React.ReactNode }) {
   const [palette, setPalette] = useState(false);
   const [settings, setSettings] = useState<SettingsSection | null>(null);
   const [settingsDeep, setSettingsDeep] = useState(false);
+  const [saved] = useState(readDraft);
   const [sendWhenFunded, setSendWhenFunded] = useState(false);
   const [isSidebarCollapsed, setCollapsed] = useState(readFold);
   const chipRef = useRef<HTMLButtonElement>(null);
-  const [draft, setDraft] = useState<DraftState>({ text: "", attachments: [], rev: 0 });
+  const [draft, setDraft] = useState<DraftState>(() => ({ text: saved.text, attachments: [], rev: 0 }));
+  const hold = useRef<string | null>(null);
+  useEffect(() => {
+    if (!saved.hold || !navigator.locks) return;
+    const id = saved.hold;
+    void navigator.locks.request(holdLock(id), { ifAvailable: true }, (lock) => {
+      if (!lock) return;
+      hold.current = id;
+      setSendWhenFunded(true);
+    });
+  }, [saved]);
+  useEffect(() => {
+    if (!sendWhenFunded) {
+      hold.current = null;
+      return;
+    }
+    const id = (hold.current ??= crypto.randomUUID());
+    let release = () => {};
+    void navigator.locks?.request(holdLock(id), () => new Promise<void>((done) => (release = done)));
+    return () => release();
+  }, [sendWhenFunded]);
+  useEffect(() => {
+    try {
+      const held = sendWhenFunded && !draft.attachments.length ? hold.current : null;
+      if (draft.text) sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ owner: currentOwner(), text: draft.text, hold: held }));
+      else sessionStorage.removeItem(DRAFT_KEY);
+    } catch {
+      // storage blocked or full: the draft lasts for this visit
+    }
+  }, [sendWhenFunded, draft.text, draft.attachments.length]);
   const [pick] = useState(() => {
     let storage: Pick<Storage, "getItem" | "setItem"> = { getItem: () => null, setItem: () => {} };
     try {

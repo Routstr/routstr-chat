@@ -245,6 +245,79 @@ test(`first run${chosen ? "" : ", nothing chosen"}: who's writing, a new account
   expect(await kit.redeem(await v2.makeToken(page, left))).toBe(left);
 });
 
+// paying in a wallet app can reload the tab on a phone: the held message comes back and still
+// sends by itself, once
+test("a held message outlives a reload of the tab and sends once the sats land", async ({
+  page,
+  context,
+  kit,
+  appUrl,
+}) => {
+  await seedAccounts(context, [newKey()]);
+  await funded(page, kit, appUrl, 1);
+  const composer = page.getByRole("textbox", { name: "Message" });
+  await composer.fill(`${TINY} held over a reload`);
+  await page.getByRole("main").getByRole("button", { name: "Send", exact: true }).click();
+  await expect(page.locator(".pa-view").first()).toBeVisible();
+
+  await page.reload();
+  await v2.ready(page);
+  await expect(composer).toHaveValue(`${TINY} held over a reload`);
+  await v2.receive(page, await kit.mintToken(100));
+  await v2.waitReplyText(page, "Echo: held over a reload");
+  await v2.waitIdle(page);
+  await expect(page.locator("article.rd-me")).toHaveCount(1);
+});
+
+// a copy of a tab (the browser copies its sessionStorage) keeps a held message's words, but only
+// the tab that held it sends it: one message, paid once
+test("a copied tab keeps a held message's words but never sends it a second time", async ({
+  page,
+  context,
+  kit,
+  appUrl,
+}) => {
+  await seedAccounts(context, [newKey()]);
+  await funded(page, kit, appUrl, 1);
+  const composer = (p: Page) => p.getByRole("textbox", { name: "Message" });
+  await composer(page).fill(`${TINY} held once`);
+  await page.getByRole("main").getByRole("button", { name: "Send", exact: true }).click();
+  await expect(page.locator(".pa-view").first()).toBeVisible();
+
+  const draft = await page.evaluate(() => sessionStorage.getItem("draft"));
+  const copy = await context.newPage();
+  await copy.addInitScript((d) => {
+    if (d && !sessionStorage.getItem("draft")) sessionStorage.setItem("draft", d);
+  }, draft);
+  await v2.open(copy, appUrl);
+  await expect(composer(copy)).toHaveValue(`${TINY} held once`);
+
+  await v2.receive(copy, await kit.mintToken(100));
+  await v2.waitReplyText(page, "Echo: held once");
+  await copy.waitForTimeout(5_000);
+  // the copy never sent it: its words are still in its box
+  await expect(composer(copy)).toHaveValue(`${TINY} held once`);
+});
+
+// a draft's words come back after a reload of the tab (Settings promises it for Reload now),
+// for the account that wrote them only
+test("a draft comes back after a reload, and stays with its account", async ({
+  page,
+  context,
+  appUrl,
+}) => {
+  await seedAccounts(context, [newKey(), newKey()]);
+  await v2.open(page, appUrl);
+  const composer = page.getByRole("textbox", { name: "Message" });
+  await composer.fill("half a thought");
+  await page.reload();
+  await v2.ready(page);
+  await expect(composer).toHaveValue("half a thought");
+
+  await v2.switchAccount(page);
+  await expect(composer).toHaveValue("");
+});
+
 // main's old shared credit is the account main had signed in (the first v2 opened with on
 // this device), as main's coins are: another account that opens first never takes it
 test("main's old provider credit goes to main's account, not to another that opens first", async ({
