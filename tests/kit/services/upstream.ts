@@ -23,6 +23,8 @@ export interface Behaviour {
   text?: string;
   /** override the reported usage */
   usage?: { prompt: number; completion: number };
+  /** end the answer with a picture, as OpenRouter streams an image model's (delta.images) */
+  image?: boolean;
 }
 
 export interface UpstreamRequest {
@@ -63,6 +65,9 @@ export const MODELS = [
   },
 ];
 export const BTC_USD = 100_000; // 1 sat = $0.001
+// one red pixel, as an image model's answer carries its picture
+const PIXEL =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==";
 export const API_KEY = "kit-upstream-key";
 
 const DIRECTIVE = /\[kit:([a-z]+)(?:=([^\]]*))?\]/g;
@@ -107,6 +112,7 @@ export function parseDirectives(text: string): Behaviour | undefined {
     else if (name === "fail") found.fail = Number(value ?? 500);
     else if (name === "cut") found.cut = Number(value ?? 2);
     else if (name === "think") found.think = true;
+    else if (name === "image") found.image = true;
     else if (name === "text") found.text = value ?? "";
     else if (name === "md") found.text = markdown(Number(value ?? 4600));
     else if (name === "usage") {
@@ -243,6 +249,7 @@ export async function startUpstream(): Promise<Upstream> {
       if (behaviour.chunkMs) await sleep(behaviour.chunkMs);
       chunk({ content: w });
     }
+    if (behaviour.image) chunk({ images: [{ type: "image_url", image_url: { url: PIXEL } }] });
     chunk({}, "stop");
     if (body.stream_options?.include_usage)
       res.write(

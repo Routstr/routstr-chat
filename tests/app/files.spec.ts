@@ -90,3 +90,22 @@ test("does not send while a PDF is still being read", async ({ page, kit, appUrl
   await page.getByRole("textbox", { name: "Message" }).press("Enter");
   await expect(page.locator("article.rd-me")).toHaveCount(1, { timeout: 30_000 });
 });
+
+// an image model streams its picture after the words (OpenRouter's delta.images): it shows in the
+// answer, is kept on this device, and is still there after a reload
+test("an answer's picture shows, and is still there after a reload", async ({ page, context, kit, appUrl }) => {
+  await seedAccounts(context, [nip19.nsecEncode(generateSecretKey())]);
+  await v2.open(page, appUrl);
+  await seedKitProvider(page, kit.coreUrl, "kit-cheap");
+  await v2.fund(page, appUrl, await kit.mintToken(100));
+
+  await v2.send(page, "[kit:usage=10,10][kit:image] draw a red dot");
+  await v2.waitReplyText(page, "Echo: draw a red dot");
+  const picture = page.locator("article.rd-ai").last().locator("img");
+  await expect(picture).toBeVisible({ timeout: 30_000 });
+  await expect.poll(() => filesKept(page)).toBe(1);
+
+  await page.reload();
+  await v2.ready(page);
+  await expect(page.locator("article.rd-ai").last().locator("img")).toBeVisible({ timeout: 30_000 });
+});
