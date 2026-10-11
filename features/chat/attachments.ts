@@ -3,7 +3,7 @@ import type { ApiMessage, Attachments, FileStore, StoredFile } from "./ports";
 
 type ApiPart = Exclude<ApiMessage["content"], string>[number];
 
-/** Saved in place of a message whose only files could not be kept. */
+/** Saved in place of a file that could not be kept. */
 export const NOT_KEPT = "This attachment could not be kept.";
 
 const fileOf = (part: MessageContent) =>
@@ -81,8 +81,10 @@ export function createAttachments(files: FileStore): Attachments {
       const parts = await Promise.all(
         message.content.map((part) => keep(part, signal))
       );
-      const kept = parts.filter((part) => part !== undefined);
-      return { ...message, content: kept.length ? kept : NOT_KEPT };
+      return {
+        ...message,
+        content: parts.map((part) => part ?? { type: "text", text: NOT_KEPT }),
+      };
     },
   };
 }

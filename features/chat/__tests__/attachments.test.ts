@@ -208,7 +208,7 @@ describe("Attachments: what is saved", () => {
     ]);
   });
 
-  it("leaves out a file that could not be kept anywhere, and keeps the rest", async () => {
+  it("saves a note in place of a file that could not be kept anywhere, and keeps the rest", async () => {
     files.store.mockResolvedValueOnce({});
     const saved = await attachments.forSave(
       user([
@@ -221,6 +221,7 @@ describe("Attachments: what is saved", () => {
 
     expect(saved.content).toEqual([
       { type: "text", text: "look" },
+      { type: "text", text: NOT_KEPT },
       { type: "image_url", image_url: { url: "", storageId: "img" } },
     ]);
   });
@@ -232,7 +233,7 @@ describe("Attachments: what is saved", () => {
       signal
     );
 
-    expect(saved.content).toBe(NOT_KEPT);
+    expect(saved.content).toEqual([{ type: "text", text: NOT_KEPT }]);
   });
 
   it("saves a reply image that came without a url as it came", async () => {
