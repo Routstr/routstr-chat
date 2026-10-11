@@ -13,6 +13,13 @@ const fileOf = (part: MessageContent) =>
       ? part.file
       : undefined;
 
+/** The bytes a base64 data: URL holds. */
+const bytesIn = (dataUrl: string) => {
+  const data = dataUrl.slice(dataUrl.indexOf(",") + 1);
+  const padding = data.endsWith("==") ? 2 : data.endsWith("=") ? 1 : 0;
+  return Math.floor((data.length * 3) / 4) - padding;
+};
+
 /** Where every file these messages carry is kept. */
 export const filesIn = (messages: Message[]): StoredFile[] =>
   messages.flatMap(({ content }) =>
@@ -57,7 +64,13 @@ export function createAttachments(files: FileStore): Attachments {
       file.storageId || file.blossomHash
         ? {}
         : await files.store(file.url, signal);
-    const kept = { ...file, ...copies, url: "" };
+    // its size goes with it: a later request sends it again, and is priced by it
+    const kept = {
+      ...file,
+      ...copies,
+      url: "",
+      size: file.size ?? bytesIn(file.url),
+    };
     if (!kept.storageId && !kept.blossomHash) return undefined;
     // the part's own field: image_url or file
     return { ...part, [part.type]: kept };

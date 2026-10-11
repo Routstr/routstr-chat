@@ -5,8 +5,7 @@ import { AcceptedMintsContext, usePurse } from "@/features/wallet/view";
 import type { Model } from "@/types/models";
 import { defaultModel, pickedModel, useModelPick, type Choice } from "./pick";
 import { normalizeModality } from "./picker/modality";
-import { needOf } from "./price";
-import { payable, useMoney, usePayable, type Payable } from "./useMoney";
+import { payable, useMoney, usePayableFor, type Payable } from "./useMoney";
 
 type Catalog = ReturnType<typeof useCatalogService>;
 /** Where the SDK sends each asked model from this wallet, by its own rule. */
@@ -22,7 +21,7 @@ interface Asked {
 /** With nothing chosen: what the app picks for what can pay, a key's credit
  *  counted where each model's message would go. */
 const autoPick = (models: Model[], catalog: Catalog, chosen: Choice | null, pay: Payable, routed: Routed) =>
-  defaultModel(models, catalog?.picks() ?? [], needOf, (m) =>
+  defaultModel(models, catalog?.picks() ?? [], pay.need, (m) =>
     // a model is ranked only when a key's credit decides it
     pay.covers(m, () => (catalog ? goesTo(m, chosen, catalog.routes(m.id), routed[m.id]) : undefined))
   );
@@ -32,7 +31,8 @@ function useModelOf() {
   const catalog = useCatalogService();
   const { models, loading } = useCatalogModels();
   const pick = useModelPick();
-  const pay = usePayable();
+  // the chat as it stands, without the draft: typing never changes the pick
+  const pay = usePayableFor("");
   const { balances } = useMoney();
   const purse = usePurse();
   const [answers, setAnswers] = useState<Asked>({ of: "", catalog: null, at: {} });
@@ -97,18 +97,19 @@ export function ChatModelProvider({ children }: { children: React.ReactNode }) {
   const catalog = useCatalogService();
   const { total, node } = useMoney();
   const credit = useKeyCredit();
+  const { need } = usePayableFor("");
   // read when money comes in: the model and pin as they are then
-  const now = useRef({ value, total, credit, node });
+  const now = useRef({ value, total, credit, node, need });
   useLayoutEffect(() => {
-    now.current = { value, total, credit, node };
+    now.current = { value, total, credit, node, need };
   });
   const accepted = useCallback(
     (sats: number) => {
-      const { value, total, credit, node } = now.current;
+      const { value, total, credit, node, need } = now.current;
       if (!catalog) return [];
       // with nothing chosen, the model the app will pick once these sats are in
       const model =
-        pickedModel(value.models, value) ?? autoPick(value.models, catalog, value.chosen, payable(total + sats, credit, !!node), value.routed);
+        pickedModel(value.models, value) ?? autoPick(value.models, catalog, value.chosen, payable(total + sats, credit, !!node, need), value.routed);
       if (!model) return [];
       const base = goesTo(model, value.chosen, catalog.routes(model.id), value.routed[model.id]);
       return base ? catalog.mintsOf(base) : [];

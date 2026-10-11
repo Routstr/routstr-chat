@@ -177,6 +177,27 @@ export class CatalogService {
     return byBase(this.deps.discoveryAdapter.getCachedMints(), baseUrl) ?? [];
   }
 
+  /** What one message to this model may cost, as the SDK sizes its payment
+   *  for a request with these messages (pricedRequest): their words and
+   *  files, the model's longest reply and the node's own gate, never over its
+   *  max_cost. Null messages (a file of unknown size): the most the SDK asks
+   *  of any request. 0 when the model has no price. */
+  need(model: Model, messages: unknown[] | null): number {
+    // the body fetchAIResponse sends, with the search tool it adds for OpenAI's models
+    const body = {
+      model: model.id,
+      messages,
+      stream: true,
+      ...(model.name?.startsWith("OpenAI:") ? { tools: [{ type: "web_search" }] } : {}),
+    };
+    return this.deps.providerManager.getRequiredSatsForModel(
+      model as unknown as Parameters<ProviderManager["getRequiredSatsForModel"]>[0],
+      messages ?? [],
+      undefined,
+      messages ? body : {}
+    );
+  }
+
   /** Providers that serve this model, cheapest first, as routing ranks them. */
   routes(modelId: string) {
     return this.deps.providerManager.getProviderPriceRankingForModel(modelId, {

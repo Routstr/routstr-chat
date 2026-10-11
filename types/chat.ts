@@ -13,6 +13,8 @@ export interface MessageContent {
   text?: string;
   image_url?: {
     url: string;
+    /** Bytes, once kept: a later request sends it again, and is priced by it. */
+    size?: number;
     storageId?: string;
     blossomHash?: string; // SHA-256 of encrypted blob for cross-device sync
     blossomServers?: string[]; // Blossom servers where blob is stored

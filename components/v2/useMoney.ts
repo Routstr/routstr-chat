@@ -1,11 +1,16 @@
-import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { useBusy, useKeyCredit } from "@/features/chat/view";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useCatalogService } from "@/features/catalog/view";
+import { pricedRequest, questionOf, useBusy, useKeyCredit } from "@/features/chat/view";
+import { useThread } from "@/features/history/view";
 import { useNodePays, type RemoteNode } from "@/features/node/view";
 import { topUpFor } from "@/features/payments/view";
 import { useWallet } from "@/features/wallet/view";
+import type { Message } from "@/types/chat";
 import type { Model } from "@/types/models";
 import { getPendingCashuTokenAmount } from "@/utils/cashuUtils";
-import { needOf } from "./price";
+import { useOpenChat } from "./openChat";
+import { normalizeModality } from "./picker/modality";
+import { useDraft } from "./ui";
 
 export interface Money {
   /** What you can spend: the wallet plus sats held in provider tokens. */
@@ -61,15 +66,21 @@ export function MoneyProvider({ children }: { children: React.ReactNode }) {
 const slashed = (url: string) => (url.endsWith("/") ? url : `${url}/`);
 
 /** What a send takes from the wallet before it goes, by the SDK's own sizes
- *  (topUpFor), and whether the wallet has it. On the API-key path a key's
- *  credit at the provider the send goes to pays first; `credit` is null when
- *  every message carries its own token (X-Cashu), and a node pays for all. */
-export function payable(total: number, credit: Readonly<Record<string, number>> | null, node: boolean) {
+ *  (topUpFor), and whether the wallet has it. `need` is what one message may
+ *  cost, by the SDK's own rule. On the API-key path a key's credit at the
+ *  provider the send goes to pays first; `credit` is null when every message
+ *  carries its own token (X-Cashu), and a node pays for all. */
+export function payable(
+  total: number,
+  credit: Readonly<Record<string, number>> | null,
+  node: boolean,
+  need: (model: Model) => number
+) {
   const keys = credit ? Object.values(credit) : [];
   // null: no key at that provider yet
   const keyAt = (baseUrl: string | null | undefined) => (credit && baseUrl ? credit[slashed(baseUrl)] ?? null : null);
   const takesWith = (model: Model, key: number | null) =>
-    node ? 0 : topUpFor(needOf(model), key, credit ? "apikeys" : "xcashu").now;
+    node ? 0 : topUpFor(need(model), key, credit ? "apikeys" : "xcashu").now;
   const takes = (model: Model, where: string | null | undefined) => takesWith(model, keyAt(where));
   /** Whether where the send goes changes the answer: the wallet alone is
    *  short, and the most any key holds would make it enough. */
@@ -80,7 +91,7 @@ export function payable(total: number, credit: Readonly<Record<string, number>> 
     decides(model)
       ? total >= takes(model, typeof where === "function" ? where() : where)
       : total >= takesWith(model, null);
-  return { takes, decides, covers };
+  return { takes, decides, covers, need };
 }
 
 /** The provider a message goes to, or a way to work it out. */
@@ -88,13 +99,36 @@ type Where = string | null | undefined | (() => string | undefined);
 
 export type Payable = ReturnType<typeof payable>;
 
-/** `payable` for this account now. The picker and the send both ask it, so
- *  they never disagree. */
+/** `payable` for this account now, for a send of the draft in the open chat.
+ *  The picker and the send both ask it, so they never disagree. */
 export function usePayable() {
+  const { text, attachments } = useDraft();
+  return usePayableFor(useMemo(() => questionOf(text, attachments), [text, attachments]));
+}
+
+/** `payable` for a send of `question` in the open chat: what one message may
+ *  cost on a model is the SDK's own price for that request (pricedRequest). */
+export function usePayableFor(question: Message["content"]) {
   const { total, node } = useMoney();
   const credit = useKeyCredit();
-  return useMemo(() => payable(total, credit, !!node), [total, node, credit]);
+  const catalog = useCatalogService();
+  const slots = useThread(useOpenChat().id);
+  const request = useMemo(() => {
+    const branch = (slots ?? []).map((s) => s.displayed);
+    return { sees: pricedRequest(branch, question, true), reads: pricedRequest(branch, question, false) };
+  }, [slots, question]);
+  const need = useCallback(
+    (model: Model) => catalog?.need(model, textOnly(model) ? request.reads : request.sees) ?? 0,
+    [catalog, request]
+  );
+  return useMemo(() => payable(total, credit, !!node, need), [total, node, credit, need]);
 }
+
+// as the engine is told: unknown inputs are not taken as text only
+const textOnly = (model: Model) => {
+  const inputs = model.architecture?.input_modalities;
+  return !!inputs && !inputs.some((m) => normalizeModality(m) === "image");
+};
 
 /** A number that counts to its new value once, and never while you read. */
 export function useCountUp(target: number, ms = 900) {

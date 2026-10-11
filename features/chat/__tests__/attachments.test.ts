@@ -122,7 +122,7 @@ describe("Attachments: what a request sends", () => {
 });
 
 describe("Attachments: what is saved", () => {
-  it("keeps a reply's inline image and saves only where it is kept", async () => {
+  it("keeps a reply's inline image and saves only where it is kept, and its size", async () => {
     files.store.mockResolvedValueOnce({
       storageId: "new",
       blossomHash: "h",
@@ -148,6 +148,7 @@ describe("Attachments: what is saved", () => {
           type: "image_url",
           image_url: {
             url: "",
+            size: 8,
             storageId: "new",
             blossomHash: "h",
             blossomServers: ["https://b.example"],
@@ -203,7 +204,12 @@ describe("Attachments: what is saved", () => {
     expect(saved.content).toEqual([
       {
         type: "image_url",
-        image_url: { url: "", blossomHash: "h", blossomServers: ["b"] },
+        image_url: {
+          url: "",
+          size: 8,
+          blossomHash: "h",
+          blossomServers: ["b"],
+        },
       },
     ]);
   });

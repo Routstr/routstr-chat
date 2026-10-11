@@ -6,7 +6,7 @@ import { expect, test } from "./fixtures";
 import { v2 } from "./drivers/v2";
 import { seedAccounts, seedKitProvider } from "./seed";
 import type { KitClient } from "../kit/client";
-import { needOf } from "../../components/v2/price";
+import { ProviderManager } from "@routstr/sdk";
 import { topUpFor } from "../../features/payments/view";
 import type { Model } from "../../types/models";
 
@@ -395,11 +395,18 @@ async function holdAt(page: Page, nsec: string, baseUrl: string, sats: number) {
   await v2.ready(page);
 }
 
-/** What the wallet must hold for a message to a kit model at a provider where no key holds
- *  credit yet, by the app's own rule, from the core's own listing. */
-async function walletAlone(kit: KitClient, id: string): Promise<number> {
+/** The first deposit the SDK makes for `text`, the only message of a new chat, to a kit model:
+ *  its own price rule over the core's own listing, the request as the app sends it. */
+async function firstDeposit(kit: KitClient, id: string, text: string): Promise<number> {
   const { data } = (await (await fetch(`${kit.coreUrl}v1/models`)).json()) as { data: Model[] };
-  return topUpFor(needOf(data.find((m) => m.id === id)!), null).now;
+  const model = data.find((m) => m.id === id)!;
+  const messages = [{ role: "user", content: text }];
+  const need = new ProviderManager({} as never).getRequiredSatsForModel(model as never, messages, undefined, {
+    model: id,
+    messages,
+    stream: true,
+  });
+  return topUpFor(need, null).now;
 }
 
 /** Whether the picker marks the kit's model as needing more sats; closes it again. */
@@ -440,8 +447,8 @@ test("credit a provider holds pays for messages to it, and only to it", async ({
   await v2.waitReplyText(page, "Echo: held message");
   await v2.waitIdle(page);
 
-  // the wallet keeps a sat less than it would need alone: short, but enough with the core's credit
-  const keep = (await walletAlone(kit, "kit-cheap")) - 1;
+  // the wallet keeps less than any first deposit: short alone, but enough with the core's credit
+  const keep = 1;
   await v2.useMint(page, kit.env.mintUrl);
   const left = await v2.balance(page);
   expect(await kit.redeem(await v2.makeToken(page, left - keep))).toBe(left - keep);
@@ -454,6 +461,28 @@ test("credit a provider holds pays for messages to it, and only to it", async ({
   await v2.waitIdle(page);
   await expect(page.locator("article.rd-me")).toHaveCount(2);
   expect(await v2.balance(page)).toBe(keep);
+});
+
+// the picker and the send ask for what the SDK's payment really takes: a wallet holding just its
+// first deposit sends, and the deposit is all it takes
+test("a wallet holding just the first deposit sends, and the deposit is all it takes", async ({
+  page,
+  context,
+  kit,
+  appUrl,
+}) => {
+  const text = `${TINY} just enough`;
+  const deposit = await firstDeposit(kit, "kit-echo", text);
+  await seedAccounts(context, [newKey()]);
+  await v2.open(page, appUrl);
+  await seedKitProvider(page, kit.coreUrl, "kit-echo");
+  await v2.receive(page, await kit.mintToken(deposit));
+  await v2.useMint(page, kit.env.mintUrl);
+
+  await v2.send(page, text);
+  await v2.waitReplyText(page, "Echo: just enough");
+  await v2.waitIdle(page);
+  await expect.poll(() => v2.balance(page)).toBe(0);
 });
 
 // with nothing chosen the app picks the costliest model what can pay covers, and a key's credit
@@ -474,8 +503,8 @@ test("with nothing chosen, credit a provider holds counts toward the model the a
   await v2.waitReplyText(page, "Echo: first");
   await v2.waitIdle(page);
 
-  // the wallet keeps a sat less than Kit Echo needs alone; the core's key makes up the rest
-  const keep = (await walletAlone(kit, "kit-echo")) - 1;
+  // the wallet keeps less than any first deposit; the core's key makes up the rest
+  const keep = 1;
   const left = await v2.balance(page);
   expect(await kit.redeem(await v2.makeToken(page, left - keep))).toBe(left - keep);
   await expect.poll(() => v2.balance(page)).toBe(keep);
