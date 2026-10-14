@@ -101,7 +101,8 @@ export function useKeyCredit(): Readonly<Record<string, number>> | null {
   const held = useAccountChat()?.held;
   return useSyncExternalStore(
     held?.subscribe ?? none,
-    () => held?.keys() ?? NO_CREDIT,
+    // null stays null: X-Cashu spends no key
+    () => (held ? held.keys() : NO_CREDIT),
     () => NO_CREDIT
   );
 }

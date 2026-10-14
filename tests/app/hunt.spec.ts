@@ -409,6 +409,72 @@ async function firstDeposit(kit: KitClient, id: string, text: string): Promise<n
   return topUpFor(need, null).now;
 }
 
+/** What one paid message to a kit model takes on X-Cashu, where each message carries its own
+ *  token: the same price rule, with no key deposit on top. */
+async function xcashuToken(kit: KitClient, id: string, text: string): Promise<number> {
+  const { data } = (await (await fetch(`${kit.coreUrl}v1/models`)).json()) as { data: Model[] };
+  const messages = [{ role: "user", content: text }];
+  const need = new ProviderManager({} as never).getRequiredSatsForModel(data.find((m) => m.id === id) as never, messages, undefined, {
+    model: id,
+    messages,
+    stream: true,
+  });
+  return topUpFor(need, null, "xcashu").now;
+}
+
+/** Whether the picker marks the kit's model as needing more sats; closes it again. */
+async function cheapIsShort(page: Page): Promise<boolean> {
+  await page.getByRole("button", { name: /^Model: Kit Cheap\./ }).click();
+  const row = page.getByRole("option", { name: /Kit Cheap/ });
+  await expect(row).toBeVisible();
+  const short = (await row.getAttribute("data-short")) !== null;
+  await page.keyboard.press("Escape");
+  await expect(row).toBeHidden();
+  return short;
+}
+
+// on the API-key path a provider spends the credit it holds for you before the wallet, so the
+// picker and the send count it for messages to that provider, and for no other
+test("credit a provider holds pays for messages to it, and only to it", async ({
+  page,
+  context,
+  kit,
+  appUrl,
+}) => {
+  const nsec = newKey();
+  await seedAccounts(context, [nsec]);
+  await v2.open(page, appUrl);
+  await seedKitProvider(page, kit.coreUrl, "kit-cheap");
+
+  // 500 sats at a provider that does not serve the model, nothing in the wallet
+  await holdAt(page, nsec, "http://elsewhere.localhost/", 500);
+  expect(await cheapIsShort(page)).toBe(true);
+  await v2.send(page, `${TINY} held message`);
+  await expect(
+    page.getByRole("heading", { name: "Add a few sats to send" })
+  ).toBeVisible();
+  await expect(page.locator("article.rd-me")).toHaveCount(0);
+
+  // sats land: the held message goes to the kit's core, whose key keeps the rest of its deposit
+  await v2.receive(page, await kit.mintToken(300));
+  await v2.waitReplyText(page, "Echo: held message");
+  await v2.waitIdle(page);
+
+  // the wallet keeps less than any first deposit: short alone, but enough with the core's credit
+  const keep = 1;
+  await v2.useMint(page, kit.env.mintUrl);
+  const left = await v2.balance(page);
+  expect(await kit.redeem(await v2.makeToken(page, left - keep))).toBe(left - keep);
+  await expect.poll(() => v2.balance(page)).toBe(keep);
+  expect(await cheapIsShort(page)).toBe(false);
+
+  // and the send agrees: it goes, paid by the core's credit, the wallet untouched
+  await v2.send(page, `${TINY} paid by the credit`);
+  await v2.waitReplyText(page, "Echo: paid by the credit");
+  await v2.waitIdle(page);
+  await expect(page.locator("article.rd-me")).toHaveCount(2);
+  expect(await v2.balance(page)).toBe(keep);
+});
 
 // the picker and the send ask for what the SDK's payment really takes: a wallet holding just its
 // first deposit sends, and the deposit is all it takes
@@ -430,6 +496,22 @@ test("a wallet holding just the first deposit sends, and the deposit is all it t
   await v2.waitReplyText(page, "Echo: just enough");
   await v2.waitIdle(page);
   await expect.poll(() => v2.balance(page)).toBe(0);
+});
+
+// on X-Cashu each message carries a token of its own price: a wallet holding just that sends,
+// not asked for an API key's deposit
+test("on X-Cashu a wallet holding just one message's token sends", async ({ page, context, kit, appUrl }) => {
+  await payPerRequest(context);
+  const text = `${TINY} one token`;
+  const token = await xcashuToken(kit, "kit-echo", text);
+  await seedAccounts(context, [newKey()]);
+  await v2.open(page, appUrl);
+  await seedKitProvider(page, kit.coreUrl, "kit-echo");
+  await v2.receive(page, await kit.mintToken(token));
+  await v2.useMint(page, kit.env.mintUrl);
+
+  await v2.send(page, text);
+  await v2.waitReplyText(page, "Echo: one token");
 });
 
 // the SDK pays a provider from one mint it takes: sats at a mint the kit's core does not take
