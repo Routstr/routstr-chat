@@ -163,4 +163,41 @@ describe("pricedRequest: the request a send would make, as the SDK prices it", (
       )
     );
   });
+
+  it("is what the SDK asks when the reply is capped, less than for the model's longest reply", async () => {
+    const long = { ...model, id: "long", name: "Long", top_provider: { context_length: 400_000, max_completion_tokens: 128_000 }, sats_pricing: { ...model.sats_pricing, max_completion_cost: 1_280 } };
+    let sent: { messages: unknown[] } | undefined;
+    await fetchAIResponse(
+      {
+        selectedModel: long as never,
+        baseUrl: "https://provider.example/",
+        mintUrl: "https://mint.example/",
+        messageHistory: [{ role: "user", content: "hi" }] as never,
+        maxTokens: 64_000,
+      },
+      {
+        onStreamingUpdate: () => {},
+        onThinkingUpdate: () => {},
+        onMessageAppend: () => {},
+        onBalanceUpdate: () => {},
+        onTransactionUpdate: () => {},
+      } as never,
+      {
+        client: {
+          routeRequest: async ({ body }: { body: { messages: unknown[] } }) => {
+            sent = body;
+            return new Response("data: [DONE]\n\n");
+          },
+        },
+        alertLevel: "min",
+        getPendingCashuTokenAmount: () => 0,
+      } as never
+    );
+    const pm = new ProviderManager({} as never);
+    const catalog = new CatalogService({ providerManager: pm } as never);
+    const capped = catalog.need(long as never, pricedRequest([], "hi", true), 64_000);
+
+    expect(capped).toBe(pm.getRequiredSatsForModel(long as never, sent!.messages, 64_000, sent as never));
+    expect(capped).toBeLessThan(catalog.need(long as never, pricedRequest([], "hi", true)));
+  });
 });

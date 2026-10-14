@@ -42,6 +42,7 @@ export interface Model {
     max_cost: number;
   };
   per_request_limits: PerRequestLimits;
+  top_provider?: { context_length?: number; max_completion_tokens?: number | null };
 }
 
 export interface RoutstrNodeInfo {

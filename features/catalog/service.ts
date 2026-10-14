@@ -182,18 +182,19 @@ export class CatalogService {
    *  files, the model's longest reply and the node's own gate, never over its
    *  max_cost. Null messages (a file of unknown size): the most the SDK asks
    *  of any request. 0 when the model has no price. */
-  need(model: Model, messages: unknown[] | null): number {
+  need(model: Model, messages: unknown[] | null, maxTokens?: number): number {
     // the body fetchAIResponse sends, with the search tool it adds for OpenAI's models
     const body = {
       model: model.id,
       messages,
       stream: true,
+      ...(maxTokens !== undefined ? { max_tokens: maxTokens } : {}),
       ...(model.name?.startsWith("OpenAI:") ? { tools: [{ type: "web_search" }] } : {}),
     };
     return this.deps.providerManager.getRequiredSatsForModel(
       model as unknown as Parameters<ProviderManager["getRequiredSatsForModel"]>[0],
       messages ?? [],
-      undefined,
+      messages ? maxTokens : undefined,
       messages ? body : {}
     );
   }
@@ -209,6 +210,30 @@ export class CatalogService {
       }
     }
     return rates;
+  }
+
+  /** The smallest context and longest reply any node lists for each model, so
+   *  a reply cap fits wherever a send ends up, and whether any lists it as
+   *  making pictures. A longest reply some node does not name is unknown. */
+  rooms(): Record<string, { context?: number; maxOut?: number; draws: boolean }> {
+    const rooms: Record<string, { context?: number; maxOut?: number; unnamed: boolean; draws: boolean }> = {};
+    for (const models of Object.values(this.deps.discoveryAdapter.getCachedModels())) {
+      for (const model of models as unknown as Model[]) {
+        const room = (rooms[model.id] ??= { unnamed: false, draws: false });
+        if (model.architecture?.output_modalities?.includes("image")) room.draws = true;
+        const context = model.top_provider?.context_length || model.context_length;
+        const maxOut = model.top_provider?.max_completion_tokens;
+        if (context) room.context = Math.min(room.context ?? context, context);
+        if (maxOut) room.maxOut = Math.min(room.maxOut ?? maxOut, maxOut);
+        else room.unnamed = true;
+      }
+    }
+    return Object.fromEntries(
+      Object.entries(rooms).map(([id, room]) => [
+        id,
+        { context: room.context, maxOut: room.unnamed ? undefined : room.maxOut, draws: room.draws },
+      ])
+    );
   }
 
   /** Providers that serve this model, cheapest first, as routing ranks them. */

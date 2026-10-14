@@ -89,6 +89,8 @@ export interface ChatModel {
   provider?: string;
   /** False when the model reads text only. */
   images?: boolean;
+  /** The model's context and longest reply, for the reply cap. */
+  room?: { context?: number; maxOut?: number | null; draws?: boolean };
 }
 
 /** Pays for one request and delivers its answer through the callbacks;

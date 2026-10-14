@@ -325,6 +325,14 @@ describe("createPay", () => {
     expect(b.fetch.calls[0].args[0]).toMatchObject({ mode: "xcashu" });
   });
 
+  it("asks the SDK for a reply of at most 64k tokens when the model and the prompt leave room, so its deposit is sized for that", async () => {
+    const { pay, fetch } = await setup();
+    const model = { id: "m", room: { context: 400_000, maxOut: 128_000 } };
+    void pay({ ...request, model }, callbacks(), new AbortController().signal);
+    await tick();
+    expect(fetch.calls[0].args[0]).toMatchObject({ modelId: "m", maxTokens: 64_000 });
+  });
+
   it("holds the account's payment lock until the payment is settled", async () => {
     const { pay, credit, fetch } = await setup();
 

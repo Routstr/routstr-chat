@@ -3,12 +3,13 @@ import { useCatalogService } from "@/features/catalog/view";
 import { pricedRequest, questionOf, useBusy, useKeyCredit } from "@/features/chat/view";
 import { useThread } from "@/features/history/view";
 import { useNodePays, type RemoteNode } from "@/features/node/view";
-import { topUpFor } from "@/features/payments/view";
+import { promptTokensOf, replyCap, topUpFor } from "@/features/payments/view";
 import { useWallet } from "@/features/wallet/view";
 import type { Message } from "@/types/chat";
 import type { Model } from "@/types/models";
 import { getPendingCashuTokenAmount } from "@/utils/cashuUtils";
 import { useOpenChat } from "./openChat";
+import { useListed } from "./useListed";
 import { normalizeModality } from "./picker/modality";
 import { useDraft } from "./ui";
 
@@ -117,14 +118,24 @@ export function usePayableFor(question: Message["content"]) {
   const { balances, node } = useMoney();
   const credit = useKeyCredit();
   const catalog = useCatalogService();
+  const { rooms } = useListed();
   const slots = useThread(useOpenChat().id);
   const request = useMemo(() => {
     const branch = (slots ?? []).map((s) => s.displayed);
-    return { sees: pricedRequest(branch, question, true), reads: pricedRequest(branch, question, false) };
+    const priced = (images: boolean) => {
+      const messages = pricedRequest(branch, question, images);
+      // counted once, and only for a model whose room allows a cap
+      let tokens: number | undefined;
+      return { messages, tokens: () => (tokens ??= messages ? promptTokensOf(messages) : 0) };
+    };
+    return { sees: priced(true), reads: priced(false) };
   }, [slots, question]);
   const need = useCallback(
-    (model: Model) => catalog?.need(model, textOnly(model) ? request.reads : request.sees) ?? 0,
-    [catalog, request]
+    (model: Model) => {
+      const { messages, tokens } = textOnly(model) ? request.reads : request.sees;
+      return catalog?.need(model, messages, replyCap(rooms[model.id], tokens)) ?? 0;
+    },
+    [catalog, request, rooms]
   );
   const spendable = useCallback(
     (where?: string | null) => {

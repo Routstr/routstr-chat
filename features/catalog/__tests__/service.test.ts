@@ -343,6 +343,29 @@ describe("CatalogService.pictureRates", () => {
   });
 });
 
+describe("CatalogService.rooms", () => {
+  // Codex, 10-14: zai-org-glm-5 allows 99,000 output tokens at one node and 32,000 at another; a
+  // send sized for the first went to the second
+  it("gives each model the smallest context and longest reply any node lists for it", () => {
+    const { catalog, cache } = setup();
+    const listed = (id: string, context: number, maxOut?: number) =>
+      ({ id, context_length: context, top_provider: { context_length: context, max_completion_tokens: maxOut } }) as never;
+    cache[PUBLIC] = [listed("glm", 202_752, 99_000), listed("open", 128_000)];
+    cache["https://other.example/"] = [listed("glm", 202_752, 32_000), listed("open", 128_000, 100_000)];
+
+    expect(catalog.rooms().glm).toEqual({ context: 202_752, maxOut: 32_000, draws: false });
+    // a node that names no longest reply leaves it unknown
+    expect(catalog.rooms().open?.maxOut).toBeUndefined();
+  });
+
+  it("says when any node lists the model as making pictures", () => {
+    const { catalog, cache } = setup();
+    cache[PUBLIC] = [{ id: "banana", architecture: { output_modalities: ["image", "text"] } } as never];
+
+    expect(catalog.rooms().banana.draws).toBe(true);
+  });
+});
+
 describe("CatalogService: providers you turn on and off", () => {
   const B = "https://b.example/";
   const kept = (saved: Map<string, string>) =>

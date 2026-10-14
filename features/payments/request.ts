@@ -2,6 +2,7 @@ import type { StorageAdapter, WalletAdapter } from "@routstr/sdk/wallet";
 import type { Pay } from "@/features/chat/ports";
 import { withNodeModeError } from "./nodeErrors";
 import { lockedAfter } from "./lateWrites";
+import { promptTokensOf, replyCap } from "./replyCap";
 import type { Keys, Purse, RedeemFailure, Sdk, Spending } from "./ports";
 
 interface PayDeps {
@@ -165,6 +166,7 @@ export function createPay(deps: PayDeps): Pay {
         {
           messageHistory: messages,
           modelId: model.id,
+          maxTokens: replyCap(model.room, () => promptTokensOf(messages)),
           // The node is the only provider in node mode. Elsewhere a pinned
           // provider is forced only when the SDK reads our warm cache: cold, it
           // refetches and throws if that provider dropped the model.
