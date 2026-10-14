@@ -10,7 +10,7 @@ import { useChatModel } from "../useChatModel";
 import { useMoney, usePayable } from "../useMoney";
 import { textOf } from "../format";
 import { estimateSats, promptTokens } from "../price";
-import { answers, baseKey, hostOf, parseKey, priceScale, type Route, type Row } from "./catalog";
+import { baseKey, hostOf, parseKey, priceScale, type Route, type Row } from "./catalog";
 
 /** Development only: the lab hands the picker a catalogue with providers, so
  *  every state can be seen without touching the real provider cache. */
@@ -24,7 +24,7 @@ export const CatalogStandInContext = createContext<CatalogStandIn | null>(null);
  *  message costs on each, what you can afford, what is in use. */
 export function useCatalog() {
   const catalog = useCatalogService();
-  const { models: all, model: selectedModel, chosen, routed } = useChatModel();
+  const { models, model: selectedModel, chosen, routed } = useChatModel();
   const slots = useThread(useOpenChat().id);
   const { text } = useDraft();
   const standIn = useContext(CatalogStandInContext);
@@ -36,7 +36,6 @@ export function useCatalog() {
   const tokens = useMemo(() => promptTokens(history, text), [history, text]);
   const cost = useCallback((m: Model | null | undefined) => estimateSats(m, tokens), [tokens]);
 
-  const models = useMemo(() => all.filter(answers), [all]);
 
   // cheapest first, the order the router tries them in. Ranking rescans the
   // whole discovery cache, so each model is ranked once per change of the list.
@@ -102,7 +101,7 @@ export function useCatalog() {
   const picks = useMemo(
     () => new Set(standIn ? standIn.picks : catalog?.picks() ?? []),
     // the discovery store hydrates late; re-read it whenever models change
-    [standIn, catalog, all]
+    [standIn, catalog, models]
   );
   const web = useMemo(() => new Set(webSearchModels), []);
 

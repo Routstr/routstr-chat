@@ -41,11 +41,12 @@ export const draws = (m: Model) => (m.architecture?.output_modalities ?? []).som
 export const isPrivate = (m: Model) => m.id.startsWith("tinfoil");
 export const nameSaysPrivate = (m: Model) => /private/i.test(m.name);
 
-/** Models the chat can talk to: text in, text or pictures out. */
+/** Models the chat can talk to: text in, text out (pictures too or not). A
+ *  model that only makes pictures is served by the images API, never a chat. */
 export const answers = (m: Model) => {
   const outs = m.architecture?.output_modalities;
   const ins = m.architecture?.input_modalities;
-  const out = !outs?.length || outs.map((o) => String(o ?? "").toLowerCase()).some((o) => o === "text" || o === "image");
+  const out = !outs?.length || outs.some((o) => String(o ?? "").toLowerCase() === "text");
   const inn = !ins?.length || ins.map(normalizeModality).some((i) => i === "text");
   return out && inn;
 };

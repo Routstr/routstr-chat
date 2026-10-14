@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Model } from "@/types/models";
-import { baseKey, fmt, handles, hostOf, measureFor, priceScale, searchRank, sortRows, type Row } from "./catalog";
+import { answers, baseKey, fmt, handles, hostOf, measureFor, priceScale, searchRank, sortRows, type Row } from "./catalog";
 
 const model = (id: string, name: string, extra: Partial<Model> = {}) =>
   ({ id, name, created: 0, context_length: 0, architecture: { input_modalities: ["text"], output_modalities: ["text"] }, ...extra }) as unknown as Model;
@@ -32,9 +32,9 @@ describe("searchRank", () => {
 });
 
 describe("sortRows", () => {
-  const a = model("a", "A: Alpha", { created: 30, context_length: 1000 } as Partial<Model>);
-  const b = model("b", "B: Beta", { created: 10, context_length: 0 } as Partial<Model>);
-  const c = model("c", "C: Gamma", { created: 20, context_length: 5000 } as Partial<Model>);
+  const a = model("a", "A: Alpha", { created: 30, context_length: 1000 } as unknown as Partial<Model>);
+  const b = model("b", "B: Beta", { created: 10, context_length: 0 } as unknown as Partial<Model>);
+  const c = model("c", "C: Gamma", { created: 20, context_length: 5000 } as unknown as Partial<Model>);
   const rows = [a, b, c].map(row);
   const names = (rs: Row[]) => rs.map((r) => r.model.id).join("");
 
@@ -81,5 +81,23 @@ describe("baseKey and hostOf", () => {
     expect(hostOf("https://api.example.com/", model("m", "OpenAI: GPT-5"))).toBe("api.example.com");
     expect(hostOf(null, model("m", "OpenAI: GPT-5"))).toBe("OpenAI");
     expect(hostOf(null, model("m", "GPT-5"))).toBe("Unknown");
+  });
+});
+
+describe("answers: the models a chat can talk to", () => {
+  const takes = (input_modalities: string[], output_modalities: string[]) =>
+    model("m", "M", { architecture: { input_modalities, output_modalities } } as unknown as Partial<Model>);
+
+  it("keeps a model that answers in words, pictures too or not", () => {
+    expect(answers(takes(["text"], ["text"]))).toBe(true);
+    expect(answers(takes(["text", "image"], ["image", "text"]))).toBe(true);
+  });
+
+  it("leaves out a model that only makes pictures: providers send it to the images API", () => {
+    expect(answers(takes(["text"], ["image"]))).toBe(false);
+  });
+
+  it("leaves out a model that does not read text", () => {
+    expect(answers(takes(["audio"], ["text"]))).toBe(false);
   });
 });

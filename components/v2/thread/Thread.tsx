@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useOpenChat } from "../openChat";
+import { useCatalogModels } from "@/features/catalog/view";
 import { useAccountChat, useAsking, useReplyCosts } from "@/features/chat/view";
 import { useHistory, useThread, type ThreadSlot } from "@/features/history/view";
 import { useTurnActions } from "../useActions";
@@ -24,7 +25,9 @@ const NO_SLOTS: ThreadSlot[] = [];
 /* ══ the thread ════════════════════════════════════════════════════════════ */
 export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) {
   const { id: activeConversationId, target, reached } = useOpenChat();
-  const { models, model: selectedModel } = useChatModel();
+  const { model: selectedModel } = useChatModel();
+  // every listed model, so a past reply from one the chat no longer offers keeps its name
+  const { models } = useCatalogModels();
   // the versions picked live in history, so the model is sent the branch shown here
   const history = useHistory();
   const slots = useThread(activeConversationId) ?? NO_SLOTS;

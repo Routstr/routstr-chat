@@ -4,6 +4,7 @@ import { useKeyCredit } from "@/features/chat/view";
 import { AcceptedMintsContext, usePurse } from "@/features/wallet/view";
 import type { Model } from "@/types/models";
 import { defaultModel, pickedModel, useModelPick, type Choice } from "./pick";
+import { answers as canChat } from "./picker/catalog";
 import { normalizeModality } from "./picker/modality";
 import { payable, useMoney, usePayableFor, type Payable } from "./useMoney";
 
@@ -29,7 +30,9 @@ const autoPick = (models: Model[], catalog: Catalog, chosen: Choice | null, pay:
 
 function useModelOf() {
   const catalog = useCatalogService();
-  const { models, loading } = useCatalogModels();
+  const { models: listed, loading } = useCatalogModels();
+  // only models a chat can talk to, for the picker, a link and the app's own pick alike
+  const models = useMemo(() => listed.filter(canChat), [listed]);
   const pick = useModelPick();
   // the chat as it stands, without the draft: typing never changes the pick
   const pay = usePayableFor("");
