@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createSdk } from "../sdk";
 
 const CHEAP = "https://cheap.example/";
@@ -52,5 +52,19 @@ describe("route: where the SDK pays, by its own rule", () => {
     expect(
       await route("m", { balances: { [Z]: 50 }, activeMint: Z })
     ).toMatchObject({ baseUrl: CHEAP });
+  });
+});
+
+// Codex, 10-14: models arrive before the providers' mints; a send priced at the
+// mints the first route took must be worked out again once the mints are in
+describe("changes: what makes the app work out routes again", () => {
+  it("includes the providers' mints arriving", async () => {
+    const sdk = await routing();
+    const listener = vi.fn();
+    sdk.changes(listener);
+
+    sdk.discoveryAdapter.setCachedMints({ [CHEAP]: [X], [DEAR]: [Y, Z] });
+
+    expect(listener).toHaveBeenCalled();
   });
 });

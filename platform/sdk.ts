@@ -109,7 +109,9 @@ export function createSdk({ extraProviders }: { extraProviders: string[] }) {
           now.providersOnCooldown !== before.providersOnCooldown ||
           now.disabledProviders !== before.disabledProviders ||
           now.manuallyDisabledProviders !== before.manuallyDisabledProviders ||
-          now.manuallyEnabledProviders !== before.manuallyEnabledProviders
+          now.manuallyEnabledProviders !== before.manuallyEnabledProviders ||
+          // a route worked out before the mints were in may take none the wallet holds
+          now.mintsFromAllProviders !== before.mintsFromAllProviders
         ) {
           listener();
         }
