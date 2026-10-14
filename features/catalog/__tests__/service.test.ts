@@ -331,6 +331,18 @@ describe("CatalogService.listedAt", () => {
   });
 });
 
+describe("CatalogService.pictureRates", () => {
+  it("gives the highest picture-token price any node lists for each model", () => {
+    const { catalog, cache } = setup();
+    const priced = (id: string, image_output?: number) =>
+      ({ id, sats_pricing: { prompt: 0, completion: 0, ...(image_output ? { image_output } : {}) } }) as never;
+    cache[PUBLIC] = [priced("banana"), priced("words")];
+    cache["https://newer.example/"] = [priced("banana", 0.0395)];
+
+    expect(catalog.pictureRates()).toEqual({ banana: 0.0395 });
+  });
+});
+
 describe("CatalogService: providers you turn on and off", () => {
   const B = "https://b.example/";
   const kept = (saved: Map<string, string>) =>

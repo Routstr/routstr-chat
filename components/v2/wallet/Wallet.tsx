@@ -13,6 +13,7 @@ import { useUi } from "../ui";
 import { shortModelName } from "../format";
 import { useChatModel } from "../useChatModel";
 import { estimateSats, promptTokens } from "../price";
+import { useListed } from "../useListed";
 import { useMoney } from "../useMoney";
 import { tokenMs } from "../motion";
 import { Note, Odometer, dayOf, fmt, host, left, mintLabel, numSize, pairChange, phoneNow, readKeyFlag, reduced, span, toMs, whenIn, writeKeyFlag } from "./bits";
@@ -32,7 +33,8 @@ const HOUR = 3_600_000;
 /** What one ordinary reply costs with the chosen model. */
 export function usePerReply() {
   const { model: selectedModel } = useChatModel();
-  const per = estimateSats(selectedModel, promptTokens("", ""));
+  const { pictureRates } = useListed();
+  const per = estimateSats(selectedModel, promptTokens("", ""), selectedModel ? pictureRates[selectedModel.id] : undefined);
   return { per, name: shortModelName(selectedModel?.name, selectedModel?.id) };
 }
 

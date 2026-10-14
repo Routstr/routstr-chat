@@ -198,6 +198,19 @@ export class CatalogService {
     );
   }
 
+  /** The highest picture-token price any node lists for each model: older
+   *  nodes list none, yet charge a picture all the same. */
+  pictureRates(): Record<string, number> {
+    const rates: Record<string, number> = {};
+    for (const models of Object.values(this.deps.discoveryAdapter.getCachedModels())) {
+      for (const model of models as unknown as Model[]) {
+        const rate = model.sats_pricing?.image_output;
+        if (rate && rate > (rates[model.id] ?? 0)) rates[model.id] = rate;
+      }
+    }
+    return rates;
+  }
+
   /** Providers that serve this model, cheapest first, as routing ranks them. */
   routes(modelId: string) {
     return this.deps.providerManager.getProviderPriceRankingForModel(modelId, {

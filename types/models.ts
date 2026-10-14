@@ -33,6 +33,8 @@ export interface Model {
     completion: number;
     request: number;
     image: number;
+    /** A picture token a model draws; newer nodes list it. */
+    image_output?: number;
     web_search: number;
     internal_reasoning: number;
     max_completion_cost: number;

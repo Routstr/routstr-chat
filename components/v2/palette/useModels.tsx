@@ -5,6 +5,7 @@ import { renderCompanyIcon } from "@/components/v2/picker/display";
 import { Icon } from "../icons";
 import { shortModelName } from "../format";
 import { estimateSats, promptTokens } from "../price";
+import { useListed } from "../useListed";
 
 export function useModels(models: Model[]) {
   const byId = useMemo(() => new Map((models as Model[]).map((m) => [m.id, m])), [models]);
@@ -16,7 +17,8 @@ export function useModels(models: Model[]) {
     },
     [byId]
   );
-  const perReply = useCallback((m?: Model | null) => (m ? estimateSats(m, promptTokens("", "")) : 0), []);
+  const { pictureRates } = useListed();
+  const perReply = useCallback((m?: Model | null) => (m ? estimateSats(m, promptTokens("", ""), pictureRates[m.id]) : 0), [pictureRates]);
   const modelWords = useMemo(
     () =>
       (models as Model[])

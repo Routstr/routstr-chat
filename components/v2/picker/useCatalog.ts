@@ -10,6 +10,7 @@ import { useChatModel } from "../useChatModel";
 import { useMoney, usePayable } from "../useMoney";
 import { textOf } from "../format";
 import { estimateSats, promptTokens } from "../price";
+import { useListed } from "../useListed";
 import { baseKey, hostOf, parseKey, priceScale, type Route, type Row } from "./catalog";
 
 /** Development only: the lab hands the picker a catalogue with providers, so
@@ -34,7 +35,8 @@ export function useCatalog() {
   // the same estimate the composer shows: this conversation plus the draft
   const history = useMemo(() => (slots ?? []).map((s) => textOf(s.displayed.content)).join(" "), [slots]);
   const tokens = useMemo(() => promptTokens(history, text), [history, text]);
-  const cost = useCallback((m: Model | null | undefined) => estimateSats(m, tokens), [tokens]);
+  const { pictureRates } = useListed();
+  const cost = useCallback((m: Model | null | undefined) => estimateSats(m, tokens, m ? pictureRates[m.id] : undefined), [tokens, pictureRates]);
 
 
   // cheapest first, the order the router tries them in. Ranking rescans the
