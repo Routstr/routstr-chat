@@ -7,6 +7,7 @@ import { peek } from "@/features/wallet/view";
 import { useUi } from "../../ui";
 import { useMoney, usePayable } from "../../useMoney";
 import { useChatModel } from "../../useChatModel";
+import { hostOf } from "../../picker/catalog";
 import { KEPT, useFunding } from "../../wallet/useFunding";
 import { PRESETS, fmt, reduced } from "./bits";
 
@@ -28,6 +29,8 @@ export function usePay(say: (t: string) => void) {
   const funding = useFunding();
 
   const balance = money.total;
+  // what this payment can draw on: the SDK pays from one mint the provider takes
+  const usable = pay.spendable(provider);
   const held = useHeldCredit();
   const need = priced ? pay.takes(priced, provider) : 0;
   // an account's first sats (nothing in the wallet or held at a provider): a small try, picked for you
@@ -47,7 +50,7 @@ export function usePay(say: (t: string) => void) {
   }, []);
   const [landed, setLanded] = useState(0);
 
-  const minOther = Math.max(1, need - balance);
+  const minOther = Math.max(1, need - usable);
   // an invoice runs out at the mint's deadline; after that nobody should pay it
   const [ranOut, setRanOut] = useState<number | null>(null);
   useEffect(() => {
@@ -125,7 +128,7 @@ export function usePay(say: (t: string) => void) {
   // seal the card goes back to the amounts, whose head says what is still short
   const short = useRef(0);
   useEffect(() => {
-    short.current = priced && !pay.covers(priced, provider) ? Math.max(1, need - balance) : 0;
+    short.current = priced && !pay.covers(priced, provider) ? Math.max(1, need - usable) : 0;
   });
   useEffect(() => {
     if (!landed || !holding) return;
@@ -212,7 +215,18 @@ export function usePay(say: (t: string) => void) {
           t: "Top up to send",
           s: (
             <>
-              You have <b>{fmt(balance)} sats</b>. This model needs <b>{fmt(need)} sats</b>{" "}to start a&nbsp;reply.
+              You have <b>{fmt(balance)} sats</b>
+              {usable < balance &&
+                provider &&
+                priced &&
+                (usable > 0 ? (
+                  <>
+                    , but a payment comes from one mint {hostOf(provider, priced)} takes, and the most there is <b>{fmt(usable)} sats</b>
+                  </>
+                ) : (
+                  <>, but none of it is at a mint {hostOf(provider, priced)} takes</>
+                ))}
+              . This model needs <b>{fmt(need)} sats</b>{" "}to start a&nbsp;reply.
             </>
           ),
         }
@@ -228,7 +242,7 @@ export function usePay(say: (t: string) => void) {
     head,
     presets: trying ? [TRY, ...PRESETS.slice(0, 2)] : PRESETS,
     funding,
-    balance,
+    balance: usable,
     need,
     minOther,
     method,

@@ -66,12 +66,14 @@ export function MoneyProvider({ children }: { children: React.ReactNode }) {
 const slashed = (url: string) => (url.endsWith("/") ? url : `${url}/`);
 
 /** What a send takes from the wallet before it goes, by the SDK's own sizes
- *  (topUpFor), and whether the wallet has it. `need` is what one message may
- *  cost, by the SDK's own rule. On the API-key path a key's credit at the
- *  provider the send goes to pays first; `credit` is null when every message
- *  carries its own token (X-Cashu), and a node pays for all. */
+ *  (topUpFor), and whether the wallet has it. `spendable` is what one payment
+ *  to a provider can draw on: the SDK pays from a single mint the provider
+ *  takes (with no provider given, the fullest mint). `need` is what one
+ *  message may cost, by the SDK's own rule. On the API-key path a key's credit
+ *  at the provider the send goes to pays first; `credit` is null when every
+ *  message carries its own token (X-Cashu), and a node pays for all. */
 export function payable(
-  total: number,
+  spendable: (where?: string | null) => number,
   credit: Readonly<Record<string, number>> | null,
   node: boolean,
   need: (model: Model) => number
@@ -85,13 +87,16 @@ export function payable(
   /** Whether where the send goes changes the answer: the wallet alone is
    *  short, and the most any key holds would make it enough. */
   const decides = (model: Model) =>
-    keys.length > 0 && total < takesWith(model, null) && total >= takesWith(model, Math.max(...keys));
-  /** `where` is worked out only when it decides. */
-  const covers = (model: Model, where: Where) =>
-    decides(model)
-      ? total >= takes(model, typeof where === "function" ? where() : where)
-      : total >= takesWith(model, null);
-  return { takes, decides, covers, need };
+    keys.length > 0 && spendable() < takesWith(model, null) && spendable() >= takesWith(model, Math.max(...keys));
+  /** A known `where` counts its own mints and key; one still to work out is
+   *  worked out only when a key's credit decides. */
+  const covers = (model: Model, where: Where) => {
+    if (typeof where !== "function") return spendable(where) >= takes(model, where);
+    if (!decides(model)) return spendable() >= takesWith(model, null);
+    const at = where();
+    return spendable(at) >= takes(model, at);
+  };
+  return { takes, decides, covers, need, spendable };
 }
 
 /** The provider a message goes to, or a way to work it out. */
@@ -109,7 +114,7 @@ export function usePayable() {
 /** `payable` for a send of `question` in the open chat: what one message may
  *  cost on a model is the SDK's own price for that request (pricedRequest). */
 export function usePayableFor(question: Message["content"]) {
-  const { total, node } = useMoney();
+  const { balances, node } = useMoney();
   const credit = useKeyCredit();
   const catalog = useCatalogService();
   const slots = useThread(useOpenChat().id);
@@ -121,7 +126,15 @@ export function usePayableFor(question: Message["content"]) {
     (model: Model) => catalog?.need(model, textOnly(model) ? request.reads : request.sees) ?? 0,
     [catalog, request]
   );
-  return useMemo(() => payable(total, credit, !!node, need), [total, node, credit, need]);
+  const spendable = useCallback(
+    (where?: string | null) => {
+      const takes = where ? (catalog?.mintsOf(where) ?? []) : [];
+      // a provider that names no mints takes any, as the SDK reads it
+      return Math.max(0, ...Object.entries(balances).flatMap(([mint, sats]) => (!takes.length || takes.includes(mint) ? [sats] : [])));
+    },
+    [balances, catalog]
+  );
+  return useMemo(() => payable(spendable, credit, !!node, need), [spendable, node, credit, need]);
 }
 
 // as the engine is told: unknown inputs are not taken as text only

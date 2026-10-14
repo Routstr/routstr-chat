@@ -98,21 +98,21 @@ const ChatModelContext = createContext<ReturnType<typeof useModelOf> | null>(nul
 export function ChatModelProvider({ children }: { children: React.ReactNode }) {
   const value = useModelOf();
   const catalog = useCatalogService();
-  const { total, node } = useMoney();
+  const { node } = useMoney();
   const credit = useKeyCredit();
-  const { need } = usePayableFor("");
+  const { need, spendable } = usePayableFor("");
   // read when money comes in: the model and pin as they are then
-  const now = useRef({ value, total, credit, node, need });
+  const now = useRef({ value, spendable, credit, node, need });
   useLayoutEffect(() => {
-    now.current = { value, total, credit, node, need };
+    now.current = { value, spendable, credit, node, need };
   });
   const accepted = useCallback(
     (sats: number) => {
-      const { value, total, credit, node, need } = now.current;
+      const { value, spendable, credit, node, need } = now.current;
       if (!catalog) return [];
       // with nothing chosen, the model the app will pick once these sats are in
       const model =
-        pickedModel(value.models, value) ?? autoPick(value.models, catalog, value.chosen, payable(total + sats, credit, !!node, need), value.routed);
+        pickedModel(value.models, value) ?? autoPick(value.models, catalog, value.chosen, payable((where) => spendable(where) + sats, credit, !!node, need), value.routed);
       if (!model) return [];
       const base = goesTo(model, value.chosen, catalog.routes(model.id), value.routed[model.id]);
       return base ? catalog.mintsOf(base) : [];

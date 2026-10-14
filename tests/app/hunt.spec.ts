@@ -409,59 +409,6 @@ async function firstDeposit(kit: KitClient, id: string, text: string): Promise<n
   return topUpFor(need, null).now;
 }
 
-/** Whether the picker marks the kit's model as needing more sats; closes it again. */
-async function cheapIsShort(page: Page): Promise<boolean> {
-  await page.getByRole("button", { name: /^Model: Kit Cheap\./ }).click();
-  const row = page.getByRole("option", { name: /Kit Cheap/ });
-  await expect(row).toBeVisible();
-  const short = (await row.getAttribute("data-short")) !== null;
-  await page.keyboard.press("Escape");
-  await expect(row).toBeHidden();
-  return short;
-}
-
-// on the API-key path a provider spends the credit it holds for you before the wallet, so the
-// picker and the send count it for messages to that provider, and for no other
-test("credit a provider holds pays for messages to it, and only to it", async ({
-  page,
-  context,
-  kit,
-  appUrl,
-}) => {
-  const nsec = newKey();
-  await seedAccounts(context, [nsec]);
-  await v2.open(page, appUrl);
-  await seedKitProvider(page, kit.coreUrl, "kit-cheap");
-
-  // 500 sats at a provider that does not serve the model, nothing in the wallet
-  await holdAt(page, nsec, "http://elsewhere.localhost/", 500);
-  expect(await cheapIsShort(page)).toBe(true);
-  await v2.send(page, `${TINY} held message`);
-  await expect(
-    page.getByRole("heading", { name: "Add a few sats to send" })
-  ).toBeVisible();
-  await expect(page.locator("article.rd-me")).toHaveCount(0);
-
-  // sats land: the held message goes to the kit's core, whose key keeps the rest of its deposit
-  await v2.receive(page, await kit.mintToken(300));
-  await v2.waitReplyText(page, "Echo: held message");
-  await v2.waitIdle(page);
-
-  // the wallet keeps less than any first deposit: short alone, but enough with the core's credit
-  const keep = 1;
-  await v2.useMint(page, kit.env.mintUrl);
-  const left = await v2.balance(page);
-  expect(await kit.redeem(await v2.makeToken(page, left - keep))).toBe(left - keep);
-  await expect.poll(() => v2.balance(page)).toBe(keep);
-  expect(await cheapIsShort(page)).toBe(false);
-
-  // and the send agrees: it goes, paid by the core's credit, the wallet untouched
-  await v2.send(page, `${TINY} paid by the credit`);
-  await v2.waitReplyText(page, "Echo: paid by the credit");
-  await v2.waitIdle(page);
-  await expect(page.locator("article.rd-me")).toHaveCount(2);
-  expect(await v2.balance(page)).toBe(keep);
-});
 
 // the picker and the send ask for what the SDK's payment really takes: a wallet holding just its
 // first deposit sends, and the deposit is all it takes
@@ -483,6 +430,30 @@ test("a wallet holding just the first deposit sends, and the deposit is all it t
   await v2.waitReplyText(page, "Echo: just enough");
   await v2.waitIdle(page);
   await expect.poll(() => v2.balance(page)).toBe(0);
+});
+
+// the SDK pays a provider from one mint it takes: sats at a mint the kit's core does not take
+// cannot pay it, so Send asks for sats that can, and nothing is sent to fail; sats that land at
+// the kit mint send the held message
+test("sats at a mint the provider does not take: Send asks for usable sats, then sends", async ({
+  page,
+  context,
+  kit,
+  appUrl,
+}) => {
+  await seedAccounts(context, [newKey()]);
+  await v2.open(page, appUrl);
+  await seedKitProvider(page, kit.coreUrl, "kit-cheap");
+  await v2.receive(page, await kit.mintToken(100, { otherMint: true }));
+
+  await v2.send(page, `${TINY} from the right mint`);
+  await expect(page.getByRole("heading", { name: "Top up to send" })).toBeVisible();
+  await expect(page.getByText(/none of it is at a mint .* takes/)).toBeVisible();
+  await expect(page.locator("article.rd-me")).toHaveCount(0);
+
+  await v2.receive(page, await kit.mintToken(100));
+  await v2.waitReplyText(page, "Echo: from the right mint");
+  await expect(page.getByText("Not enough sats for this reply.")).toHaveCount(0);
 });
 
 // with nothing chosen the app picks the costliest model what can pay covers, and a key's credit

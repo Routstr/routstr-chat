@@ -26,7 +26,7 @@ const kindOf = (raw: string): Kind => {
   // a dropped connection reads as the SDK's refund step failing ("returned -1"): no answer came back
   if (/did not respond|timed? ?out|no response|returned -1|network error/i.test(t)) return "noanswer";
   if (DECLINED.test(t) || /content filtering/i.test(t)) return "declined";
-  if (/insufficient|not enough|balance/i.test(t)) return "funds";
+  if (/insufficient|not enough|balance|no funded mint/i.test(t)) return "funds";
   return "unknown";
 };
 
@@ -110,7 +110,10 @@ export default function Trouble({
     );
   }
 
-  const hold = /at least (\d+)/i.exec(raw)?.[1];
+  const hold = /at least (\d+)|need (\d+) sats/i.exec(raw)?.slice(1).find(Boolean);
+  // the SDK pays from one mint the provider takes: the sats may be elsewhere, or split
+  const elsewhere = /No funded mint accepted by/i.test(raw);
+  const fullest = /largest (?:accepted )?mint balance: (\d+)/i.exec(raw)?.[1];
   let head = "Something went wrong.";
   let sub: React.ReactNode = "The request stopped before an answer came back.";
   let prime: React.ReactNode = canAct && (
@@ -137,7 +140,16 @@ export default function Trouble({
             {model} needs <span className="n">{Number(hold).toLocaleString("en-US")} sats</span> to start.{" "}
           </>
         )}
-        Your wallet has <span className="n">{Math.floor(money.total).toLocaleString("en-US")} sats</span>.
+        Your wallet has <span className="n">{Math.floor(money.total).toLocaleString("en-US")} sats</span>
+        {elsewhere
+          ? ", but not at a mint this provider takes."
+          : fullest && Number(fullest) < Number(hold ?? 0)
+            ? (
+                <>
+                  , but one payment comes from one mint, and the fullest holds <span className="n">{Number(fullest).toLocaleString("en-US")} sats</span>.
+                </>
+              )
+            : "."}
       </>
     );
     prime = (
