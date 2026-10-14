@@ -1,7 +1,7 @@
 "use client";
 
 import React, { memo, useEffect, useLayoutEffect, useMemo, useRef } from "react";
-import ReactMarkdown, { type Components } from "react-markdown";
+import ReactMarkdown, { defaultUrlTransform, type Components, type UrlTransform } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
@@ -14,6 +14,10 @@ import { rehypeWords } from "./words";
 
 const REMARK = [remarkMath, remarkGfm];
 const REHYPE = [rehypeKatex];
+// Some image models write their picture into the words as a data: link. Markdown's own rule would
+// drop it; a picture held in the page itself is drawn. Every other address keeps that rule.
+const keepPictures: UrlTransform = (url, key) =>
+  key === "src" && /^data:image\//i.test(url) ? url : defaultUrlTransform(url);
 
 const text = (children: React.ReactNode): string =>
   React.Children.toArray(children)
@@ -76,7 +80,7 @@ const LIVE_COMPONENTS: Components = {
 
 const Block = memo(function Block({ md }: { md: string }) {
   return (
-    <ReactMarkdown remarkPlugins={REMARK} rehypePlugins={REHYPE} components={COMPONENTS}>
+    <ReactMarkdown remarkPlugins={REMARK} rehypePlugins={REHYPE} components={COMPONENTS} urlTransform={keepPictures}>
       {md}
     </ReactMarkdown>
   );
@@ -116,7 +120,7 @@ function tableNums(wrap: HTMLElement) {
 const LiveBlock = memo(function LiveBlock({ md, idle }: { md: string; idle: boolean }) {
   const plugins = useMemo(() => [rehypeKatex, rehypeWords({ idle })], [idle]);
   return (
-    <ReactMarkdown remarkPlugins={REMARK} rehypePlugins={plugins} components={LIVE_COMPONENTS}>
+    <ReactMarkdown remarkPlugins={REMARK} rehypePlugins={plugins} components={LIVE_COMPONENTS} urlTransform={keepPictures}>
       {md}
     </ReactMarkdown>
   );

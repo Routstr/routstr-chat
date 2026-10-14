@@ -28,6 +28,12 @@ describe("pictures in an answer", () => {
       expect(out).not.toContain("<img");
     }
   );
+  it("shows a picture written into the words as a data: link, as some image models answer", () => {
+    const px = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==";
+    expect(html(`Here it is:\n\n![a red dot](${px})`)).toContain(`<img src="${px}"`);
+    // a data: link to anything else is still dropped
+    expect(html("[open](data:text/html,hi)")).not.toContain("data:text/html");
+  });
   it("shows a picture from this app at once", () => {
     expect(html("![dot](/icons/icon-192.png)")).toContain('<img src="/icons/icon-192.png"');
   });
