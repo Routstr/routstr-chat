@@ -47,7 +47,7 @@ export function useRailTip({
   const showTip = (el: HTMLElement, kind: string) => {
     const t = tipRef.current;
     const rail = root.current;
-    if (!t || !rail) return;
+    if (!t || !rail || !el.getClientRects().length) return;
     const rr = rail.getBoundingClientRect();
     const r = el.getBoundingClientRect();
     tipFor.current = el;
