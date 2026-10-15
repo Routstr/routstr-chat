@@ -217,7 +217,9 @@ export class CatalogService {
    *  making pictures. A longest reply some node does not name is unknown. */
   rooms(): Record<string, { context?: number; maxOut?: number; draws: boolean }> {
     const rooms: Record<string, { context?: number; maxOut?: number; unnamed: boolean; draws: boolean }> = {};
-    for (const models of Object.values(this.deps.discoveryAdapter.getCachedModels())) {
+    const off = new Set(this.deps.discoveryAdapter.getDisabledProviders());
+    for (const [base, models] of Object.entries(this.deps.discoveryAdapter.getCachedModels())) {
+      if (off.has(base)) continue;
       for (const model of models as unknown as Model[]) {
         const room = (rooms[model.id] ??= { unnamed: false, draws: false });
         if (model.architecture?.output_modalities?.includes("image")) room.draws = true;
