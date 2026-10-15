@@ -3,6 +3,7 @@ import type { Message } from "@/types/chat";
 import { createPnsEvent, decryptPnsEvent, type PnsKeys } from "@/lib/pns";
 
 const KIND_CHAT = 20001;
+const KIND_TITLE = 20002;
 
 /** The parent every first question points at. */
 export const ROOT_ID = "0".repeat(64);
@@ -15,6 +16,45 @@ export type Stored = Message & { _eventId: string; _createdAt: number };
 export interface Entry {
   conversationId: string;
   message: Stored;
+}
+
+export interface Title {
+  conversationId: string;
+  title: string;
+  eventId: string;
+  createdAt: number;
+}
+
+export function encodeTitle(
+  conversationId: string,
+  title: string,
+  author: string,
+  createdAt: number,
+  keys: PnsKeys
+): NostrEvent {
+  return createPnsEvent(
+    {
+      kind: KIND_TITLE,
+      pubkey: author,
+      created_at: createdAt,
+      tags: [
+        ["d", conversationId],
+        ["client", "routstr-chat"],
+      ],
+      content: title,
+    },
+    keys
+  );
+}
+
+export function decodeTitle(event: NostrEvent, keys: PnsKeys): Title | null {
+  const inner = decryptPnsEvent(event, keys);
+  if (inner?.kind !== KIND_TITLE || typeof inner.content !== "string") return null;
+  const conversationId = Array.isArray(inner.tags)
+    ? inner.tags.find((t: unknown) => Array.isArray(t) && t[0] === "d")?.[1]
+    : undefined;
+  if (!conversationId) return null;
+  return { conversationId, title: inner.content, eventId: event.id, createdAt: inner.created_at };
 }
 
 /** One message, encrypted the way main writes it, so every client reads it. */

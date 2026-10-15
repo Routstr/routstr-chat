@@ -193,6 +193,7 @@ html[data-nogl] body {
 /* a real pointer only: after a tap, a touch screen keeps :hover on the last button */
 @media (hover: hover) { button.title:hover { color: var(--ink); background: var(--fill-1); } }
 .title-in { animation: titleIn var(--d-slow) var(--e-out) both; display: inline-block; }
+.title-name { field-sizing: content; min-width: 6ch; max-width: 100%; color: var(--ink); background: var(--fill-1); box-shadow: inset 0 0 0 1px var(--hair); caret-color: var(--tint); outline: none; }
 @keyframes titleIn { from { opacity: 0; filter: blur(4px); transform: translateY(3px); } to { opacity: 1; filter: none; transform: none; } }
 
 /* ══ stage: a new chat is the room itself, a greeting and the composer ══ */

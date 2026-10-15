@@ -7,7 +7,7 @@
    number, --p, and everything below is drawn from it. Tokens only. */
 
 /* desktop has none of these */
-.pcard, .catch, .title-chev { display: none; }
+.pcard, .catch { display: none; }
 .head-bal { display: none; }
 
 @media (max-width: 760px) {
@@ -156,7 +156,6 @@
   /* titles never end in dots: a long one fades at its end, as the drawer's do */
   .panel-head .title-in { overflow: hidden; text-overflow: clip; white-space: nowrap; min-width: 0; }
   .panel-head .title-in[data-cut] { mask-image: linear-gradient(90deg, #000 calc(100% - var(--s6)), transparent); }
-  .title-chev { display: block; width: 13px; height: 13px; color: var(--ink-3); flex: none; margin-top: 2px; }
   .panel-head .title:active { background: var(--fill-1); transform: scale(.98); }
   .head-bal {
     display: inline-flex; align-items: baseline; justify-content: flex-end; gap: 5px;

@@ -59,6 +59,7 @@ class LabHistory {
     this.listeners.forEach((listener) => listener());
   };
   remove = async (id: string) => this.hooks.remove(id);
+  rename = async (id: string, title: string) => this.hooks.rename(id, title);
   sync = async (): Promise<SyncOutcome> => {
     await this.hooks.sync();
     return "ok";

@@ -591,6 +591,24 @@ describe("HistoryService: sync", () => {
     );
   });
 
+  it("shows a name another device gives a chat, and drops it with the chat", async () => {
+    const net = network();
+    const who = person();
+    await keyringOn(net, who);
+    const phone = device({ net, who });
+    phone.history.start();
+    await ready(phone.history);
+    await phone.history.save("c1", ask("hello"));
+    await phone.history.rename("c1", "Trip plan");
+    const { history, log } = device({ net, who });
+    history.start();
+    await until(() => history.getConversations()[0]?.title === "Trip plan");
+
+    await history.remove("c1");
+    expect([...log.rows.values()].filter((e) => e.kind === KIND_PNS)).toEqual([]);
+    await until(() => phone.history.getConversations().length === 0);
+  });
+
   it("stops taking messages from relays once sync is turned off, and takes them again once on", async () => {
     const net = network();
     const who = person();

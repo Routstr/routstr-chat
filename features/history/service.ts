@@ -9,7 +9,14 @@ import {
 import type { Conversation, Message } from "@/types/chat";
 import { KIND_PNS, createPnsDeletionEvent, type PnsKeys } from "@/lib/pns";
 import type { AccountRelays } from "@/features/relays/service";
-import { decodeMessage, encodeMessage, type Entry } from "./codec";
+import {
+  decodeMessage,
+  decodeTitle,
+  encodeMessage,
+  encodeTitle,
+  type Entry,
+  type Title,
+} from "./codec";
 import {
   KIND_KEYRING,
   createKeyring,
@@ -191,6 +198,16 @@ export class HistoryService {
     this.store.show(conversationId, event.id);
     this.publish(event);
     return { ...entry.message, _prevId: message._prevId };
+  }
+
+  async rename(conversationId: string, title: string): Promise<void> {
+    const keys = await this.whenWritable();
+    const at = Math.max(nowSeconds(), (this.store.namedAt(conversationId) ?? 0) + 1);
+    const event = encodeTitle(conversationId, title, this.owner, at, keys);
+    this.authorOf.set(event.id, event.pubkey);
+    this.store.ingest([], [decodeTitle(event, keys)!]);
+    await this.deps.log.put([event]);
+    this.publish(event);
   }
 
   /** Gone here at once; the deletion is kept and sent to relays. */
@@ -432,11 +449,16 @@ export class HistoryService {
       });
     }
     if (!keys) return;
-    const entries = events
-      .filter((event) => event.kind === KIND_PNS && !this.deleted.has(event.id))
-      .map((event) => decodeMessage(event, keys))
-      .filter((entry): entry is Entry => entry !== null);
-    this.store.ingest(entries);
+    const entries: Entry[] = [];
+    const titles: Title[] = [];
+    for (const event of events) {
+      if (event.kind !== KIND_PNS || this.deleted.has(event.id)) continue;
+      const entry = decodeMessage(event, keys);
+      const title = entry ? null : decodeTitle(event, keys);
+      if (entry) entries.push(entry);
+      else if (title) titles.push(title);
+    }
+    this.store.ingest(entries, titles);
   }
 
   // main's "Forget chats after 7 days": run once, after the first sync

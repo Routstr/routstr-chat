@@ -17,7 +17,7 @@ import Settings from "./settings/Settings";
 import Greeting, { Resume } from "./Greeting";
 import { useCountUp, useMoney } from "./useMoney";
 import { useSession } from "@/features/session/view";
-import { useConversations, useHistoryLoaded, useThread } from "@/features/history/view";
+import { useConversations, useHistory, useHistoryLoaded, useThread } from "@/features/history/view";
 import { useOpenChat } from "./openChat";
 import { sats } from "./format";
 import { useDrawerDrag, useKeyboardInset, usePhone } from "./phone";
@@ -57,6 +57,13 @@ function Panel() {
     () => conversations.find((c) => c.id === activeConversationId)?.title ?? "",
     [conversations, activeConversationId]
   );
+  const history = useHistory();
+  const [naming, setNaming] = useState<string | null>(null);
+  const named = (id: string, next: string | null, back: boolean) => {
+    setNaming(null);
+    if (next) history?.rename(id, next).catch((error) => console.error("Could not rename the chat:", error));
+    if (back) requestAnimationFrame(() => document.querySelector<HTMLElement>(".panel-head button.title")?.focus());
+  };
   useLayoutEffect(() => {
     const t = titleIn.current;
     if (!t) return;
@@ -134,12 +141,13 @@ function Panel() {
             <Icon name="menu" />
           </button>
         </div>
-        {!empty && title ? (
-          <button className="title" onClick={() => ui.setPalette(true)} title="Search chats" aria-label={`Search chats. Current chat: ${title}`}>
+        {!empty && title && activeConversationId && naming === activeConversationId ? (
+          <NameField title={title} done={(next, back) => named(activeConversationId, next, back)} />
+        ) : !empty && title ? (
+          <button className="title" onClick={() => setNaming(activeConversationId)} aria-label={`Rename this chat: ${title}`}>
             <span className="title-in" key={title} ref={titleIn}>
               {title}
             </span>
-            <Icon name="down" size={13} className="title-chev" />
           </button>
         ) : (
           <span className="title" />
@@ -280,5 +288,34 @@ export default function Shell() {
         <Settings />
       </div>
     </ChatModelProvider>
+  );
+}
+
+function NameField({ title, done }: { title: string; done: (next: string | null, back: boolean) => void }) {
+  const box = useRef<HTMLInputElement>(null);
+  const ended = useRef(false);
+  useEffect(() => {
+    box.current?.focus();
+    box.current?.select();
+  }, []);
+  const end = (value: string | null, back: boolean) => {
+    if (ended.current) return;
+    ended.current = true;
+    const next = value?.trim();
+    done(next && next !== title ? next : null, back);
+  };
+  return (
+    <input
+      ref={box}
+      className="title title-name"
+      defaultValue={title}
+      aria-label="Chat name"
+      onKeyDown={(e) => {
+        if ((e.key !== "Enter" && e.key !== "Escape") || e.nativeEvent.isComposing) return;
+        e.preventDefault();
+        end(e.key === "Enter" ? e.currentTarget.value : null, true);
+      }}
+      onBlur={(e) => document.hasFocus() && end(e.currentTarget.value, false)}
+    />
   );
 }
