@@ -2,7 +2,7 @@
 .md > .rd-code { margin-top: 1.2em; }
 .md > .rd-code + * { margin-top: 1.2em; }
 .rd-code {
-  border-radius: var(--r-sm); background: var(--code-bg); overflow: clip;
+  border-radius: var(--r-sm); background: linear-gradient(var(--code-bg), var(--code-bg)), var(--surface); overflow: clip;
   box-shadow: inset 0 1px 0 var(--code-lip), inset 0 0 0 1px var(--hair);
   font-family: var(--f-mono);
   /* one line box for the gutter and the code, whatever their font sizes */
@@ -20,8 +20,11 @@
 .rd-code[data-bleed][data-nums="off"] .rd-pre { padding-left: var(--rd-bleed); }
 .rd-code-cap {
   display: flex; align-items: center; justify-content: space-between; gap: var(--s3);
-  min-height: 38px; padding: 4px 5px 0 var(--s4);
+  min-height: 38px; margin: 1px 1px 0; padding: 3px 4px 0 calc(var(--s4) - 1px);
+  position: sticky; top: var(--top-fade, 36px); z-index: 1;
+  border-radius: calc(var(--r-sm) - 1px) calc(var(--r-sm) - 1px) 0 0; background: inherit;
 }
+.rd-code-cap::before { content: ""; position: absolute; inset: auto 0 100%; height: 64px; background: inherit; }
 .rd-code-lang { display: inline-flex; align-items: baseline; gap: 10px; font-size: 11px; letter-spacing: .02em; color: var(--ink-3); }
 .rd-code-n { font-size: 10.5px; font-variant-numeric: tabular-nums; }
 .rd-code-n::before { margin: 0 9px 0 0; }
