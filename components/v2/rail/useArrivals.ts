@@ -46,6 +46,8 @@ export function useArrivals({
     return () => {
       cancelAnimationFrame(raf);
       window.clearTimeout(t);
+      setArriving((a) => (a.size ? new Set() : a));
+      setTitled((a) => (a.size ? new Set() : a));
     };
   }, [conversations, conversationsLoaded, isAuthenticated]);
   return { arriving, titled, arrivingList };
