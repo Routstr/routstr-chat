@@ -7,11 +7,74 @@ export type ProviderDirectoryEntry = {
 };
 
 const TOR_ONION_SUFFIX = ".onion";
+const TOR_MODE_STORAGE_KEY = "routstr_tor_mode";
 
+/**
+ * Detect if the current browser is Tor Browser by checking the user agent
+ */
+const isTorBrowser = (): boolean => {
+  if (typeof window === "undefined") return false;
+  const userAgent = navigator.userAgent.toLowerCase();
+  return userAgent.includes("tor");
+};
+
+/**
+ * Get manual Tor mode preference from localStorage
+ * Returns: true (force Tor), false (force non-Tor), or null (auto-detect)
+ */
+export const getTorModePreference = (): boolean | null => {
+  if (typeof window === "undefined") return null;
+  try {
+    const stored = localStorage.getItem(TOR_MODE_STORAGE_KEY);
+    if (stored === "true") return true;
+    if (stored === "false") return false;
+    return null;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Set manual Tor mode preference in localStorage
+ * Pass null to clear the preference and enable auto-detection
+ */
+export const setTorModePreference = (value: boolean | null): void => {
+  if (typeof window === "undefined") return;
+  try {
+    if (value === null) {
+      localStorage.removeItem(TOR_MODE_STORAGE_KEY);
+    } else {
+      localStorage.setItem(TOR_MODE_STORAGE_KEY, String(value));
+    }
+  } catch {
+    // Silently fail if localStorage is not available
+  }
+};
+
+/**
+ * Determine if we're in a Tor context
+ * Checks in order:
+ * 1. Manual override from localStorage
+ * 2. .onion hostname check
+ * 3. Tor Browser detection via user agent
+ */
 export const isTorContext = (): boolean => {
   if (typeof window === "undefined") return false;
+
+  // Check manual override first
+  const manualOverride = getTorModePreference();
+  if (manualOverride !== null) {
+    return manualOverride;
+  }
+
+  // Check if accessed via .onion address
   const hostname = window.location.hostname.toLowerCase();
-  return hostname.endsWith(TOR_ONION_SUFFIX);
+  if (hostname.endsWith(TOR_ONION_SUFFIX)) {
+    return true;
+  }
+
+  // Auto-detect Tor Browser
+  return isTorBrowser();
 };
 
 export const isOnionUrl = (url: string): boolean => {
