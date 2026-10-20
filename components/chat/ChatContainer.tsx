@@ -1,12 +1,12 @@
 "use client";
 
-import React from "react";
-import { Menu } from "lucide-react";
+import React, { useCallback, useState } from "react";
 import { useChat } from "@/context/ChatProvider";
 import { useAuth } from "@/context/AuthProvider";
 import ChatHeader from "./ChatHeader";
 import MainChatArea from "./MainChatArea";
 import Sidebar from "./Sidebar";
+import ChatSearchOverlay from "./ChatSearchOverlay";
 
 /**
  * Main layout container and orchestration component
@@ -27,6 +27,7 @@ const ChatContainer: React.FC<ChatContainerProps> = ({
   isQrModalOpen,
 }) => {
   const { isAuthenticated } = useAuth();
+  const [isChatSearchOpen, setIsChatSearchOpen] = useState(false);
   const {
     // UI State
     isSidebarOpen,
@@ -51,6 +52,26 @@ const ChatContainer: React.FC<ChatContainerProps> = ({
     syncWithNostr,
     isSyncing,
   } = useChat();
+
+  const openChatSearch = useCallback(() => {
+    setIsChatSearchOpen(true);
+  }, []);
+
+  const closeChatSearch = useCallback(() => {
+    setIsChatSearchOpen(false);
+  }, []);
+
+  const handleSelectConversationFromSearch = useCallback(
+    (conversationId: string) => {
+      loadConversation(conversationId);
+      setIsChatSearchOpen(false);
+
+      if (isMobile) {
+        setIsSidebarOpen(false);
+      }
+    },
+    [isMobile, loadConversation, setIsSidebarOpen]
+  );
 
   return (
     <div
@@ -78,6 +99,7 @@ const ChatContainer: React.FC<ChatContainerProps> = ({
           conversations={conversations}
           activeConversationId={activeConversationId}
           createNewConversation={startNewConversation}
+          openSearchOverlay={openChatSearch}
           loadConversation={loadConversation}
           deleteConversation={deleteConversation}
           setIsSettingsOpen={setIsSettingsOpen}
@@ -100,6 +122,16 @@ const ChatContainer: React.FC<ChatContainerProps> = ({
         {/* Main Chat Content */}
         <MainChatArea />
       </div>
+
+      {isAuthenticated && (
+        <ChatSearchOverlay
+          open={isChatSearchOpen}
+          onClose={closeChatSearch}
+          conversations={conversations}
+          activeConversationId={activeConversationId}
+          onSelectConversation={handleSelectConversationFromSearch}
+        />
+      )}
     </div>
   );
 };

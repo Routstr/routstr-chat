@@ -1,12 +1,12 @@
 import {
   ChevronDown,
-  PlusCircle,
   Settings,
   Trash2,
   X,
   Key,
   SquarePen,
   RefreshCw,
+  Search,
 } from "lucide-react";
 import { Conversation } from "@/types/chat";
 
@@ -20,6 +20,7 @@ interface SidebarProps {
   conversations: Conversation[];
   activeConversationId: string | null;
   createNewConversation: () => void;
+  openSearchOverlay: () => void;
   loadConversation: (id: string) => void;
   deleteConversation: (id: string, e: React.MouseEvent) => Promise<void>;
   setIsSettingsOpen: (isOpen: boolean) => void;
@@ -41,6 +42,7 @@ export default function Sidebar({
   conversations,
   activeConversationId,
   createNewConversation,
+  openSearchOverlay,
   loadConversation,
   deleteConversation,
   setIsSettingsOpen,
@@ -103,6 +105,20 @@ export default function Sidebar({
               <X className="h-5 w-5" />
             </button>
           )}
+        </div>
+
+        <div className="px-4 pb-2">
+          <button
+            onClick={() => {
+              openSearchOverlay();
+              if (isMobile) setIsSidebarOpen(false);
+            }}
+            className="w-full flex items-center gap-2 text-sidebar-foreground/80 hover:text-sidebar-foreground bg-sidebar-accent/20 hover:bg-sidebar-accent/40 border border-sidebar-border rounded-md py-2 px-3 h-[36px] text-sm transition-colors cursor-pointer"
+            aria-label="Search chats"
+          >
+            <Search className="h-4 w-4" />
+            <span>Search chats</span>
+          </button>
         </div>
 
         {/* Conversations List */}
