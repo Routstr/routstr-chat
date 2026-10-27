@@ -134,6 +134,8 @@ export function usePay(say: (t: string) => void) {
     if (!landed || !holding) return;
     const t = window.setTimeout(() => {
       if (!short.current) return;
+      funding.reset();
+      paidOnce.current = false;
       setLanded(0);
       setTokText("");
       setMethod("ln");
