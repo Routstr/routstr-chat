@@ -5,7 +5,6 @@ import {
   Keyset,
   MintKeys,
 } from "@cashu/cashu-ts";
-import { Mint } from "../domain/Mint";
 import { normalizeMintUrl } from "../utils/formatting";
 
 /**
@@ -86,38 +85,6 @@ export class MintService {
       throw new Error(
         `Failed to activate mint ${mintUrl}: ${error instanceof Error ? error.message : String(error)}`
       );
-    }
-  }
-
-  /**
-   * Get preferred unit for a mint (prefer msat over sat)
-   */
-  async getPreferredUnit(
-    mintUrl: string
-  ): Promise<"sat" | "msat" | "not supported"> {
-    const normalizedUrl = normalizeMintUrl(mintUrl);
-    const mint = new CashuMint(normalizedUrl);
-    const keysets = await mint.getKeySets();
-
-    const activeKeysets = keysets.keysets.filter((k) => k.active);
-    const units = [...new Set(activeKeysets.map((k) => k.unit))];
-
-    return units.includes("msat")
-      ? "msat"
-      : units.includes("sat")
-        ? "sat"
-        : "not supported";
-  }
-
-  /**
-   * Validate mint URL
-   */
-  validateMintUrl(url: string): boolean {
-    try {
-      new URL(url);
-      return true;
-    } catch {
-      return false;
     }
   }
 }
