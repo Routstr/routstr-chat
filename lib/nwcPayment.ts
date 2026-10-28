@@ -16,38 +16,6 @@ export async function isNWCConnected(): Promise<boolean> {
   }
 }
 
-/**
- * Get NWC wallet balance
- * @returns Promise resolving to balance in sats, or null if not available
- */
-export async function getNWCBalance(): Promise<number | null> {
-  try {
-    const mod = await import("@getalby/bitcoin-connect-react");
-    const provider = await mod.requestProvider();
-
-    if (provider && typeof provider.getBalance === "function") {
-      const res = await provider.getBalance();
-      if (typeof res === "number") return res;
-      if (res && typeof res === "object") {
-        if ("balance" in res && typeof (res as any).balance === "number") {
-          const unit = ((res as any).unit || "").toString().toLowerCase();
-          const n = (res as any).balance as number;
-          return unit.includes("msat") ? Math.floor(n / 1000) : n;
-        }
-        if (
-          "balanceMsats" in res &&
-          typeof (res as any).balanceMsats === "number"
-        ) {
-          return Math.floor((res as any).balanceMsats / 1000);
-        }
-      }
-    }
-  } catch {
-    // NWC not connected or error fetching balance
-  }
-  return null;
-}
-
 export interface NWCPaymentCallbacks {
   onInvoiceCreated?: (invoice: string, quoteId: string) => void;
   onPaymentSuccess?: (sats: number) => void | Promise<void>;

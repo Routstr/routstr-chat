@@ -146,59 +146,10 @@ export const interceptConsole = () => {
 };
 
 /**
- * Restore original console methods (useful for testing)
- */
-export const restoreConsole = () => {
-  if (!isIntercepting) return;
-  isIntercepting = false;
-
-  console.log = originalConsole.log;
-  console.debug = originalConsole.debug;
-  console.info = originalConsole.info;
-  console.warn = originalConsole.warn;
-  console.error = originalConsole.error;
-};
-
-/**
- * Logger object with methods for each log level
- * Also calls the original console method
- * Use this for explicit logging that should always be captured
- */
-export const logger = {
-  debug: (message: string, ...args: unknown[]) => {
-    addLogEntry("DEBUG", message, args);
-    originalConsole.debug(message, ...args);
-  },
-  log: (message: string, ...args: unknown[]) => {
-    addLogEntry("INFO", message, args);
-    originalConsole.log(message, ...args);
-  },
-  info: (message: string, ...args: unknown[]) => {
-    addLogEntry("INFO", message, args);
-    originalConsole.info(message, ...args);
-  },
-  warn: (message: string, ...args: unknown[]) => {
-    addLogEntry("WARN", message, args);
-    originalConsole.warn(message, ...args);
-  },
-  error: (message: string, ...args: unknown[]) => {
-    addLogEntry("ERROR", message, args);
-    originalConsole.error(message, ...args);
-  },
-};
-
-/**
  * Get all log entries as formatted strings
  */
 export const getLogs = (): string[] => {
   return logEntries.map(formatLogEntry);
-};
-
-/**
- * Get raw log entries
- */
-export const getLogEntries = (): LogEntry[] => {
-  return [...logEntries];
 };
 
 /**
@@ -218,20 +169,6 @@ export const subscribeLogs = (listener: () => void): (() => void) => {
   return () => {
     listeners.delete(listener);
   };
-};
-
-/**
- * Get the count of log entries
- */
-export const getLogCount = (): number => {
-  return logEntries.length;
-};
-
-/**
- * Check if console interception is active
- */
-export const isConsoleIntercepted = (): boolean => {
-  return isIntercepting;
 };
 
 // Auto-intercept console on module load in browser environment

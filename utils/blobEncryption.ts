@@ -62,18 +62,6 @@ export function deriveBlobKey(
   return hkdf(sha256, pnsKey, combinedSalt, undefined, 32);
 }
 
-/**
- * Derives a master blob encryption key from the PNS key.
- * This is used when we don't have the original file hash (e.g., for decryption).
- *
- * @param pnsKey - The 32-byte PNS key from user's derived keys
- * @returns 32-byte master encryption key
- */
-export function deriveMasterBlobKey(pnsKey: Uint8Array): Uint8Array {
-  const salt = new TextEncoder().encode(BLOB_KEY_SALT);
-  return hkdf(sha256, pnsKey, salt, undefined, 32);
-}
-
 // ============================================================================
 // Encryption/Decryption
 // ============================================================================
@@ -231,11 +219,4 @@ function hexToBytes(hex: string): Uint8Array {
     bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
   }
   return bytes;
-}
-
-/**
- * Checks if data is an encrypted blob by checking the version byte
- */
-export function isEncryptedBlob(data: Uint8Array): boolean {
-  return data.length > 0 && data[0] === BLOB_ENCRYPTION_VERSION;
 }
