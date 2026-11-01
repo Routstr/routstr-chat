@@ -10,7 +10,7 @@
   color: var(--ink-3); transition: background var(--d-fast), color var(--d-fast), transform var(--d-fast) var(--e-spring);
 }
 .rd-tool .v2-ico { width: 16px; height: 16px; }
-.rd-tool:hover { background: var(--fill-1); color: var(--ink); }
+@media (hover: hover) { .rd-tool:hover { background: var(--fill-1); color: var(--ink); } }
 .rd-tool:active { transform: scale(.92); }
 .rd-tool:disabled { opacity: .38; pointer-events: none; }
 /* a version arrow at its end stays focusable, so the focus is not dropped */

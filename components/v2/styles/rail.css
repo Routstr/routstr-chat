@@ -703,7 +703,7 @@ html[data-room="meridian"] .sb-add { color: var(--ink); }
 
 /* ── reduced motion ─────────────────────────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
-  .sb .flip, .sb-clip, .sb-clip-in, .sb-shade, .sb-acts, .sb-tip.is-title,
+  .sb .flip, .sb .face, .sb-clip, .sb-clip-in, .sb-shade, .sb-acts, .sb-tip.is-title,
   .room > .panel, .room > .panel :is(.panel-head .title, .thread-box, .dock .slot, .stage-in, .stage-tail > *) { transition: none; }
   .sb-row.is-live .sb-mark-r i, .sb-row.is-live .sb-tt, .sb-row.is-titled .sb-tt { animation: none; }
   .sb-row.is-live .sb-mark-r i { opacity: .8; }

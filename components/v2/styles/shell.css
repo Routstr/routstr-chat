@@ -105,8 +105,10 @@ html[data-nogl] body {
   backface-visibility: hidden; -webkit-backface-visibility: hidden;
   display: flex; flex-direction: column;
   padding: var(--s5) var(--s3) var(--s3);
+  transition: opacity 0s calc((var(--d-slow) + var(--d-quick)) * .38);
 }
 .face.back { transform: rotateY(180deg); }
+.flip[data-side="wallet"] > .front, .flip[data-side="chats"] > .back { opacity: 0; }
 
 .ghost {
   display: inline-flex; align-items: center; justify-content: center;

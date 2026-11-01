@@ -114,8 +114,10 @@
   transition: background var(--d-fast) var(--e-out), color var(--d-fast) var(--e-out), transform var(--d-fast) var(--e-spring);
 }
 .island .attach .v2-ico { transition: transform var(--d-mid) var(--e-spring); }
-.island .attach:hover { background: var(--fill-1); color: var(--ink); }
-.island .attach:hover .v2-ico { transform: rotate(-8deg); }
+@media (hover: hover) {
+  .island .attach:hover { background: var(--fill-1); color: var(--ink); }
+  .island .attach:hover .v2-ico { transform: rotate(-8deg); }
+}
 .island .attach:active { background: var(--fill-2); transform: scale(.94); }
 
 /* the model: a quiet line you can press, not a pill */
@@ -126,7 +128,8 @@
   font-family: var(--f-ui); font-size: 13.5px; font-weight: 500; letter-spacing: -.005em; color: var(--ink-2);
   transition: background var(--d-fast) var(--e-out), color var(--d-fast) var(--e-out);
 }
-.island .model:hover, .island .model[aria-expanded="true"] { background: var(--fill-1); color: var(--ink); }
+.island .model[aria-expanded="true"] { background: var(--fill-1); color: var(--ink); }
+@media (hover: hover) { .island .model:hover { background: var(--fill-1); color: var(--ink); } }
 .island .model:active { background: var(--fill-2); }
 /* refused while models load: the chip that is loading is the one that answers */
 .island .model::before { content: ""; position: absolute; inset: 0; border-radius: inherit; background: var(--fill-2); opacity: 0; pointer-events: none; }
@@ -198,7 +201,7 @@
 }
 .island .go[data-live]::before, .island .go[data-mode="stop"]::before { opacity: 1; transform: none; }
 .island .go[data-live], .island .go[data-mode="stop"] { color: var(--c-go-ink); }
-.island .go[data-live]:hover { transform: translateY(-1px); }
+@media (hover: hover) { .island .go[data-live]:hover { transform: translateY(-1px); } }
 .island .go:active { transform: scale(.9); }
 .island .go:not([data-live]):not([data-mode="stop"]) { cursor: default; }
 .island .go-g { position: relative; display: grid; }
