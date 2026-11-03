@@ -168,6 +168,7 @@ function Panel() {
                 aria-label={money.node ? "Wallet, your node pays" : balWait ? "Wallet, balance loading" : `Wallet, ${sats(money.total)} sats`}
                 onClick={() => window.dispatchEvent(new Event("v2:wallet"))}
               >
+                <Icon name="wallet" />
                 {money.node ? (
                   <span className="node">Node</span>
                 ) : balWait ? (

@@ -417,7 +417,7 @@ html[data-room="meridian"] .sb-wait i { background: var(--ink-2); }
 .sb-add { display: none; font-family: var(--f-ui); font-size: 15px; font-weight: 500; letter-spacing: -.005em; color: var(--tint); }
 .sb-bal[data-zero] .sb-add { display: inline; }
 /* meridian's accent is a crimson (a rose at dusk): the rail's first word to a new visitor stays ink */
-html[data-room="meridian"] .sb-add { color: var(--ink); }
+html[data-room="meridian"] :is(.sb-add, .sb-bal[data-zero] .v2-ico) { color: var(--ink); }
 .sb-bal[data-node] .sb-bal-v { font-family: var(--f-ui); font-size: 15px; color: var(--ink); letter-spacing: -.005em; }
 /* money in: the amount that arrived rises beside the balance once, then goes */
 .sb-bal-v { position: relative; }
@@ -442,6 +442,8 @@ html[data-room="meridian"] .sb-add { color: var(--ink); }
 }
 .sb-bal-mini small { display: block; font-size: 8.5px; letter-spacing: .08em; color: var(--ink-3); text-transform: uppercase; margin-top: 2px; }
 .sb-bal[data-zero] .sb-bal-mini { color: var(--ink-3); }
+.sb-bal-mini .v2-ico { display: block; margin: 0 auto 4px; }
+.sb-bal[data-zero] .sb-bal-mini .v2-ico { color: var(--tint); }
 
 .sb-tools { display: flex; align-items: center; gap: 2px; padding-bottom: 3px; }
 .sb-tools .ghost { color: var(--ink-3); }

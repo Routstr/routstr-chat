@@ -1,6 +1,7 @@
 "use client";
 
 import { sats } from "../format";
+import { Icon } from "../icons";
 import type { useMoney } from "../useMoney";
 
 const compact = (n: number) => {
@@ -76,6 +77,7 @@ export function BalanceButton({
         )}
       </span>
       <span className="sb-bal-mini" aria-hidden="true">
+        <Icon name="wallet" size={16} />
         {money.node ? (
           "node"
         ) : balWait ? (

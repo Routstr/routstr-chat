@@ -172,6 +172,9 @@
     animation: sbGhost calc(var(--d-wave) * .82) var(--e-in-out) infinite; --i: 0;
   }
   .head-bal[data-zero] :is(.n, .u) { color: var(--ink-2); }
+  .head-bal .v2-ico { align-self: center; }
+  .head-bal[data-zero] .v2-ico { color: var(--tint); }
+  html[data-room="meridian"] .head-bal[data-zero] .v2-ico { color: var(--ink); }
   .head-bal .node { font-family: var(--f-ui); font-size: 12px; color: var(--ink); }
   /* the pencil and the balance trade places the way the title does: a short fade, never a cut */
   .panel-head .trail > * { animation: fade var(--d-mid) var(--e-out) both; }
