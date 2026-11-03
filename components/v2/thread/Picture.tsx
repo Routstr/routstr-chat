@@ -34,7 +34,7 @@ export function Thumb({ src, alt }: { src: string; alt: string }) {
 /* A picture in the thread keeps its own shape on the text's left edge, never
    taller than about half the window (so its strip stays on the first
    screen). Save sits on the picture; a click opens it larger in the viewer. */
-export default function Picture({ src, alt, className = "" }: { src: string; alt: string; className?: string }) {
+export default function Picture({ src, alt, className = "", onError }: { src: string; alt: string; className?: string; onError?: () => void }) {
   const [ar, setAr] = useState(1);
   const [from, setFrom] = useState<HTMLImageElement | null>(null);
   const img = useRef<HTMLImageElement>(null);
@@ -50,6 +50,7 @@ export default function Picture({ src, alt, className = "" }: { src: string; alt
             const i = e.currentTarget;
             if (i.naturalWidth && i.naturalHeight) setAr(i.naturalWidth / i.naturalHeight);
           }}
+          onError={onError}
         />
       </button>
       <button type="button" className="rd-img-save" aria-label="Save picture" title="Save" onClick={() => downloadImageFromSrc(src)}>
@@ -72,12 +73,12 @@ export default function Picture({ src, alt, className = "" }: { src: string; alt
 
 /* A picture an answer points at on another server waits for a click: loading it would tell that
    server your address, and the link itself can carry words from the chat. */
-export function RemotePicture({ src, alt }: { src: string; alt: string }) {
+export function RemotePicture({ src, alt, onOpen }: { src: string; alt: string; onOpen?: () => void }) {
   const [on, setOn] = useState(false);
   if (on) return <Picture src={src} alt={alt} />;
   const host = hostOf(src);
   return (
-    <button type="button" className="rd-doc rd-remote" onClick={() => setOn(true)} aria-label={`Load the picture from ${host}`}>
+    <button type="button" className="rd-doc rd-remote" onClick={() => (onOpen ? onOpen() : setOn(true))} aria-label={`Load the picture from ${host}`}>
       <span className="rd-doc-ico" aria-hidden="true">
         <span>IMG</span>
       </span>

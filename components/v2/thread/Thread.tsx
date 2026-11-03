@@ -10,6 +10,7 @@ import { hitIn } from "./hit";
 import { useChatModel } from "../useChatModel";
 import { useNotes } from "./useNotes";
 import { shortModelName } from "../format";
+import { paints } from "../picker/catalog";
 import { Icon } from "../icons";
 import { rootToken, tokenMs } from "../motion";
 import { Answer } from "./answer/Answer";
@@ -51,6 +52,10 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
   );
   const modelName = useCallback((id?: string) => (id ? shortModelName(modelOf(id)?.name, id).toLowerCase() : "assistant"), [modelOf]);
   const fullName = useCallback((id?: string) => (id ? shortModelName(modelOf(id)?.name, id) : "assistant"), [modelOf]);
+  const painted = useCallback((id?: string) => {
+    const m = modelOf(id);
+    return !!m && paints(m);
+  }, [modelOf]);
 
   const liveHere = useAsking(activeConversationId);
   // the stored answer and the streaming copy can overlap for a frame. Read, not
@@ -418,7 +423,7 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
               return <Trouble key={key} msgs={[msg]} index={depth} isLast={isLast} label={modelName(msg._modelId)} model={fullName(msg._modelId)} onEdit={setEditing} />;
             return (
               <Answer key={key} msg={msg} index={depth} {...v} isLast={isLast} busy={liveHere}
-                label={modelName(msg._modelId)} full={fullName(msg._modelId)} stopped={stoppedAnswer && depth === slots.length - 1} onVersion={onVersion} onRetry={onRetry} />
+                label={modelName(msg._modelId)} full={fullName(msg._modelId)} stopped={stoppedAnswer && depth === slots.length - 1} painted={painted(msg._modelId)} onVersion={onVersion} onRetry={onRetry} />
             );
           })
         )}

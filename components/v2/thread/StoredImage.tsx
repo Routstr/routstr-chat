@@ -23,11 +23,14 @@ export default function StoredImage({
   item,
   caption,
   thumb,
+  painted,
 }: {
   item: MessageContent;
   caption?: string;
   /** an enclosure under your words, not a picture in an answer */
   thumb?: boolean;
+  /** the answer of a model that only makes pictures: only its provider puts a link here, never its words */
+  painted?: boolean;
 }) {
   const ref = item.image_url;
   const key = ref?.storageId || ref?.blossomHash || "";
@@ -55,6 +58,8 @@ export default function StoredImage({
     return () => stop.abort();
   }, [url, ref, key, files, blossomSyncEnabled, pnsKeys]);
 
+  // offline, or the provider let the link go: it can be tried again
+  if (failed && url && isRemote(url)) return <RemotePicture src={url} alt="This picture did not load, try again" onOpen={() => setFailed(false)} />;
   if (failed) {
     return (
       <div className="rd-doc rd-missing">
@@ -77,7 +82,7 @@ export default function StoredImage({
       </div>
     );
   }
-  // a picture an answer names by its address on another host waits for a click, as in its words
-  if (isRemote(url)) return <RemotePicture src={url} alt={caption ?? ""} />;
-  return thumb ? <Thumb src={url} alt={caption ?? "Attached picture"} /> : <Picture src={url} alt={caption ?? ""} />;
+  // a picture a model's words name on another host waits for a click, as in its words
+  if (isRemote(url) && (thumb || !painted)) return <RemotePicture src={url} alt={caption ?? ""} />;
+  return thumb ? <Thumb src={url} alt={caption ?? "Attached picture"} /> : <Picture src={url} alt={caption ?? ""} onError={() => setFailed(true)} />;
 }

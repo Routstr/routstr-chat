@@ -28,6 +28,10 @@ describe("pictures in an answer", () => {
       expect(out).not.toContain("<img");
     }
   );
+  it("shows the link a picture model's provider answered with at once", () => {
+    const item = { type: "image_url", image_url: { url: "https://img.example.com/a.png" } };
+    expect(renderToStaticMarkup(createElement(StoredImage, { item: item as never, painted: true }))).toContain('<img src="https://img.example.com/a.png"');
+  });
   it("shows a picture written into the words as a data: link, as some image models answer", () => {
     const px = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==";
     expect(html(`Here it is:\n\n![a red dot](${px})`)).toContain(`<img src="${px}"`);

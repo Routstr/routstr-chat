@@ -31,6 +31,7 @@ export const Answer = memo(function Answer({
   full,
   busy,
   stopped,
+  painted,
   onVersion,
   onRetry,
 }: {
@@ -44,6 +45,8 @@ export const Answer = memo(function Answer({
   full: string;
   busy: boolean;
   stopped?: boolean;
+  /** a model that only makes pictures answered */
+  painted?: boolean;
   onVersion: Go;
   onRetry: (index: number) => void;
 }) {
@@ -95,7 +98,7 @@ export const Answer = memo(function Answer({
           <div className="rd-ans-in">
             {parsed.text && <Prose content={parsed.text} />}
             {parsed.images.map((im, i) => (
-              <StoredImage key={i} item={im} />
+              <StoredImage key={i} item={im} painted={painted} />
             ))}
           </div>
           {sources.length > 0 && <Sources sources={sources} />}
