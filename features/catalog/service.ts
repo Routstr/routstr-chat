@@ -182,20 +182,28 @@ export class CatalogService {
    *  files, the model's longest reply and the node's own gate, never over its
    *  max_cost. Null messages (a file of unknown size): the most the SDK asks
    *  of any request. 0 when the model has no price. */
-  need(model: Model, messages: unknown[] | null, maxTokens?: number): number {
-    // the body fetchAIResponse sends, with the search tool it adds for OpenAI's models
-    const body = {
-      model: model.id,
-      messages,
-      stream: true,
-      ...(maxTokens !== undefined ? { max_tokens: maxTokens } : {}),
-      ...(model.name?.startsWith("OpenAI:") ? { tools: [{ type: "web_search" }] } : {}),
-    };
+  need(
+    model: Model,
+    messages: unknown[] | null,
+    maxTokens?: number,
+    picture?: { n: number; resolution?: string; quality?: string }
+  ): number {
+    // the body fetchAIResponse sends, with the search tool it adds for OpenAI's
+    // models, or a picture request's count, size and quality
+    const body = picture
+      ? { model: model.id, ...picture }
+      : {
+          model: model.id,
+          messages,
+          stream: true,
+          ...(maxTokens !== undefined ? { max_tokens: maxTokens } : {}),
+          ...(model.name?.startsWith("OpenAI:") ? { tools: [{ type: "web_search" }] } : {}),
+        };
     return this.deps.providerManager.getRequiredSatsForModel(
       model as unknown as Parameters<ProviderManager["getRequiredSatsForModel"]>[0],
       messages ?? [],
       messages ? maxTokens : undefined,
-      messages ? body : {}
+      messages || picture ? body : {}
     );
   }
 

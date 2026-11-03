@@ -140,6 +140,13 @@
 .island .model-ico { display: inline-grid; place-items: center; flex: none; width: 16px; height: 16px; color: var(--ink-2); font-size: 15px; }
 .island .model-ico .co-ico { width: 1em; height: 1em; display: block; }
 .island .model-n { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.island .crow:has(.pic-opts) { grid-template-columns: minmax(0, max-content) minmax(0, 1fr) auto auto; padding-left: 4px; }
+.island .pic-opts { display: inline-flex; gap: 2px; min-width: 0; overflow: hidden; justify-self: start; }
+.island .pic-opt {
+  height: var(--c-row); padding: 0 6px; border-radius: var(--r-sm); background: none; border: 0; cursor: pointer;
+  font-family: var(--f-ui); font-size: 13px; color: var(--ink-3);
+}
+.island .pic-opt:hover { background: var(--fill-1); color: var(--ink); }
 .island[data-model="loading"] .model .chev { display: none; }
 .island .model[aria-disabled="true"] { cursor: default; }
 .island .model[aria-disabled="true"]:is(:hover, :active) { background: none; }
@@ -355,6 +362,9 @@ html[data-room="meridian"] .island {
   .island .crow { padding-top: 0; gap: 0; }
   .island .model { padding: 0 8px 0 4px; font-size: 14px; }
   .island .model-n { max-width: 40vw; }
+  /* no room beside the model for a picture's size and count: they take the line under it */
+  .island .crow:has(.pic-opts) { grid-template-columns: minmax(0, 1fr) auto auto; }
+  .island .crow .pic-opts { grid-row: 2; grid-column: 1 / -1; margin-top: -8px; }
   .island .voice { padding: 0 8px 0 4px; }
   .island .v-long { display: none; }
   .island .v-short { display: inline; }

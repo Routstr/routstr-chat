@@ -1,6 +1,7 @@
 "use client";
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type SetStateAction } from "react";
+import type { PictureChoice } from "@/features/chat/view";
 import { currentOwner } from "@/features/session/view";
 import type { MessageAttachment } from "@/types/chat";
 import { ModelPick, PickContext } from "./pick";
@@ -114,6 +115,16 @@ export const useDraft = () => {
   return v;
 };
 
+/* What a picture model is asked for: how many, at what size and quality. Its
+   own context: the price everywhere reads it, and the rest of the UI state
+   must not redraw those screens. */
+const PictureContext = createContext<[PictureChoice, (choice: PictureChoice) => void] | null>(null);
+export const usePicture = () => {
+  const v = useContext(PictureContext);
+  if (!v) throw new Error("usePicture must be used inside UiProvider");
+  return v;
+};
+
 // The composer's model chip: the picker hangs from it and gives the focus back to it. Its own
 // context, so the UI state above stays plain values.
 const ChipContext = createContext<React.RefObject<HTMLButtonElement | null>>({ current: null });
@@ -130,6 +141,7 @@ export function UiProvider({ children }: { children: React.ReactNode }) {
   const [saved] = useState(readDraft);
   const [sendWhenFunded, setSendWhenFunded] = useState(false);
   const [isSidebarCollapsed, setCollapsed] = useState(readFold);
+  const [picture, setPicture] = useState<PictureChoice>({ n: 1 });
   const chipRef = useRef<HTMLButtonElement>(null);
   const [draft, setDraft] = useState<DraftState>(() => ({ text: saved.text, attachments: [], rev: 0 }));
   const hold = useRef<string | null>(null);
@@ -200,11 +212,14 @@ export function UiProvider({ children }: { children: React.ReactNode }) {
   const setAttachments = useCallback((update: SetStateAction<MessageAttachment[]>) => setDraft((d) => attached(d, update)), []);
   const clear = useCallback((rev: number) => setDraft((d) => cleared(d, rev)), []);
   const writing = useMemo(() => ({ ...draft, setText, setAttachments, clear }), [draft, setText, setAttachments, clear]);
+  const picturing = useMemo<[PictureChoice, (choice: PictureChoice) => void]>(() => [picture, setPicture], [picture]);
   return (
     <UiContext.Provider value={value}>
       <ChipContext.Provider value={chipRef}>
         <PickContext.Provider value={pick}>
-          <DraftContext.Provider value={writing}>{children}</DraftContext.Provider>
+          <DraftContext.Provider value={writing}>
+            <PictureContext.Provider value={picturing}>{children}</PictureContext.Provider>
+          </DraftContext.Provider>
         </PickContext.Provider>
       </ChipContext.Provider>
     </UiContext.Provider>

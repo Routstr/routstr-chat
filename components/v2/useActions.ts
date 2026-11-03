@@ -5,7 +5,8 @@ import { useCatalogService } from "@/features/catalog/view";
 import { useHistory } from "@/features/history/view";
 import { editedOf, questionOf, useAccountChat, type AccountChatView, type ChatModel } from "@/features/chat/view";
 import { chatModelOf, useChatModel } from "./useChatModel";
-import { useDraft, useUi } from "./ui";
+import { pictureOf } from "./picker/catalog";
+import { useDraft, usePicture, useUi } from "./ui";
 
 type Chat = AccountChatView["chat"];
 
@@ -16,6 +17,7 @@ function useStart() {
   const catalog = useCatalogService();
   const { model, chosen } = useChatModel();
   const { setFace } = useUi();
+  const [picture] = usePicture();
   return useCallback(
     async (turn: (chat: Chat, model: ChatModel) => Promise<unknown>): Promise<boolean> => {
       if (!account) {
@@ -29,14 +31,14 @@ function useStart() {
       try {
         // the reply cap fits the smallest room any node lists, wherever the send ends up
         const room = catalog?.rooms()[model.id];
-        await turn(account.chat, { ...chatModelOf(model, chosen, catalog?.routes(model.id) ?? []), room });
+        await turn(account.chat, { ...chatModelOf(model, chosen, catalog?.routes(model.id) ?? []), room, picture: pictureOf(model, picture) });
         return true;
       } catch (error) {
         toast.error(error instanceof Error ? error.message : String(error));
         return false;
       }
     },
-    [account, model, chosen, catalog, setFace]
+    [account, model, chosen, catalog, setFace, picture]
   );
 }
 

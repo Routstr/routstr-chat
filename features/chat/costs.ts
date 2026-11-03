@@ -27,7 +27,10 @@ export class ReplyCosts {
 
   async record(replyId: string, requestId: string): Promise<void> {
     const sats = await this.lookup(requestId);
-    if (sats === undefined) return;
+    if (sats !== undefined) this.set(replyId, sats);
+  }
+
+  set(replyId: string, sats: number): void {
     // read again first: another tab may have written since
     this.map = { ...this.read(), [replyId]: sats };
     this.storage.setItem(this.key, JSON.stringify(this.map));

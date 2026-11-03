@@ -4,6 +4,7 @@ import {
   MintDiscovery,
   ModelManager,
   noopLogger,
+  parseCoreError,
   ProviderManager,
   resolveRequestContext,
 } from "@routstr/sdk";
@@ -62,6 +63,34 @@ export function createSdk({ extraProviders }: { extraProviders: string[] }) {
       },
       { alertLevel: "min", logger: noopLogger }
     );
+  const pictures: Sdk["pictures"] = async ({ body, signal, ...input }) => {
+    const { client, baseUrl, mintUrl, selectedModel, pinnedProvider } = await resolveRequestContext({
+      ...input,
+      mode: "apikeys",
+      discoveryAdapter,
+      usageTrackingDriver,
+      sdkStore: store,
+      logger: noopLogger,
+    });
+    const response = (await client.routeRequest({
+      path: `/${IMAGES}`,
+      method: "POST",
+      body: { ...body, model: selectedModel.id },
+      baseUrl,
+      mintUrl,
+      modelId: selectedModel.id,
+      signal,
+      pinnedProvider,
+    })) as Response & { finalize?: () => Promise<number> };
+    const text = await response.text();
+    // the key's new balance is written while the payment lock is still held
+    const spent = await response.finalize?.();
+    if (!response.ok) throw new Error(parseCoreError(text, response.status).message || `The provider answered ${response.status}.`);
+    const { data } = JSON.parse(text) as { data?: { b64_json?: string; url?: string }[] };
+    const urls = (data ?? []).flatMap((d) => (d.b64_json ? [`data:${pictureType(d.b64_json)};base64,${d.b64_json}`] : d.url ? [d.url] : []));
+    const cost = response.headers.get("x-routstr-cost-msats");
+    return { urls, sats: cost !== null ? Number(cost) / 1000 : spent || undefined };
+  };
   // by request id alone: the log keeps the canonical model id, not the one picked
   const cost: Sdk["cost"] = async (requestId) =>
     (await usageTrackingDriver.list({ after: Date.now() - 60_000 })).find(
@@ -120,6 +149,7 @@ export function createSdk({ extraProviders }: { extraProviders: string[] }) {
     providerManager,
     mintDiscovery: new MintDiscovery(discoveryAdapter),
     request,
+    pictures,
     cost,
     usageTrackingDriver,
     torMode: isTorContext,
@@ -131,3 +161,8 @@ export function createSdk({ extraProviders }: { extraProviders: string[] }) {
       }),
   };
 }
+
+const IMAGES = "v1/images/generations";
+
+const pictureType = (b64: string) =>
+  b64.startsWith("/9j/") ? "image/jpeg" : b64.startsWith("UklGR") ? "image/webp" : "image/png";

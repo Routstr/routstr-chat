@@ -95,6 +95,16 @@ export interface Sdk {
     >,
     callbacks: RunCallbacks
   ): Promise<void>;
+  /** One picture request through the images API, paid with an API key. */
+  pictures(
+    options: Pick<FetchOptions, "forcedProvider" | "torMode" | "modelManager" | "providerManager"> & {
+      modelId: string;
+      body: Record<string, unknown>;
+      walletAdapter: WalletAdapter;
+      storageAdapter: StorageAdapter;
+      signal: AbortSignal;
+    }
+  ): Promise<{ urls: string[]; sats?: number }>;
   client(wallet: WalletAdapter, storage: StorageAdapter): RoutstrClient;
   /** The shared managers once their cache holds models, so the SDK routes
    *  from it instead of discovering first; undefined on a cold start. */

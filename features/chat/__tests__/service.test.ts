@@ -16,7 +16,7 @@ let history: FakeHistory;
 let provider: ReturnType<typeof manualPay>;
 let attachments: ReturnType<typeof passThroughAttachments>;
 let chat: ChatService;
-let costs: { record: ReturnType<typeof vi.fn> };
+let costs: { record: ReturnType<typeof vi.fn>; set: ReturnType<typeof vi.fn> };
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -24,7 +24,7 @@ beforeEach(() => {
   history = new FakeHistory();
   provider = manualPay();
   attachments = passThroughAttachments();
-  costs = { record: vi.fn(async () => {}) };
+  costs = { record: vi.fn(async () => {}), set: vi.fn() };
   chat = new ChatService({
     history,
     attachments,

@@ -43,6 +43,18 @@ export interface Model {
   };
   per_request_limits: PerRequestLimits;
   top_provider?: { context_length?: number; max_completion_tokens?: number | null };
+  /** A picture model's price steps in USD; sats_pricing.image_output is the dearest in sats. */
+  image_pricing?: {
+    max_usd: number;
+    tiers: readonly { resolution: string | null; quality: string | null; usd: number }[];
+    resolutions: readonly string[];
+    qualities: readonly string[];
+    default_resolution: string | null;
+    default_quality: string | null;
+    unit?: string;
+    megapixel_usd?: number;
+    endpoints?: Readonly<Record<string, { parameters?: { n?: { max?: number } } }>>;
+  };
 }
 
 export interface RoutstrNodeInfo {

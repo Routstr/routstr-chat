@@ -252,6 +252,7 @@ describe("chat with real money", () => {
 
     const payments: Sdk = {
       request: sdk.request,
+      pictures: sdk.pictures,
       client: sdk.client,
       cost: sdk.cost,
       warm: () => catalog.warm(),

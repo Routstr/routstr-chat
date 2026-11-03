@@ -91,6 +91,15 @@ export interface ChatModel {
   images?: boolean;
   /** The model's context and longest reply, for the reply cap. */
   room?: { context?: number; maxOut?: number | null; draws?: boolean };
+  /** A picture model's request: how many, at what size and quality. */
+  picture?: PictureChoice;
+}
+
+/** A picture's size and quality, and how many. */
+export interface PictureChoice {
+  n: number;
+  resolution?: string;
+  quality?: string;
 }
 
 /** Pays for one request and delivers its answer through the callbacks;

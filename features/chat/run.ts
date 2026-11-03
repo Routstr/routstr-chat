@@ -17,6 +17,8 @@ export interface RunSnapshot {
   thinkingMs?: number;
   /** Key of this request in the SDK usage log, where its real cost is recorded. */
   requestId?: string;
+  /** What the request cost, when the payment says so itself. */
+  sats?: number;
   /** The answer to save: the full reply, or what arrived before Stop or a failure. */
   message?: Message;
   error?: string;
@@ -31,7 +33,7 @@ export type RunCallbacks = Pick<
   | "onMessageAppend"
   | "onPaymentProcessing"
   | "onRequestId"
->;
+> & { onCost?(sats: number): void };
 
 /** Makes the request and resolves once its payment is settled. */
 export type Transport = (
@@ -147,6 +149,7 @@ export class RequestRun {
     },
     // Arrives after the answer has ended, and still belongs to this request
     onRequestId: (requestId) => this.update({ requestId }),
+    onCost: (sats) => this.update({ sats }),
   };
 
   private finish(

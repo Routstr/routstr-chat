@@ -9,9 +9,10 @@ import type { Message } from "@/types/chat";
 import type { Model } from "@/types/models";
 import { getPendingCashuTokenAmount } from "@/utils/cashuUtils";
 import { useOpenChat } from "./openChat";
+import { paints, pictureOf } from "./picker/catalog";
 import { useListed } from "./useListed";
 import { normalizeModality } from "./picker/modality";
-import { useDraft } from "./ui";
+import { useDraft, usePicture } from "./ui";
 
 export interface Money {
   /** What you can spend: the wallet plus sats held in provider tokens. */
@@ -83,7 +84,7 @@ export function payable(
   // null: no key at that provider yet
   const keyAt = (baseUrl: string | null | undefined) => (credit && baseUrl ? credit[slashed(baseUrl)] ?? null : null);
   const takesWith = (model: Model, key: number | null) =>
-    node ? 0 : topUpFor(need(model), key, credit ? "apikeys" : "xcashu").now;
+    node ? 0 : topUpFor(need(model), key, credit || paints(model) ? "apikeys" : "xcashu").now;
   const takes = (model: Model, where: string | null | undefined) => takesWith(model, keyAt(where));
   /** Whether where the send goes changes the answer: the wallet alone is
    *  short, and the most any key holds would make it enough. */
@@ -119,6 +120,7 @@ export function usePayableFor(question: Message["content"]) {
   const credit = useKeyCredit();
   const catalog = useCatalogService();
   const { rooms } = useListed();
+  const [picture] = usePicture();
   const slots = useThread(useOpenChat().id);
   const request = useMemo(() => {
     const branch = (slots ?? []).map((s) => s.displayed);
@@ -133,9 +135,9 @@ export function usePayableFor(question: Message["content"]) {
   const need = useCallback(
     (model: Model) => {
       const { messages, tokens } = textOnly(model) ? request.reads : request.sees;
-      return catalog?.need(model, messages, replyCap(rooms[model.id], tokens)) ?? 0;
+      return catalog?.need(model, messages, replyCap(rooms[model.id], tokens), pictureOf(model, picture)) ?? 0;
     },
-    [catalog, request, rooms]
+    [catalog, request, rooms, picture]
   );
   const spendable = useCallback(
     (where?: string | null) => {

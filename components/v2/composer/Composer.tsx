@@ -11,14 +11,17 @@ import { normalizeModality } from "@/components/v2/picker/modality";
 import type { MessageAttachment } from "@/types/chat";
 import type { Model } from "@/types/models";
 import { Icon } from "../icons";
-import { useChipRef, useDraft, useUi } from "../ui";
+import { useChipRef, useDraft, usePicture, useUi } from "../ui";
 import { useOpenChat } from "../openChat";
 import { useSend } from "../useActions";
 import { useChatModel } from "../useChatModel";
 import { useMoney, usePayable } from "../useMoney";
 import { sats, satUnit, shortModelName, textOf } from "../format";
 import { TEXT_ONLY, useAttachments } from "./useAttachments";
-import { estimateSats, promptTokens } from "../price";
+import { estimateSats, pictureSats, promptTokens } from "../price";
+import { paints, pictureOf } from "../picker/catalog";
+import type { PictureChoice } from "@/features/chat/view";
+import { PictureOptions } from "./PictureOptions";
 import { useListed } from "../useListed";
 import { settle, takeFlight } from "./landing";
 import { tokenMs } from "../motion";
@@ -35,7 +38,7 @@ const reduced = () => window.matchMedia("(prefers-reduced-motion: reduce)").matc
  *  the words so far, the text of any attached files and a reply of ordinary
  *  length. It holds still while you type (settling) and settles 600ms after
  *  the last key; a model or a file change re-rolls it at once. */
-function useEstimate(model: Model | null, draft: string, history: string, files: string, pictureRate?: number) {
+function useEstimate(model: Model | null, draft: string, history: string, files: string, pictureRate?: number, picture?: PictureChoice) {
   const [value, setValue] = useState<number | null>(null);
   const [settling, setSettling] = useState(false);
   const lastDraft = useRef<string | null>(null);
@@ -50,12 +53,13 @@ function useEstimate(model: Model | null, draft: string, history: string, files:
     lastDraft.current = draft;
     if (typed) setSettling(true);
     const t = window.setTimeout(() => {
-      const v = estimateSats(model, promptTokens(`${history} ${files}`, draft), pictureRate);
+      const drawn = model && picture && pictureOf(model, picture);
+      const v = drawn ? pictureSats(model, drawn) * drawn.n : estimateSats(model, promptTokens(`${history} ${files}`, draft), pictureRate);
       setValue(v > 0 ? v : null);
       setSettling(false);
     }, typed ? 600 : 0);
     return () => window.clearTimeout(t);
-  }, [model, draft, history, files, pictureRate]);
+  }, [model, draft, history, files, pictureRate, picture]);
   return { value, settling };
 }
 
@@ -154,6 +158,7 @@ export default function Composer({ centred }: { centred: boolean }) {
   const slots = useThread(activeConversationId);
   const isAuthenticated = useSession().pubkey !== null;
   const ui = useUi();
+  const [picture] = usePicture();
   const money = useMoney();
   const isWalletLoading = money.loading;
   // credit held at any provider: the account has money, if not there
@@ -192,7 +197,8 @@ export default function Composer({ centred }: { centred: boolean }) {
     const t = window.setTimeout(() => setProblem(null), 2500);
     return () => window.clearTimeout(t);
   }, [problem]);
-  const takesImages = (selectedModel?.architecture?.input_modalities ?? []).some(
+  const drawing = !!selectedModel && paints(selectedModel);
+  const takesImages = !drawing && (selectedModel?.architecture?.input_modalities ?? []).some(
     (m) => normalizeModality(m) === "image"
   );
   // with no model chosen yet nothing is refused; the engine refuses at send
@@ -213,7 +219,7 @@ export default function Composer({ centred }: { centred: boolean }) {
   const fileText = useMemo(() => uploadedAttachments.map((a) => a.textContent ?? "").join(" "), [uploadedAttachments]);
   // priced as the provider the send goes to prices it, the number the picker shows
   const { pictureRates } = useListed();
-  const estimate = useEstimate(priced, inputMessage, history, fileText, priced ? pictureRates[priced.id] : undefined);
+  const estimate = useEstimate(priced, inputMessage, history, fileText, priced ? pictureRates[priced.id] : undefined, picture);
 
   const face = ui.face;
   // the back of the card stays drawn while it turns away
@@ -496,7 +502,7 @@ export default function Composer({ centred }: { centred: boolean }) {
   if (chipModel.model !== selectedModel?.id) setChipModel({ model: selectedModel?.id, arrived: selectedModel?.id });
   const arrive = !!selectedModel && chipModel.arrived === selectedModel.id;
 
-  const placeholder = centred ? "Ask anything" : "Reply";
+  const placeholder = drawing ? "Describe a picture" : centred ? "Ask anything" : "Reply";
   const live = hasContent && face === "write" && !isLoading && ((modelState === "ready" && !busy) || (!isAuthenticated && !money.node));
   const priceShown = !money.node && !isLoading && estimate.value !== null;
   const voiceId = problem ? `say-${problem.at}` : priceShown ? `p-${sats(estimate.value!)}` : "none";
@@ -590,17 +596,19 @@ export default function Composer({ centred }: { centred: boolean }) {
 
         <div className="under" ref={under}>
           <div className="crow" inert={face !== "write"}>
-            <span className="tipped">
-              <button
-                className="attach"
-                type="button"
-                onClick={() => fileInput.current?.click()}
-                aria-label={takesImages ? "Attach images or PDFs" : "Attach a PDF"}
-              >
-                <Icon name="clip" />
-              </button>
-              <span className="tip">{takesImages || !selectedModel ? "Attach images or PDFs" : "Attach a PDF, this model reads text only"}</span>
-            </span>
+            {!drawing && (
+              <span className="tipped">
+                <button
+                  className="attach"
+                  type="button"
+                  onClick={() => fileInput.current?.click()}
+                  aria-label={takesImages ? "Attach images or PDFs" : "Attach a PDF"}
+                >
+                  <Icon name="clip" />
+                </button>
+                <span className="tip">{takesImages || !selectedModel ? "Attach images or PDFs" : "Attach a PDF, this model reads text only"}</span>
+              </span>
+            )}
             <input
               ref={fileInput}
               type="file"
@@ -643,6 +651,7 @@ export default function Composer({ centred }: { centred: boolean }) {
               </button>
               {routeTip && <span className="tip tip-chip">{routeTip}</span>}
             </span>
+            {drawing && <PictureOptions model={selectedModel} />}
             <span className="voice-wrap tipped" data-price={priceShown && !problem ? "" : undefined}>
               <Voice id={voiceId} settling={estimate.settling && !problem} tone={problem ? "say" : undefined}>
                 {voice}

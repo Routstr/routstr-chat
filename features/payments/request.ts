@@ -110,6 +110,19 @@ export function sdkWallet(
   };
 }
 
+// your words come first in a question, before its files and their text
+const promptOf = (messages: { role: string; content: unknown }[]) => {
+  const content = messages.at(-1)?.content;
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  const words: string[] = [];
+  for (const part of content) {
+    if (part?.type !== "text" || typeof part.text !== "string") break;
+    words.push(part.text);
+  }
+  return words.join("\n");
+};
+
 /** Pays for each request of one account through the Routstr SDK. */
 export function createPay(deps: PayDeps): Pay {
   return async ({ messages, model }, callbacks, signal) => {
@@ -162,6 +175,25 @@ export function createPay(deps: PayDeps): Pay {
         { listed: (token) => keeps(storage, token) }
       );
       const warm = deps.sdk.warm();
+      const forcedProvider = node ? node.url : (warm && model.provider) || undefined;
+      if (model.picture) {
+        const { n, resolution, quality } = model.picture;
+        callbacks.onPaymentProcessing?.(true);
+        const { urls, sats } = await deps.sdk.pictures({
+          modelId: model.id,
+          body: { prompt: promptOf(messages), n, ...(resolution && { resolution }), ...(quality && { quality }) },
+          forcedProvider,
+          torMode: deps.sdk.torMode(),
+          walletAdapter: wallet,
+          storageAdapter: storage,
+          signal,
+          ...warm,
+        });
+        if (!urls.length) throw new Error("The provider sent no picture.");
+        if (sats !== undefined) callbacks.onCost?.(sats);
+        callbacks.onMessageAppend({ role: "assistant", content: urls.map((url) => ({ type: "image_url", image_url: { url } })) });
+        return;
+      }
       await deps.sdk.request(
         {
           messageHistory: messages,
@@ -170,9 +202,7 @@ export function createPay(deps: PayDeps): Pay {
           // The node is the only provider in node mode. Elsewhere a pinned
           // provider is forced only when the SDK reads our warm cache: cold, it
           // refetches and throws if that provider dropped the model.
-          forcedProvider: node
-            ? node.url
-            : (warm && model.provider) || undefined,
+          forcedProvider,
           torMode: deps.sdk.torMode(),
           mode: !node && spending.mode === "xcashu" ? "xcashu" : "apikeys",
           walletAdapter: wallet,

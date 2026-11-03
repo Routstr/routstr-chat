@@ -18,7 +18,7 @@ interface ChatDeps {
   history: ChatHistory;
   attachments: Attachments;
   pay: Pay;
-  costs: Pick<ReplyCosts, "record">;
+  costs: Pick<ReplyCosts, "record" | "set">;
 }
 
 export interface Turn {
@@ -210,7 +210,8 @@ export class ChatService {
     // the usage log has the real cost once the payment settled
     void turn
       .then(([, saved]) => {
-        const { requestId } = run.getSnapshot();
+        const { requestId, sats } = run.getSnapshot();
+        if (saved && sats !== undefined) return this.deps.costs.set(saved._eventId, sats);
         if (saved && requestId) {
           return this.deps.costs.record(saved._eventId, requestId);
         }

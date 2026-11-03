@@ -14,6 +14,7 @@ import {
   makerOf,
   nameSaysPrivate,
   pages,
+  paints,
   per1M,
   releasedAgo,
   releasedOn,
@@ -340,7 +341,7 @@ function Details(props: DetailsProps) {
             </div>
             {x !== null && (
               <div className="pl-mark" style={{ "--x": x.toFixed(4) } as React.CSSProperties}>
-                <b>~{fmt(p)}&nbsp;{satUnit(p)} a message</b>
+                <b>~{fmt(p)}&nbsp;{satUnit(p)} {paints(m) ? "a picture" : "a message"}</b>
               </div>
             )}
             <div className="pl-ends">

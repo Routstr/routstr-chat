@@ -1,3 +1,4 @@
+import type { PictureChoice } from "@/features/chat/view";
 import type { Model } from "@/types/models";
 import { normalizeModality } from "@/components/v2/picker/modality";
 import { getModelCompanyId } from "@/components/v2/picker/modelCompanies";
@@ -49,6 +50,32 @@ export const answers = (m: Model) => {
   const out = !outs?.length || outs.some((o) => String(o ?? "").toLowerCase() === "text");
   const inn = !ins?.length || ins.map(normalizeModality).some((i) => i === "text");
   return out && inn;
+};
+
+/** Models that only make pictures, through the images API (not the ones that edit a picture). */
+export const paints = (m: Model) => {
+  const outs = m.architecture?.output_modalities;
+  const ins = m.architecture?.input_modalities;
+  return !!m.image_pricing && !!outs?.length && outs.every((o) => normalizeModality(o) === "image") && !!ins?.some((i) => normalizeModality(i) === "text") && !/edit/i.test(m.id);
+};
+
+/** Most pictures one request may ask this model for: the node refuses a count
+ *  no endpoint of the model takes. */
+export const mostPictures = (m: Model) => {
+  const limits = Object.values(m.image_pricing?.endpoints ?? {}).map((e) => e.parameters?.n?.max ?? 1);
+  return limits.length ? Math.min(4, Math.max(...limits)) : 4;
+};
+
+/** What a picture model is asked for, kept to the counts, sizes and qualities
+ *  it lists, its own defaults where none is chosen; undefined for any other model. */
+export const pictureOf = (m: Model, choice: PictureChoice): PictureChoice | undefined => {
+  const ip = m.image_pricing;
+  if (!ip || !paints(m)) return undefined;
+  return {
+    n: Math.min(choice.n, mostPictures(m)),
+    resolution: (choice.resolution && ip.resolutions.includes(choice.resolution) ? choice.resolution : ip.default_resolution ?? ip.resolutions[0]) ?? undefined,
+    quality: (choice.quality && ip.qualities.includes(choice.quality) ? choice.quality : ip.default_quality ?? ip.qualities[0]) ?? undefined,
+  };
 };
 
 /** A base url as the app pins and the discovery cache keys it: with a scheme

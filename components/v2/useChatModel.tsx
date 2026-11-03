@@ -4,7 +4,7 @@ import { useKeyCredit } from "@/features/chat/view";
 import { AcceptedMintsContext, usePurse } from "@/features/wallet/view";
 import type { Model } from "@/types/models";
 import { defaultModel, pickedModel, useModelPick, type Choice } from "./pick";
-import { answers as canChat } from "./picker/catalog";
+import { answers as canChat, paints } from "./picker/catalog";
 import { normalizeModality } from "./picker/modality";
 import { payable, useMoney, usePayableFor, type Payable } from "./useMoney";
 
@@ -22,7 +22,7 @@ interface Asked {
 /** With nothing chosen: what the app picks for what can pay, a key's credit
  *  counted where each model's message would go. */
 const autoPick = (models: Model[], catalog: Catalog, chosen: Choice | null, pay: Payable, routed: Routed) =>
-  defaultModel(models, catalog?.picks() ?? [], pay.need, (m) =>
+  defaultModel(models.filter(canChat), catalog?.picks() ?? [], pay.need, (m) =>
     // a model is ranked only when a key's credit decides it
     pay.covers(m, () => (catalog ? goesTo(m, chosen, catalog.routes(m.id), routed[m.id]) : undefined))
   );
@@ -31,8 +31,8 @@ const autoPick = (models: Model[], catalog: Catalog, chosen: Choice | null, pay:
 function useModelOf() {
   const catalog = useCatalogService();
   const { models: listed, loading } = useCatalogModels();
-  // only models a chat can talk to, for the picker, a link and the app's own pick alike
-  const models = useMemo(() => listed.filter(canChat), [listed]);
+  // models a chat can talk to or draw with, for the picker, a link and the app's own pick alike
+  const models = useMemo(() => listed.filter((m) => canChat(m) || paints(m)), [listed]);
   const pick = useModelPick();
   // the chat as it stands, without the draft: typing never changes the pick
   const pay = usePayableFor("");
