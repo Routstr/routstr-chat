@@ -469,7 +469,7 @@ export default function Composer({ centred }: { centred: boolean }) {
   const onCardDown = (e: React.PointerEvent) => {
     if (face !== "write") return;
     const t = e.target as HTMLElement;
-    if (t.closest("button, input, textarea, a, .file")) return;
+    if (t.closest("button, input, textarea, a, .file, [popover]")) return;
     e.preventDefault();
     field.current?.focus();
   };

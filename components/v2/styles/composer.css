@@ -143,15 +143,37 @@
 .island .crow:has(.pic-opts) { grid-template-columns: minmax(0, max-content) minmax(0, 1fr) auto auto; padding-left: 4px; }
 .island .pic-opts { display: inline-flex; gap: 2px; min-width: 0; overflow: hidden; justify-self: start; }
 .island .pic-opt {
-  height: var(--c-row); padding: 0 6px; border-radius: var(--r-sm); background: none; border: 0; cursor: pointer;
-  font-family: var(--f-ui); font-size: 13px; color: var(--ink-3);
+  display: inline-flex; align-items: center; gap: 4px; height: var(--c-row); padding: 0 6px 0 8px; border-radius: var(--r-sm);
+  font-family: var(--f-ui); font-size: 13px; color: var(--ink-3); white-space: nowrap;
+  transition: background var(--d-fast) var(--e-out), color var(--d-fast) var(--e-out);
 }
-.island .pic-opt:hover { background: var(--fill-1); color: var(--ink); }
+.island .pic-opt[aria-expanded="true"] { background: var(--fill-1); color: var(--ink); }
+@media (hover: hover) { .island .pic-opt:hover { background: var(--fill-1); color: var(--ink); } }
+.island .pic-opt:active { background: var(--fill-2); }
+/* its menu sits in the top layer, beside the button it came from */
+.island .pic-menu {
+  position: fixed; inset: auto; margin: 0; border: 0; min-width: 176px; padding: 6px; border-radius: var(--r-md); display: none;
+  background: rgb(var(--surface-hero)); color: var(--ink-2); font-family: var(--f-ui); box-shadow: var(--lift-3), var(--glow);
+  transform-origin: top left; opacity: 0; transform: translateY(-4px) scale(.97);
+  transition: opacity var(--d-quick) var(--e-out), transform var(--d-quick) var(--e-out),
+    overlay var(--d-quick) allow-discrete, display var(--d-quick) allow-discrete;
+}
+.island .pic-menu[data-up] { transform-origin: bottom left; transform: translateY(4px) scale(.97); }
+.island .pic-menu:popover-open {
+  display: block; opacity: 1; transform: none;
+  transition: opacity var(--d-fast) var(--e-out), transform var(--d-mid) var(--e-spring),
+    overlay var(--d-fast) allow-discrete, display var(--d-fast) allow-discrete;
+}
+@starting-style {
+  .island .pic-menu:popover-open { opacity: 0; transform: translateY(-4px) scale(.97); }
+  .island .pic-menu[data-up]:popover-open { transform: translateY(4px) scale(.97); }
+}
+.island .pic-menu .mi-s { margin-left: auto; font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
 .island[data-model="loading"] .model .chev { display: none; }
 .island .model[aria-disabled="true"] { cursor: default; }
 .island .model[aria-disabled="true"]:is(:hover, :active) { background: none; }
-.island .model .chev { flex: none; width: 12px; height: 12px; color: var(--ink-3); stroke-width: 2; transition: transform var(--d-mid) var(--e-spring); }
-.island .model[aria-expanded="true"] .chev { transform: rotate(180deg); }
+.island :is(.model, .pic-opt) .chev { flex: none; width: 12px; height: 12px; color: var(--ink-3); stroke-width: 2; transition: transform var(--d-mid) var(--e-spring); }
+.island :is(.model, .pic-opt)[aria-expanded="true"] .chev { transform: rotate(180deg); }
 /* a new model: the mark pops, the name rises */
 .island .model-n[data-in] { animation: cUp var(--d-mid) var(--e-out) both; }
 .island .model-ico[data-in] { animation: cPop var(--d-move) var(--e-spring) both; }

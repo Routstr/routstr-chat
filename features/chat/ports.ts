@@ -62,6 +62,9 @@ export interface FileStore {
   /** Keeps a data URL's file here and, while file sync is on, on Blossom
    *  until `signal` aborts. Returns only the copies made; never rejects. */
   store(dataUrl: string, signal: AbortSignal): Promise<StoredFile>;
+  /** A picture another host serves at `url`, as a data URL; undefined when
+   *  the host will not give it, it is not a picture, or `signal` aborts. */
+  fromLink(url: string, signal: AbortSignal): Promise<string | undefined>;
 }
 
 /** The file store as screens use it: a file taken into the composer is kept

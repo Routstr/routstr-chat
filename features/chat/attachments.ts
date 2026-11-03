@@ -59,6 +59,11 @@ export function createAttachments(files: FileStore): Attachments {
     signal: AbortSignal
   ): Promise<MessageContent | undefined> {
     const file = fileOf(part);
+    // a picture a provider answered with a link: the link expires, so the picture is kept
+    if (part.type === "image_url" && file?.url && /^https?:/i.test(file.url)) {
+      const picture = await files.fromLink(file.url, signal);
+      return picture ? keep({ ...part, image_url: { ...file, url: picture } }, signal) : part;
+    }
     if (!file?.url?.startsWith("data:")) return part;
     const copies =
       file.storageId || file.blossomHash

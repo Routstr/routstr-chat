@@ -338,6 +338,7 @@ describe("ChatService: what a reply keeps", () => {
       attachments: createAttachments({
         load: vi.fn(async () => undefined),
         store: vi.fn(async () => ({})),
+        fromLink: vi.fn(async () => undefined),
       }),
       pay: provider.pay,
       costs,
@@ -390,6 +391,7 @@ describe("ChatService: files", () => {
     const files = {
       load: vi.fn(async () => IMAGE),
       store: vi.fn(async () => ({ storageId: "kept" })),
+      fromLink: vi.fn(async () => undefined),
     };
     chat = new ChatService({
       history,

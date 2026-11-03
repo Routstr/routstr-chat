@@ -189,19 +189,19 @@ html[data-room="night"] .mp, html[data-room="meridian"][data-face="dusk"] .mp { 
   opacity: 1; transform: none; visibility: visible;
   transition: opacity var(--d-fast) var(--e-out), transform var(--d-mid) var(--e-spring), visibility 0s;
 }
-.mp .menu-t { font-family: var(--f-mono); font-size: 10px; letter-spacing: .11em; text-transform: uppercase; color: var(--ink-3); padding: 8px 10px 4px; }
-.mp .menu-t:not(:first-child) { margin-top: 4px; border-top: 1px solid var(--hair); padding-top: 12px; }
-.mp .mi {
+:is(.mp, .pic-menu) .menu-t { font-family: var(--f-mono); font-size: 10px; letter-spacing: .11em; text-transform: uppercase; color: var(--ink-3); padding: 8px 10px 4px; }
+:is(.mp, .pic-menu) .menu-t:not(:first-child) { margin-top: 4px; border-top: 1px solid var(--hair); padding-top: 12px; }
+:is(.mp, .pic-menu) .mi {
   display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%;
   min-height: 36px; padding: 0 10px; border-radius: var(--r-xs); text-align: left;
   font-size: 13.5px; color: var(--ink-2);
   transition: background var(--d-fast) var(--e-out), color var(--d-fast);
 }
 .mp .mi.mono-i span { font-family: var(--f-mono); font-size: 12px; }
-.mp .mi:hover, .mp .mi:focus-visible { background: var(--fill-1); color: var(--ink); box-shadow: none; }
-.mp .mi .mi-c { color: var(--ink); opacity: 0; transform: scale(.6); transition: opacity var(--d-fast), transform var(--d-fast) var(--e-spring); }
-.mp .mi[aria-checked="true"] { color: var(--ink); }
-.mp .mi[aria-checked="true"] .mi-c { opacity: 1; transform: none; }
+:is(.mp, .pic-menu) .mi:is(:hover, :focus-visible) { background: var(--fill-1); color: var(--ink); box-shadow: none; }
+:is(.mp, .pic-menu) .mi .mi-c { color: var(--ink); opacity: 0; transform: scale(.6); transition: opacity var(--d-fast), transform var(--d-fast) var(--e-spring); }
+:is(.mp, .pic-menu) .mi[aria-checked="true"] { color: var(--ink); }
+:is(.mp, .pic-menu) .mi[aria-checked="true"] .mi-c { opacity: 1; transform: none; }
 
 /* ══ the list ══════════════════════════════════════════════════════════ */
 .mp-list {
@@ -635,7 +635,7 @@ button.dt-sum:hover .s-r .v2-ico { transform: translateY(2px); }
   .mp .tog::after { left: 7px; right: 7px; bottom: 7px; }
   .mp-sort, .mp .sc-x { height: 44px; font-size: 13.5px; padding: 0 8px; }
   .mp[data-lay="one"] .mp-head { padding: 2px 12px 2px 16px; min-height: 48px; }
-  .mp .mi { min-height: 48px; font-size: 15px; }
+  :is(.mp, .pic-menu) .mi { min-height: 48px; font-size: 15px; }
   .mp .mi.mono-i span { font-size: 13px; }
   .mp[data-lay="one"] .row { grid-template-columns: 26px minmax(0, 1fr) auto 44px; min-height: 62px; padding: 6px 0 6px 14px; }
   .mp[data-lay="one"] .row:hover { background: transparent; }

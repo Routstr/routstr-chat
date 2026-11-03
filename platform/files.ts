@@ -31,6 +31,7 @@ const SERVERS = "blossomServers";
 const SAVE_WAIT_MS = 30_000;
 const CHECK_WAIT_MS = 10_000;
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+const MAX_LINKED_BYTES = 25 * 1024 * 1024;
 
 const trim = (server: string) => server.replace(/\/$/, "");
 
@@ -277,6 +278,26 @@ export function createFileStore(deps: {
         upload(file.bytes, file.type, signal, SAVE_WAIT_MS),
       ]);
       return storageId ? { storageId, ...copies } : copies;
+    },
+
+    async fromLink(url, signal) {
+      const stop = new AbortController();
+      const timer = setTimeout(() => stop.abort(), CHECK_WAIT_MS * 2);
+      const quit = () => stop.abort();
+      signal.addEventListener("abort", quit, { once: true });
+      if (signal.aborted) quit();
+      try {
+        const response = await fetch(url, { signal: stop.signal, credentials: "omit", referrerPolicy: "no-referrer" });
+        const type = response.headers.get("content-type")?.split(";")[0].trim() ?? "";
+        if (!response.ok || !/^image\/(png|jpeg|webp|gif|avif)$/.test(type)) return undefined;
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        return bytes.length <= MAX_LINKED_BYTES ? toDataUrl(bytes, type) : undefined;
+      } catch {
+        return undefined;
+      } finally {
+        clearTimeout(timer);
+        signal.removeEventListener("abort", quit);
+      }
     },
 
     async keep(dataUrl) {

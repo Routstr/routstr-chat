@@ -7,7 +7,7 @@ const PNG = "data:image/png;base64,iVBORw0KGgo=";
 const PDF = "data:application/pdf;base64,JVBERi0=";
 
 let kept: Map<string, string>;
-let files: { load: Mock<FileStore["load"]>; store: Mock<FileStore["store"]> };
+let files: { load: Mock<FileStore["load"]>; store: Mock<FileStore["store"]>; fromLink: Mock<FileStore["fromLink"]> };
 let attachments: Attachments;
 const signal = new AbortController().signal;
 
@@ -21,6 +21,7 @@ beforeEach(() => {
       kept.get(file.storageId ?? file.blossomHash ?? "")
     ),
     store: vi.fn<FileStore["store"]>(async () => ({ storageId: "new" })),
+    fromLink: vi.fn<FileStore["fromLink"]>(async () => undefined),
   };
   attachments = createAttachments(files);
 });
@@ -157,6 +158,18 @@ describe("Attachments: what is saved", () => {
       ],
       _modelId: "m",
     });
+  });
+
+  it("keeps a picture a provider answered with a link, and the link when its host will not give it", async () => {
+    const link = "https://pictures.example/a.png";
+    const reply: Message = { role: "assistant", content: [{ type: "image_url", image_url: { url: link } }], _modelId: "m" };
+    files.fromLink.mockResolvedValueOnce(PNG);
+
+    expect((await attachments.forSave(reply, signal)).content).toEqual([{ type: "image_url", image_url: { url: "", size: 8, storageId: "new" } }]);
+    expect(files.fromLink).toHaveBeenCalledWith(link, signal);
+    expect(files.store).toHaveBeenCalledWith(PNG, signal);
+
+    expect((await attachments.forSave(reply, signal)).content).toEqual([{ type: "image_url", image_url: { url: link } }]);
   });
 
   it("does not keep again a file the composer already kept", async () => {

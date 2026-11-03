@@ -73,6 +73,7 @@ export function labChat(history: ChatHistory, params: URLSearchParams): AccountC
     files: {
       load: async () => undefined,
       store: async () => ({}),
+      fromLink: async () => undefined,
       keep: async () => `lab-${Date.now()}`,
       copy: async () => ({}),
       sync: () => LAB_SYNC,
