@@ -7,7 +7,6 @@
  * the unit tests. Wallet checks end on the mint's coin states.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { getTokenMetadata } from "@cashu/cashu-ts";
 import {
   FakeHistory,
   memoryStorage,
@@ -473,7 +472,7 @@ describe("chat with real money", () => {
     chat.dispose();
   });
 
-  it("gives up on an X-Cashu refund core keeps pending, and keeps it for later", async () => {
+  it("loses nothing when an X-Cashu stream is cut mid-way", async () => {
     spending = { mode: "xcashu" };
     const { chat, credit, wallet } = await account();
 
@@ -487,13 +486,9 @@ describe("chat with real money", () => {
     await chat.refund();
 
     expect(Date.now() - started).toBeLessThan(15_000);
-    // the token core kept stays listed as a claim for a later refund (its coins
-    // are spent at the mint, so this is the claim's face value, not money in hand)
-    const held = Object.values(credit.keys.storage().getXcashuTokens())
-      .flat()
-      .reduce((sum, entry) => sum + getTokenMetadata(entry.token).amount, 0);
-    expect(held).toBeGreaterThan(0);
-    expect(wallet.sats + held).toBe(300);
+    // core gives the whole token back with the cut reply: nothing waits on a claim
+    expect(credit.keys.storage().getXcashuTokens()).toEqual({});
+    expect(wallet.sats).toBe(300);
     chat.dispose();
   });
 });

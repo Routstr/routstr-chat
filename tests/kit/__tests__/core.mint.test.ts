@@ -75,27 +75,16 @@ describe("X-Cashu", () => {
     }
   );
 
-  // KNOWN CORE GAP (core df89c0a5), pinned as it is today: after a cut stream core answers
-  // 500, keeps the coins and never writes the refund, so the claim answers 425 "pending"
-  // for good. The SDK keeps retrying and the reply's sats stay at the provider. When core
-  // fixes it this test fails: then change it to expect the 150 sats back.
-  it("keeps the money when the stream is cut mid-way (known core gap)", async () => {
+  // after a cut stream core answers 424 and gives the whole token back as change (core
+  // df89c0a5 answered 500 and kept the coins, with the refund claim pending for good)
+  it("returns everything when the stream is cut mid-way", async () => {
     const token = await kit.mintToken(150);
     const r = await chat(
       { "X-Cashu": token },
       "[kit:cut=2] one two three four"
     );
-    expect(r.status).toBe(500);
-    expect(r.change).toBeNull();
-    expect(new Set(await kit.tokenStates(token))).toEqual(new Set(["SPENT"]));
-    for (let i = 0; i < 3; i++) {
-      const claim = await fetch(`${kit.coreUrl}v1/wallet/refund`, {
-        method: "POST",
-        headers: { "X-Cashu": token },
-      });
-      expect(claim.status).toBe(425);
-      await new Promise((res) => setTimeout(res, 1000));
-    }
+    expect(r.status).toBe(424);
+    expect(await kit.redeem(r.change!)).toBe(150);
   });
 
   // a property over many paid replies: whatever the upstream does, paid = change + charge,
