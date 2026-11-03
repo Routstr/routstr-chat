@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Model } from "@/types/models";
-import { answers, baseKey, fmt, handles, hostOf, measureFor, priceScale, searchRank, sortRows, type Row } from "./catalog";
+import { answers, baseKey, fmt, handles, hostOf, makerOf, measureFor, priceScale, searchRank, sortRows, type Row } from "./catalog";
 
 const model = (id: string, name: string, extra: Partial<Model> = {}) =>
   ({ id, name, created: 0, context_length: 0, architecture: { input_modalities: ["text"], output_modalities: ["text"] }, ...extra }) as unknown as Model;
@@ -99,5 +99,22 @@ describe("answers: the models a chat can talk to", () => {
 
   it("leaves out a model that does not read text", () => {
     expect(answers(takes(["audio"], ["text"]))).toBe(false);
+  });
+});
+
+describe("makerOf: the maker a model is filed under", () => {
+  it("reads the maker from the id or the name", () => {
+    expect(makerOf(model("magistral-small-2506", "Magistral Small 2506"))).toBe("mistral");
+    expect(makerOf(model("lyria-3-pro-preview", "Lyria 3 Pro Preview"))).toBe("google");
+    expect(makerOf(model("inclusionai/ling-3.0-flash", "Ling 3.0 Flash"))).toBe("inclusionai");
+    expect(makerOf(model("seedream-v5-pro", "Seedream V5 Pro"))).toBe("bytedance");
+  });
+
+  it("matches a short keyword only where a word starts", () => {
+    expect(makerOf(model("sao10k/l3.1-euryale-70b", "Llama 3.1 Euryale 70B"))).toBe("meta");
+    expect(makerOf(model("openai/o3-pro", "o3 Pro"))).toBe("openai");
+    expect(makerOf(model("wan-2.5", "Wan 2.5"))).toBe("alibaba");
+    expect(makerOf(model("solar-pro4", "Upstage: Solar Pro 4"))).toBe("upstage");
+    expect(makerOf(model("swan-7b", "Swan 7B"))).toBe("other");
   });
 });
