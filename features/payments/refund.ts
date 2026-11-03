@@ -33,8 +33,8 @@ const due = (key: ApiKeyEntry) =>
 
 // A refund holds the payment lock, so every reply waits for it: a provider
 // that does not say what a key holds in this long keeps the key for the next
-// refund
-const ASK_MS = 15_000;
+// refund (the SDK gives up at 10 s, then the refund would still be asked for)
+const ASK_MS = 8_000;
 
 /** What the provider says the key holds, or null when it does not answer in time. */
 async function askBalance(balances: BalanceManager, key: ApiKeyEntry) {

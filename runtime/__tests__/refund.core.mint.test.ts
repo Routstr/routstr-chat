@@ -172,7 +172,7 @@ describe("the Refund button against this node's core", () => {
     expect(exported.list()).toEqual([]);
   });
 
-  it("shows a key empty after a payout the wallet could not take in", async () => {
+  it("holds a payout the wallet could not take in, and takes it in on the next press", async () => {
     const { chat, storage, hold, received, state } = await account();
     const key = await newKey(40);
     hold(key);
@@ -181,10 +181,17 @@ describe("the Refund button against this node's core", () => {
     state.mintDown = true;
     expect(await chat.refund()).toEqual([
       { baseUrl: kit.coreUrl, success: false },
+      { baseUrl: "held refund", success: false },
     ]);
-
     expect(received).toEqual([]);
-    expect(storage.getAllApiKeys()).toMatchObject([{ key, balance: 0 }]);
+    expect(storage.getAllApiKeys()).toEqual([]);
+    expect(chat.held.get()).toBe(40);
+
+    state.mintDown = false;
+    expect(await chat.refund()).toEqual([
+      { baseUrl: "held refund", success: true },
+    ]);
+    expect(received).toEqual([40]);
     expect(chat.held.get()).toBe(0);
   });
 
@@ -227,15 +234,29 @@ describe("the Refund button against this node's core", () => {
     const others: ApiKeyEntry[] = [
       { baseUrl: kit.coreUrl, key, balance: 60, lastUsed: null },
     ];
-    const { chat, received, state } = await account(others);
+    const exported = new ExportedKeys(
+      "alice",
+      memoryStorage(),
+      new BalanceManager({} as WalletAdapter, {} as StorageAdapter),
+      {
+        get: async () => undefined,
+        put: async () => {},
+        delete: async () => {},
+      }
+    );
+    const { chat, received, state } = await account(others, (token, baseUrl) =>
+      exported.adopt(token, baseUrl)
+    );
 
     state.mintDown = true;
     expect(await chat.refund()).toEqual([
       { baseUrl: kit.coreUrl, success: false },
     ]);
     state.mintDown = false;
-    // core has paid the key out to zero by now, and pays the same out again
+    // the payout held from the first press lands, and core, asked again,
+    // replays the payout the wallet now has: the key is done
     expect(await chat.refund()).toEqual([
+      { baseUrl: "held refund", success: true },
       { baseUrl: kit.coreUrl, success: true },
     ]);
 

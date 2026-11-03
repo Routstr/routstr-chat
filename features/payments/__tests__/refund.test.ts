@@ -139,14 +139,19 @@ describe("refundCredit", () => {
     const { deps, direct, credit, wallet } = await setup();
     direct.setApiKey(LARGE, "sk-large");
     lastUsed(credit, 0);
-    wallet.purse.take.mockRejectedValueOnce(new Error("mint unreachable"));
+    wallet.purse.take
+      .mockRejectedValueOnce(new Error("mint unreachable"))
+      .mockRejectedValueOnce(new Error("mint unreachable"));
 
     await refundCredit(deps, false);
-    expect(direct.getApiKey(LARGE)).not.toBeNull();
+    expect(direct.getCachedReceiveTokens()).toMatchObject([
+      { token: "payout-fixture" },
+    ]);
 
     await refundCredit(deps, false);
     expect(wallet.received).toEqual(["payout-fixture"]);
     expect(direct.getAllApiKeys()).toEqual([]);
+    expect(direct.getCachedReceiveTokens()).toEqual([]);
   });
 
   it("keeps the last known balance when the provider cannot say, and still asks for a refund", async () => {
@@ -317,7 +322,7 @@ describe("refundCredit", () => {
     expect(deps.otherDevices.drop).toHaveBeenCalledWith(["sk-gone-device"]);
   });
 
-  it("shows this device's key empty after a payout the wallet could not take in", async () => {
+  it("takes in a payout the wallet could not take in at first, in the same refund", async () => {
     provider({ [LARGE]: 120_000 });
     const { deps, direct, wallet } = await setup();
     direct.setApiKey(LARGE, "sk-mine");
@@ -326,11 +331,10 @@ describe("refundCredit", () => {
 
     const results = await refundCredit(deps, true);
 
-    expect(results).toContainEqual({ baseUrl: LARGE, success: false });
-    // kept, so a refund later is paid out again, and empty, as the provider says
-    expect(direct.getAllApiKeys()).toMatchObject([
-      { key: "sk-mine", balance: 0 },
-    ]);
+    expect(results).toContainEqual({ baseUrl: "held refund", success: true });
+    expect(wallet.received).toEqual([`refund-${LARGE}`]);
+    expect(direct.getAllApiKeys()).toEqual([]);
+    expect(direct.getCachedReceiveTokens()).toEqual([]);
   });
 
   it("keeps a lost device's key when its payout could not be received", async () => {

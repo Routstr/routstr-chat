@@ -6,8 +6,8 @@
 const MARGIN = 1.4;
 // the smallest refill, as a share of what one message may cost
 const MIN_REFILL = 0.21;
-// a new key never starts below this many sats
-const MIN_FIRST_DEPOSIT = 7;
+// no deposit, first or refill, is below this many sats
+const MIN_DEPOSIT = 7;
 
 export interface TopUp {
   /** Sats paid before the request goes; it cannot go without them. */
@@ -27,11 +27,13 @@ export function topUpFor(
   if (mode === "xcashu") return { now: Math.ceil(need), later: 0 };
   if (credit === null) {
     return {
-      now: Math.max(Math.ceil(need * MARGIN), MIN_FIRST_DEPOSIT),
+      now: Math.max(Math.ceil(need * MARGIN), MIN_DEPOSIT),
       later: 0,
     };
   }
   if (credit >= need * MARGIN) return { now: 0, later: 0 };
-  const refill = Math.ceil(Math.max(need * MARGIN - credit, MIN_REFILL * need));
+  const refill = Math.ceil(
+    Math.max(need * MARGIN - credit, MIN_REFILL * need, MIN_DEPOSIT)
+  );
   return credit < need ? { now: refill, later: 0 } : { now: 0, later: refill };
 }

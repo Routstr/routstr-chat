@@ -43,6 +43,7 @@ const balance = (amount: number, more: object = {}) => ({
   reserved: 0,
   unit: "msat" as const,
   apiKey: "sk-made",
+  readSeq: 0,
   ...more,
 });
 

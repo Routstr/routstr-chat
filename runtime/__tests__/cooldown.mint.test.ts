@@ -1,8 +1,8 @@
 /**
- * A provider that fails replies for a model twice within the SDK's cooldown
- * window is left out for that model, and the picker shows it: a request on the
- * warm model list records its failures in the provider manager the picker
- * reads (catalog.warm). One failure alone leaves it in (SDK policy). Two
+ * A provider that fails a reply for a model is left out for that model for a
+ * while, and the picker shows it: a request on the warm model list records its
+ * failures in the provider manager the picker reads (catalog.warm). The SDK
+ * cools the model down there for 10 s, longer each failure in a row. Two
  * providers here are one routstr-core under two addresses.
  */
 import { expect, it } from "vitest";
@@ -22,7 +22,7 @@ const ONE = kit.coreUrl;
 const TWO = ONE.replace("127.0.0.1", "localhost");
 const MODEL = "kit-cheap";
 
-it("leaves out a provider that failed two replies for a model in a row, in the picker too", async () => {
+it("leaves out a provider that failed a reply for a model, in the picker too", async () => {
   const routing = createRouting({
     node: () => undefined,
     extraProviders: [ONE, TWO],
@@ -45,7 +45,7 @@ it("leaves out a provider that failed two replies for a model in a row, in the p
     ...emptyDevice(),
   });
   const ranked = () => routing.catalog.routes(MODEL).map((r) => r.baseUrl);
-  // each reply: the first provider fails it, the other answers
+  // the first provider fails the reply, the other answers it
   const reply = async (id: string) => {
     await kit.upstream.queue({ fail: 500 });
     const turn = await chat.chat.send(id, "hi", { id: MODEL });
@@ -55,9 +55,8 @@ it("leaves out a provider that failed two replies for a model in a row, in the p
   };
 
   const first = ranked()[0];
-  await reply("c1");
   expect(ranked()).toHaveLength(2);
-  await reply("c2");
+  await reply("c1");
 
   expect(ranked()).not.toContain(first);
   expect(ranked()).toHaveLength(1);
