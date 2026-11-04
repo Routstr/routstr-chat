@@ -201,8 +201,8 @@ html[data-room="meridian"] .v2 {
 @keyframes stPageIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes stRise { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 
-.st-head, .st-grp { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, var(--col)) minmax(0, 1fr); }
-.st-head > *, .st-grp > .st-body { grid-column: 2; }
+.st-head, .st-dep, .st-grp { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, var(--col)) minmax(0, 1fr); }
+.st-head > *, .st-dep > *, .st-grp > .st-body { grid-column: 2; }
 .st-head { margin-bottom: var(--s7); }
 .st-t {
   font-family: var(--f-display); font-weight: var(--w-display); font-size: calc(34px * var(--display-scale));
@@ -215,6 +215,12 @@ html[data-room="meridian"] .v2 {
 /* the column's full measure; a sentence that does not fit moves whole to the next line, and one
    longer than the line splits into even halves, never a two-word tail */
 .st-lede .st-s { display: inline-block; text-wrap: balance; }
+/* a page on its way out says so under its title, in the column, before anything on it is used */
+.st-dep { margin: calc(var(--s5) - var(--s7)) 0 var(--s7); }
+.st-dep > div { display: grid; justify-items: start; gap: 6px; padding: 20px 22px 22px; border-radius: var(--r-lg); background: var(--st-acc-soft); }
+.st-dep-t { font-family: var(--f-ui); font-size: 19px; font-weight: var(--w-strong); line-height: 1.3; color: var(--ink); font-stretch: var(--display-stretch, 100%); }
+.st-dep .st-rn { font-size: 14.5px; color: var(--ink-2); max-width: 46ch; }
+.st-dep .st-btn { margin-top: 12px; }
 
 /* a group: its name in the margin, its rows in the column */
 .st-grp { position: relative; scroll-margin-top: 72px; content-visibility: auto; contain-intrinsic-size: auto 240px; overflow-clip-margin: 8px; }
@@ -227,8 +233,10 @@ html[data-room="meridian"] .v2 {
 .st-kv { font-family: var(--f-ui); font-size: 12px; color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; transition: color var(--d-mid); }
 /* warn is a dot, never coloured words: small orange text on the dark rooms reads as alarm */
 .st-kv[data-tone="warn"], .st-rs[data-tone="warn"], .st-it-s[data-tone="warn"] { color: var(--ink); }
-.st-kv[data-tone="warn"]::before, .st-rs[data-tone="warn"]::before, .st-it-s[data-tone="warn"]::before, .st-err::before {
+.st-kv[data-tone="warn"]::before, .st-rs[data-tone="warn"]::before, .st-it-s[data-tone="warn"]::before, .st-err::before, .st-dep-t::before {
   content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 99px; background: var(--warn); margin-right: 7px; vertical-align: .08em; flex: none; }
+/* the notice's dot, sized to its title */
+.st-dep-t::before { width: 9px; height: 9px; margin-right: 10px; vertical-align: .1em; }
 .st-kv:empty { display: none; }
 /* ok is calm ink, never the accent: in Meridian --tint and --warn are the same colour */
 .st-kv[data-tone="ok"] { color: var(--ink-2); }
@@ -237,8 +245,8 @@ html[data-room="meridian"] .v2 {
 /* narrower panels: the margin folds above its rows */
 @container stpane (max-width: 899px) {
   .st-page { padding-inline: var(--s6); }
-  .st-head, .st-grp { grid-template-columns: minmax(0, 1fr); }
-  .st-head > *, .st-grp > .st-body { grid-column: 1; }
+  .st-head, .st-dep, .st-grp { grid-template-columns: minmax(0, 1fr); }
+  .st-head > *, .st-dep > *, .st-grp > .st-body { grid-column: 1; }
   .st-marg { grid-column: 1; grid-row: auto; justify-self: stretch; text-align: left; position: static; padding: var(--s1) 0 var(--s2);
     grid-auto-flow: column; justify-content: start; align-items: baseline; gap: 10px; }
   .st-grp + .st-grp, .st-view + .st-grp { margin-top: var(--s6); }
@@ -752,6 +760,7 @@ html[data-room="meridian"] .v2 {
   .st-mclose { width: 44px; height: 44px; border-radius: var(--r-sm); align-items: center; justify-content: center; color: var(--ink-2); }
   .st-page { padding: 64px var(--s5) var(--s9); }
   .st-head { margin-bottom: var(--s5); }
+  .st-dep { margin: 0 0 var(--s5); }
   .st-t { font-size: calc(34px * var(--display-scale)); }
   .st-hero-v { font-size: calc(40px * var(--display-scale)); }
   .st-lede { font-size: 15px; }

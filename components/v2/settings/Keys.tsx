@@ -32,6 +32,22 @@ import {
 const satsOf = (k: ExportedKey) =>
   k.balance === null ? null : Math.floor(k.balance / 1000);
 
+/* keys made here gave way to routstrd: the page says so before anything on it is used */
+function Deprecated() {
+  return (
+    <div className="st-dep" role="note">
+      <div>
+        <p className="st-dep-t">API keys are deprecated</p>
+        <p className="st-rn">To use Routstr in other apps, run routstrd instead. It runs on your computer, finds the cheapest node, and pays it per request.</p>
+        <a className="st-btn prime" href="https://routstr.com/routstrd" target="_blank" rel="noopener noreferrer">
+          Get routstrd
+          <Icon name="out" size={16} />
+        </a>
+      </div>
+    </div>
+  );
+}
+
 export default function Keys() {
   const ui = useUi();
   const toast = useToast();
@@ -56,6 +72,7 @@ export default function Keys() {
     return (
       <>
         <Head title="API keys" lede="Keys let other apps spend credit at one provider." />
+        <Deprecated />
         <Grp id="g-keys" k="Your keys">
           <Row wrap title="Sign in first" note="Keys are kept with your account.">
             <Btn
@@ -99,6 +116,7 @@ export default function Keys() {
   return (
     <>
       <Head title="API keys" lede="Keys let other apps spend credit at one provider." />
+      <Deprecated />
       <Grp id="g-keys" k="Your keys" kv={keys.length ? plural(keys.length, "key") : undefined}>
         {keys.length === 0 ? (
           <Row title="No keys yet" note="Make one below. It holds sats at one provider for another app to use." />
