@@ -39,6 +39,11 @@ export function useKeyboardInset(phone: boolean) {
     const vv = window.visualViewport;
     const html = document.documentElement;
     if (!phone || !vv) return;
+    // the box the panel is fixed in, whose foot the keyboard covers. Not innerHeight: iOS 26 shrinks
+    // that with the keyboard, which left the composer under it
+    const floor = document.createElement("div");
+    floor.style.cssText = "position: fixed; inset: 0; visibility: hidden; pointer-events: none";
+    document.body.append(floor);
     let was = 0;
     let wasP = 0;
     let fallback = 0;
@@ -79,7 +84,7 @@ export function useKeyboardInset(phone: boolean) {
       // shapes the page, so a drawer that took the focus never shrinks back mid-open
       const a = document.activeElement;
       const typing = !!a?.matches?.("input, textarea, [contenteditable='true']");
-      const kb = typing ? Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop)) : 0;
+      const kb = typing ? Math.max(0, Math.round(floor.getBoundingClientRect().bottom - vv.height - vv.offsetTop)) : 0;
       was = kb;
       html.style.setProperty("--kb", `${kb}px`);
       html.toggleAttribute("data-kb", kb > 80);
@@ -107,6 +112,7 @@ export function useKeyboardInset(phone: boolean) {
     };
     document.addEventListener("focusin", focus);
     return () => {
+      floor.remove();
       window.clearTimeout(fallback);
       mo.disconnect();
       document.removeEventListener("focusin", focus);
