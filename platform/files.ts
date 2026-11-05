@@ -131,19 +131,26 @@ export function createFileStore(deps: {
     keys: PnsKeys[],
     signal: AbortSignal
   ) {
+    const misses: string[] = [];
     for (const server of servers) {
       try {
         const response = await fetch(`${trim(server)}/${hash}`, { signal });
-        if (!response.ok) continue;
+        if (!response.ok) {
+          misses.push(`${server} answered ${response.status}`);
+          continue;
+        }
         const blob = new Uint8Array(await response.arrayBuffer());
         for (const { pnsKey } of keys) {
           const file = decryptBlob(blob, pnsKey);
           if (file) return file;
         }
-      } catch {
+        misses.push(`${server} has a copy none of this account's keys open`);
+      } catch (error) {
         if (signal.aborted) return undefined;
+        misses.push(`${server}: ${error}`);
       }
     }
+    console.warn(`Could not fetch file ${hash} from Blossom:`, misses);
   }
 
   /** A Blossom server still has this copy. */
@@ -231,13 +238,17 @@ export function createFileStore(deps: {
           body: blob,
           signal: stop.signal,
         });
-        if (!response.ok)
-          throw new Error(`${server} answered ${response.status}`);
+        if (!response.ok) {
+          const reason = response.headers.get("X-Reason") || (await response.text().catch(() => ""));
+          throw new Error(`${server} answered ${response.status} ${reason.slice(0, 200)}`);
+        }
         return server;
       })
     );
     clearTimeout(timer);
     signal.removeEventListener("abort", end);
+    const refused = results.flatMap((r) => (r.status === "rejected" ? [String(r.reason)] : []));
+    if (refused.length) console.warn("A file copy did not reach every Blossom server:", refused);
     const servers = results.flatMap((r) =>
       r.status === "fulfilled" ? [r.value] : []
     );

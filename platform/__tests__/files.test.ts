@@ -225,10 +225,13 @@ describe("FileStore: Blossom", () => {
     ).toBe(PNG);
   });
 
-  it("names only the servers that took the upload", async () => {
+  it("names only the servers that took the upload, and says why one refused", async () => {
     blossom.refusing.add(A);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     expect((await store().store(PNG, signal())).blossomServers).toEqual([B]);
+    expect(String(warn.mock.calls[0])).toContain(`${A} answered 401 no`);
+    warn.mockRestore();
   });
 
   it("uses no server while file sync is off or the account's history is locked", async () => {

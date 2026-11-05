@@ -47,10 +47,12 @@ export interface FileSync {
   servers: string[];
 }
 
-/** The servers files go to until the person picks others (main's). */
+/** The servers files go to until the person picks others: ones that take an
+ *  encrypted copy (main's, Primal and nostr.build, take only pictures and
+ *  video, so they refuse it with 415). */
 export const DEFAULT_FILE_SERVERS = [
-  "https://blossom.primal.net",
-  "https://cdn.nostr.build",
+  "https://nostr.download",
+  "https://blossom.ditto.pub",
 ];
 
 /** The device's file store and the account's Blossom copies. */
