@@ -21,11 +21,11 @@
 /* a folded line hangs two characters in, so columns still read */
 .rd-qc .rd-ql { white-space: pre-wrap; min-height: 1.62em; padding-left: 2ch; text-indent: -2ch; }
 
-/* long: seven lines of text (never a blank one), then the rest opens under them */
-.rd-q-wrap { display: grid; grid-template-rows: 1fr; }
-.rd-q-in { min-height: 0; overflow: clip; }
-.rd-q-wrap[data-long] { grid-template-rows: 0fr; transition: grid-template-rows var(--d-mid) var(--e-out); }
+/* long: seven lines of text (never a blank one), then the rest opens under them.
+   Only a long message folds and clips; any other grows with every line it has */
+.rd-q-wrap[data-long] { display: grid; grid-template-rows: 0fr; transition: grid-template-rows var(--d-mid) var(--e-out); }
 .rd-q-wrap[data-long] .rd-q-in {
+  overflow: clip;
   min-height: var(--rd-clamp, calc(var(--line) * 7));
   --rd-fade: 64px;
   mask-image: linear-gradient(to bottom, #000 calc(100% - var(--rd-fade)), transparent);

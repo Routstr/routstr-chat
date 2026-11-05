@@ -34,6 +34,8 @@ export function useHug(wrapRef: RefObject<HTMLDivElement | null>, text: string) 
       if (lines().n > was.n) w.style.width = "";
     };
     hug();
+    // measured in a stand-in face, the box is hugged again in the real one
+    void document.fonts?.ready.then(hug);
     let vw = window.innerWidth;
     const on = () => {
       if (window.innerWidth === vw) return;
