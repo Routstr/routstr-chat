@@ -76,10 +76,31 @@ export default function Send({
   /* ── a token ───────────────────────────────────────────────────────────── */
   const have = mint.bal;
   const n = +s.sendAmount || 0;
+  // a mint may keep a fee for the swap that makes a token and for claiming it
+  // (the token carries that one): "All" is the largest token, not the balance
+  const [fees, setFees] = useState<{ at: string; fee: number | null; most: number } | null>(null);
+  const feesAt = `${mint.active?.url} ${have} ${n}`;
+  useEffect(() => {
+    const from = purse();
+    const url = mint.active?.url;
+    if (!from || !url || !have) return;
+    let live = true;
+    from.tokenFees(url, n).then(
+      (f) => live && setFees({ at: feesAt, ...f }),
+      (e) => console.warn("Could not work out the mint's fee for a token", e)
+    );
+    return () => {
+      live = false;
+    };
+  }, [feesAt]);
+  // until the mint's fees are read (or when they cannot be), as before
+  const known = fees?.at === feesAt ? fees : null;
+  const most = known?.most ?? have;
+  const fee = known?.fee ?? 0;
   const [making, setMaking] = useState(false);
   const make = async () => {
     const from = purse();
-    if (!from || !mint.active || !(n > 0 && n <= have) || making) return;
+    if (!from || !mint.active || !(n > 0 && n <= most) || making) return;
     const before = new Set(tokens.map((t) => t.id));
     flip.current = field.current?.getBoundingClientRect() ?? null;
     setMaking(true);
@@ -89,6 +110,7 @@ export default function Send({
       await from.send(mint.active.url, n);
       s.setSendAmount("");
     } catch (e) {
+      console.error("Could not make the token:", e);
       s.setError(e instanceof Error ? e.message : String(e));
     } finally {
       setMaking(false);
@@ -265,8 +287,9 @@ export default function Send({
         />
       );
     } else {
-      const over = n > have;
-      const o = over ? mint.coverBy(n) : null;
+      const over = n > most;
+      const o = n > have ? mint.coverBy(n) : null;
+      const kept = fee > 0 ? `The mint keeps ${fmt(fee)} as its fee` : undefined;
       const sum = tokens.reduce((a, x) => a + satsOf(x.amount, x.unit), 0);
       body = (
         <Pane
@@ -282,14 +305,16 @@ export default function Send({
                   fieldRef={field}
                   warn={over}
                   buys={
-                    over ? (
+                    n > have ? (
                       <Two a={`Only ${fmt(have)} sats on ${mn}`} b={o ? `${o.name} has ${fmt(o.bal)}. Switch mint below.` : undefined} />
+                    ) : over ? (
+                      <Two a={`At most ${fmt(most)} sats on ${mn}`} b={`The mint keeps ${fmt(have - most)} as its fee`} />
                     ) : n <= 0 ? (
                       <Two a={`You have ${fmt(have)} sats on ${mn}`} />
-                    ) : n === have ? (
-                      <Two a={`That is everything on ${mn}`} />
+                    ) : n === most ? (
+                      <Two a={`That is everything on ${mn}`} b={kept} />
                     ) : (
-                      <Two a={`${fmt(have - n)} sats stay on ${mn}`} />
+                      <Two a={`${fmt(have - n - fee)} sats stay on ${mn}`} b={kept} />
                     )
                   }
                 />
@@ -297,7 +322,7 @@ export default function Send({
                   list={[
                     [100, "100"],
                     [500, "500"],
-                    [have, "All", `All ${fmt(have)} sats on ${mn}`],
+                    [most, "All", `All ${fmt(most)} sats on ${mn}`],
                   ]}
                   value={n}
                   onPick={(p) => {
@@ -324,7 +349,7 @@ export default function Send({
               type="button"
               className="wl-go"
               data-busy={making ? "" : undefined}
-              disabled={making || !(n > 0 && n <= have)}
+              disabled={making || !(n > 0 && n <= most)}
               onClick={() => void make()}
             >
               {making ? (

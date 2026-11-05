@@ -364,6 +364,58 @@ export class WalletExecutor {
     );
   }
 
+  /**
+   * What a token of `sats` takes from these coins on top of `sats`: the
+   * mint's fee for the swap that makes it, and the fee for claiming it, which
+   * the token carries so whoever claims it gets all of `sats`. `fee` is null
+   * when these coins cannot make it; `most` is the largest token they can.
+   * Nothing is asked of the mint once its keys are in, and nothing is spent.
+   */
+  async tokenFees(
+    mintUrl: string,
+    sats: number,
+    coins: Coins
+  ): Promise<{ fee: number | null; most: number }> {
+    const proofs = await read(coins);
+    const fee = async (wallet: Wallet, n: number) => {
+      const amount = wallet.unit === "msat" ? n * 1000 : n;
+      try {
+        const { inputs, keepOutputs } = await wallet.prepareSwapToSend(
+          amount,
+          bare(inUnit(proofs, wallet.unit)),
+          { keysetId: wallet.keysetId, includeFees: true }
+        );
+        const kept = (keepOutputs ?? []).reduce((s, o) => s + o.blindedMessage.amount, 0);
+        const taken = amountOf(inputs) - kept - amount;
+        return wallet.unit === "msat" ? Math.ceil(taken / 1000) : taken;
+      } catch {
+        return null;
+      }
+    };
+    const wallet = await this.sendWallet(mintUrl, proofs, sats);
+    // the fees only grow with the amount: the largest token is searched for
+    let lo = 0;
+    let hi = worth(proofs, wallet.unit);
+    while (lo < hi) {
+      const mid = Math.ceil((lo + hi) / 2);
+      if ((await fee(wallet, mid)) === null) hi = mid - 1;
+      else lo = mid;
+    }
+    return { fee: sats > 0 ? await fee(wallet, sats) : 0, most: lo };
+  }
+
+  /** The wallet a token of `sats` is made with: the mint may hold coins of
+   *  more than one unit (a sat token taken where msat is the default), so the
+   *  default's, else a unit that covers it. */
+  private async sendWallet(mintUrl: string, proofs: Proof[], sats: number) {
+    const wallet = await this.open(mintUrl);
+    if (worth(proofs, wallet.unit) >= sats) return wallet;
+    const other = [...new Set(proofs.map(unitOf))].find(
+      (unit) => unit && worth(proofs, unit) >= sats
+    );
+    return other ? this.open(mintUrl, other) : wallet;
+  }
+
   private async sendLocked(
     mintUrl: string,
     sats: number,
@@ -371,15 +423,7 @@ export class WalletExecutor {
     options: SendOptions
   ): Promise<string> {
     const { journal } = this.deps;
-    let wallet = await this.open(mintUrl);
-    // the mint may hold coins of more than one unit (a sat token taken where
-    // msat is the default): sent from the default's, else a unit that covers it
-    if (worth(proofs, wallet.unit) < sats) {
-      const other = [...new Set(proofs.map(unitOf))].find(
-        (unit) => unit && worth(proofs, unit) >= sats
-      );
-      if (other) wallet = await this.open(mintUrl, other);
-    }
+    const wallet = await this.sendWallet(mintUrl, proofs, sats);
     proofs = bare(inUnit(proofs, wallet.unit));
     const commit = this.deps.commitFor(mintUrl);
     const amount = wallet.unit === "msat" ? sats * 1000 : sats;

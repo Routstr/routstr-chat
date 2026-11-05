@@ -88,6 +88,7 @@ export async function seal(
       env.mintUrl,
       env.invoiceMintUrl,
       env.msatMintUrl,
+      env.feeMintUrl,
       env.relayUrl,
       env.coreUrl,
     ]

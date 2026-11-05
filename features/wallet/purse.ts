@@ -25,6 +25,14 @@ export interface Purse {
     /** the provider the handoff gives it to, for Reclaim to ask */
     to?: string
   ): Promise<string>;
+  /** What a token of `sats` at the mint takes on top of `sats` in the mint's
+   *  fees (its swap, and claiming the token, which the token carries), null
+   *  when this account's coins there cannot make it, and the largest token
+   *  they can make. Nothing is spent. */
+  tokenFees(
+    mintUrl: string,
+    sats: number
+  ): Promise<{ fee: number | null; most: number }>;
   /** A melt quote for a Lightning invoice at the mint, in a unit this
    *  account's coins there can pay it in. */
   quote(mintUrl: string, invoice: string): Promise<MeltQuoteBolt11Response>;
@@ -140,6 +148,8 @@ export function createPurse(
       note({ direction: "out", sats });
       return token;
     },
+    tokenFees: (mintUrl, sats) =>
+      executor.tokenFees(mintUrl, sats, () => coins.coins(owner, mintUrl)),
     quote: (mintUrl, invoice) =>
       executor.quote(mintUrl, invoice, () => coins.coins(owner, mintUrl)),
     pay: async (mintUrl, quote) => {

@@ -16,6 +16,8 @@ export interface MintOptions {
   keysets?: "v1" | "v2";
   /** also offer the msat unit, as some mints do */
   msat?: boolean;
+  /** the fee per input, in parts per thousand of a sat (mint.cubabitcoin.org keeps 100) */
+  feePpk?: number;
 }
 
 export interface MintProcess {
@@ -73,7 +75,7 @@ async function launch(
         MINT_LISTEN_PORT: String(port),
         MINT_PRIVATE_KEY: `kit-test-only-${port}`,
         MINT_DATABASE: "./data",
-        MINT_INPUT_FEE_PPK: "0",
+        MINT_INPUT_FEE_PPK: String(opts.feePpk ?? 0),
         FAKEWALLET_DELAY_INCOMING_PAYMENT: "0",
         FAKEWALLET_DELAY_OUTGOING_PAYMENT: "0",
         FAKEWALLET_PAY_INVOICE_STATE: payState,

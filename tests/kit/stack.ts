@@ -1,4 +1,4 @@
-// Starts the local stack every test shares: two FakeWallet mints, a Nostr relay, a fake LLM
+// Starts the local stack every test shares: four FakeWallet mints, a Nostr relay, a fake LLM
 // upstream and real routstr-core in front of it. All on free ports, all on this machine.
 import fs from "node:fs";
 import os from "node:os";
@@ -15,6 +15,7 @@ export interface KitEnv {
   mintUrl: string; // the wallet's mint; core accepts it; melts settle; v1 keyset ids by default
   invoiceMintUrl: string; // a second mint with v2 keyset ids ("01…"): invoices to pay, tokens from another mint
   msatMintUrl: string; // a third mint that offers msat as well as sat
+  feeMintUrl: string; // a fourth that keeps a fee per coin spent (100 ppk), as mint.cubabitcoin.org does
   relayUrl: string;
   upstreamUrl: string;
   coreUrl: string | null; // routstr-core, with a trailing slash like the app stores it; null if not started
@@ -89,14 +90,18 @@ export async function startStack(opts: StackOptions = {}): Promise<Stack> {
       startMint({ dir: path.join(dir, "msat-mint"), pidFile, msat: true }).then(
         (s) => (stops.push(s.stop), s)
       ),
+      startMint({ dir: path.join(dir, "fee-mint"), pidFile, feePpk: 100 }).then(
+        (s) => (stops.push(s.stop), s)
+      ),
     ]);
     const failed = started.find((r) => r.status === "rejected");
     if (failed) throw (failed as PromiseRejectedResult).reason;
-    const [relay, upstream, mint, invoiceMint, msatMint] = started.map(
+    const [relay, upstream, mint, invoiceMint, msatMint, feeMint] = started.map(
       (r) => (r as PromiseFulfilledResult<unknown>).value
     ) as [
       Awaited<ReturnType<typeof startRelay>>,
       Awaited<ReturnType<typeof startUpstream>>,
+      Awaited<ReturnType<typeof startMint>>,
       Awaited<ReturnType<typeof startMint>>,
       Awaited<ReturnType<typeof startMint>>,
       Awaited<ReturnType<typeof startMint>>,
@@ -130,6 +135,7 @@ export async function startStack(opts: StackOptions = {}): Promise<Stack> {
         mintUrl: mint.url,
         invoiceMintUrl: invoiceMint.url,
         msatMintUrl: msatMint.url,
+        feeMintUrl: feeMint.url,
         relayUrl: relay.url,
         upstreamUrl: upstream.url,
         coreUrl,
@@ -147,6 +153,7 @@ const VARS = {
   mintUrl: "KIT_MINT_URL",
   invoiceMintUrl: "KIT_INVOICE_MINT_URL",
   msatMintUrl: "KIT_MSAT_MINT_URL",
+  feeMintUrl: "KIT_FEE_MINT_URL",
   relayUrl: "KIT_RELAY_URL",
   upstreamUrl: "KIT_UPSTREAM_URL",
   coreUrl: "KIT_CORE_URL",
@@ -166,6 +173,7 @@ export function envFromProcess(): KitEnv | undefined {
     mintUrl: get("mintUrl"),
     invoiceMintUrl: get("invoiceMintUrl"),
     msatMintUrl: get("msatMintUrl"),
+    feeMintUrl: get("feeMintUrl"),
     relayUrl: get("relayUrl"),
     upstreamUrl: get("upstreamUrl"),
     coreUrl: get("coreUrl") || null,

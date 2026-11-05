@@ -62,6 +62,8 @@ describe.each([
     expect(purse.peek(token)).toEqual({ mint, sats: 40 });
     expect(await purse.receive(token)).toEqual({ sats: 40, pending: false });
     expect(await purse.balances()).toEqual({ [mint]: 40 });
+    // a mint that keeps no fee: everything can go
+    expect(await purse.tokenFees(mint, 15)).toEqual({ fee: 0, most: 40 });
 
     let handed = "";
     const sent = await purse.send(mint, 15, async (t) => void (handed = t));
@@ -237,4 +239,27 @@ it("keeps the provider a token went to on its listing when the handoff fails, fo
   expect(tokensOf(journal.list("alice"))).toMatchObject([
     { amount: 16, baseUrl: "https://provider.example/" },
   ]);
+});
+
+describe("a purse at a mint that keeps a fee", () => {
+  it("makes the largest token everything there can make, and counts the fee", async () => {
+    const mint = kit.env.feeMintUrl;
+    const { store } = memoryCoins(() => "sat");
+    const purse = createPurse("alice", {
+      coins: store,
+      activity,
+      journal: new Journal(memoryStorage()),
+      locks: navigator.locks,
+    });
+    // 216 sats in four coins, as a wallet held at mint.cubabitcoin.org
+    await store.change("alice", mint, await kit.mintProofs(216, mint), []);
+    // all of it cannot go: the swap and claiming the token each keep a sat
+    await expect(purse.send(mint, 216)).rejects.toThrow(/Not enough funds/);
+    expect(await purse.tokenFees(mint, 216)).toEqual({ fee: null, most: 214 });
+    expect(await purse.tokenFees(mint, 100)).toEqual({ fee: 2, most: 214 });
+    // nothing moved: the largest token is made, and claimed whole
+    const token = await purse.send(mint, 214);
+    expect(await kit.redeem(token)).toBe(214);
+    expect(await purse.balances()).toEqual({});
+  });
 });
