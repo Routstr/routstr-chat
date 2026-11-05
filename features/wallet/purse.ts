@@ -40,6 +40,9 @@ export interface Purse {
    *  mint. "pending" means the mint has not settled it yet: the coins stay out
    *  of the wallet and the book settles it later (and writes its activity). */
   pay(mintUrl: string, quote: MeltQuoteBolt11Response): Promise<MeltOutcome>;
+  /** The sats the mint keeps, on top of the quote, for the coins paying it
+   *  spends; null when the coins here cannot pay it with that fee. */
+  payFee(mintUrl: string, quote: MeltQuoteBolt11Response): Promise<number | null>;
   /** A Lightning invoice for `sats` into this account's wallet at the mint.
    *  It is written down before it is returned, so the wallet claims it
    *  whenever it is paid, even if nobody waits for it any more. */
@@ -158,6 +161,10 @@ export function createPurse(
       );
       if (spent) note({ direction: "out", sats: toSats(spent, quote.unit) });
       return state;
+    },
+    payFee: async (mintUrl, quote) => {
+      const fee = await executor.payFee(mintUrl, quote, () => coins.coins(owner, mintUrl));
+      return fee === null ? null : quote.unit === "msat" ? Math.ceil(fee / 1000) : fee;
     },
     deposit: (mintUrl, sats) => executor.deposit(mintUrl, sats),
     claim: async (mintUrl, quoteId) => {

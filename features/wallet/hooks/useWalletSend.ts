@@ -234,6 +234,12 @@ export function useWalletSend() {
     [cashuStore.activeMintUrl, addInvoice, purse]
   );
 
+  const quoteFee = useCallback(async () => {
+    const made = meltQuoteRef.current;
+    const from = purse();
+    return made && from ? from.payFee(made.mintUrl, made.quote) : undefined;
+  }, [purse]);
+
   const handleNip60PaymentCancel = useCallback(() => {
     setNip60SendInvoice("");
     setNip60MeltQuoteId("");
@@ -275,9 +281,10 @@ export function useWalletSend() {
       const from = purse();
       if (!from) throw new Error("User not logged in");
       const have = (await from.balances())[mintUrl] ?? 0;
-      if (have < invoiceAmount + (invoiceFeeReserve || 0)) {
+      const mintFee = await from.payFee(mintUrl, quote);
+      if (mintFee === null || have < invoiceAmount + (invoiceFeeReserve || 0) + mintFee) {
         setError(
-          `Insufficient balance: have ${formatBalance(have, "sat")}s, need ${formatBalance(invoiceAmount + (invoiceFeeReserve || 0), "sat")}s`
+          `Insufficient balance: have ${formatBalance(have, "sat")}s, need ${formatBalance(invoiceAmount + (invoiceFeeReserve || 0), "sat")}s and the mint's fee`
         );
         setIsNip60Processing(false);
         return;
@@ -340,6 +347,7 @@ export function useWalletSend() {
     invoiceAmount,
     invoiceFeeReserve,
     quoteMintUrl,
+    quoteFee,
     isNip60Processing,
     isNip60LoadingInvoice,
     // actions

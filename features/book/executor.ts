@@ -243,6 +243,54 @@ export class WalletExecutor {
     );
   }
 
+  /** What paying this melt quote takes from these coins beyond its amount
+   *  and fee reserve: the mint's fees for the coins spent, in the quote's
+   *  unit, by the selection pay makes. Null when the coins cannot pay it
+   *  with those fees. Nothing is spent. */
+  async payFee(
+    mintUrl: string,
+    quote: MeltQuoteBolt11Response,
+    coins: Coins
+  ): Promise<number | null> {
+    const wallet = await this.open(mintUrl, quote.unit);
+    const proofs = bare(inUnit(await read(coins), wallet.unit));
+    const amount = quote.amount + (quote.fee_reserve || 0);
+    try {
+      const pick = await this.payPick(wallet, mintUrl, amount, proofs);
+      const taken = "exact" in pick
+        ? amountOf(pick.exact)
+        : amountOf(pick.swap.inputs) - (pick.swap.keepOutputs ?? []).reduce((s, o) => s + o.blindedMessage.amount, 0);
+      return taken - amount;
+    } catch {
+      return null;
+    }
+  }
+
+  /** The coins that pay `amount` to a melt, mint fees included: some that
+   *  already make it exactly, or else a swap that makes them. */
+  private async payPick(
+    wallet: Wallet,
+    mintUrl: string,
+    amount: number,
+    proofs: Proof[]
+  ): Promise<{ exact: Proof[] } | { swap: SwapPreview }> {
+    if (amountOf(proofs) < amount) {
+      throw new Error(`Not enough funds on mint ${mintUrl}`);
+    }
+    try {
+      const exact = wallet.sendOffline(amount, proofs, {
+        includeFees: true,
+        exactMatch: true,
+      }).send;
+      if (amountOf(exact) === amount + wallet.getFeesForProofs(exact)) {
+        return { exact };
+      }
+    } catch {
+      // no exact selection
+    }
+    return { swap: await wallet.prepareSwapToSend(amount, proofs, { includeFees: true }) };
+  }
+
   private async payLocked(
     mintUrl: string,
     quote: MeltQuoteBolt11Response,
@@ -255,33 +303,12 @@ export class WalletExecutor {
     const commit = this.deps.commitFor(mintUrl);
     const fee = quote.fee_reserve || 0;
     const amount = quote.amount + fee;
-    if (amountOf(proofs) < amount) {
-      throw new Error(`Not enough funds on mint ${mintUrl}`);
-    }
-
-    // coins that already make the exact amount need no swap
-    let send: Proof[] = [];
-    try {
-      const exact = wallet.sendOffline(amount, proofs, {
-        includeFees: true,
-        exactMatch: true,
-      }).send;
-      if (amountOf(exact) === amount + wallet.getFeesForProofs(exact)) {
-        send = exact;
-      }
-    } catch {
-      // no exact selection
-    }
-    const swapped = send.length
-      ? undefined
-      : await this.swap(
-          wallet,
-          mintUrl,
-          await wallet.prepareSwapToSend(amount, proofs, { includeFees: true }),
-          proofs,
-          commit
-        );
-    send = swapped?.send ?? send;
+    const pick = await this.payPick(wallet, mintUrl, amount, proofs);
+    const swapped =
+      "exact" in pick
+        ? undefined
+        : await this.swap(wallet, mintUrl, pick.swap, proofs, commit);
+    const send = swapped?.send ?? ("exact" in pick ? pick.exact : []);
 
     const preview = await wallet.prepareMelt("bolt11", quote, send);
     const melt: MeltRecord = {

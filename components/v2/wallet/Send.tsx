@@ -144,6 +144,24 @@ export default function Send({
   // paid, or sent and still settling on a slow route
   const [lnPaid, setLnPaid] = useState<{ n: number; pending: boolean } | null>(null);
   const lnAmt = useRef(0);
+  // the quote is paid by the mint that made it, whichever is active now
+  const payer = mint.all.find((m) => m.url === s.quoteMintUrl) ?? mint.active;
+  const payerBal = payer?.bal ?? 0;
+  // a mint may keep a fee for the coins a payment spends: that leaves the wallet too
+  const [mintFee, setMintFee] = useState<{ at: string; fee: number | null } | null>(null);
+  const mintFeeAt = `${s.nip60MeltQuoteId} ${payerBal}`;
+  useEffect(() => {
+    if (!s.nip60MeltQuoteId) return;
+    let live = true;
+    s.quoteFee().then(
+      (fee) => live && fee !== undefined && setMintFee({ at: mintFeeAt, fee }),
+      (e) => console.warn("Could not work out the mint's fee for a payment", e)
+    );
+    return () => {
+      live = false;
+    };
+  }, [mintFeeAt]);
+  const meltFee = mintFee?.at === mintFeeAt ? mintFee.fee : 0;
   const bare = (v: string) => v.trim().replace(/^lightning:/i, "");
   const lookUp = (t: string) => {
     s.setError("");
@@ -404,13 +422,10 @@ export default function Send({
   } else {
     const quoted = s.invoiceAmount !== null;
     const fee = s.invoiceFeeReserve ?? 0;
-    const total = (s.invoiceAmount ?? 0) + fee;
+    const total = (s.invoiceAmount ?? 0) + fee + (meltFee ?? 0);
     const paying = s.isNip60Processing;
     const failed = quoted && !!s.error && !paying;
-    // the quote is paid by the mint that made it, whichever is active now
-    const payer = mint.all.find((m) => m.url === s.quoteMintUrl) ?? mint.active;
-    const payerBal = payer?.bal ?? 0;
-    const short = quoted && !paying && total > payerBal;
+    const short = quoted && !paying && (total > payerBal || meltFee === null);
     const none = !!ln && /^ln(bc|tb|bcrt)/i.test(ln) && noAmount(ln);
     const notLn = !!ln && !/^ln(bc|tb|bcrt)/i.test(ln);
     let read_: React.ReactNode = <p className="wl-hint">You will see the amount and the fee before anything is paid.</p>;
@@ -455,6 +470,12 @@ export default function Send({
                 <span>Network fee, at most</span>
                 <span>{fmt(fee)}</span>
               </div>
+              {!!meltFee && (
+                <div>
+                  <span>Mint&apos;s fee</span>
+                  <span>{fmt(meltFee)}</span>
+                </div>
+              )}
               <div className="total">
                 <span>Leaves your wallet, at most</span>
                 <span>{fmt(total)}</span>
@@ -462,7 +483,7 @@ export default function Send({
             </div>
           </div>
           {short && (
-            <Note kind="warn" text={`Not enough on ${payer?.name ?? mn}. It has ${fmt(payerBal)} sats, this needs up to ${fmt(total)}.${o ? ` ${o.name} has ${fmt(o.bal)}, switch mint below.` : ""}`} />
+            <Note kind="warn" text={`Not enough on ${payer?.name ?? mn}. It has ${fmt(payerBal)} sats, this needs up to ${fmt(total)}${meltFee === null ? " and the mint's fee" : ""}.${o ? ` ${o.name} has ${fmt(o.bal)}, switch mint below.` : ""}`} />
           )}
           {failed && <Note kind="warn" text="This payment did not finish. Check the invoice is still unpaid before you try again." />}
         </>
