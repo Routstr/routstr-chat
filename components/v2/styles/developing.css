@@ -101,6 +101,12 @@ html[data-room="meridian"][data-face="dusk"] .la-frame {
   font-family: var(--f-body); font-style: italic; font-weight: var(--w-body);
   font-size: 15px; line-height: 1.4; color: var(--ink-2); text-wrap: pretty;
 }
+/* a name that leaves some of the prompt out opens to all of it, rising from
+   the frame's foot (a long one scrolls inside the frame) */
+.la-frame-name { display: block; width: 100%; text-align: left; }
+.la-frame-name[aria-expanded="true"] q { max-width: none; }
+.la-frame-t:has(.la-frame-name[aria-expanded="true"]) { top: var(--s4); display: flex; flex-direction: column; overflow-y: auto; }
+.la-frame-t:has(.la-frame-name[aria-expanded="true"]) > .la-frame-name { margin-top: auto; }
 .la-frame img, .la-frame canvas {
   position: absolute; inset: 0; z-index: 4; width: 100%; height: 100%; object-fit: cover; display: block;
   opacity: 0;

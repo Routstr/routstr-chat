@@ -18,14 +18,29 @@ import { tokenMs, useReducedMotion } from "../motion";
 
 const reduced = () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-/** The prompt named like a picture: "Paint a quiet harbour" -> "A quiet harbour". */
+/** The prompt named like a picture: "Paint a quiet harbour" -> "A quiet harbour".
+ *  `cut` when the name leaves some of the prompt out. */
 export const pictureName = (prompt: string) => {
-  let t = prompt.trim().replace(/^(please\s+)?(paint|draw|make|create|generate|render|sketch|illustrate|design|show me)(\s+me)?\s+/i, "");
-  const first = t.split(/[.!?\n,;]/)[0].trim();
+  const all = prompt.trim().replace(/^(please\s+)?(paint|draw|make|create|generate|render|sketch|illustrate|design|show me)(\s+me)?\s+/i, "");
+  const first = all.split(/[.!?\n,;]/)[0].trim();
   const words = first.split(/\s+/);
-  t = words.length <= 12 ? first : `${words.slice(0, 9).join(" ")}…`;
-  return t ? t[0].toUpperCase() + t.slice(1) : "";
+  const t = words.length <= 12 ? first : `${words.slice(0, 9).join(" ")}…`;
+  const cut = words.length > 12 || /[^\s.!?]/.test(all.slice(first.length).replace(/^[.!?\n,;\s]+/, ""));
+  return { name: t ? t[0].toUpperCase() + t.slice(1) : "", cut };
 };
+
+/** The picture's name in its frame; one that leaves some of the prompt out
+ *  opens to the whole prompt on a tap. */
+function PictureName({ prompt }: { prompt: string }) {
+  const { name, cut } = pictureName(prompt);
+  const [open, setOpen] = useState(false);
+  if (!cut) return <q>{name}</q>;
+  return (
+    <button type="button" className="la-frame-name" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+      <q>{open ? prompt.trim() : name.endsWith("…") ? name : `${name}…`}</q>
+    </button>
+  );
+}
 
 /** The newest reasoning heading, scanned from the end. */
 const newestHeading = (s: string) => {
@@ -308,7 +323,7 @@ export default function Live({
               </div>
               <div className="la-dens" aria-hidden="true" />
               <div className="la-frame-t">
-                <q>{pictureName(prompt)}</q>
+                <PictureName prompt={prompt} />
               </div>
             </div>
           ) : (
