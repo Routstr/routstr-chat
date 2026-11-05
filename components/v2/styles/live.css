@@ -182,7 +182,7 @@ html[data-room="meridian"] { --wet: color-mix(in srgb, var(--ink-3) 62%, var(--s
 .la-sep::before { content: ""; width: 3px; height: 3px; border-radius: 50%; background: currentColor; opacity: .7; }
 .la-words[data-topic] .la-sep { opacity: 1; }
 .la-w {
-  grid-area: 1 / 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  grid-area: 1 / 1; justify-self: start; min-width: 0; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   transition: transform var(--d-fast) var(--e-out), opacity var(--d-fast) var(--e-out);
 }
 .la-w[data-out] { transform: translateY(-62%); opacity: 0; }
