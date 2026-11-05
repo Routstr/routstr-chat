@@ -446,6 +446,8 @@ html[data-room="meridian"] :is(.sb-add, .sb-bal[data-zero] .v2-ico) { color: var
 .sb-bal[data-zero] .sb-bal-mini .v2-ico { color: var(--tint); }
 
 .sb-tools { display: flex; align-items: center; gap: 2px; padding-bottom: 3px; }
+/* your name beside your light: a phone has no tip to say whose it is */
+.sb-me-n { display: none; }
 .sb-tools .ghost { color: var(--ink-3); }
 .sb-tools .ghost:hover { color: var(--ink); }
 /* the room, said in words: a small round swatch of the room's own backdrop and its name, quiet like the
@@ -682,6 +684,11 @@ html[data-room="meridian"] :is(.sb-add, .sb-bal[data-zero] .v2-ico) { color: var
   .sb-tools { gap: 4px; }
   .sb-tools .ghost { width: 44px; height: 44px; }
   .sb-sw { height: 44px; padding: 0 12px 0 11px; font-size: 14px; }
+  /* the name gives way first when the foot is tight: the balance never does */
+  .sb-bal { flex: none; }
+  .sb-tools { min-width: 0; }
+  .sb-tools .sb-gear:has(.sb-me-n) { width: auto; min-width: 44px; flex: 0 1 auto; gap: 8px; padding: 0 12px 0 11px; color: var(--ink-2); }
+  .sb-me-n { display: block; min-width: 0; max-width: 8ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--f-ui); font-size: 14px; font-weight: 450; }
   .sb-bal { padding: 8px 10px 7px; }
   .sb-rooms, .sb-accts { width: calc(100% - 2 * var(--s3)); bottom: 72px; }
   .sb-acct { min-height: 48px; }

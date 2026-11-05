@@ -1,6 +1,6 @@
 /* ══ your light (light/Light.tsx) ═══════════════════════════════════════
    Only transform and opacity ever change, so the compositor does the work. */
-.lt { position: relative; display: inline-block; flex: none; border-radius: 50%; overflow: hidden; isolation: isolate;
+.lt { position: relative; display: inline-block; flex: none; border-radius: 50%; overflow: hidden; clip-path: circle(50%); isolation: isolate;
   background: radial-gradient(circle at 40% 35%, var(--lt-lift), var(--lt-body) 55%, var(--lt-deep)); vertical-align: middle; }
 .lt > span { position: absolute; inset: 0; pointer-events: none; }
 .lt .lt-flow { inset: -30%; background-size: cover; will-change: transform; }

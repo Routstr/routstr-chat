@@ -216,6 +216,7 @@ export default function Rail() {
                         onClick={() => (me ? setAccounts((o) => !o) : ui.openSettings())}
                       >
                         <Me />
+                        {me && <span className="sb-me-n">{me.metadata?.name || "Account"}</span>}
                       </button>
                     </div>
                   </footer>
