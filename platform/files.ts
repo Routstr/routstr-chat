@@ -4,6 +4,7 @@ import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 import { finalizeEvent } from "nostr-tools";
 import {
   DEFAULT_FILE_SERVERS,
+  isPictureType,
   type Files,
   type FileSync,
   type StoredFile,
@@ -300,7 +301,7 @@ export function createFileStore(deps: {
       try {
         const response = await fetch(url, { signal: stop.signal, credentials: "omit", referrerPolicy: "no-referrer" });
         const type = response.headers.get("content-type")?.split(";")[0].trim() ?? "";
-        if (!response.ok || !/^image\/(png|jpeg|webp|gif|avif)$/.test(type)) return undefined;
+        if (!response.ok || !isPictureType(type)) return undefined;
         const bytes = new Uint8Array(await response.arrayBuffer());
         return bytes.length <= MAX_LINKED_BYTES ? toDataUrl(bytes, type) : undefined;
       } catch {

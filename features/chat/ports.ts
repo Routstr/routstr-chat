@@ -55,6 +55,9 @@ export const DEFAULT_FILE_SERVERS = [
   "https://blossom.ditto.pub",
 ];
 
+export const isPictureType = (type: string) =>
+  /^image\/(png|jpeg|webp|gif|avif)$/.test(type);
+
 /** The device's file store and the account's Blossom copies. */
 export interface FileStore {
   /** The file as a data URL, or undefined when no copy can be reached.

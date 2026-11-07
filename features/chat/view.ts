@@ -140,5 +140,5 @@ export function useReplyCosts(): Record<string, number> {
 export { pricedRequest } from "./priced";
 export { editedOf, questionOf } from "./question";
 export type { ChatModel, FileSync, PictureChoice } from "./ports";
-export { DEFAULT_FILE_SERVERS } from "./ports";
+export { DEFAULT_FILE_SERVERS, isPictureType } from "./ports";
 export type { RunSnapshot } from "./run";

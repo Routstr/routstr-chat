@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import type { MessageContent } from "@/types/chat";
-import { useFiles, useFileSync } from "@/features/chat/view";
+import { isPictureType, useFiles, useFileSync } from "@/features/chat/view";
 import { useHistoryKeys } from "@/features/history/view";
 import { isRemote } from "./links";
 import Picture, { RemotePicture, Thumb } from "./Picture";
@@ -12,7 +12,8 @@ import Picture, { RemotePicture, Thumb } from "./Picture";
 const objectUrlOf = (dataUrl: string) => {
   const [head, data] = dataUrl.split(",", 2);
   const bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
-  return URL.createObjectURL(new Blob([bytes], { type: head.slice(5).replace(/;base64$/, "") }));
+  const type = head.slice(5).replace(/;base64$/, "");
+  return URL.createObjectURL(new Blob([bytes], { type: isPictureType(type) ? type : "application/octet-stream" }));
 };
 const cache = new Map<string, string>();
 
