@@ -100,6 +100,15 @@ describe("answers: the models a chat can talk to", () => {
   it("leaves out a model that does not read text", () => {
     expect(answers(takes(["audio"], ["text"]))).toBe(false);
   });
+
+  it("reads a provider's arrow spelling: text->text is still a chat", () => {
+    expect(answers(takes(["text->text"], ["text->text"]))).toBe(true);
+    expect(answers(takes(["text->text+image"], ["text->text+image"]))).toBe(true);
+  });
+
+  it("still leaves out an arrow spelling that only makes pictures", () => {
+    expect(answers(takes(["text"], ["text->image"]))).toBe(false);
+  });
 });
 
 describe("makerOf: the maker a model is filed under", () => {

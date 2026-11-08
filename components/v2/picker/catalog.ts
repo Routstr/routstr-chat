@@ -42,12 +42,22 @@ export const draws = (m: Model) => (m.architecture?.output_modalities ?? []).som
 export const isPrivate = (m: Model) => m.id.startsWith("tinfoil");
 export const nameSaysPrivate = (m: Model) => /private/i.test(m.name);
 
+/** What a provider's modality string says comes back: "text->text+image"
+ *  is "text+image", "text->text" is "text". */
+const returned = (v: unknown) => {
+  const s = String(v ?? "").toLowerCase();
+  const arrow = s.indexOf("->");
+  return arrow < 0 ? s : s.slice(arrow + 2);
+};
+
 /** Models the chat can talk to: text in, text out (pictures too or not). A
  *  model that only makes pictures is served by the images API, never a chat. */
 export const answers = (m: Model) => {
   const outs = m.architecture?.output_modalities;
   const ins = m.architecture?.input_modalities;
-  const out = !outs?.length || outs.some((o) => String(o ?? "").toLowerCase() === "text");
+  // providers spell modalities inconsistently: "text->text" and
+  // "text->text+image" are still a model that answers in words
+  const out = !outs?.length || outs.some((o) => returned(o).split("+").some((x) => normalizeModality(x) === "text"));
   const inn = !ins?.length || ins.map(normalizeModality).some((i) => i === "text");
   return out && inn;
 };
