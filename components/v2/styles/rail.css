@@ -411,6 +411,17 @@ html[data-room="meridian"] .sb-wait i { background: var(--ink-2); }
   color: var(--ink); font-variant-numeric: tabular-nums lining-nums;
 }
 .sb-bal-v .unit { font-family: var(--f-ui); font-weight: 400; font-size: 12px; color: var(--ink-3); letter-spacing: 0; }
+/* what providers hold, under the number: a figure of its own in the display face, never a caption,
+   so the balance above is not read as all there is (the dot says it is out, not lost) */
+.sb-bal-p {
+  display: flex; align-items: center; gap: 6px;
+  font-family: var(--f-display); font-weight: var(--w-display); font-stretch: var(--display-stretch, 100%);
+  font-size: calc(13.5px * var(--display-scale)); line-height: 1.2; letter-spacing: var(--display-track);
+  color: var(--ink-2); font-variant-numeric: tabular-nums lining-nums; white-space: nowrap;
+  animation: sbFade var(--d-slow) var(--e-out) both;
+}
+.sb-bal-p i { flex: none; width: 5px; height: 5px; border-radius: 9px; background: var(--tint); }
+html[data-room="meridian"] .sb-bal-p i { background: var(--ink-2); }
 /* at zero the foot says what to do next, in the room's tint, on the value line; the label says "0 sats".
    Compact enough to sit beside the longest room name (Overprint) and the gear */
 .sb-bal[data-zero] :is(.sb-num, .unit) { display: none; }
@@ -642,7 +653,7 @@ html[data-room="meridian"] :is(.sb-add, .sb-bal[data-zero] .v2-ico) { color: var
 .sb-sw-n { transition: opacity var(--d-fast) var(--e-out); }
 .sb[data-fold] .sb-sw-n { position: absolute; left: 31px; opacity: 0; pointer-events: none; transition-duration: var(--d-quick); }
 .sb[data-fold] .sb-bal { width: 44px; margin-left: -4px; padding: 7px 0 6px; justify-items: center; }
-.sb[data-fold] .sb-bal-k, .sb[data-fold] .sb-bal-v, .sb[data-fold] .sb-bal-wait { display: none; }
+.sb[data-fold] .sb-bal-k, .sb[data-fold] .sb-bal-v, .sb[data-fold] .sb-bal-p, .sb[data-fold] .sb-bal-wait { display: none; }
 .sb[data-fold] .sb-bal-mini { display: block; animation: sbFade var(--d-mid) var(--e-out) calc(var(--d-quick) * 1.33) both; }
 .sb[data-fold] .sb-rooms, .sb[data-fold] .sb-accts { left: calc(var(--spine-w) + 10px); bottom: var(--s3); transform-origin: 0% 100%; }
 

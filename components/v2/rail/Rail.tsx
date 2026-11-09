@@ -53,7 +53,8 @@ export default function Rail() {
   const ui = useUi();
   const { isSidebarCollapsed, setIsSidebarCollapsed } = ui;
   const money = useMoney();
-  const shown = useCountUp(money.total);
+  // the number the wallet shows large: what this device has and what providers hold
+  const shown = useCountUp(money.all);
 
   const root = useRef<HTMLElement>(null);
   const list = useRef<HTMLElement>(null);
@@ -239,7 +240,7 @@ export default function Rail() {
       )}
       {accounts && (
         <AccountMenu
-          total={balWait || money.node ? null : money.total}
+          total={balWait || money.node ? null : money.all}
           busy={busy || liveId !== null}
           switchTo={switchTo}
           onClose={(refocus) => {

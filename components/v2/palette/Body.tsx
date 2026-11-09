@@ -151,7 +151,7 @@ export default function Body({ closing }: { closing: boolean }) {
                   perReply,
                   byId,
                   selectedModel,
-                  total: money.total,
+                  total: money.all,
                   railOff: isSidebarCollapsed,
                 }}
               />

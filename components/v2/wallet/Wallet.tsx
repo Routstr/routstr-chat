@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useObservableState } from "applesauce-react/hooks";
-import { useAccountChat, useHeldCredit } from "@/features/chat/view";
+import { useAccountChat } from "@/features/chat/view";
 import { useAccountManager } from "@/features/session/view";
 import { useActivity, useMints, usePurse, useWallet } from "@/features/wallet/view";
 import { useUnclaimedTokensStore } from "@/features/wallet/state/unclaimedTokensStore";
@@ -268,7 +268,8 @@ function useWaitingTokens() {
 function Home({ go, freeze, bloom }: { go: (v: View, o?: { reopen?: Reopen | null }) => void; freeze: number | null; bloom: number }) {
   const money = useMoney();
   const account = useAccountChat();
-  const held = useHeldCredit();
+  // the one figure the whole screen reads: credit at providers is part of the balance
+  const held = money.held;
   const activity = useActivity();
   const tokens = useUnclaimedTokensStore((s) => s.unclaimedTokens);
   const invoices = usePendingInvoices();
@@ -281,10 +282,10 @@ function Home({ go, freeze, bloom }: { go: (v: View, o?: { reopen?: Reopen | nul
   const { manager } = useAccountManager();
   const active = useObservableState(manager.active$);
   const [keyNoteGone, setKeyNoteGone] = useState(false);
-  const keyNote = active?.type === "nsec" && money.total > 0 && !keyNoteGone && !readKeyFlag(active.pubkey);
+  const keyNote = active?.type === "nsec" && money.all > 0 && !keyNoteGone && !readKeyFlag(active.pubkey);
 
   // the card light blooms once when money lands
-  const lastTotal = useRef(money.total);
+  const lastTotal = useRef(money.all);
   const settled = useRef(false);
   useEffect(() => {
     if (money.loading) return;
@@ -293,10 +294,10 @@ function Home({ go, freeze, bloom }: { go: (v: View, o?: { reopen?: Reopen | nul
   }, [money.loading]);
   const [bloomK, setBloomK] = useState(0);
   useEffect(() => {
-    const d = money.total - lastTotal.current;
-    lastTotal.current = money.total;
+    const d = money.all - lastTotal.current;
+    lastTotal.current = money.all;
     if (d >= 1 && settled.current && freeze === null) setBloomK((k) => k + 1);
-  }, [money.total, freeze]);
+  }, [money.all, freeze]);
   useEffect(() => {
     const h = hero.current;
     if ((!bloom && !bloomK) || !h || reduced()) return;
@@ -397,7 +398,7 @@ function Home({ go, freeze, bloom }: { go: (v: View, o?: { reopen?: Reopen | nul
     );
   }
 
-  const T = freeze ?? money.total;
+  const T = freeze ?? money.all;
   const zero = T <= 0;
   const replies = per > 0 ? Math.floor(T / per) : 0;
   const tokSum = tokens.reduce((s, t) => s + satsOf(t.amount, t.unit), 0);
@@ -517,6 +518,25 @@ function Home({ go, freeze, bloom }: { go: (v: View, o?: { reopen?: Reopen | nul
               </>
             ) : null}
           </p>
+          {/* what the providers hold, in the number's own face: part of the balance above,
+              said where it is, one press from coming home */}
+          {held > 0 && (
+            <p className="wl-prov">
+              <i aria-hidden="true" />
+              <span className="wl-prov-n">{fmt(held)}</span>
+              <span className="wl-prov-t">at providers</span>
+              {heldState === "busy" ? (
+                <span className="wl-prov-a" data-busy="" aria-disabled="true">
+                  <span className="spin sm" role="status" aria-label="Returning" />
+                  Returning
+                </span>
+              ) : (
+                <button type="button" className="wl-prov-a" aria-label={`Return ${fmt(held)} sats to the wallet`} onClick={() => void giveBack()}>
+                  Return
+                </button>
+              )}
+            </p>
+          )}
         </div>
       )}
       <div className="wl-acts">
@@ -642,46 +662,21 @@ function Home({ go, freeze, bloom }: { go: (v: View, o?: { reopen?: Reopen | nul
       )}
 
       {heldState === "done" ? (
-        <div className="wl-grow">
-          <div>
-            <div className="wl-sec">
-              <Note kind="ok" text={`${fmt(heldBack)} sats are back in your wallet.`} />
-            </div>
-          </div>
-        </div>
-      ) : held > 0 ? (
         <div className="wl-sec">
-          <p className="wl-sec-t">
-            <span>With providers</span>
-          </p>
-          <div className="wl-row wl-held">
-            <span className="wl-row-t">
-              <span>{fmt(held)} sats</span>
-            </span>
-            <span className="wl-row-r">
-              {heldState === "busy" ? (
-                <span className="wl-link" data-busy="" aria-disabled="true">
-                  <span className="spin sm" role="status" aria-label="Returning" />
-                  Returning
-                </span>
-              ) : (
-                <button type="button" className="wl-link" aria-label={`Return ${fmt(held)} sats to the wallet`} onClick={() => void giveBack()}>
-                  Return
-                </button>
-              )}
-            </span>
-            <span className="wl-row-s">
-              {heldState === "busy"
-                ? "On their way back to your wallet. Your balance stays the same."
-                : heldState === "part"
-                  ? heldBack > 0
-                    ? `${fmt(heldBack)} sats came back. The rest could not yet. Try again later.`
-                    : someBack
-                      ? "Some came back. The rest could not yet. Try again later."
-                      : "Nothing came back yet. Try again later."
-                  : "Not in your balance yet. It comes back on its own when the providers answer."}
-            </span>
-          </div>
+          <Note kind="ok" text={`${fmt(heldBack)} sats are back in your wallet.`} />
+        </div>
+      ) : heldState === "part" ? (
+        <div className="wl-sec">
+          <Note
+            kind="warn"
+            text={
+              heldBack > 0
+                ? `${fmt(heldBack)} sats came back. The rest could not yet. Try again later.`
+                : someBack
+                  ? "Some came back. The rest could not yet. Try again later."
+                  : "Nothing came back yet. Try again later."
+            }
+          />
         </div>
       ) : null}
 

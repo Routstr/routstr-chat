@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useAccountChat, useAsking, useHeldCredit } from "@/features/chat/view";
+import { useAccountChat, useAsking } from "@/features/chat/view";
 import { useCatalogService } from "@/features/catalog/view";
 import { useThread } from "@/features/history/view";
 import { useSession } from "@/features/session/view";
@@ -161,8 +161,6 @@ export default function Composer({ centred }: { centred: boolean }) {
   const [picture] = usePicture();
   const money = useMoney();
   const isWalletLoading = money.loading;
-  // credit held at any provider: the account has money, if not there
-  const held = useHeldCredit();
   // the same rule the picker shows: what can pay at the provider the message goes to
   const payable = usePayable();
   const lowBalanceWarningForModel = !!priced && !payable.covers(priced, provider);
@@ -387,7 +385,7 @@ export default function Composer({ centred }: { centred: boolean }) {
   // money arrived for a held message: turn back, then send it by itself
   useEffect(() => {
     // credit a provider still holds counts as money too
-    if (!ui.sendWhenFunded || !isAuthenticated || money.total + held <= 0 || busy) return;
+    if (!ui.sendWhenFunded || !isAuthenticated || money.all <= 0 || busy) return;
     if (!selectedModel) {
       // funded, but nothing chosen to answer: pick one and it sends
       if (ui.face !== "write") {
@@ -404,7 +402,7 @@ export default function Composer({ centred }: { centred: boolean }) {
       window.setTimeout(launch, 420);
     }, 1500);
     return () => window.clearTimeout(t);
-  }, [ui, needsMoney, isAuthenticated, money.total, held, selectedModel, busy, launch]);
+  }, [ui, needsMoney, isAuthenticated, money.all, selectedModel, busy, launch]);
 
   const onKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && !isTouch()) {
