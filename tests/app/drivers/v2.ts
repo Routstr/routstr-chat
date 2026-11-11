@@ -109,14 +109,17 @@ export const v2 = {
     );
   },
 
-  /** The wallet total the rail shows (its aria-label holds the true total at once). */
+  /** The sats on this device: the rail's balance less what providers hold
+   *  (its aria-label holds both at once). */
   async balance(page: Page): Promise<number> {
     const label =
       (await railWallet(page).getAttribute("aria-label", { timeout: 2000 })) ??
       "";
     const n = label.match(/Balance ([\d,.]+) sats/);
     if (!n) throw new Error(`no balance yet: ${label}`);
-    return Number(n[1].replace(/,/g, ""));
+    const held = label.match(/([\d,.]+) of it at providers/);
+    const num = (s: string) => Number(s.replace(/,/g, ""));
+    return num(n[1]) - (held ? num(held[1]) : 0);
   },
 
   /** Settings → Account → Sign in → Secret key (only offered while no key is on the device). */
