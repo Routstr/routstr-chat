@@ -1,3 +1,5 @@
+import { sha256 } from "@noble/hashes/sha2.js";
+import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
 import type { ApiKeyEntry } from "@routstr/sdk/wallet";
 import type { KeysService } from "./service";
 import type { BackupPorts, Remote } from "./relayBackup";
@@ -44,6 +46,20 @@ export const parseBackup = (content: unknown): SyncedApiKey[] | "unreadable" =>
 // a failed backup is tried again on the next change
 const report = (error: unknown) => console.error("[keys backup]", error);
 
+/** The keys that left this device while the relays may still list them, by
+ *  hash, kept across reloads. */
+export interface Removed {
+  read(): string[];
+  write(hashes: string[]): void;
+}
+
+const inMemory = (): Removed => {
+  let kept: string[] = [];
+  return { read: () => kept, write: (hashes) => void (kept = hashes) };
+};
+
+const hashOf = (key: string) => bytesToHex(sha256(utf8ToBytes(key)));
+
 const keySet = (keys: SyncedApiKey[]) =>
   keys
     .map((k) => `${k.device} ${k.baseUrl} ${k.key}`)
@@ -54,8 +70,8 @@ export class KeyBackup {
   // the set last seen on the relays; null until they answered with something readable
   private published: string | null = null;
   private others: SyncedApiKey[] = [];
-  // keys that left this device this session; the relays may still list them
-  private readonly removed = new Set<string>();
+  // keys that left this device; the relays may still list them
+  private readonly removed: Set<string>;
   // what providers said lately that the other devices' keys hold: the backup
   // keeps a key's balance of when the key set last changed, since a balance
   // alone is never published (each reply would ask the signer)
@@ -66,8 +82,11 @@ export class KeyBackup {
     private readonly keys: KeysService,
     private readonly device: string,
     private readonly ports: BackupPorts<SyncedApiKey[]>,
-    private readonly delayMs = 500
-  ) {}
+    private readonly delayMs = 500,
+    private readonly saved: Removed = inMemory()
+  ) {
+    this.removed = new Set(saved.read());
+  }
 
   /** Runs until the returned stop is called (the account's lifetime). */
   start(): () => void {
@@ -76,7 +95,9 @@ export class KeyBackup {
     const stopLocal = this.keys.subscribe(() => {
       const now = this.keys.keys();
       const kept = new Set(now.map((k) => k.key));
-      last.forEach((k) => kept.has(k.key) || this.removed.add(k.key));
+      const left = last.filter((k) => !kept.has(k.key));
+      left.forEach((k) => this.removed.add(hashOf(k.key)));
+      if (left.length) this.saved.write([...this.removed]);
       last = now;
       clearTimeout(timer);
       timer = setTimeout(() => this.publish().catch(report), this.delayMs);
@@ -132,7 +153,8 @@ export class KeyBackup {
       await this.keys.reload();
       const storage = this.keys.storage();
       for (const key of listed) {
-        if (key.device !== this.device || this.removed.has(key.key)) continue;
+        if (key.device !== this.device || this.removed.has(hashOf(key.key)))
+          continue;
         // another key at that provider replaced it
         if (storage.getApiKey(key.baseUrl)) continue;
         storage.setApiKey(key.baseUrl, key.key);
@@ -142,6 +164,11 @@ export class KeyBackup {
     } finally {
       release();
     }
+    // the relays no longer list a key that left: nothing is left to skip
+    const onRelays = new Set(listed.map((k) => hashOf(k.key)));
+    const caughtUp = [...this.removed].filter((hash) => !onRelays.has(hash));
+    caughtUp.forEach((hash) => this.removed.delete(hash));
+    if (caughtUp.length) this.saved.write([...this.removed]);
     this.published = keySet(listed);
     this.others = listed.filter((k) => k.device !== this.device);
     this.listeners.forEach((listener) => listener());

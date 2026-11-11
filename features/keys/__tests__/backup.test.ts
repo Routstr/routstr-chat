@@ -1,10 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { createMemoryDriver, type StorageDriver } from "@routstr/sdk/storage";
 import { KeysService } from "../service";
-import { KeyBackup, parseBackup, type SyncedApiKey } from "../backup";
+import {
+  KeyBackup,
+  parseBackup,
+  type Removed,
+  type SyncedApiKey,
+} from "../backup";
 import type { Remote } from "../relayBackup";
 
-const setup = async () => {
+const setup = async (kept?: Removed) => {
   const drivers = new Map<string, StorageDriver>();
   const open = (name: string) => {
     if (!drivers.has(name)) drivers.set(name, createMemoryDriver());
@@ -21,7 +26,8 @@ const setup = async () => {
       watch: (listener) => ((push = listener), () => {}),
       publish: async (list) => void published.push(list),
     },
-    0
+    0,
+    kept
   );
   const stop = backup.start();
   const tick = () => new Promise((r) => setTimeout(r, 10));
@@ -81,6 +87,36 @@ describe("KeyBackup", () => {
         .map((k) => k.key)
         .sort()
     ).toEqual(["sk-lost", "sk-new"]);
+  });
+
+  it("still skips a key removed here after a reload, until the relays stop listing it", async () => {
+    let saved: string[] = [];
+    const kept: Removed = {
+      read: () => saved,
+      write: (hashes) => void (saved = hashes),
+    };
+    const t = await setup(kept);
+    t.keys.storage().setApiKey("https://gone.test/", "sk-removed");
+    await t.backup.apply("none");
+    t.keys.storage().removeApiKey("https://gone.test/");
+    await t.tick();
+    t.stop();
+
+    // the page reloads before the relays heard that the key left
+    const reloaded = new KeyBackup(
+      t.keys,
+      "this-device",
+      { watch: () => () => {}, publish: async () => {} },
+      0,
+      kept
+    );
+    await reloaded.apply([
+      entry("this-device", "https://gone.test/", "sk-removed"),
+    ]);
+    expect(t.keys.keys()).toEqual([]);
+
+    await reloaded.apply([]);
+    expect(saved).toEqual([]);
   });
 
   it("never writes over a backup it cannot read, even after reading an older one", async () => {
