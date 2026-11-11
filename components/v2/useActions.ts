@@ -15,7 +15,7 @@ type Chat = AccountChatView["chat"];
 function useStart() {
   const account = useAccountChat();
   const catalog = useCatalogService();
-  const { model, chosen } = useChatModel();
+  const { model, chosen, priced } = useChatModel();
   const { setFace } = useUi();
   const [picture] = usePicture();
   return useCallback(
@@ -31,14 +31,14 @@ function useStart() {
       try {
         // the reply cap fits the smallest room any node lists, wherever the send ends up
         const room = catalog?.rooms()[model.id];
-        await turn(account.chat, { ...chatModelOf(model, chosen, catalog?.routes(model.id) ?? []), room, picture: pictureOf(model, picture) });
+        await turn(account.chat, { ...chatModelOf(model, chosen, catalog?.routes(model.id) ?? [], priced ?? model), room, picture: pictureOf(model, picture) });
         return true;
       } catch (error) {
         toast.error(error instanceof Error ? error.message : String(error));
         return false;
       }
     },
-    [account, model, chosen, catalog, setFace, picture]
+    [account, model, chosen, priced, catalog, setFace, picture]
   );
 }
 

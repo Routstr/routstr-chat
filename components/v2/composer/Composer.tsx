@@ -147,7 +147,7 @@ function Tile({ a, reading, onRemove, onTip }: { a: MessageAttachment; reading: 
 export default function Composer({ centred }: { centred: boolean }) {
   const { id: activeConversationId } = useOpenChat();
   const { text: inputMessage, setText: setInputMessage, attachments: uploadedAttachments, setAttachments: setUploadedAttachments } = useDraft();
-  const { model: selectedModel, priced, chosen, provider, loading: isLoadingModels } = useChatModel();
+  const { model: selectedModel, priced, chosen, provider, settled, loading: isLoadingModels } = useChatModel();
   const catalog = useCatalogService();
   const chat = useAccountChat()?.chat;
   const isLoading = useAsking(activeConversationId);
@@ -197,8 +197,8 @@ export default function Composer({ centred }: { centred: boolean }) {
     return () => window.clearTimeout(t);
   }, [problem]);
   const drawing = !!selectedModel && paints(selectedModel);
-  // a picture model works from as many of your pictures as it lists
-  const references = selectedModel ? mostReferences(selectedModel) : 0;
+  // a picture model works from as many of your pictures as the provider the send goes to takes
+  const references = priced ? mostReferences(priced) : 0;
   const takesImages = !!selectedModel && (drawing ? references > 0 : sees(selectedModel));
   // with no model chosen yet nothing is refused; the engine refuses at send
   const imagesOk = !selectedModel || takesImages;
@@ -207,7 +207,8 @@ export default function Composer({ centred }: { centred: boolean }) {
   const pictures = uploadedAttachments.filter((a) => a.type === "image").length;
   const most = !imagesOk ? 0 : drawing ? references : Infinity;
   useEffect(() => {
-    if (pictures <= most) return;
+    // a picture model's cap is known once the SDK says where the send goes
+    if (pictures <= most || (drawing && !settled)) return;
     const t = window.setTimeout(() => {
       setUploadedAttachments((prev) => {
         const images = prev.filter((a) => a.type === "image");
@@ -218,7 +219,7 @@ export default function Composer({ centred }: { centred: boolean }) {
       else say(pictures === 1 ? "Picture taken out, this model reads text only" : `${pictures} pictures taken out, this model reads text only`);
     });
     return () => window.clearTimeout(t);
-  }, [most, pictures]);
+  }, [most, pictures, drawing, settled]);
 
   const history = useMemo(() => (slots ?? []).map((s) => textOf(s.displayed.content)).join(" "), [slots]);
   const fileText = useMemo(() => uploadedAttachments.map((a) => a.textContent ?? "").join(" "), [uploadedAttachments]);

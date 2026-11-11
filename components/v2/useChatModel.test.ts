@@ -21,6 +21,18 @@ describe("chatModelOf: what the engine is told about a model", () => {
     expect(chatModelOf(model(), null, []).images).toBeUndefined();
   });
 
+  it("lets a picture model read your pictures only where the provider the send goes to takes them", () => {
+    const painter = (refs?: number) =>
+      ({
+        id: "p",
+        name: "P",
+        architecture: { input_modalities: ["text", "image"], output_modalities: ["image"] },
+        image_pricing: { endpoints: { e: { parameters: refs ? { input_references: { max: refs } } : {} } } },
+      }) as unknown as Model;
+    expect(chatModelOf(painter(), null, [], painter(2)).images).toBe(true);
+    expect(chatModelOf(painter(2), null, [], painter()).images).toBe(false);
+  });
+
   it("reads the provider's other spellings of image", () => {
     expect(chatModelOf(model(["text", "vision"]), null, []).images).toBe(true);
     expect(chatModelOf(model(["Image"]), null, []).images).toBe(true);

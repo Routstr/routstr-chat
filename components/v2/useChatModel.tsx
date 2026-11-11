@@ -87,7 +87,9 @@ function useModelOf() {
     const listed = routes.find((r) => r.baseUrl === provider)?.model as unknown as Model | undefined;
     return { provider, priced: listed ?? model };
   }, [model, pick.chosen, catalog, models, routed]);
-  return { ...pick, models, loading, model, ...sent, routed };
+  // where a send of the model in use goes is the SDK's answer, not a guess until it comes
+  const settled = !!model && fresh && model.id in answers.at;
+  return { ...pick, models, loading, model, ...sent, routed, settled };
 }
 
 const ChatModelContext = createContext<ReturnType<typeof useModelOf> | null>(null);
@@ -139,11 +141,13 @@ export function useChatModel() {
 const slashed = (url: string) => (url.endsWith("/") ? url : `${url}/`);
 
 /** What the chat engine is told about a model: the pin, while the catalogue
- *  still routes this model to it, and whether it reads images. */
+ *  still routes this model to it, and whether it reads images, as `listed`, the
+ *  provider the send goes to, lists them. */
 export function chatModelOf(
   model: Model,
   chosen: Choice | null,
-  routes: { baseUrl: string }[]
+  routes: { baseUrl: string }[],
+  listed: Model = model
 ): { id: string; provider?: string; images?: boolean } {
   // a pin is kept as main keys it: with a scheme and a closing slash
   const pinned =
@@ -151,8 +155,8 @@ export function chatModelOf(
       ? routes.find((r) => slashed(r.baseUrl) === chosen.provider)?.baseUrl
       : undefined;
   const inputs = model.architecture?.input_modalities;
-  // unknown inputs are not taken as text only; a picture model reads the pictures it can work from
-  const images = paints(model) ? mostReferences(model) > 0 : inputs ? inputs.some((m) => normalizeModality(m) === "image") : undefined;
+  // unknown inputs are not taken as text only; a picture model reads the pictures its provider takes
+  const images = paints(model) ? mostReferences(listed) > 0 : inputs ? inputs.some((m) => normalizeModality(m) === "image") : undefined;
   return { id: model.id, provider: pinned, images };
 }
 
