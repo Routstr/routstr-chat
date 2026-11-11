@@ -7,7 +7,6 @@ import "./globals.css";
 import ClientProviders from "@/components/ClientProviders";
 import { Toaster } from "@/components/ui/sonner";
 import BitcoinConnectClient from "@/components/bitcoin-connect/BitcoinConnectClient";
-import SWUpdater from "@/components/SWUpdater";
 import { GlobalTooltip } from "@/components/ui/GlobalTooltip";
 import { withBase } from "@/lib/base";
 
@@ -64,7 +63,6 @@ export default function RootLayout({
         suppressHydrationWarning={true}
       >
         <ClientProviders>
-          <SWUpdater />
           {children}
           <Toaster />
           <GlobalTooltip />

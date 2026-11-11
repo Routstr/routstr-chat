@@ -9,7 +9,7 @@ const withPWACfg = withPWA({
   disable: process.env.NODE_ENV === "development",
   publicExcludes: ["!*.txt"],
   workboxOptions: {
-    skipWaiting: true,
+    skipWaiting: false,
     // Exclude RSC payload files (.txt) from precaching
     exclude: [/\.txt$/],
     // Prevent navigation fallback for .txt files (RSC payloads)
