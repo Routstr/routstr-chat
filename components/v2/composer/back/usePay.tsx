@@ -27,12 +27,12 @@ export function usePay(say: (t: string) => void) {
   const money = useMoney();
   const funding = useFunding();
 
-  const balance = money.all;
+  const balance = money.total;
   // what this payment can draw on: the SDK pays from one mint the provider takes
   const usable = pay.spendable(provider);
   const need = priced ? pay.takes(priced, provider) : 0;
   // an account's first sats (nothing here and nothing held at a provider): a small try, picked for you
-  const trying = !money.loading && balance <= 0 && TRY >= need;
+  const trying = !money.loading && money.all <= 0 && TRY >= need;
 
   const [method, setMethod] = useState<"ln" | "token">("ln");
   const [picked, setPicked] = useState(0);
