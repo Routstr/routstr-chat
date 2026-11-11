@@ -50,7 +50,7 @@ export default function Add({
   const create = (n: number, retry = false) => {
     if (!(n > 0)) return;
     flip.current = retry ? null : field.current?.getBoundingClientRect() ?? null;
-    before.current = money.total;
+    before.current = money.all;
     setDir(retry ? undefined : "flip");
     funding.createInvoice(n);
   };
@@ -145,7 +145,7 @@ export default function Add({
   if (reopen && !stillWaiting && !reopenPaid && !reopenExpired) setPaidId(reopen.id);
   useEffect(() => {
     if (!reopenPaid || !reopen) return;
-    before.current = money.total - reopen.amount;
+    before.current = money.all - reopen.amount;
     settle(reopen.amount);
   }, [reopenPaid]);
 
@@ -162,7 +162,7 @@ export default function Add({
   }, [tok.text]);
   const receive = async () => {
     if (read?.kind !== "token") return;
-    before.current = money.total;
+    before.current = money.all;
     setTok((x) => ({ ...x, state: "busy" }));
     const got = await funding.redeemToken(tok.text);
     if (got === "busy") return;
