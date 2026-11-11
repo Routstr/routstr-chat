@@ -42,8 +42,10 @@ export const draws = (m: Model) => (m.architecture?.output_modalities ?? []).som
 export const isPrivate = (m: Model) => m.id.startsWith("tinfoil");
 export const nameSaysPrivate = (m: Model) => /private/i.test(m.name);
 
-/** What a provider's modality string says comes back: "text->text+image"
- *  is "text+image", "text->text" is "text". */
+/** What follows the arrow in a provider's modality string, which in
+ *  OpenRouter's form is what comes back ("text+image->text" is "text"). Read
+ *  only for text: core's tinfoil writes "text->text+image" for a model that
+ *  reads pictures, not one that makes them. */
 const returned = (v: unknown) => {
   const s = String(v ?? "").toLowerCase();
   const arrow = s.indexOf("->");
