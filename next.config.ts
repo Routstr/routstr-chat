@@ -5,6 +5,7 @@ import pkg from "./package.json";
 const withPWACfg = withPWA({
   dest: "public",
   register: true,
+  reloadOnOnline: false,
   disable: process.env.NODE_ENV === "development",
   publicExcludes: ["!*.txt"],
   workboxOptions: {
