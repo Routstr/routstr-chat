@@ -64,14 +64,13 @@ export function useLightLife(): { state: LightState; pulse: LightPulse } {
     const t = window.setTimeout(() => (settled.current = true), 1500);
     return () => window.clearTimeout(t);
   }, [money.loading]);
-  const lastTotal = useRef(money.all);
+  const lastTotal = useRef(money.total);
   useEffect(() => {
-    // sats moving to a provider, or coming home, are not money landing
-    const d = money.all - lastTotal.current;
-    lastTotal.current = money.all;
+    const d = money.total - lastTotal.current;
+    lastTotal.current = money.total;
     if (!settled.current || d < 1 || asking || Date.now() - endedAt.current < 15000) return;
     ring("gold");
-  }, [money.all]);
+  }, [money.total]);
 
   const state: LightState = !online
     ? "offline"
