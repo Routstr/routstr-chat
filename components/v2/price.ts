@@ -48,3 +48,12 @@ export const estimateSats = (model: Model | undefined | null, tokens: number, pi
   // the node settles each reply in whole sats, rounded up
   return raw > 0 ? Math.ceil(raw) : 0;
 };
+
+/** What the pictures you give a picture model to work from add to its price,
+ *  past the ones the price includes. */
+export const referenceSats = (model: Model, count: number) => {
+  const ip = model.image_pricing;
+  const extra = Math.max(0, count - (ip?.input_images_included ?? 0));
+  if (!ip?.max_usd || !ip.input_image_usd || !extra) return 0;
+  return Math.ceil(((model.sats_pricing?.image_output ?? 0) / ip.max_usd) * ip.input_image_usd * extra);
+};

@@ -4,7 +4,7 @@ import { useKeyCredit } from "@/features/chat/view";
 import { AcceptedMintsContext, usePurse } from "@/features/wallet/view";
 import type { Model } from "@/types/models";
 import { defaultModel, pickedModel, useModelPick, type Choice } from "./pick";
-import { answers as canChat, paints } from "./picker/catalog";
+import { answers as canChat, mostReferences, paints } from "./picker/catalog";
 import { normalizeModality } from "./picker/modality";
 import { payable, useMoney, usePayableFor, type Payable } from "./useMoney";
 
@@ -151,8 +151,9 @@ export function chatModelOf(
       ? routes.find((r) => slashed(r.baseUrl) === chosen.provider)?.baseUrl
       : undefined;
   const inputs = model.architecture?.input_modalities;
-  // unknown inputs are not taken as text only
-  return { id: model.id, provider: pinned, images: inputs ? inputs.some((m) => normalizeModality(m) === "image") : undefined };
+  // unknown inputs are not taken as text only; a picture model reads the pictures it can work from
+  const images = paints(model) ? mostReferences(model) > 0 : inputs ? inputs.some((m) => normalizeModality(m) === "image") : undefined;
+  return { id: model.id, provider: pinned, images };
 }
 
 /** Where a message to this model goes: its pin while routing still serves it

@@ -7,7 +7,6 @@ import { useThread } from "@/features/history/view";
 import { useSession } from "@/features/session/view";
 import { getModelCompanyId } from "@/components/v2/picker/modelCompanies";
 import { renderCompanyIcon } from "@/components/v2/picker/display";
-import { normalizeModality } from "@/components/v2/picker/modality";
 import type { MessageAttachment } from "@/types/chat";
 import type { Model } from "@/types/models";
 import { Icon } from "../icons";
@@ -18,8 +17,8 @@ import { useChatModel } from "../useChatModel";
 import { useMoney, usePayable } from "../useMoney";
 import { sats, satUnit, shortModelName, textOf } from "../format";
 import { TEXT_ONLY, useAttachments } from "./useAttachments";
-import { estimateSats, pictureSats, promptTokens } from "../price";
-import { paints, pictureOf } from "../picker/catalog";
+import { estimateSats, pictureSats, promptTokens, referenceSats } from "../price";
+import { mostReferences, paints, pictureOf, sees } from "../picker/catalog";
 import type { PictureChoice } from "@/features/chat/view";
 import { PictureOptions } from "./PictureOptions";
 import { useListed } from "../useListed";
@@ -38,7 +37,7 @@ const reduced = () => window.matchMedia("(prefers-reduced-motion: reduce)").matc
  *  the words so far, the text of any attached files and a reply of ordinary
  *  length. It holds still while you type (settling) and settles 600ms after
  *  the last key; a model or a file change re-rolls it at once. */
-function useEstimate(model: Model | null, draft: string, history: string, files: string, pictureRate?: number, picture?: PictureChoice) {
+function useEstimate(model: Model | null, draft: string, history: string, files: string, pictureRate?: number, picture?: PictureChoice, references = 0) {
   const [value, setValue] = useState<number | null>(null);
   const [settling, setSettling] = useState(false);
   const lastDraft = useRef<string | null>(null);
@@ -54,12 +53,12 @@ function useEstimate(model: Model | null, draft: string, history: string, files:
     if (typed) setSettling(true);
     const t = window.setTimeout(() => {
       const drawn = model && picture && pictureOf(model, picture);
-      const v = drawn ? pictureSats(model, drawn) * drawn.n : estimateSats(model, promptTokens(`${history} ${files}`, draft), pictureRate);
+      const v = drawn ? pictureSats(model, drawn) * drawn.n + referenceSats(model, references) : estimateSats(model, promptTokens(`${history} ${files}`, draft), pictureRate);
       setValue(v > 0 ? v : null);
       setSettling(false);
     }, typed ? 600 : 0);
     return () => window.clearTimeout(t);
-  }, [model, draft, history, files, pictureRate, picture]);
+  }, [model, draft, history, files, pictureRate, picture, references]);
   return { value, settling };
 }
 
@@ -198,28 +197,34 @@ export default function Composer({ centred }: { centred: boolean }) {
     return () => window.clearTimeout(t);
   }, [problem]);
   const drawing = !!selectedModel && paints(selectedModel);
-  const takesImages = !drawing && (selectedModel?.architecture?.input_modalities ?? []).some(
-    (m) => normalizeModality(m) === "image"
-  );
+  // a picture model works from as many of your pictures as it lists
+  const references = selectedModel ? mostReferences(selectedModel) : 0;
+  const takesImages = !!selectedModel && (drawing ? references > 0 : sees(selectedModel));
   // with no model chosen yet nothing is refused; the engine refuses at send
   const imagesOk = !selectedModel || takesImages;
   const { addFiles, remove, reading } = useAttachments(setUploadedAttachments, say, imagesOk);
-  // a model that reads text only: pictures already in the draft are taken out, and said
+  // pictures past what the model takes are taken out, oldest first, and said
   const pictures = uploadedAttachments.filter((a) => a.type === "image").length;
+  const most = !imagesOk ? 0 : drawing ? references : Infinity;
   useEffect(() => {
-    if (imagesOk || !pictures) return;
+    if (pictures <= most) return;
     const t = window.setTimeout(() => {
-      setUploadedAttachments((prev) => prev.filter((a) => a.type !== "image"));
-      say(pictures === 1 ? "Picture taken out, this model reads text only" : `${pictures} pictures taken out, this model reads text only`);
+      setUploadedAttachments((prev) => {
+        const images = prev.filter((a) => a.type === "image");
+        const out = new Set(images.slice(0, images.length - most));
+        return prev.filter((a) => !out.has(a));
+      });
+      if (most) say(most === 1 ? "Takes one picture" : `Takes up to ${most} pictures`);
+      else say(pictures === 1 ? "Picture taken out, this model reads text only" : `${pictures} pictures taken out, this model reads text only`);
     });
     return () => window.clearTimeout(t);
-  }, [imagesOk]);
+  }, [most, pictures]);
 
   const history = useMemo(() => (slots ?? []).map((s) => textOf(s.displayed.content)).join(" "), [slots]);
   const fileText = useMemo(() => uploadedAttachments.map((a) => a.textContent ?? "").join(" "), [uploadedAttachments]);
   // priced as the provider the send goes to prices it, the number the picker shows
   const { pictureRates } = useListed();
-  const estimate = useEstimate(priced, inputMessage, history, fileText, priced ? pictureRates[priced.id] : undefined, picture);
+  const estimate = useEstimate(priced, inputMessage, history, fileText, priced ? pictureRates[priced.id] : undefined, picture, pictures);
 
   const face = ui.face;
   // the back of the card stays drawn while it turns away
@@ -270,7 +275,8 @@ export default function Composer({ centred }: { centred: boolean }) {
     return () => cancelAnimationFrame(raf);
   }, [face, back]);
   useEffect(() => () => window.clearTimeout(turnT.current), []);
-  const hasContent = inputMessage.trim().length > 0 || uploadedAttachments.length > 0;
+  // a picture is made from words; your pictures only go with them
+  const hasContent = inputMessage.trim().length > 0 || (!drawing && uploadedAttachments.length > 0);
   const loading = isLoadingModels || (isWalletLoading && isAuthenticated);
   // a PDF still in the draft and being read would go without its text
   const readingNow = uploadedAttachments.some((a) => reading.has(a.id));
@@ -596,25 +602,27 @@ export default function Composer({ centred }: { centred: boolean }) {
 
         <div className="under" ref={under}>
           <div className="crow" inert={face !== "write"}>
-            {!drawing && (
+            {(!drawing || takesImages) && (
               <span className="tipped">
                 <button
                   className="attach"
                   type="button"
                   onClick={() => fileInput.current?.click()}
-                  aria-label={takesImages ? "Attach images or PDFs" : "Attach a PDF"}
+                  aria-label={drawing ? "Attach a picture to work from" : takesImages ? "Attach images or PDFs" : "Attach a PDF"}
                 >
                   <Icon name="clip" />
                 </button>
-                <span className="tip">{takesImages || !selectedModel ? "Attach images or PDFs" : "Attach a PDF, this model reads text only"}</span>
+                <span className="tip">
+                  {drawing ? "Attach a picture to work from" : takesImages || !selectedModel ? "Attach images or PDFs" : "Attach a PDF, this model reads text only"}
+                </span>
               </span>
             )}
             <input
               ref={fileInput}
               type="file"
-              multiple
+              multiple={!drawing || most > 1}
               hidden
-              accept={imagesOk ? "image/*,application/pdf" : "application/pdf"}
+              accept={drawing ? "image/*" : imagesOk ? "image/*,application/pdf" : "application/pdf"}
               onChange={(e) => {
                 if (e.target.files) void addFiles(e.target.files, "pick");
                 e.target.value = "";

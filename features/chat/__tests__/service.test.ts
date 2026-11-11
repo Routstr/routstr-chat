@@ -255,6 +255,22 @@ describe("ChatService: what the model is sent", () => {
     expect(turn.run.getSnapshot().warning).toContain("left out");
   });
 
+  it("makes a picture from the question alone, never loading or warning of earlier pictures", async () => {
+    const drawn = [{ type: "image_url" as const, image_url: { url: "data:image/png;base64,AA" } }];
+    const first = await chat.send("c", "a cat", model);
+    await flush();
+    provider.last.callbacks.onMessageAppend({ role: "assistant", content: drawn });
+    provider.last.settle();
+    await first.reply;
+
+    const painter = { id: "p", images: false, picture: { n: 1 } };
+    const turn = await chat.send("c", "now in snow", painter);
+    await flush();
+
+    expect(contents(provider.last.messages)).toEqual(["now in snow"]);
+    expect(turn.run.getSnapshot().warning).toBeUndefined();
+  });
+
   it("says so when some attachments could not be loaded", async () => {
     vi.mocked(attachments.forRequest).mockResolvedValueOnce([
       { role: "user", content: [{ type: "text", text: "two files" }] },

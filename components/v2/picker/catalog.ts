@@ -66,6 +66,11 @@ export const mostPictures = (m: Model) => {
   return limits.length ? Math.min(4, Math.max(...limits)) : 4;
 };
 
+/** Most pictures of yours a picture model may work from in one request, as
+ *  its endpoints list them; 0 for one that takes none. */
+export const mostReferences = (m: Model) =>
+  paints(m) && sees(m) ? Math.max(0, ...Object.values(m.image_pricing?.endpoints ?? {}).map((e) => e.parameters?.input_references?.max ?? 0)) : 0;
+
 /** What a picture model is asked for, kept to the counts, sizes and qualities
  *  it lists, its own defaults where none is chosen; undefined for any other model. */
 export const pictureOf = (m: Model, choice: PictureChoice): PictureChoice | undefined => {

@@ -141,6 +141,7 @@
 .island .model-ico .co-ico { width: 1em; height: 1em; display: block; }
 .island .model-n { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .island .crow:has(.pic-opts) { grid-template-columns: minmax(0, max-content) minmax(0, 1fr) auto auto; padding-left: 4px; }
+.island .crow:has(.attach):has(.pic-opts) { grid-template-columns: auto minmax(0, max-content) minmax(0, 1fr) auto auto; padding-left: 0; }
 .island .pic-opts { display: inline-flex; gap: 2px; min-width: 0; overflow: hidden; justify-self: start; }
 .island .pic-opt {
   display: inline-flex; align-items: center; gap: 4px; height: var(--c-row); padding: 0 6px 0 8px; border-radius: var(--r-sm);
@@ -386,6 +387,7 @@ html[data-room="meridian"] .island {
   .island .model-n { max-width: 40vw; }
   /* no room beside the model for a picture's size and count: they take the line under it */
   .island .crow:has(.pic-opts) { grid-template-columns: minmax(0, 1fr) auto auto; }
+  .island .crow:has(.attach):has(.pic-opts) { grid-template-columns: auto minmax(0, 1fr) auto auto; }
   .island .crow .pic-opts { grid-row: 2; grid-column: 1 / -1; margin-top: -8px; }
   .island .voice { padding: 0 8px 0 4px; }
   .island .v-long { display: none; }

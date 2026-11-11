@@ -160,7 +160,7 @@ export function fakeSdk(request: Sdk["request"] = vi.fn(async () => {})) {
         logger: noopLogger,
         usageTrackingDriver,
       }),
-    pictures: vi.fn(async () => ({ urls: [] })),
+    pictures: vi.fn<Sdk["pictures"]>(async () => ({ urls: [] })),
     cost: vi.fn(async () => undefined),
     warm: vi.fn(() => undefined),
     ensureNode: vi.fn(async () => {}),

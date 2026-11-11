@@ -225,10 +225,12 @@ export class ChatService {
 
   private transport(history: Message[], model: ChatModel): Transport {
     return async (callbacks, signal) => {
+      // a picture is made from the question alone: its words and its pictures
+      const asked = model.picture ? history.slice(-1) : history;
       const sent =
         model.images === false
-          ? withoutImages(history, callbacks.onWarning)
-          : history;
+          ? withoutImages(asked, callbacks.onWarning)
+          : asked;
       const messages = await this.deps.attachments.forRequest(sent, signal);
       if (signal.aborted) return;
       checkAttachments(sent, messages, callbacks.onWarning);

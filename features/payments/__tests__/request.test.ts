@@ -325,6 +325,31 @@ describe("createPay", () => {
     expect(b.fetch.calls[0].args[0]).toMatchObject({ mode: "xcashu" });
   });
 
+  it("gives a picture model the question's words and pictures, and nothing else", async () => {
+    const { pay, sdk } = await setup();
+    sdk.pictures.mockResolvedValue({ urls: ["data:image/png;base64,AA"] });
+    const picture = { id: "p", picture: { n: 1, resolution: "1K" } };
+    const question = {
+      role: "user",
+      content: [
+        { type: "text" as const, text: "the same cat, in snow" },
+        { type: "image_url" as const, image_url: { url: "data:image/png;base64,CAT" } },
+      ],
+    };
+    await pay({ messages: [question], model: picture }, callbacks(), new AbortController().signal);
+    await pay({ messages: [{ role: "user", content: "a cat" }], model: picture }, callbacks(), new AbortController().signal);
+
+    expect(sdk.pictures.mock.calls.map(([{ body }]) => body)).toEqual([
+      {
+        prompt: "the same cat, in snow",
+        n: 1,
+        resolution: "1K",
+        input_references: [{ type: "image_url", image_url: { url: "data:image/png;base64,CAT" } }],
+      },
+      { prompt: "a cat", n: 1, resolution: "1K" },
+    ]);
+  });
+
   it("asks the SDK for a reply of at most 64k tokens when the model and the prompt leave room, so its deposit is sized for that", async () => {
     const { pay, fetch } = await setup();
     const model = { id: "m", room: { context: 400_000, maxOut: 128_000 } };

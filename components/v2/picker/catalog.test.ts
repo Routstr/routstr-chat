@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Model } from "@/types/models";
-import { answers, baseKey, fmt, handles, hostOf, makerOf, measureFor, priceScale, searchRank, sortRows, type Row } from "./catalog";
+import { answers, baseKey, fmt, handles, hostOf, makerOf, measureFor, mostReferences, priceScale, searchRank, sortRows, type Row } from "./catalog";
 
 const model = (id: string, name: string, extra: Partial<Model> = {}) =>
   ({ id, name, created: 0, context_length: 0, architecture: { input_modalities: ["text"], output_modalities: ["text"] }, ...extra }) as unknown as Model;
@@ -99,6 +99,33 @@ describe("answers: the models a chat can talk to", () => {
 
   it("leaves out a model that does not read text", () => {
     expect(answers(takes(["audio"], ["text"]))).toBe(false);
+  });
+});
+
+describe("mostReferences: the pictures of yours a picture model works from", () => {
+  const painter = (input_modalities: string[], refs: (number | undefined)[]) =>
+    model("p", "P", {
+      architecture: { input_modalities, output_modalities: ["image"] },
+      image_pricing: {
+        max_usd: 0.04,
+        tiers: [],
+        resolutions: [],
+        qualities: [],
+        default_resolution: null,
+        default_quality: null,
+        endpoints: Object.fromEntries(refs.map((max, i) => [`e${i}`, { parameters: max === undefined ? {} : { input_references: { max } } }])),
+      },
+    } as unknown as Partial<Model>);
+
+  it("takes as many as its most generous endpoint lists", () => {
+    expect(mostReferences(painter(["text", "image"], [1]))).toBe(1);
+    expect(mostReferences(painter(["text", "image"], [3, 14, undefined]))).toBe(14);
+  });
+
+  it("takes none from a model that reads only words, or lists no limit", () => {
+    expect(mostReferences(painter(["text"], [4]))).toBe(0);
+    expect(mostReferences(painter(["text", "image"], [undefined]))).toBe(0);
+    expect(mostReferences(painter(["text", "image"], []))).toBe(0);
   });
 });
 

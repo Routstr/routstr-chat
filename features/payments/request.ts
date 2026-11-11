@@ -123,6 +123,17 @@ const promptOf = (messages: { role: string; content: unknown }[]) => {
   return words.join("\n");
 };
 
+/** The question's pictures, as a picture model is given them to work from. */
+const referencesOf = (messages: { role: string; content: unknown }[]) => {
+  const content = messages.at(-1)?.content;
+  if (!Array.isArray(content)) return [];
+  return content.flatMap((part) =>
+    part?.type === "image_url" && typeof part.image_url?.url === "string"
+      ? [{ type: "image_url", image_url: { url: part.image_url.url } }]
+      : []
+  );
+};
+
 /** Pays for each request of one account through the Routstr SDK. */
 export function createPay(deps: PayDeps): Pay {
   return async ({ messages, model }, callbacks, signal) => {
@@ -178,10 +189,17 @@ export function createPay(deps: PayDeps): Pay {
       const forcedProvider = node ? node.url : (warm && model.provider) || undefined;
       if (model.picture) {
         const { n, resolution, quality } = model.picture;
+        const references = referencesOf(messages);
         callbacks.onPaymentProcessing?.(true);
         const { urls, sats } = await deps.sdk.pictures({
           modelId: model.id,
-          body: { prompt: promptOf(messages), n, ...(resolution && { resolution }), ...(quality && { quality }) },
+          body: {
+            prompt: promptOf(messages),
+            n,
+            ...(resolution && { resolution }),
+            ...(quality && { quality }),
+            ...(references.length > 0 && { input_references: references }),
+          },
           forcedProvider,
           torMode: deps.sdk.torMode(),
           walletAdapter: wallet,

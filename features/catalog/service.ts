@@ -186,12 +186,14 @@ export class CatalogService {
     model: Model,
     messages: unknown[] | null,
     maxTokens?: number,
-    picture?: { n: number; resolution?: string; quality?: string }
+    picture?: { n: number; resolution?: string; quality?: string },
+    references: unknown[] = []
   ): number {
     // the body fetchAIResponse sends, with the search tool it adds for OpenAI's
-    // models, or a picture request's count, size and quality
+    // models, or a picture request's count, size, quality and your pictures,
+    // which carries no messages
     const body = picture
-      ? { model: model.id, ...picture }
+      ? { model: model.id, ...picture, ...(references.length > 0 && { input_references: references }) }
       : {
           model: model.id,
           messages,
@@ -201,8 +203,8 @@ export class CatalogService {
         };
     return this.deps.providerManager.getRequiredSatsForModel(
       model as unknown as Parameters<ProviderManager["getRequiredSatsForModel"]>[0],
-      messages ?? [],
-      messages ? maxTokens : undefined,
+      picture ? [] : (messages ?? []),
+      messages && !picture ? maxTokens : undefined,
       messages || picture ? body : {}
     );
   }

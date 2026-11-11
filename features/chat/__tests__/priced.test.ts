@@ -200,4 +200,23 @@ describe("pricedRequest: the request a send would make, as the SDK prices it", (
     expect(capped).toBe(pm.getRequiredSatsForModel(long as never, sent!.messages, 64_000, sent as never));
     expect(capped).toBeLessThan(catalog.need(long as never, pricedRequest([], "hi", true)));
   });
+
+  it("is what the SDK asks for a picture made from your pictures, more than for one from words alone", () => {
+    const painter = {
+      id: "painter",
+      architecture: { input_modalities: ["text", "image"], output_modalities: ["image"] },
+      sats_pricing: { prompt: 0, completion: 0, image_output: 40, max_completion_cost: 160, max_cost: 160 },
+      image_pricing: { unit: "image", max_usd: 0.04, input_image_usd: 0.01, resolutions: ["1K"], qualities: [], tiers: [{ resolution: "1K", quality: null, usd: 0.04 }] },
+    };
+    const pm = new ProviderManager({} as never);
+    const catalog = new CatalogService({ providerManager: pm } as never);
+    const picture = { n: 1, resolution: "1K" };
+    const yours = [{ type: "image_url", image_url: { url: "data:image/png;base64,CAT" } }];
+    const from = catalog.need(painter as never, pricedRequest([], "the same cat, in snow", true), undefined, picture, yours);
+
+    expect(from).toBe(
+      pm.getRequiredSatsForModel(painter as never, [], undefined, { prompt: "the same cat, in snow", ...picture, input_references: yours, model: "painter" })
+    );
+    expect(from).toBeGreaterThan(catalog.need(painter as never, pricedRequest([], "a cat", true), undefined, picture));
+  });
 });

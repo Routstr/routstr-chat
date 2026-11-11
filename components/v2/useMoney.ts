@@ -9,7 +9,7 @@ import type { Message } from "@/types/chat";
 import type { Model } from "@/types/models";
 import { getPendingCashuTokenAmount } from "@/utils/cashuUtils";
 import { useOpenChat } from "./openChat";
-import { paints, pictureOf } from "./picker/catalog";
+import { mostReferences, paints, pictureOf } from "./picker/catalog";
 import { useListed } from "./useListed";
 import { normalizeModality } from "./picker/modality";
 import { useDraft, usePicture } from "./ui";
@@ -130,12 +130,14 @@ export function usePayableFor(question: Message["content"]) {
       let tokens: number | undefined;
       return { messages, tokens: () => (tokens ??= messages ? promptTokensOf(messages) : 0) };
     };
-    return { sees: priced(true), reads: priced(false) };
+    // the question's own pictures, which a picture model works from
+    const pictures = Array.isArray(question) ? question.filter((part) => part.type === "image_url") : [];
+    return { sees: priced(true), reads: priced(false), pictures };
   }, [slots, question]);
   const need = useCallback(
     (model: Model) => {
       const { messages, tokens } = textOnly(model) ? request.reads : request.sees;
-      return catalog?.need(model, messages, replyCap(rooms[model.id], tokens), pictureOf(model, picture)) ?? 0;
+      return catalog?.need(model, messages, replyCap(rooms[model.id], tokens), pictureOf(model, picture), mostReferences(model) > 0 ? request.pictures : []) ?? 0;
     },
     [catalog, request, rooms, picture]
   );
