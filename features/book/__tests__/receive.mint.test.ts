@@ -71,3 +71,42 @@ describe.each([
     expect(await kit.coinStates(sent, mint)).toEqual(sent.map(() => "SPENT"));
   });
 });
+
+it("lands a token the background retry meets while its take waits for the mint, and the take says so", async () => {
+  const mint = kit.env.mintUrl;
+  const token = getEncodedToken({
+    mint,
+    proofs: bare(await kit.mintProofs(16, mint)),
+    unit: "sat",
+  });
+  let stored: Proof[] = [];
+  const executor = new WalletExecutor({
+    owner: "alice",
+    journal: new Journal(memoryStorage()),
+    commitFor: () => async (add) => void (stored = [...stored, ...add]),
+    locks: navigator.locks,
+  });
+  // the mint answers the take's first question slowly, as a first connection on a phone can
+  const fetch = globalThis.fetch;
+  let asked: (() => void) | undefined;
+  const asking = new Promise<void>((resolve) => (asked = resolve));
+  globalThis.fetch = async (input, init) => {
+    if (asked && String(input).endsWith("/v1/info")) {
+      asked();
+      asked = undefined;
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    }
+    return fetch(input, init);
+  };
+  try {
+    const taking = executor.take(token);
+    await asking;
+    const retried = executor.retryReceives();
+    const took = await taking;
+    expect([took.pending, sum(took.proofs)]).toEqual([false, 16]);
+    expect(await retried).toEqual([]);
+  } finally {
+    globalThis.fetch = fetch;
+  }
+  expect(sum(stored)).toBe(16);
+});

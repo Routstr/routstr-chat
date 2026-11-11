@@ -193,6 +193,9 @@ export async function claimPaid(
 /** One operation per account at a time, in every tab; recovery waits for it. */
 export const walletLock = (owner: string) => `routstr-chat-wallet:${owner}`;
 
+/** A token's take holds its record until it ends, in every tab. */
+const receiveLock = (id: string) => `routstr-chat-receive:${id}`;
+
 /**
  * Moves one account's money. Every mint call that spends or creates coins is
  * written to the journal first, and the coins it returns are written down
@@ -551,41 +554,52 @@ export class WalletExecutor {
   async take(
     token: string
   ): Promise<{ proofs: Proof[]; unit: string; pending: boolean }> {
-    if (!this.deps.locks) {
+    const { locks } = this.deps;
+    if (!locks) {
       throw new Error(
         "This browser cannot safely coordinate payments across tabs."
       );
     }
     const record = this.holdReceive(token);
-    // a mint that does not answer never holds the account's lock
-    if (!(await this.reachable(record.mintUrl))) {
-      return { proofs: [], unit: record.unit ?? "sat", pending: true };
-    }
-    return this.locked(record.mintUrl, () => this.landReceive(record));
+    return locks.request(receiveLock(record.id), async () => {
+      // a mint that does not answer never holds the account's lock
+      if (!(await this.reachable(record.mintUrl))) {
+        return { proofs: [], unit: record.unit ?? "sat", pending: true };
+      }
+      return this.locked(record.mintUrl, () => this.landReceive(record));
+    });
   }
 
   /** Tries every token this account still holds to receive; resolves with
    *  what landed. One the mint refuses (spent, invalid) is dropped. */
   async retryReceives(): Promise<{ proofs: Proof[]; unit: string }[]> {
     const landed: { proofs: Proof[]; unit: string }[] = [];
+    const { journal, owner, locks } = this.deps;
+    if (!locks) return landed;
     // each mint asked once a round, however many of its tokens wait
     const answers = new Map<string, Promise<boolean>>();
-    for (const record of this.deps.journal.list(this.deps.owner)) {
+    for (const record of journal.list(owner)) {
       if (record.kind !== "receive") continue;
       if (!answers.has(record.mintUrl)) {
         answers.set(record.mintUrl, this.reachable(record.mintUrl));
       }
       if (!(await answers.get(record.mintUrl))) continue;
-      const { journal, owner } = this.deps;
-      // taken in meanwhile (by the take that wrote it, another round or tab): done
-      const got = await this.locked(record.mintUrl, async () =>
-        journal.list(owner).some((r) => r.id === record.id)
-          ? this.landReceive(record)
-          : null
-      ).catch((error) => {
-        console.error("A waiting token was refused:", error);
-        return null;
-      });
+      // one its take is still on is left to that take; taken in meanwhile
+      // (by the take that wrote it, another round or tab): done
+      const got = await locks
+        .request(receiveLock(record.id), { ifAvailable: true }, (free) =>
+          free
+            ? this.locked(record.mintUrl, async () =>
+                journal.list(owner).some((r) => r.id === record.id)
+                  ? this.landReceive(record)
+                  : null
+              )
+            : null
+        )
+        .catch((error) => {
+          console.error("A waiting token was refused:", error);
+          return null;
+        });
       if (got?.proofs.length) landed.push(got);
     }
     return landed;
