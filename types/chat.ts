@@ -64,6 +64,8 @@ export interface Conversation {
   id: string;
   title: string;
   messages: Message[];
+  /** kept at the top of the list */
+  pinned?: boolean;
 }
 
 export interface Model {

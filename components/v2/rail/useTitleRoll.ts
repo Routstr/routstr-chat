@@ -43,7 +43,7 @@ export function useTitleRoll({
       rolling.current = { row, anim: null, peek: true };
       return;
     }
-    const dist = over + 34; // clear of the right fade and the delete slot
+    const dist = over + 62; // clear of the right fade and the pin and delete slot
     t.classList.add("is-rolling");
     const anim = tt.animate([{ transform: "translateX(0)" }, { transform: `translateX(${-dist}px)` }], {
       duration: Math.min(1600, Math.max(900, (dist / 42) * 1000)),

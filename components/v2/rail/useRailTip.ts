@@ -54,12 +54,13 @@ export function useRailTip({
     if (kind === "title") {
       // the row opens downward to show its whole title: same place, same type,
       // first line exactly over the row's own, so it reads as the row growing.
-      // It draws the row's delete glyph at the spot of the real button under it.
+      // It draws the row's pin and delete glyphs at the spots of the real buttons under it.
       const go = el.querySelector<HTMLElement>(".sb-go")!;
       const gr = go.getBoundingClientRect();
       t.className = "sb-tip is-title";
-      t.innerHTML = `<span class="sb-tip-t">${esc(el.querySelector(".sb-tt")?.textContent ?? "")}</span><span class="sb-tip-x" aria-hidden="true">${TRASH}</span>`;
+      t.innerHTML = `<span class="sb-tip-t">${esc(el.querySelector(".sb-tt")?.textContent ?? "")}</span><span class="sb-tip-p" aria-hidden="true">${el.querySelector(".sb-pin")?.innerHTML ?? ""}</span><span class="sb-tip-x" aria-hidden="true">${TRASH}</span>`;
       t.classList.toggle("is-x", !!el.querySelector(".sb-x:hover"));
+      t.classList.toggle("is-p", !!el.querySelector(".sb-pin:hover"));
       Object.assign(t.style, { left: `${gr.left - rr.left}px`, top: `${gr.top - rr.top}px`, width: `${gr.width}px`, minHeight: "" });
       // never stop across half a line; a group label under it steps aside
       let bottom = gr.top + t.offsetHeight;

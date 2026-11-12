@@ -60,6 +60,7 @@ class LabHistory {
   };
   remove = async (id: string) => this.hooks.remove(id);
   rename = async (id: string, title: string) => this.hooks.rename(id, title);
+  pin = async (id: string, pinned: boolean) => this.hooks.pin(id, pinned);
   sync = async (): Promise<SyncOutcome> => {
     await this.hooks.sync();
     return "ok";

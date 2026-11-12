@@ -33,9 +33,12 @@ export function useRailHover({
       if (folded || kind === "fold" || kind === "gear") return armTip(k, kind);
     }
     if (tipFor.current && !tipFor.current.contains(t)) hideTip();
-    // an open title layer mirrors the real delete button's hover
+    // an open title layer mirrors the real pin and delete buttons' hover
     const tl = tip.current;
-    if (tl) tl.classList.toggle("is-x", !!t.closest(".sb-x") && tl.classList.contains("is-title"));
+    if (tl) {
+      tl.classList.toggle("is-x", !!t.closest(".sb-x") && tl.classList.contains("is-title"));
+      tl.classList.toggle("is-p", !!t.closest(".sb-pin") && tl.classList.contains("is-title"));
+    }
   };
   // the ring holds while you point at its line; only a real move counts, not
   // the Undo that just appeared under a still cursor

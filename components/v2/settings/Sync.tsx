@@ -47,7 +47,7 @@ export default function Sync() {
         <Row
           id="r-forget"
           title="Forget chats after 7 days"
-          note="Each time the app opens, chats with no new message for 7 days are deleted here and everywhere they are stored."
+          note="Each time the app opens, chats with no new message for 7 days are deleted here and everywhere they are stored. Pinned chats are kept."
         >
           <Sw
             on={forget}

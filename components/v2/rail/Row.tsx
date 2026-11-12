@@ -18,6 +18,7 @@ export const Row = memo(function Row({
   tab,
   fresh,
   titled,
+  pinned,
   n,
 }: {
   id: string;
@@ -30,6 +31,7 @@ export const Row = memo(function Row({
   tab: boolean;
   fresh: boolean;
   titled: boolean;
+  pinned: boolean;
   n?: number;
 }) {
   const leaving = gone === "leaving" || gone === "gone";
@@ -49,11 +51,17 @@ export const Row = memo(function Row({
     >
       <div className="sb-row-in">
         <div className="sb-under" aria-hidden="true">
-          <Icon name="trash" size={17} />
-          Delete
+          <span className="sb-under-p">
+            <Icon name={pinned ? "unpin" : "pin"} size={17} />
+            {pinned ? "Unpin" : "Pin"}
+          </span>
+          <span className="sb-under-d">
+            <Icon name="trash" size={17} />
+            Delete
+          </span>
         </div>
         {current && <span className="sb-glide" aria-hidden="true" />}
-        <button type="button" className="sb-go" tabIndex={tab ? 0 : -1} aria-current={current ? "page" : undefined} aria-keyshortcuts="Delete">
+        <button type="button" className="sb-go" tabIndex={tab ? 0 : -1} aria-current={current ? "page" : undefined} aria-keyshortcuts="Delete P">
           <span className={long ? "sb-t is-long" : "sb-t"}>
             <span className="sb-tt">{title}</span>
           </span>
@@ -66,6 +74,9 @@ export const Row = memo(function Row({
             <i />
           </span>
         )}
+        <button type="button" className="sb-pin" tabIndex={-1} aria-label={`${pinned ? "Unpin" : "Pin"} ${title}`}>
+          <Icon name={pinned ? "unpin" : "pin"} size={15} />
+        </button>
         <button type="button" className="sb-x" tabIndex={-1} aria-label={`Delete ${title}`}>
           <Icon name="trash" size={15} />
         </button>

@@ -19,11 +19,12 @@ export function useLongTitles(
       const t = r.querySelector<HTMLElement>(".sb-t");
       const key = `${t?.textContent ?? ""}|${r.className}`;
       if (seen.current.get(r.dataset.id!)?.key === key) continue;
-      seen.current.set(r.dataset.id!, { key, long: !!t && t.scrollWidth > t.clientWidth - 34 });
+      // clear of the pin and delete a pointer shows (a phone has neither, only its marks)
+      seen.current.set(r.dataset.id!, { key, long: !!t && t.scrollWidth > t.clientWidth - (phone ? 34 : 62) });
     }
     const out = new Set(rows.filter((r) => seen.current.get(r.dataset.id!)?.long).map((r) => r.dataset.id!));
     setLong((s) => (s.size === out.size && [...out].every((x) => s.has(x)) ? s : out));
-  }, []);
+  }, [phone]);
   const again = useCallback(() => {
     seen.current.clear();
     measure();

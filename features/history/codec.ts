@@ -4,6 +4,9 @@ import { createPnsEvent, decryptPnsEvent, type PnsKeys } from "@/lib/pns";
 
 const KIND_CHAT = 20001;
 const KIND_TITLE = 20002;
+// a pin is its own event, so a rename on a device that has not seen it never undoes it
+// (main reads only 20001 and passes over the rest)
+const KIND_PIN = 20003;
 
 /** The parent every first question points at. */
 export const ROOT_ID = "0".repeat(64);
@@ -50,12 +53,52 @@ export function encodeTitle(
 export function decodeTitle(event: NostrEvent, keys: PnsKeys): Title | null {
   const inner = decryptPnsEvent(event, keys);
   if (inner?.kind !== KIND_TITLE || typeof inner.content !== "string") return null;
-  const conversationId = Array.isArray(inner.tags)
-    ? inner.tags.find((t: unknown) => Array.isArray(t) && t[0] === "d")?.[1]
-    : undefined;
+  const conversationId = tagOf(inner, "d");
   if (!conversationId) return null;
   return { conversationId, title: inner.content, eventId: event.id, createdAt: inner.created_at };
 }
+
+/** A chat kept at the top of the list, or let go; the newest says which. */
+export interface Pin {
+  conversationId: string;
+  pinned: boolean;
+  eventId: string;
+  createdAt: number;
+}
+
+export function encodePin(
+  conversationId: string,
+  pinned: boolean,
+  author: string,
+  createdAt: number,
+  keys: PnsKeys
+): NostrEvent {
+  return createPnsEvent(
+    {
+      kind: KIND_PIN,
+      pubkey: author,
+      created_at: createdAt,
+      tags: [
+        ["d", conversationId],
+        ["client", "routstr-chat"],
+        ["pinned", pinned ? "1" : "0"],
+      ],
+      content: "",
+    },
+    keys
+  );
+}
+
+export function decodePin(event: NostrEvent, keys: PnsKeys): Pin | null {
+  const inner = decryptPnsEvent(event, keys);
+  if (inner?.kind !== KIND_PIN) return null;
+  const conversationId = tagOf(inner, "d");
+  if (!conversationId) return null;
+  return { conversationId, pinned: tagOf(inner, "pinned") === "1", eventId: event.id, createdAt: inner.created_at };
+}
+
+const tagOf = (inner: { tags?: unknown }, name: string): string | undefined =>
+  Array.isArray(inner.tags) ? inner.tags.find((t: unknown) => Array.isArray(t) && t[0] === name)?.[1] : undefined;
 
 /** One message, encrypted the way main writes it, so every client reads it. */
 export function encodeMessage(

@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useAnswering, useBusy } from "@/features/chat/view";
-import { useConversations, useHistoryLoaded } from "@/features/history/view";
+import { useConversations, useHistory, useHistoryLoaded } from "@/features/history/view";
 import { useObservableState } from "applesauce-react/hooks";
 import { useAccountManager, useSession } from "@/features/session/view";
 import { Icon } from "../icons";
@@ -43,11 +43,14 @@ import { useUnread } from "./useUnread";
    becomes a line you can take back for five seconds, where your eye already
    is. A cut title shows the rest of itself after a still moment. */
 
+const goOf = (list: HTMLElement | null, id: string) => list?.querySelector<HTMLElement>(`.sb-row[data-id="${CSS.escape(id)}"] .sb-go`);
+
 export default function Rail() {
   const { id: activeConversationId, open: loadConversation, openNew: startNewConversation } = useOpenChat();
   const liveId = useAnswering();
   const busy = useBusy();
   const conversations = useConversations();
+  const history = useHistory();
   const conversationsLoaded = useHistoryLoaded();
   const isAuthenticated = useSession().pubkey !== null;
   const ui = useUi();
@@ -128,6 +131,30 @@ export default function Rail() {
     loadConversation(id);
     ui.setDrawer(false);
   };
+  // a pinned chat stays at the top of the list on every device, and is never forgotten for its age.
+  // It moves group, so a new row stands in its place: the keys follow it there
+  const refocus = useRef<string | null>(null);
+  const pin = (id: string) => {
+    const c = conversations.find((x) => x.id === id);
+    if (!c) return;
+    if (goOf(list.current, id)?.matches(":focus")) refocus.current = id;
+    history
+      ?.pin(id, !c.pinned)
+      .then(() => say(c.pinned ? `${c.title || "Untitled"} unpinned` : `${c.title || "Untitled"} pinned`))
+      .catch((error) => console.error("Could not pin the chat:", error))
+      .finally(() => (refocus.current = null));
+  };
+  useLayoutEffect(() => {
+    const id = refocus.current;
+    const go = id ? goOf(list.current, id) : null;
+    if (!go || go.matches(":focus")) return;
+    refocus.current = null;
+    // only from nowhere: the focus that moved on meanwhile stays where it went
+    if (document.activeElement === document.body) {
+      go.focus({ preventScroll: true });
+      go.scrollIntoView({ block: "nearest" });
+    }
+  }, [groups]);
   const fresh = () => {
     startNewConversation();
     ui.setDrawer(false);
@@ -136,7 +163,7 @@ export default function Rail() {
 
   useRailKeys({ ui, isSidebarCollapsed, setFold, turn, hideTip });
   const { swDown, swMove, swEnd, openRow, closeOpen, justSwiped } = useSwipeRow(ui);
-  const { delAt, onListClick, onListKey, onListEnd } = useListActions({ list, remove, undo, open, finalise, setFocusId, openRow, closeOpen, justSwiped });
+  const { delAt, onListClick, onListKey, onListEnd } = useListActions({ list, remove, pin, undo, open, finalise, setFocusId, openRow, closeOpen, justSwiped });
   const { onRailOver, onRailMove, onRailOut, onListFocus, onListBlur } = useRailHover({ tip, folded, tipFor, armTip, hideTip, armRoll, rollBack, ringOf, delAt });
 
   const newCurrent = !finding && !activeConversationId;

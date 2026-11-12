@@ -11,10 +11,13 @@ import { KIND_PNS, createPnsDeletionEvent, type PnsKeys } from "@/lib/pns";
 import type { AccountRelays } from "@/features/relays/service";
 import {
   decodeMessage,
+  decodePin,
   decodeTitle,
   encodeMessage,
+  encodePin,
   encodeTitle,
   type Entry,
+  type Pin,
   type Title,
 } from "./codec";
 import {
@@ -206,6 +209,17 @@ export class HistoryService {
     const event = encodeTitle(conversationId, title, this.owner, at, keys);
     this.authorOf.set(event.id, event.pubkey);
     this.store.ingest([], [decodeTitle(event, keys)!]);
+    await this.deps.log.put([event]);
+    this.publish(event);
+  }
+
+  /** Kept at the top of the list on every device, or let go. */
+  async pin(conversationId: string, pinned: boolean): Promise<void> {
+    const keys = await this.whenWritable();
+    const at = Math.max(nowSeconds(), (this.store.pinnedAt(conversationId) ?? 0) + 1);
+    const event = encodePin(conversationId, pinned, this.owner, at, keys);
+    this.authorOf.set(event.id, event.pubkey);
+    this.store.ingest([], [], [decodePin(event, keys)!]);
     await this.deps.log.put([event]);
     this.publish(event);
   }
@@ -451,14 +465,17 @@ export class HistoryService {
     if (!keys) return;
     const entries: Entry[] = [];
     const titles: Title[] = [];
+    const pins: Pin[] = [];
     for (const event of events) {
       if (event.kind !== KIND_PNS || this.deleted.has(event.id)) continue;
       const entry = decodeMessage(event, keys);
       const title = entry ? null : decodeTitle(event, keys);
+      const pin = entry || title ? null : decodePin(event, keys);
       if (entry) entries.push(entry);
       else if (title) titles.push(title);
+      else if (pin) pins.push(pin);
     }
-    this.store.ingest(entries, titles);
+    this.store.ingest(entries, titles, pins);
   }
 
   // main's "Forget chats after 7 days": run once, after the first sync
@@ -467,7 +484,7 @@ export class HistoryService {
     const cutoff = nowSeconds() - FORGET_AFTER_S;
     for (const conversation of this.store.getConversations()) {
       const last = conversation.messages.at(-1)?._createdAt ?? 0;
-      if (last && last < cutoff) await this.remove(conversation.id);
+      if (last && last < cutoff && !conversation.pinned) await this.remove(conversation.id);
     }
   }
 

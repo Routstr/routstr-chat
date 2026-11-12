@@ -1,5 +1,5 @@
 import type { Conversation } from "@/types/chat";
-import type { Entry, Stored, Title } from "./codec";
+import type { Entry, Pin, Stored, Title } from "./codec";
 import { buildThread, byTime, titleOf, type ThreadSlot } from "./thread";
 
 interface Record {
@@ -18,13 +18,15 @@ export class HistoryStore {
   private records = new Map<string, Record>();
   private conversationOf = new Map<string, string>();
   private titles = new Map<string, Map<string, Title>>();
-  private titleIn = new Map<string, string>();
+  private pins = new Map<string, Map<string, Pin>>();
+  // a title's or a pin's event id → its conversation, for a delete
+  private markIn = new Map<string, string>();
   private list: Conversation[] | undefined;
 
   constructor(private onChange: () => void) {}
 
   /** Events arrive in bursts and in any order: one change per burst. */
-  ingest(entries: Entry[], titles: Title[] = []): void {
+  ingest(entries: Entry[], titles: Title[] = [], pins: Pin[] = []): void {
     for (const { conversationId, message } of entries) {
       let record = this.records.get(conversationId);
       if (!record) {
@@ -35,28 +37,34 @@ export class HistoryStore {
       this.conversationOf.set(message._eventId, conversationId);
       this.changed(record);
     }
-    for (const title of titles) {
-      const named = this.titles.get(title.conversationId) ?? new Map<string, Title>();
-      this.titles.set(title.conversationId, named.set(title.eventId, title));
-      this.titleIn.set(title.eventId, title.conversationId);
-      const record = this.records.get(title.conversationId);
+    const mark = <T extends Title | Pin>(marks: Map<string, Map<string, T>>, m: T) => {
+      marks.set(m.conversationId, (marks.get(m.conversationId) ?? new Map<string, T>()).set(m.eventId, m));
+      this.markIn.set(m.eventId, m.conversationId);
+      const record = this.records.get(m.conversationId);
       if (record) this.changed(record);
-    }
-    if (entries.length > 0 || titles.length > 0) this.onChange();
+    };
+    titles.forEach((t) => mark(this.titles, t));
+    pins.forEach((p) => mark(this.pins, p));
+    if (entries.length > 0 || titles.length > 0 || pins.length > 0) this.onChange();
   }
 
   namedAt(conversationId: string): number | undefined {
     return newest(this.titles.get(conversationId))?.createdAt;
   }
 
+  pinnedAt(conversationId: string): number | undefined {
+    return newest(this.pins.get(conversationId))?.createdAt;
+  }
+
   /** Drops events (a delete from this or another device). */
   remove(eventIds: string[]): void {
     let removed = false;
     for (const id of eventIds) {
-      const named = this.titleIn.get(id);
+      const named = this.markIn.get(id);
       if (named) {
         this.titles.get(named)?.delete(id);
-        this.titleIn.delete(id);
+        this.pins.get(named)?.delete(id);
+        this.markIn.delete(id);
         const record = this.records.get(named);
         if (record) this.changed(record);
         removed = true;
@@ -82,6 +90,7 @@ export class HistoryStore {
     return [
       ...(this.records.get(conversationId)?.byId.keys() ?? []),
       ...(this.titles.get(conversationId)?.keys() ?? []),
+      ...(this.pins.get(conversationId)?.keys() ?? []),
     ];
   }
 
@@ -125,7 +134,7 @@ export class HistoryStore {
         [...record.byId.values()].filter((m) => m.role !== "system")
       );
       const title = newest(this.titles.get(id))?.title || titleOf(messages[0]);
-      record.conversation = { id, title, messages };
+      record.conversation = newest(this.pins.get(id))?.pinned ? { id, title, messages, pinned: true } : { id, title, messages };
     }
     return record.conversation;
   }
@@ -137,9 +146,9 @@ export class HistoryStore {
   }
 }
 
-const newest = (titles: Map<string, Title> | undefined): Title | undefined => {
-  let pick: Title | undefined;
-  for (const t of titles?.values() ?? []) {
+const newest = <T extends { createdAt: number; eventId: string }>(marks: Map<string, T> | undefined): T | undefined => {
+  let pick: T | undefined;
+  for (const t of marks?.values() ?? []) {
     if (!pick || t.createdAt > pick.createdAt || (t.createdAt === pick.createdAt && t.eventId > pick.eventId)) pick = t;
   }
   return pick;

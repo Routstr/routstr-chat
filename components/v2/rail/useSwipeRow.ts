@@ -3,20 +3,26 @@ import { tokenMs } from "../motion";
 import type { useUi } from "../ui";
 import { ease, phoneNow } from "./helpers";
 
-/* ── phone: swipe a row left to delete ──────────────────────────────── */
+/* ── phone: swipe a row left to pin or delete ───────────────────────── */
+// under a row: Pin and Delete, one ACT wide each
+export const ACT = 96;
+const OPEN = 2 * ACT;
+
 export function useSwipeRow(ui: ReturnType<typeof useUi>) {
-  // raw: how far the finger has taken the row from closed (a row resting open starts at -96)
-  // hold: the press-and-hold timer (a second way to Delete for someone who never swipes)
+  // raw: how far the finger has taken the row from closed (a row resting open starts at -OPEN)
+  // hold: the press-and-hold timer (a second way to Pin and Delete for someone who never swipes)
   const sw = useRef<{ go: HTMLElement; row: HTMLElement; x: number; y: number; dx: number; raw: number; base: number; on: boolean; id: number; hold: number; held: boolean; pts: { x: number; t: number }[] } | null>(null);
   const justSwiped = useRef(-1e9);
   const swDown = (e: React.PointerEvent) => {
+    // a new press is a new gesture: its click is its own, however soon after a swipe
+    justSwiped.current = -1e9;
     const go = (e.target as Element).closest<HTMLElement>(".sb-go");
     if (!go || !phoneNow() || e.button > 0) return;
     const row = go.closest<HTMLElement>(".sb-row")!;
     if (row.classList.contains("is-leaving")) return;
-    const base = openRow.current === row ? -96 : 0;
+    const base = openRow.current === row ? -OPEN : 0;
     const s = { go, row, x: e.clientX, y: e.clientY, dx: base, raw: base, base, on: false, id: e.pointerId, hold: 0, held: false, pts: [{ x: e.clientX, t: e.timeStamp }] };
-    // held still for 450ms, a closed row gives a small press and opens on its Delete
+    // held still for 450ms, a closed row gives a small press and opens on its Pin and Delete
     if (!base)
       s.hold = window.setTimeout(() => {
         s.held = true;
@@ -25,7 +31,7 @@ export function useSwipeRow(ui: ReturnType<typeof useUi>) {
         row.classList.add("is-swiping", "is-open");
         row.style.setProperty("--sw", "1");
         go.style.transition = `transform ${tokenMs("--d-mid")}ms ${ease("--e-spring")}`;
-        go.style.transform = "translateX(-96px)";
+        go.style.transform = `translateX(${-OPEN}px)`;
         closeOpen(true);
         openRow.current = row;
         navigator.vibrate?.(8);
@@ -53,16 +59,16 @@ export function useSwipeRow(ui: ReturnType<typeof useUi>) {
       }
     }
     const w = s.go.offsetWidth;
-    // 1:1 to the Delete (96px), then it resists
+    // 1:1 to the open row, then it resists
     s.raw = s.base + dx;
     s.pts.push({ x: e.clientX, t: e.timeStamp });
     if (s.pts.length > 6) s.pts.shift();
-    s.dx = s.raw > 0 ? s.raw * 0.2 : s.raw >= -96 ? s.raw : -96 + (s.raw + 96) * 0.6;
+    s.dx = s.raw > 0 ? s.raw * 0.2 : s.raw >= -OPEN ? s.raw : -OPEN + (s.raw + OPEN) * 0.6;
     s.go.style.transition = "none";
     s.go.style.transform = `translateX(${s.dx}px)`;
     s.row.style.setProperty("--sw", Math.min(1, -s.dx / (w * 0.25)).toFixed(3));
   };
-  // a swipe never deletes on its own: however far or fast, it rests open on Delete, which takes a
+  // a swipe never acts on its own: however far or fast, it rests open on Pin and Delete, which take a
   // tap (a push over the list to shut the drawer can never remove a chat). A pointercancel springs
   // back. The click that ends a real swipe is ignored by time
   const swEnd = (e: React.PointerEvent) => {
@@ -82,18 +88,18 @@ export function useSwipeRow(ui: ReturnType<typeof useUi>) {
     }
     if (!s.on) return;
     if (e.type === "pointerup") justSwiped.current = performance.now();
-    // a fast push left, or one far past the Delete, is the drawer being pushed shut: the row goes
-    // home and the drawer closes. A slow, deliberate drag rests open on Delete
+    // a fast push left, or one far past the open row, is the drawer being pushed shut: the row goes
+    // home and the drawer closes. A slow, deliberate drag rests open
     const a = s.pts[0];
     const z = s.pts[s.pts.length - 1];
     const v = e.timeStamp - z.t > 80 ? 0 : z.t > a.t ? (a.x - z.x) / (z.t - a.t) : 0;
-    const shut = e.type === "pointerup" && !s.base && phoneNow() && ui.drawer && (v > 0.6 || s.raw < -156);
+    const shut = e.type === "pointerup" && !s.base && phoneNow() && ui.drawer && (v > 0.6 || s.raw < -Math.min(OPEN + 60, s.go.offsetWidth * 0.75));
     if (shut) ui.setDrawer(false);
     if (!shut && e.type === "pointerup" && -s.raw > 48 && !(s.base && s.raw - s.base > 8)) {
       // (a row resting open that the finger pushed right, however little, closes)
-      // part of the way: the row rests open on its Delete, which a tap then takes
+      // part of the way: the row rests open on Pin and Delete, which a tap then takes
       s.go.style.transition = `transform ${tokenMs("--d-mid")}ms ${ease("--e-spring")}`;
-      s.go.style.transform = "translateX(-96px)";
+      s.go.style.transform = `translateX(${-OPEN}px)`;
       s.row.style.setProperty("--sw", "1");
       s.row.classList.add("is-open");
       openRow.current = s.row;

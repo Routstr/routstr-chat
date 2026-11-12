@@ -124,6 +124,7 @@ export type FakeHistory = HistoryService & { update(chats: Conversation[]): void
 export interface FakeHistoryHooks {
   remove(id: string): void;
   rename(id: string, title: string): void;
+  pin(id: string, pinned: boolean): void;
   sync(): Promise<void>;
   /** A message saved into a chat; a new id starts a chat. */
   append(id: string, message: Message): void;
@@ -170,7 +171,7 @@ export function FakeChatProvider({
     );
   }, []);
   // the screens read chats from history: the lab's chats stand behind it
-  const [lab] = useState(() => history({ remove: (id) => setConversations((cs) => cs.filter((c) => c.id !== id)), rename: (id, title) => setConversations((cs) => cs.map((c) => (c.id === id ? { ...c, title } : c))), sync: syncNow, append }));
+  const [lab] = useState(() => history({ remove: (id) => setConversations((cs) => cs.filter((c) => c.id !== id)), rename: (id, title) => setConversations((cs) => cs.map((c) => (c.id === id ? { ...c, title } : c))), pin: (id, pinned) => setConversations((cs) => cs.map((c) => (c.id === id ? { ...c, pinned } : c))), sync: syncNow, append }));
   useLayoutEffect(() => lab.update(conversations), [lab, conversations]);
   const [account] = useState(() => chat(lab));
   const [balance, setBalance] = useState(() => Number(params.get("balance") ?? 2140));

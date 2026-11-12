@@ -17,11 +17,11 @@ const DAY = 86_400_000;
 export function groupByDay(conversations: Conversation[]) {
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  const order = ["Today", "Yesterday", "Previous 7 days", "Previous 30 days", "Older"];
+  const order = ["Pinned", "Today", "Yesterday", "Previous 7 days", "Previous 30 days", "Older"];
   const groups = new Map<string, Conversation[]>();
   for (const c of conversations) {
     const t = lastActivity(c);
-    const label = !t
+    const day = !t
       ? "Older"
       : t >= today
         ? "Today"
@@ -32,6 +32,7 @@ export function groupByDay(conversations: Conversation[]) {
             : t >= today - 30 * DAY
               ? "Previous 30 days"
               : "Older";
+    const label = c.pinned ? "Pinned" : day;
     if (!groups.has(label)) groups.set(label, []);
     groups.get(label)!.push(c);
   }

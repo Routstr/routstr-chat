@@ -253,11 +253,12 @@ export default function Shell() {
         ui.setFace("write");
         return;
       }
-      // start typing anywhere and the words go to the composer (Space stays with a focused button)
+      // start typing anywhere and the words go to the composer (Space stays with a focused button,
+      // and a letter the focused control took, like P on a chat in the list, stays with it)
       const t = e.target as HTMLElement | null;
       const typing = t?.closest?.("input, textarea, select, [contenteditable='true'], [role='dialog']");
       // (never while the palette is up: its field has the keys, whatever holds the focus)
-      if (!typing && !ui.palette && !e.metaKey && !e.ctrlKey && !e.altKey && e.key.length === 1 && e.key !== " " && ui.face === "write") {
+      if (!typing && !e.defaultPrevented && !ui.palette && !e.metaKey && !e.ctrlKey && !e.altKey && e.key.length === 1 && e.key !== " " && ui.face === "write") {
         document.querySelector<HTMLTextAreaElement>(".island textarea")?.focus();
       }
     };

@@ -85,7 +85,7 @@ export const INDEX: [string, SettingsSection, string, string, string, string?][]
   ["Providers", "models", "g-providers", "disable provider turn off routing", "Replies are routed to the providers that are on."],
   ["Your API keys", "keys", "g-keys", "api key create add top up refund delete rename key balance", "Create a key, top it up, refund it, rename it or delete it.", "refund top up rename delete create"],
   ["Sync chats", "sync", "r-syncchats", "backup cloud devices nostr encrypted", "Encrypted to your key and kept on your relays, so your other devices can read them."],
-  ["Forget chats after 7 days", "sync", "r-forget", "auto delete autodelete retention", "Each time the app opens, chats with no new message for 7 days are deleted here and everywhere they are stored."],
+  ["Forget chats after 7 days", "sync", "r-forget", "auto delete autodelete retention", "Each time the app opens, chats with no new message for 7 days are deleted here and everywhere they are stored. Pinned chats are kept."],
   ["Stay awake while answering", "sync", "r-awake", "keep alive screen off background", "Plays silent audio while a reply streams, so it keeps going with the screen off. Music you are playing may pause."],
   ["Relays", "sync", "g-relays", "nostr relay wss add remove", ""],
   ["Files", "sync", "g-files", "blossom images uploads servers", "Files you attach are uploaded here, so your other devices can open them."],

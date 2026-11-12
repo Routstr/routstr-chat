@@ -1,9 +1,11 @@
 import React, { useRef, type RefObject } from "react";
+import { ACT } from "./useSwipeRow";
 
 /* ── pointer and keys on the list ───────────────────────────────────── */
 export function useListActions({
   list,
   remove,
+  pin,
   undo,
   open,
   finalise,
@@ -14,6 +16,7 @@ export function useListActions({
 }: {
   list: RefObject<HTMLElement | null>;
   remove: (id: string, key: boolean) => void;
+  pin: (id: string) => void;
   undo: (id: string) => void;
   open: (id: string) => void;
   finalise: (id: string) => void;
@@ -32,12 +35,20 @@ export function useListActions({
       if (e.detail !== 0) delAt.current = performance.now();
       return remove(id, e.detail === 0);
     }
-    // a row resting open: its Delete deletes, a tap on the row itself closes it
+    if (t.closest(".sb-pin")) return pin(id);
+    // a row resting open: its Pin pins, its Delete deletes, a tap on the row itself closes it
+    // (not the click that ends the swipe that opened it, wherever the pointer stopped)
     if (openRow.current === row) {
-      // the Delete side is the row's right 96px, its clipped edges too
-      if (t.closest(".sb-under") || e.clientX > row.getBoundingClientRect().right - 96) {
+      if (performance.now() - justSwiped.current < 350) return;
+      // Delete is the row's right ACT, Pin the ACT before it, their clipped edges too
+      const x = row.getBoundingClientRect().right - e.clientX;
+      if (t.closest(".sb-under-d") || x < ACT) {
         closeOpen(true);
         return remove(id, false);
+      }
+      if (t.closest(".sb-under-p") || x < 2 * ACT) {
+        closeOpen(true);
+        return pin(id);
       }
       return closeOpen();
     }
@@ -78,6 +89,11 @@ export function useListActions({
     if (e.key === "Delete" || (e.key === "Backspace" && (e.metaKey || e.ctrlKey))) {
       e.preventDefault();
       return remove((go.closest(".sb-row") as HTMLElement).dataset.id!, true);
+    }
+    // only a chat reached by keys: a P typed after a click on the open chat goes to the composer
+    if ((e.key === "p" || e.key === "P") && !e.metaKey && !e.ctrlKey && !e.altKey && !e.repeat && go.matches(":focus-visible")) {
+      e.preventDefault();
+      return pin((go.closest(".sb-row") as HTMLElement).dataset.id!);
     }
     if (!n) return;
     e.preventDefault();

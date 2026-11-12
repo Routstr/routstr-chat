@@ -1,6 +1,9 @@
+import type { Locator } from "@playwright/test";
+import { generateSecretKey, nip19 } from "nostr-tools";
 import { expect, test } from "./fixtures";
 import { v2 } from "./drivers/v2";
-import { seedKitProvider } from "./seed";
+import { seedAccounts, seedKitProvider } from "./seed";
+import { seal } from "../kit/net";
 
 test("pays for a reply through routstr-core and keeps the change", async ({
   page,
@@ -99,4 +102,78 @@ test("an html answer runs in a box of its own: it cannot reach the app's storage
   const [file] = await Promise.all([page.waitForEvent("download"), fig.getByRole("button", { name: "Save page" }).click()]);
   expect(file.suggestedFilename()).toBe("probe-page.html");
   expect(await (await file.createReadStream()).toArray().then((c) => Buffer.concat(c).toString())).toBe(html);
+});
+
+test("a pinned chat stays first, on every device of the key, and can be unpinned by keys or a swipe", async ({
+  page,
+  context,
+  browser,
+  kit,
+  appUrl,
+}) => {
+  const nsec = nip19.nsecEncode(generateSecretKey());
+  await seedAccounts(context, [nsec]);
+  await v2.open(page, appUrl);
+  await seedKitProvider(page, kit.coreUrl, "kit-cheap");
+  await v2.fund(page, appUrl, await kit.mintToken(300));
+  const chats = page.getByRole("navigation", { name: "Chats" });
+  const rail = page.getByRole("complementary", { name: "Chats and wallet" });
+  for (const words of ["older chat", "newer chat"]) {
+    await rail.getByRole("button", { name: /^New chat/ }).click();
+    await v2.send(page, `[kit:usage=10,10] ${words}`);
+    await v2.waitReplyText(page, `Echo: ${words}`);
+    await v2.waitIdle(page);
+  }
+  const titles = (list: Locator) => list.locator(".sb-tt").allTextContents();
+  const pinned = (list: Locator) => list.getByRole("region", { name: "Pinned" });
+  await expect.poll(() => titles(chats)).toHaveLength(2);
+
+  // the older chat, pinned with its own button, goes first under Pinned
+  await chats.locator(".sb-row", { hasText: "older chat" }).hover();
+  await chats.getByRole("button", { name: /^Pin .*older chat/ }).click();
+  await expect(pinned(chats)).toContainText("older chat");
+  await expect.poll(() => titles(chats)).toEqual([expect.stringContaining("older chat"), expect.stringContaining("newer chat")]);
+
+  // a second device of the key gets it pinned
+  const other = await browser.newContext();
+  await seal(other, kit.env, appUrl);
+  await seedAccounts(other, [nsec]);
+  const second = await other.newPage();
+  await v2.open(second, appUrl);
+  const chats2 = second.getByRole("navigation", { name: "Chats" });
+  await v2.waitChats(second, 2);
+  await expect(pinned(chats2)).toContainText("older chat");
+
+  // there, P on a chat reached by keys unpins it, and the keys stay on it in its new place
+  await chats2.locator(".sb-go").last().focus();
+  await second.keyboard.press("Home"); // the pinned chat, first
+  await expect(chats2.locator(".sb-row", { hasText: "older chat" }).locator(".sb-go")).toBeFocused();
+  await second.keyboard.press("p");
+  await expect(pinned(chats2)).toHaveCount(0);
+  await expect(chats2.locator(".sb-row", { hasText: "older chat" }).locator(".sb-go")).toBeFocused();
+  await expect.poll(() => titles(chats2)).toHaveLength(2);
+
+  // on a phone, a row swiped left rests open on Pin and Delete; Pin pins it
+  await second.setViewportSize({ width: 390, height: 844 });
+  await second.getByRole("button", { name: "Open chats" }).click();
+  await expect(second.getByRole("dialog", { name: "Chats and wallet" })).toBeVisible();
+  await second.waitForTimeout(600); // the drawer slides in
+  const row = chats2.locator(".sb-row", { hasText: "older chat" });
+  const box = (await row.boundingBox())!;
+  const y = box.y + box.height / 2;
+  // a slow drag (a fast one is the drawer being pushed shut)
+  await second.mouse.move(box.x + box.width - 20, y);
+  await second.mouse.down();
+  for (let i = 1; i <= 15; i++) {
+    await second.mouse.move(box.x + box.width - 20 - i * 10, y);
+    await second.waitForTimeout(30);
+  }
+  await second.waitForTimeout(120);
+  await second.mouse.up();
+  await expect(row).toHaveClass(/is-open/);
+  await expect(row.locator(".sb-under-p")).toHaveText("Pin");
+  await second.mouse.click(box.x + box.width - 144, y);
+  await expect(pinned(chats2)).toContainText("older chat");
+  await expect(chats2.locator(".sb-row", { hasText: "older chat" })).toHaveCount(1);
+  await other.close();
 });

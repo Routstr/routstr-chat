@@ -187,7 +187,7 @@
 .sb-grp.is-gone > .sb-grp-in, .sb-grp.is-new > .sb-grp-in { overflow: hidden; }
 .sb-grp.is-new { grid-template-rows: 0fr; opacity: 0; }
 
-/* a row. The right 36px are its tool slot: live mark, new-answer mark, delete */
+/* a row. The right 60px are its tool slot: live mark, new-answer mark, pin and delete */
 .sb-row {
   position: relative; z-index: 1; contain: layout style;
   display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: 1fr;
@@ -233,22 +233,26 @@
   border-radius: var(--r-sm); background: var(--fill-2);
 }
 
-.sb-x {
+.sb-x, .sb-pin {
   position: absolute; z-index: 2; right: 4px; top: calc((var(--row-h) - 28px) / 2);
   width: 28px; height: 28px; border-radius: var(--r-xs); color: var(--ink-3);
   display: grid; place-items: center; opacity: 0; transform: scale(.86);
   transition: opacity var(--d-quick) var(--e-out), transform var(--d-mid) var(--e-spring), color var(--d-fast), background var(--d-fast);
 }
-.sb-x .v2-ico { width: 15px; height: 15px; }
-.sb-x:hover { color: var(--ink); background: var(--fill-1); }
-.sb-x:focus-visible { opacity: 1; transform: none; box-shadow: var(--focus); }
-.sb-row.is-kbd { --slot: 28px; }
-.sb-row.is-kbd .sb-x { opacity: 1; transform: none; }
+/* hidden, it takes no tap: a touch screen with no hover reaches the chat under it */
+.sb-pin { right: 32px; pointer-events: none; }
+.sb-row.is-kbd .sb-pin, .sb-pin:focus-visible { pointer-events: auto; }
+.sb-x .v2-ico, .sb-pin .v2-ico { width: 15px; height: 15px; }
+.sb-x:hover, .sb-pin:hover { color: var(--ink); background: var(--fill-1); }
+.sb-x:focus-visible, .sb-pin:focus-visible { opacity: 1; transform: none; box-shadow: var(--focus); }
+.sb-row.is-kbd { --slot: 56px; }
+.sb-row.is-kbd .sb-x, .sb-row.is-kbd .sb-pin { opacity: 1; transform: none; }
 @media (hover: hover) {
   .sb-row:hover .sb-go:not([aria-current="page"])::before { opacity: 1; }
   .sb-row:hover .sb-go { color: var(--ink); }
-  .sb-row:hover { --slot: 28px; }
-  .sb-row:hover:not(.is-leaving) .sb-x { opacity: 1; transform: none; transition-delay: calc(var(--d-quick) / 2); }
+  .sb-row:hover { --slot: 56px; }
+  .sb-row:hover:not(.is-leaving) :is(.sb-x, .sb-pin) { opacity: 1; transform: none; transition-delay: calc(var(--d-quick) / 2); }
+  .sb-row:hover:not(.is-leaving) .sb-pin { pointer-events: auto; }
   .sb-row:hover .sb-mark-r { opacity: 0; transform: scale(.4); }
 }
 
@@ -311,7 +315,7 @@
 .sb-drain { fill: none; stroke: var(--ink-3); stroke-width: 1.5; stroke-linecap: round; stroke-dasharray: 100 100; stroke-dashoffset: 0; }
 .sb-row.is-leaving .sb-go { opacity: 0; transform: translateX(8px); pointer-events: none; transition: opacity var(--d-quick) var(--e-out), transform var(--d-mid) var(--e-out); }
 .sb-row.is-leaving .sb-go::before { opacity: 0; }
-.sb-row.is-leaving .sb-x, .sb-row.is-leaving .sb-mark-r { opacity: 0; pointer-events: none; }
+.sb-row.is-leaving .sb-x, .sb-row.is-leaving .sb-pin, .sb-row.is-leaving .sb-mark-r { opacity: 0; pointer-events: none; }
 .sb-row.is-leaving .sb-undo { opacity: 1; visibility: visible; transform: none; transition-delay: calc(var(--d-quick) / 2), calc(var(--d-quick) / 2), 0s; }
 .sb-row.is-leaving .sb-glide { opacity: 0; }
 
@@ -333,7 +337,7 @@
 .sb-row.is-swiping .sb-glide { display: none; }
 .sb-under {
   position: absolute; inset: 0; z-index: 0; border-radius: var(--r-sm);
-  display: none; align-items: center; justify-content: flex-end; gap: 8px; padding-right: 18px;
+  display: none; align-items: stretch; justify-content: flex-end;
   background: var(--fill-2); color: var(--ink);
   font-family: var(--f-ui); font-size: 14px; font-weight: 500;
   opacity: var(--sw, 0);
@@ -341,9 +345,12 @@
 }
 /* no warning colour: the layer is the same neutral ink as the rest of the row */
 .sb-under .v2-ico { width: 17px; height: 17px; transition: transform var(--d-mid) var(--e-spring); }
-/* resting open after a part swipe: the Delete under the row is a 96px target on the right */
+/* Pin and Delete: a 96px target each on the right, a hairline between */
+.sb-under-p, .sb-under-d { display: flex; align-items: center; justify-content: center; gap: 8px; width: 96px; transition: background var(--d-fast) var(--e-out); }
+.sb-under-p { box-shadow: inset -1px 0 0 var(--hair); }
+/* resting open after a part swipe, each takes a tap */
 .sb-row.is-open .sb-under { cursor: pointer; }
-.sb-row.is-open .sb-under:active { background: color-mix(in srgb, var(--ink) 17%, transparent); }
+.sb-row.is-open :is(.sb-under-p, .sb-under-d):active { background: color-mix(in srgb, var(--ink) 17%, transparent); }
 
 /* ── empty, finding ───────────────────────────────────────────────────────────────────────── */
 /* where the first chat will land, said once and quietly, on the list's own edge */
@@ -582,20 +589,21 @@ html[data-room="meridian"] :is(.sb-add, .sb-bal[data-zero] .v2-ico) { color: var
 /* a very long title: the row opens downward to show all of it. The first line sits exactly on the row's
    own line (same face, size and inset), so it reads as the row growing, not as a tooltip */
 .sb-tip.is-title {
-  display: block; height: auto; min-height: var(--row-h); padding: 7.6px 36px 9px 10px; white-space: normal;
+  display: block; height: auto; min-height: var(--row-h); padding: 7.6px 60px 9px 10px; white-space: normal;
   font-family: var(--f-body); font-size: 14.5px; line-height: 1.3; color: var(--ink); text-wrap: pretty;
   transform: none; clip-path: inset(-16px -16px calc(100% - var(--row-h)) -16px round var(--r-sm));
   box-shadow: var(--lift-3), var(--glow), 0 0 0 1px var(--hair);
   transition: opacity var(--d-quick) var(--e-out), clip-path var(--d-quick) var(--e-out);
 }
-/* the row's delete glyph, drawn by the layer at the exact spot of the real button under it (which takes the click) */
-.sb-tip-x {
+/* the row's pin and delete glyphs, drawn by the layer at the exact spots of the real buttons under it (which take the click) */
+.sb-tip-x, .sb-tip-p {
   position: absolute; right: 4px; top: calc((var(--row-h) - 28px) / 2); width: 28px; height: 28px;
   display: grid; place-items: center; border-radius: var(--r-xs); color: var(--ink-3);
   transition: color var(--d-fast), background var(--d-fast);
 }
-.sb-tip-x .v2-ico { width: 15px; height: 15px; }
-.sb-tip.is-x .sb-tip-x { color: var(--ink); background: var(--fill-1); }
+.sb-tip-p { right: 32px; }
+.sb-tip-x .v2-ico, .sb-tip-p .v2-ico { width: 15px; height: 15px; }
+.sb-tip.is-x .sb-tip-x, .sb-tip.is-p .sb-tip-p { color: var(--ink); background: var(--fill-1); }
 /* a group label under the open layer steps out of the way instead of being cut by its edge */
 .sb-grp-t { transition: color var(--d-fast) var(--e-out); }
 .sb-grp-t.is-under { color: transparent; }
@@ -668,13 +676,13 @@ html[data-room="meridian"] :is(.sb-add, .sb-bal[data-zero] .v2-ico) { color: var
   .sb-brand { height: 44px; }
   .sb-act { font-size: 15px; }
   .sb-act kbd { display: none; }
-  /* no delete button on a phone, so no reserved slot: the fade sits in the row's own right padding */
+  /* no pin or delete button on a phone, so no reserved slot: the fade sits in the row's own right padding */
   .sb-go { font-size: 15.5px; padding-right: 14px; }
   .sb-row, .sb-row:hover { --slot: 0px; }
   .sb-row.is-live { --slot: 34px; }
   .sb-row.is-unread { --slot: 22px; }
-  /* out of sight but still in reach of a screen reader: a phone deletes by swipe, TalkBack and VoiceOver by this */
-  .sb-x { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); opacity: 1; }
+  /* out of sight but still in reach of a screen reader: a phone pins and deletes by swipe, TalkBack and VoiceOver by these */
+  .sb-x, .sb-pin { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); opacity: 1; }
   .sb-under { display: flex; }
   .sb-grp-t { height: 34px; padding-bottom: 9px; }
   /* the phone floor for small tracked labels */

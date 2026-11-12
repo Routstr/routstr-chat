@@ -82,6 +82,7 @@ export function ChatList({
                 tab={c.id === tabId}
                 fresh={arriving.has(c.id)}
                 titled={titled.has(c.id)}
+                pinned={!!c.pinned}
                 n={arrivingList ? Math.min(k++, 14) : undefined}
               />
             ))}

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { finalizeEvent, generateSecretKey } from "nostr-tools";
 import { KIND_PNS, createPnsDeletionEvent } from "@/lib/pns";
 import { DEFAULT_RELAYS, Relays } from "@/features/relays/service";
-import { ROOT_ID, decodeMessage, encodeMessage } from "../codec";
+import { ROOT_ID, decodeMessage, encodeMessage, encodePin, encodeTitle } from "../codec";
 import { KIND_KEYRING, createKeyring, type HistorySigner } from "../keyring";
 import { FORGET_KEY, HistoryService, SYNC_KEY } from "../service";
 import { memoryLog, person } from "./fakes";
@@ -609,6 +609,30 @@ describe("HistoryService: sync", () => {
     await until(() => phone.history.getConversations().length === 0);
   });
 
+  it("pins a chat for every device, and a pin and a name never undo each other", async () => {
+    const net = network();
+    const who = person();
+    const k = await keyringOn(net, who);
+    const phone = device({ net, who });
+    phone.history.start();
+    await ready(phone.history);
+    await phone.history.save("c1", ask("hello"));
+    await phone.history.pin("c1", true);
+    expect(phone.history.getConversations()[0]).toMatchObject({ title: "hello", pinned: true });
+    const { history } = device({ net, who });
+    history.start();
+    await until(() => history.getConversations()[0]?.pinned === true);
+
+    // a name from a device that never saw the pin, written after it, keeps it
+    net.publishElsewhere(R2, encodeTitle("c1", "Trip plan", who.pubkey, NOW + 60, k.keys));
+    await until(() => phone.history.getConversations()[0]?.title === "Trip plan");
+    expect(phone.history.getConversations()[0].pinned).toBe(true);
+    // and a pin from a device that never saw the name keeps the name
+    net.publishElsewhere(R2, encodePin("c1", false, who.pubkey, NOW + 120, k.keys));
+    await until(() => history.getConversations()[0]?.pinned === undefined);
+    expect(history.getConversations()[0].title).toBe("Trip plan");
+  });
+
   it("stops taking messages from relays once sync is turned off, and takes them again once on", async () => {
     const net = network();
     const who = person();
@@ -837,7 +861,10 @@ describe("HistoryService: main's data", () => {
       NOW - 86400,
       k.keys
     );
-    [old, fresh].forEach((event) => net.relay(R1).events.set(event.id, event));
+    // a pinned chat is kept, however old
+    const kept = encodeMessage("kept", ask("kept"), who.pubkey, NOW - 9 * 86400, k.keys);
+    const pin = encodePin("kept", true, who.pubkey, NOW - 9 * 86400, k.keys);
+    [old, fresh, kept, pin].forEach((event) => net.relay(R1).events.set(event.id, event));
     const { history } = device({
       net,
       who,
@@ -850,7 +877,7 @@ describe("HistoryService: main's data", () => {
         history
           .getConversations()
           .map((c) => c.id)
-          .join() === "new"
+          .join() === "new,kept"
     );
     await until(() =>
       [...net.relay(R1).events.values()].some((e) => e.kind === 5)
