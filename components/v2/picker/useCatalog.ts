@@ -11,7 +11,8 @@ import { useMoney, usePayable } from "../useMoney";
 import { textOf } from "../format";
 import { estimateSats, promptTokens } from "../price";
 import { useListed } from "../useListed";
-import { baseKey, hostOf, parseKey, priceScale, type Route, type Row } from "./catalog";
+import { baseKey, hostOf, parseKey, priceScale, SORTS, type Route, type Row } from "./catalog";
+import { offList, smartsOf } from "./deals";
 
 /** Development only: the lab hands the picker a catalogue with providers, so
  *  every state can be seen without touching the real provider cache. */
@@ -106,6 +107,10 @@ export function useCatalog() {
     [standIn, catalog, models]
   );
   const web = useMemo(() => new Set(webSearchModels), []);
+  // how many models a message by their own provider would get below list price: the Deals tab's count
+  const deals = useMemo(() => models.filter((m) => offList(routeFor({ key: m.id, model: m, pin: null }).model) !== null).length, [models, routeFor]);
+  // the orders worth offering: by deal only with deals about, by smarts only with a model scored
+  const sorts = useMemo(() => SORTS.filter((s) => (s.key === "deal" ? deals > 0 : s.key !== "smart" || models.some((m) => smartsOf(m.id)))), [deals, models]);
 
   // which provider the model in use is pinned to, if any
   const currentKey = chosen && keyOf(chosen);
@@ -118,8 +123,8 @@ export function useCatalog() {
 
   // one object per real change, so memoised rows and details can hold still
   return useMemo(
-    () => ({ models, routesOf, routeFor, cost, needFor, fits, scale, picks, web, current, balance, node: money.node, hosts }),
-    [models, routesOf, routeFor, cost, needFor, fits, scale, picks, web, current, balance, money.node, hosts]
+    () => ({ models, routesOf, routeFor, cost, needFor, fits, scale, picks, deals, sorts, web, current, balance, node: money.node, hosts }),
+    [models, routesOf, routeFor, cost, needFor, fits, scale, picks, deals, sorts, web, current, balance, money.node, hosts]
   );
 }
 

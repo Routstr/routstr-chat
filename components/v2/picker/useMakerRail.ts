@@ -33,15 +33,17 @@ export function useMakerRail({
     cat.models.forEach((m) => counts.set(makerOf(m), (counts.get(makerOf(m)) ?? 0) + 1));
     const makers = [...MODEL_COMPANIES.map((c) => c.id), "other"].filter((id) => counts.get(id));
     const picks = cat.models.filter((m) => cat.picks.has(m.id)).length;
+    const deals = cat.deals;
     return {
       scopes: [
         { id: "favorites", label: "Favorites", short: "Favorites", icon: "star" as IconName, n: liveFavs.length },
         ...(picks ? [{ id: "picks", label: "Routstr picks", short: "Picks", icon: "spark" as IconName, n: picks }] : []),
+        ...(deals ? [{ id: "deals", label: "Deals", short: "Deals", icon: "tag" as IconName, n: deals }] : []),
         { id: "all", label: "All models", short: "All", icon: "grid" as IconName, n: cat.models.length },
       ],
       makers: makers.map((id) => ({ id, label: makerLabel(id), n: counts.get(id) ?? 0 })),
     };
-  }, [cat.models, cat.picks, liveFavs.length, makerLabel]);
+  }, [cat.models, cat.picks, cat.deals, liveFavs.length, makerLabel]);
   const railOrder = useMemo(() => [...railItems.scopes.map((s) => s.id), ...railItems.makers.map((m) => m.id)], [railItems]);
 
   const placeRailGlide = useCallback((instant: boolean) => {

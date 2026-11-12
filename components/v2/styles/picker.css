@@ -232,6 +232,8 @@ html[data-room="night"] .mp, html[data-room="meridian"][data-face="dusk"] .mp { 
 .mp .r-n { font-size: 14.5px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -.005em; }
 .mp .r-s { font-size: 12px; line-height: 1.35; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mp .r-s .h { font-family: var(--f-mono); font-size: 11.5px; }
+/* a deal reads first on the line, in the room's tint */
+.mp .r-s .r-deal { color: var(--tint); font-weight: 500; }
 .mp .r-p { font-size: 13px; font-weight: 500; color: var(--ink-2); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
 .mp .r-u { font-weight: 400; color: var(--ink-3); }
 .mp .row mark { background: var(--tint-soft); color: var(--ink); border-radius: calc(var(--r-xs) / 3); }
@@ -397,6 +399,7 @@ button.dt-sum:hover .s-r .v2-ico { transform: translateY(2px); }
 .dt-facts dt { color: var(--ink-3); }
 .dt-facts dd { margin: 0; color: var(--ink); text-wrap: pretty; }
 .dt-facts dd .dim { color: var(--ink-3); }
+.dt-facts dd.dt-deal { color: var(--tint); font-weight: 500; }
 
 .dt-routes { margin-top: 22px; }
 .dt-t { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-family: var(--f-mono); font-size: 10px; font-weight: 400; letter-spacing: .11em; text-transform: uppercase; color: var(--ink-3); }

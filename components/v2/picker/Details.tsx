@@ -6,6 +6,7 @@ import { getCompanyMeta } from "@/components/v2/picker/modelCompanies";
 import { Icon } from "../icons";
 import { satUnit, shortModelName } from "../format";
 import type { Catalog } from "./useCatalog";
+import { offList, pct, smartsOf } from "./deals";
 import {
   ctxK,
   fmt,
@@ -250,6 +251,8 @@ function Details(props: DetailsProps) {
   const ctx = Number(m.context_length ?? 0);
   const created = Number(m.created ?? 0);
   const hostName = host ? rt.host : null;
+  const off = p > 0 ? offList(rt.model) : null;
+  const smart = smartsOf(m.id);
 
   const per = (r: { model: typeof m }) => (
     <span className="rt-s">
@@ -397,6 +400,18 @@ function Details(props: DetailsProps) {
               </dd>
             </>
           ) : null}
+          {off && (
+            <>
+              <dt>Deal</dt>
+              <dd className="dt-deal">{pct(off)} less than OpenRouter&rsquo;s list price</dd>
+            </>
+          )}
+          {smart && (
+            <>
+              <dt>Intelligence</dt>
+              <dd className="dt-smart">{Math.round(smart)} on Artificial Analysis&rsquo;s index</dd>
+            </>
+          )}
           <dt>Context</dt>
           <dd>
             {ctx > 0 ? (

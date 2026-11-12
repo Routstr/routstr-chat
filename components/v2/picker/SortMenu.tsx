@@ -3,7 +3,7 @@
 import React from "react";
 import { Icon } from "../icons";
 import type { Catalog } from "./useCatalog";
-import { SORTS, sortLabel, type SortKey } from "./catalog";
+import { sortLabel, type SortKey } from "./catalog";
 
 export default function SortMenu({
   menu,
@@ -70,7 +70,7 @@ export default function SortMenu({
         onKeyDown={menuKey}
       >
         <p className="menu-t">Sort by</p>
-        {SORTS.map((s) => {
+        {cat.sorts.map((s) => {
           const on = sort === s.key;
           const next = sortLabel(s.key, on ? ((-dir) as 1 | -1) : 1).toLowerCase();
           return (

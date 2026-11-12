@@ -13,4 +13,6 @@ export const nounFor = (n: number, searching: boolean, scope: Scope, label: (id:
       ? n === 1 ? "favorite" : "favorites"
       : scope === "picks"
         ? n === 1 ? "pick" : "picks"
-        : `${scope === "all" ? "" : `${label(scope)} `}${n === 1 ? "model" : "models"}`;
+        : scope === "deals"
+          ? n === 1 ? "deal" : "deals"
+          : `${scope === "all" ? "" : `${label(scope)} `}${n === 1 ? "model" : "models"}`;

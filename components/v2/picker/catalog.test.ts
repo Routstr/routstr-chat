@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { Model } from "@/types/models";
 import { answers, baseKey, fmt, handles, hostOf, makerOf, measureFor, mostReferences, priceScale, searchRank, sortRows, type Row } from "./catalog";
+import { offList, pct, smartsOf } from "./deals";
+import list from "./openrouter.json";
 
 const model = (id: string, name: string, extra: Partial<Model> = {}) =>
   ({ id, name, created: 0, context_length: 0, architecture: { input_modalities: ["text"], output_modalities: ["text"] }, ...extra }) as unknown as Model;
@@ -52,6 +54,52 @@ describe("sortRows", () => {
     const m = measureFor("name", () => 0, () => 1);
     expect(names(sortRows(rows, "name", 1, m))).toBe("abc");
     expect(names(sortRows(rows, "name", -1, m))).toBe("cba");
+  });
+});
+
+describe("deals", () => {
+  // whatever the shipped list holds: a model only one maker has, sold at a share of its list price
+  const all = Object.entries(list.prices);
+  const bare = (x: string) => x.slice(x.indexOf("/") + 1);
+  const [id, [lp, lc]] = all.find(([x]) => all.filter(([y]) => bare(y) === bare(x)).length === 1)!;
+  const sold = (at: string, share: number) => model(at, "X: Y", { pricing: { prompt: lp * share, completion: lc * share } } as unknown as Partial<Model>);
+
+  it("a model sold for a tenth of its list price is 90% off", () => {
+    expect(pct(offList(sold(id, 0.1))!)).toBe("90%");
+  });
+  it("finds a model a node lists without its maker's prefix", () => {
+    expect(offList(sold(bare(id), 0.5))).toBeCloseTo(0.5);
+  });
+  it("a little less than list is no deal, and neither is an unpriced listing", () => {
+    expect(offList(sold(id, 0.95))).toBeNull();
+    expect(offList(sold(id, 0))).toBeNull();
+    expect(offList(sold("nobody/unlisted-model", 0.1))).toBeNull();
+  });
+  it("never rounds up to a deal it is not, and float dust never costs a point", () => {
+    expect(pct(0.929)).toBe("92%");
+    expect(pct(0.29)).toBe("29%");
+    expect(pct(offList(sold(id, 0.9))!)).toBe("10%");
+    expect(pct(offList(sold(id, 0.8))!)).toBe("20%");
+    expect(pct(offList(sold(id, 0.71))!)).toBe("29%");
+  });
+  // the cleverest and the least clever model the list scores
+  const scored = Object.entries(list.intelligence).sort((a, b) => b[1] - a[1]);
+  const [clever, dim] = [scored[0][0], scored[scored.length - 1][0]];
+  it("finds a model's intelligence as it finds its price", () => {
+    expect(smartsOf(clever)).toBe(scored[0][1]);
+    expect(smartsOf(bare(clever))).toBe(scored[0][1]);
+    expect(smartsOf("nobody/unscored-model")).toBeUndefined();
+  });
+  it("best deal first: a cut on a clever model before a bigger cut on a dim one, unscored deals after by what they save, no deal last", () => {
+    const off: Record<string, number> = { [dim]: 0.9, [clever]: 0.4, "nobody/a": 0.3, "nobody/b": 0.8 };
+    const m = measureFor("deal", () => 0, () => 1, (r) => off[r.model.id] ?? null);
+    const rows = [dim, "nobody/a", "nobody/c", clever, "nobody/b"].map((x) => row(model(x, x)));
+    expect(sortRows(rows, "deal", 1, m).map((r) => r.model.id)).toEqual([clever, dim, "nobody/b", "nobody/a", "nobody/c"]);
+  });
+  it("smartest first, unscored models after", () => {
+    const m = measureFor("smart", () => 0, () => 1);
+    const rows = ["nobody/a", dim, clever].map((x) => row(model(x, x)));
+    expect(sortRows(rows, "smart", 1, m).map((r) => r.model.id)).toEqual([clever, dim, "nobody/a"]);
   });
 });
 

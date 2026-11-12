@@ -3,6 +3,7 @@ import { getCompanyMeta } from "@/components/v2/picker/modelCompanies";
 import type { Catalog } from "./useCatalog";
 import type { Filters } from "./helpers";
 import { baseKey, draws, isPrivate, makerOf, measureFor, parseKey, searchRank, sortRows, type Row, type Scope, type SortKey } from "./catalog";
+import { offList } from "./deals";
 
 export interface Section {
   title: string;
@@ -58,6 +59,8 @@ export function useSections({
   const makerLabel = useCallback((id: string) => getCompanyMeta(id).label, []);
   const routeOf = useCallback((r: Row) => cat.routeFor(r, null, only), [cat, only]);
   const priceOf = useCallback((r: Row) => cat.cost(routeOf(r).model), [cat, routeOf]);
+  // the deal where the row's message would go: its pin, or the provider it is limited to
+  const dealOf = useCallback((r: Row) => offList(routeOf(r).model), [routeOf]);
   const searching = q.trim().length > 0;
   const filtering = searching || f.fits || f.web || f.priv || f.images || !!only;
 
@@ -75,7 +78,7 @@ export function useSections({
       if (f.fits && !cat.fits(routeOf(r))) return false;
       return true;
     };
-    const measure = measureFor(sort, priceOf, (id) => cat.routesOf(id).length);
+    const measure = measureFor(sort, priceOf, (id) => cat.routesOf(id).length, dealOf);
     const order = (rows: Row[]) => {
       const sorted = sortRows(rows, sort, dir, measure);
       if (!searching) return sorted;
@@ -85,8 +88,9 @@ export function useSections({
     };
     if (scope === "favorites" && !searching) return [{ title: "Favorites", rows: order(favScope.filter(pass)) }];
     const inScope = (id: string) =>
-      searching || scope === "all" || (scope === "picks" ? cat.picks.has(id) : makerOf(byId.get(id)!) === scope);
+      searching || scope === "all" || scope === "deals" || (scope === "picks" ? cat.picks.has(id) : makerOf(byId.get(id)!) === scope);
     let rest = cat.models.filter((m) => inScope(m.id)).map((m) => ({ key: m.id, model: m, pin: null }) as Row).filter(pass);
+    if (scope === "deals" && !searching) rest = rest.filter((r) => dealOf(r) !== null);
     if (scope === "all" && !filtering) {
       const out: Section[] = [];
       const favs = favRows.filter(pass);
@@ -95,9 +99,9 @@ export function useSections({
       out.push({ title: "All models", rows: order(rest) });
       return out;
     }
-    const title = searching ? "Matches" : scope === "all" ? "All models" : scope === "picks" ? "Routstr picks" : makerLabel(scope);
+    const title = searching ? "Matches" : scope === "all" ? "All models" : scope === "picks" ? "Routstr picks" : scope === "deals" ? "Deals" : makerLabel(scope);
     return [{ title, rows: order(rest) }];
-  }, [cat, q, searching, f, only, sort, dir, scope, favRows, favScope, groupIds, byId, filtering, makerLabel, priceOf, routeOf]);
+  }, [cat, q, searching, f, only, sort, dir, scope, favRows, favScope, groupIds, byId, filtering, makerLabel, priceOf, routeOf, dealOf]);
 
   const flat = useMemo(() => sections.flatMap((s) => s.rows), [sections]);
   const idxOf = useMemo(() => new Map(flat.map((r, i) => [r.key, i])), [flat]);

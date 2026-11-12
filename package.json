@@ -16,7 +16,8 @@
     "docker:run": "docker run -d -p 3000:80 --name routstr-chat routstr-chat",
     "docker:stop": "docker stop routstr-chat && docker rm routstr-chat",
     "test": "tsx tests/kit/run.ts test",
-    "kit": "tsx tests/kit/run.ts"
+    "kit": "tsx tests/kit/run.ts",
+    "openrouter-list": "node scripts/openrouter-list.mjs"
   },
   "dependencies": {
     "@cashu/cashu-ts": "^3.6.2",

@@ -3,6 +3,7 @@ import type { Model } from "@/types/models";
 import { normalizeModality } from "@/components/v2/picker/modality";
 import { getModelCompanyId } from "@/components/v2/picker/modelCompanies";
 import { shortModelName } from "../format";
+import { smartsOf } from "./deals";
 
 /* The picker's words and orderings, kept free of React so they can be tested.
    Everything here reads fields the app already has on `Model`. */
@@ -21,12 +22,14 @@ export interface Row {
   pin: string | null; // base url
 }
 
-export type SortKey = "latest" | "cheapest" | "context" | "coverage" | "name";
-export type Scope = "favorites" | "picks" | "all" | string; // or a maker id
+export type SortKey = "latest" | "cheapest" | "smart" | "deal" | "context" | "coverage" | "name";
+export type Scope = "favorites" | "picks" | "deals" | "all" | string; // or a maker id
 
 export const SORTS: { key: SortKey; first: string; flipped: string }[] = [
   { key: "latest", first: "Newest first", flipped: "Oldest first" },
   { key: "cheapest", first: "Cheapest first", flipped: "Priciest first" },
+  { key: "smart", first: "Smartest first", flipped: "Smartest last" },
+  { key: "deal", first: "Best deal first", flipped: "Best deal last" },
   { key: "context", first: "Longest context first", flipped: "Shortest context first" },
   { key: "coverage", first: "Most providers first", flipped: "Fewest providers first" },
   { key: "name", first: "A to Z", flipped: "Z to A" },
@@ -209,7 +212,7 @@ export function sortRows<T extends Row>(rows: T[], key: SortKey, dir: 1 | -1, me
 }
 
 /** The number each sort orders by, smallest first in its natural direction. */
-export const measureFor = (key: SortKey, cost: (r: Row) => number, routes: (id: string) => number) => (r: Row) => {
+export const measureFor = (key: SortKey, cost: (r: Row) => number, routes: (id: string) => number, off: (r: Row) => number | null = () => null) => (r: Row) => {
   switch (key) {
     case "latest": {
       const c = Number(r.model.created ?? 0);
@@ -225,6 +228,17 @@ export const measureFor = (key: SortKey, cost: (r: Row) => number, routes: (id: 
     }
     case "coverage":
       return -routes(r.model.id);
+    case "smart": {
+      const s = smartsOf(r.model.id);
+      return s ? -s : null;
+    }
+    case "deal": {
+      // what it saves times how clever the model is; a deal with no score follows every
+      // scored one (those measure below -1, a saving alone never does), by what it saves
+      const o = off(r);
+      const s = smartsOf(r.model.id);
+      return o ? (s ? -1 - o * s : -o) : null;
+    }
     default:
       return null;
   }

@@ -1,13 +1,20 @@
 import React, { useMemo } from "react";
 import type { Catalog } from "./useCatalog";
-import { ctxK, draws, isPrivate, nameSaysPrivate, sees, type Row } from "./catalog";
+import { ctxK, draws, isPrivate, nameSaysPrivate, sees, type Row, type SortKey } from "./catalog";
+import { offList, pct, smarts, smartsOf } from "./deals";
 
-export function useFacts(flat: Row[], cat: Catalog, routeOf: (r: Row) => ReturnType<Catalog["routeFor"]>, only: string | null) {
-  const subOf = (r: Row): React.ReactNode[] => {
+export function useFacts(flat: Row[], cat: Catalog, routeOf: (r: Row) => ReturnType<Catalog["routeFor"]>, only: string | null, sort: SortKey) {
+  const subOf = (r: Row, rt: ReturnType<Catalog["routeFor"]>): React.ReactNode[] => {
     const m = r.model;
     const bits: React.ReactNode[] = [];
     const host = r.pin;
+    // the deal where this row's message goes, the price it shows
+    const off = offList(rt.model);
+    if (off) bits.push(<span className="r-deal">{pct(off)} below list</span>);
     if (host) bits.push(<>on <span className="h">{cat.routeFor(r, host).host}</span></>);
+    // a list ordered by how clever its models are says so on each row
+    const s = sort === "smart" || sort === "deal" ? smartsOf(m.id) : undefined;
+    if (s) bits.push(smarts(s));
     if (isPrivate(m) && !nameSaysPrivate(m)) bits.push("private");
     if (draws(m)) bits.push("makes images");
     else if (cat.web.has(m.id)) bits.push("searches the web");
@@ -30,12 +37,12 @@ export function useFacts(flat: Row[], cat: Catalog, routeOf: (r: Row) => ReturnT
             {
               price: cat.cost(rt.model),
               short: !ok,
-              sub: subOf(r),
+              sub: subOf(r, rt),
             },
           ] as const;
         })
       ),
-    [flat, cat, routeOf, only]
+    [flat, cat, routeOf, only, sort]
   );
   return facts;
 }

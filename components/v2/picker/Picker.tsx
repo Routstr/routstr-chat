@@ -74,6 +74,16 @@ export default function Picker({
   const [scope, setScope] = useState<Scope>("all");
   const [sort, setSort] = useState<SortKey>(readSort);
   const [dir, setDir] = useState<1 | -1>(() => (getStorageItem<string>("modelSelectorSortDirection", "desc") === "asc" ? -1 : 1));
+  // Deals keep an order of their own, biggest deal first, and leave the sort of every other list alone
+  const [dealSort, setDealSort] = useState<SortKey>("deal");
+  const [dealDir, setDealDir] = useState<1 | -1>(1);
+  // the last deal gone from under the Deals list: All takes its place
+  if (scope === "deals" && !cat.deals) setScope("all");
+  const inDeals = scope === "deals";
+  // a saved order this catalogue cannot offer (by deal with no deals about) reads as the usual one
+  const offered = (k: SortKey) => cat.sorts.some((s) => s.key === k);
+  const listSort = inDeals ? (offered(dealSort) ? dealSort : "deal") : offered(sort) ? sort : "latest";
+  const listDir = inDeals ? dealDir : dir;
   const [only, setOnly] = useState<string | null>(null);
   const [f, setF] = useState<Filters>(NO_FILTERS);
   const [activeKey, setActiveKey] = useState<string | null>(null);
@@ -94,8 +104,8 @@ export default function Picker({
     requestAnimationFrame(() => (s.textContent = t));
   }, []);
 
-  const { favKeys, favIds, liveFavs, makerLabel, routeOf, searching, filtering, sections, flat, idxOf, isCurrent, isFavRow } = useSections({ configured: pick.configured, cat, q, f, only, sort, dir, scope });
-  const { activeIdx, detailKey, setActive } = useListGlide({ flat, idxOf, filtering, isCurrent, activeKey, setActiveKey, q, scope, f, only, sort, dir, cat, makerLabel, say, listEl, glide, lay });
+  const { favKeys, favIds, liveFavs, makerLabel, routeOf, searching, filtering, sections, flat, idxOf, isCurrent, isFavRow } = useSections({ configured: pick.configured, cat, q, f, only, sort: listSort, dir: listDir, scope });
+  const { activeIdx, detailKey, setActive } = useListGlide({ flat, idxOf, filtering, isCurrent, activeKey, setActiveKey, q, scope, f, only, sort: listSort, dir: listDir, cat, makerLabel, say, listEl, glide, lay });
   const { strip, railItems, railOrder, edges, stripEdges, pickScope, railKey } = useMakerRail({ lay, cat, liveFavs, makerLabel, scope, setScope, setActiveKey, railScroll, railGlide });
   const { commit, choose, toggleStar, fund, clearAll, allOn, push } = useChoose({
     pick, allOn: providersOn, cat, ui, phone, only, draft, setDraft, say, onClose, favKeys, favIds, isFavRow, setQ, setF, setOnly, input, card, setView, onDetail, onList,
@@ -109,7 +119,7 @@ export default function Picker({
     menu, setMenu, sortBtn, signedOut, onClose, input, card, view, lay, push, q, setQ, flat, activeIdx, toggleStar, railOrder, scope, pickScope, railScroll, setActive, choose, hints, setHints,
   });
   const { dRow, dHost, onBack, onStar, onUse, onRoute } = useDetail({ detailKey, idxOf, flat, activeIdx, cat, draft, setDraft, only, push, toggleStar, choose, commit, say });
-  const { menuH, menuMore, setMenuMore, menuKey, pickSort } = useSortMenu({ menu, setMenu, listEl, sortBtn, menuEl, card, sort, setSort, setDir });
+  const { menuH, menuMore, setMenuMore, menuKey, pickSort } = useSortMenu({ menu, setMenu, listEl, sortBtn, menuEl, card, sort: listSort, setSort: inDeals ? setDealSort : setSort, setDir: inDeals ? setDealDir : setDir });
 
   /* ── words ──────────────────────────────────────────────────────────── */
   const total = flat.length;
@@ -125,7 +135,7 @@ export default function Picker({
     </>
   );
 
-  const facts = useFacts(flat, cat, routeOf, only);
+  const facts = useFacts(flat, cat, routeOf, only, listSort);
 
   // a long list lands in steps: a screenful with the card, the rest in the frames after
   // (never while it closes: the leaving card keeps its frames)
@@ -170,7 +180,7 @@ export default function Picker({
             {loading ? "Loading models" : (<><span className="sc-n">{favN}</span> {noun}{onlyHost ? ` on ${onlyHost}` : ""}</>)}
           </p>
         ) : null}
-        <SortMenu menu={menu} setMenu={setMenu} sortBtn={sortBtn} menuEl={menuEl} menuH={menuH} menuMore={menuMore} setMenuMore={setMenuMore} menuKey={menuKey} pickSort={pickSort} sort={sort} dir={dir} cat={cat} only={only} setOnly={setOnly} />
+        <SortMenu menu={menu} setMenu={setMenu} sortBtn={sortBtn} menuEl={menuEl} menuH={menuH} menuMore={menuMore} setMenuMore={setMenuMore} menuKey={menuKey} pickSort={pickSort} sort={listSort} dir={listDir} cat={cat} only={only} setOnly={setOnly} />
         {(f.fits || f.web || f.priv || f.images || !!only) && total > 0 && (
           <button className="sc-x" type="button" onClick={clearAll}>Clear</button>
         )}
