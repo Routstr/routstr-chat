@@ -22,6 +22,12 @@ export type SettingsSection =
   | "about"
   | "console";
 
+/** An answer to ask again: its chat, and its place in the chat. */
+export interface Again {
+  chat: string;
+  at: number;
+}
+
 interface UiValue {
   drawer: boolean;
   setDrawer: (open: boolean) => void;
@@ -30,7 +36,10 @@ interface UiValue {
   face: ComposerFace;
   setFace: (face: ComposerFace) => void;
   picker: boolean;
-  setPicker: (open: boolean) => void;
+  /** Opened with `again`, the model you choose answers that turn again. */
+  setPicker: (open: boolean, again?: Again | null) => void;
+  /** The answer the picker was opened to ask again, if it was. */
+  again: Again | null;
   palette: boolean;
   setPalette: (open: boolean) => void;
   settings: SettingsSection | null;
@@ -130,11 +139,48 @@ export const usePicture = () => {
 const ChipContext = createContext<React.RefObject<HTMLButtonElement | null>>({ current: null });
 export const useChipRef = () => useContext(ChipContext);
 
+/* An answer asked again with another model. Its own context: the thread reads it, and the
+   rest of the UI state must not redraw the thread. */
+interface AgainValue {
+  /** Opens the picker for this answer. */
+  ask: (again: Again) => void;
+  /** The picker's choice has landed: this answer is asked again with it. */
+  answerAgain: Again | null;
+  setAnswerAgain: (again: Again | null) => void;
+  /** The button that opened the picker for it. */
+  from: React.RefObject<HTMLElement | null>;
+}
+const AgainContext = createContext<AgainValue | null>(null);
+export const useAgain = () => {
+  const v = useContext(AgainContext);
+  if (!v) throw new Error("useAgain must be used inside UiProvider");
+  return v;
+};
+/** Gives the focus back from the picker: to what opened it for an answer, or to the chip. */
+export const useGiveBack = () => {
+  const chip = useChipRef();
+  const { from } = useAgain();
+  return (o?: FocusOptions) => (from.current?.isConnected ? from.current : chip.current)?.focus(o);
+};
+
 export function UiProvider({ children }: { children: React.ReactNode }) {
   const [drawer, setDrawer] = useState(false);
   const [side, setSide] = useState<RailSide>("chats");
   const [face, setFace] = useState<ComposerFace>("write");
-  const [picker, setPicker] = useState(false);
+  const [picker, showPicker] = useState(false);
+  const [again, setAgain] = useState<Again | null>(null);
+  const [answerAgain, setAnswerAgain] = useState<Again | null>(null);
+  const from = useRef<HTMLElement | null>(null);
+  // each open says what it is for: opened plainly, it only changes the model
+  const setPicker = useCallback((open: boolean, ask: Again | null = null) => {
+    if (open) {
+      setAgain(ask);
+      from.current = ask && document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    }
+    showPicker(open);
+  }, []);
+  const ask = useCallback((a: Again) => setPicker(true, a), [setPicker]);
+  const asking = useMemo(() => ({ ask, answerAgain, setAnswerAgain, from }), [ask, answerAgain]);
   const [palette, setPalette] = useState(false);
   const [settings, setSettings] = useState<SettingsSection | null>(null);
   const [settingsDeep, setSettingsDeep] = useState(false);
@@ -189,7 +235,7 @@ export function UiProvider({ children }: { children: React.ReactNode }) {
     setDrawer(false);
     setSettingsDeep(!!section);
     setSettings(section ?? "look");
-  }, []);
+  }, [setPicker]);
   const closeSettings = useCallback(() => setSettings(null), []);
   const setIsSidebarCollapsed = useCallback((collapsed: boolean) => {
     setCollapsed(collapsed);
@@ -202,11 +248,11 @@ export function UiProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo(
     () => ({
-      drawer, setDrawer, side, setSide, face, setFace, picker, setPicker,
+      drawer, setDrawer, side, setSide, face, setFace, picker, setPicker, again,
       palette, setPalette, settings, settingsDeep, openSettings, closeSettings,
       sendWhenFunded, setSendWhenFunded, isSidebarCollapsed, setIsSidebarCollapsed,
     }),
-    [drawer, side, face, picker, palette, settings, settingsDeep, openSettings, closeSettings, sendWhenFunded, isSidebarCollapsed, setIsSidebarCollapsed]
+    [drawer, side, face, picker, setPicker, again, palette, settings, settingsDeep, openSettings, closeSettings, sendWhenFunded, isSidebarCollapsed, setIsSidebarCollapsed]
   );
   const setText = useCallback((text: string) => setDraft((d) => typed(d, text)), []);
   const setAttachments = useCallback((update: SetStateAction<MessageAttachment[]>) => setDraft((d) => attached(d, update)), []);
@@ -218,7 +264,9 @@ export function UiProvider({ children }: { children: React.ReactNode }) {
       <ChipContext.Provider value={chipRef}>
         <PickContext.Provider value={pick}>
           <DraftContext.Provider value={writing}>
-            <PictureContext.Provider value={picturing}>{children}</PictureContext.Provider>
+            <PictureContext.Provider value={picturing}>
+              <AgainContext.Provider value={asking}>{children}</AgainContext.Provider>
+            </PictureContext.Provider>
           </DraftContext.Provider>
         </PickContext.Provider>
       </ChipContext.Provider>

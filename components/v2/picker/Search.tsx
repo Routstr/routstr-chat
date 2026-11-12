@@ -12,6 +12,7 @@ export default function Search({
   q,
   setQ,
   setActiveKey,
+  again,
 }: {
   phone: boolean;
   hidden: boolean;
@@ -21,6 +22,8 @@ export default function Search({
   q: string;
   setQ: (q: string) => void;
   setActiveKey: (k: string | null) => void;
+  /** opened to ask an answer again */
+  again: boolean;
 }) {
   return (
     <div className="mp-search" data-sheet-drag={phone ? "" : undefined} inert={hidden}>
@@ -28,8 +31,8 @@ export default function Search({
       <input
         ref={input}
         type="search"
-        placeholder="Search models or makers"
-        aria-label="Search models"
+        placeholder={again ? "Try the answer again with…" : "Search models or makers"}
+        aria-label={again ? "Search a model to answer again with" : "Search models"}
         autoComplete="off"
         spellCheck={false}
         role="combobox"

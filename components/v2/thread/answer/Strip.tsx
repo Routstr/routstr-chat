@@ -15,6 +15,7 @@ export function Strip({
   model,
   canRetry,
   onRetry,
+  onRetryWith,
   stopped,
 }: {
   text: string;
@@ -24,6 +25,7 @@ export function Strip({
   model: string;
   canRetry: boolean;
   onRetry: () => void;
+  onRetryWith: () => void;
   stopped?: boolean;
 }) {
   const [turning, setTurning] = useState(false);
@@ -47,6 +49,16 @@ export function Strip({
           data-tip="Try again"
         >
           <Icon name="retry" />
+        </button>
+        <button
+          type="button"
+          className="rd-tool"
+          onClick={onRetryWith}
+          disabled={!canRetry}
+          aria-label="Try again with another model"
+          data-tip="Another model"
+        >
+          <Icon name="swap" />
         </button>
       </div>
       <p className="rd-sum">

@@ -86,7 +86,8 @@ export default function Trouble({
     retry(index);
     if (keys) requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>(".island textarea")?.focus({ preventScroll: true }));
   };
-  const switchModel = () => ui.setPicker(true);
+  // with a turn to ask again, the model chosen answers it at once
+  const switchModel = () => ui.setPicker(true, canAct && activeConversationId ? { chat: activeConversationId, at: index } : null);
 
   // stopped before any words: one quiet line and one action
   if (kind === "stopped") {

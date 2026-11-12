@@ -6,6 +6,7 @@ import { useCatalogModels } from "@/features/catalog/view";
 import { useAccountChat, useAsking, useReplyCosts } from "@/features/chat/view";
 import { useHistory, useThread, type ThreadSlot } from "@/features/history/view";
 import { useTurnActions } from "../useActions";
+import { useAgain } from "../ui";
 import { hitIn } from "./hit";
 import { useChatModel } from "../useChatModel";
 import { useNotes } from "./useNotes";
@@ -87,6 +88,20 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
     latest.current = actions.retry;
   });
   const onRetry = useCallback((i: number) => latest.current(i), []);
+  // another model for an answer: the picker opens for it, and once the model it gives is in use
+  // (so the retry below already sends to it) that answer is asked again
+  const { ask, answerAgain, setAnswerAgain } = useAgain();
+  const onRetryWith = useCallback(
+    (i: number) => {
+      if (activeConversationId) ask({ chat: activeConversationId, at: i });
+    },
+    [activeConversationId, ask]
+  );
+  useEffect(() => {
+    if (!answerAgain) return;
+    setAnswerAgain(null);
+    if (answerAgain.chat === activeConversationId) latest.current(answerAgain.at);
+  }, [answerAgain, activeConversationId, setAnswerAgain]);
   // which of your messages is open for editing; opening another chat closes it
   const [editing, setEditing] = useState<number | null>(null);
   const [editingIn, setEditingIn] = useState(activeConversationId);
@@ -423,7 +438,7 @@ export default function Thread({ loadingFromUrl }: { loadingFromUrl: boolean }) 
               return <Trouble key={key} msgs={[msg]} index={depth} isLast={isLast} label={modelName(msg._modelId)} model={fullName(msg._modelId)} onEdit={setEditing} />;
             return (
               <Answer key={key} msg={msg} index={depth} {...v} isLast={isLast} busy={liveHere}
-                label={modelName(msg._modelId)} full={fullName(msg._modelId)} stopped={stoppedAnswer && depth === slots.length - 1} painted={painted(msg._modelId)} onVersion={onVersion} onRetry={onRetry} />
+                label={modelName(msg._modelId)} full={fullName(msg._modelId)} stopped={stoppedAnswer && depth === slots.length - 1} painted={painted(msg._modelId)} onVersion={onVersion} onRetry={onRetry} onRetryWith={onRetryWith} />
             );
           })
         )}

@@ -34,6 +34,7 @@ export const Answer = memo(function Answer({
   painted,
   onVersion,
   onRetry,
+  onRetryWith,
 }: {
   msg: Message;
   index: number;
@@ -49,6 +50,7 @@ export const Answer = memo(function Answer({
   painted?: boolean;
   onVersion: Go;
   onRetry: (index: number) => void;
+  onRetryWith: (index: number) => void;
 }) {
   const parsed = useMemo(() => parseContent(msg.content), [msg.content]);
   const remembered = parsed.thinking || recallThinking(parsed.text);
@@ -122,6 +124,7 @@ export const Answer = memo(function Answer({
           model={full.toLowerCase()}
           canRetry={!busy}
           onRetry={() => onRetry(index)}
+          onRetryWith={() => onRetryWith(index)}
           stopped={stopped}
         />
       </div>

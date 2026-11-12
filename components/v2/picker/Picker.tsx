@@ -158,7 +158,7 @@ export default function Picker({
     <Gate cat={cat} onClose={onClose} ui={ui} fund={fund} />
   ) : (
     <>
-      <Search phone={phone} hidden={hidden} input={input} total={total} activeIdx={activeIdx} q={q} setQ={setQ} setActiveKey={setActiveKey} />
+      <Search phone={phone} hidden={hidden} input={input} total={total} activeIdx={activeIdx} q={q} setQ={setQ} setActiveKey={setActiveKey} again={!!ui.again} />
 
       <MakerRail hidden={hidden} railScroll={railScroll} railGlide={railGlide} strip={strip} edges={edges} stripEdges={stripEdges} railKey={railKey} loading={loading} railItems={railItems} scope={scope} pickScope={pickScope} />
 

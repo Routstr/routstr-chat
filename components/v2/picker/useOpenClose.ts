@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { LEAVE_MS } from "./helpers";
-import { useChipRef } from "../ui";
+import { useChipRef, useGiveBack } from "../ui";
 
 const HINTS_KEY = "routstr.picker.opens";
 
@@ -24,6 +24,7 @@ export function useOpenClose({
   setMenu: (m: boolean) => void;
 }) {
   const chipRef = useChipRef();
+  const giveBack = useGiveBack();
   const [shown, setShown] = useState(false);
   const [entering, setEntering] = useState(true);
   const [hints, setHints] = useState(false);
@@ -103,7 +104,7 @@ export function useOpenClose({
 
   const leaveCard = () => {
     onClose();
-    chipRef.current?.focus({ preventScroll: true });
+    giveBack({ preventScroll: true });
   };
   return { shown, entering, hints, setHints, leaveCard };
 }

@@ -1,6 +1,7 @@
 import React, { useCallback } from "react";
 import type { useModelPick } from "../pick";
-import { useChipRef, type useUi } from "../ui";
+import { useAgain, useChipRef, type useUi } from "../ui";
+import { useOpenChat } from "../openChat";
 import { shortModelName } from "../format";
 import type { Catalog } from "./useCatalog";
 import { LEAVE_MS, NO_FILTERS, SHEET_LEAVE_MS, type Filters } from "./helpers";
@@ -53,6 +54,8 @@ export function useChoose({
   onList?: () => void;
 }) {
   const chipRef = useChipRef();
+  const { setAnswerAgain } = useAgain();
+  const openChat = useOpenChat();
   /* ── actions ────────────────────────────────────────────────────────── */
   // on a phone the keyboard stays down: the chip takes focus instead of the field
   const refocusField = () =>
@@ -74,22 +77,29 @@ export function useChoose({
           : draft?.id === r.model.id
             ? draft.host
             : r.pin ?? (only && cat.routesOf(r.model.id).some((x) => x.base === only) ? only : null);
+      const route = cat.routeFor(r, pin);
+      const fits = cat.fits(route);
+      // opened to ask an answer again: it is asked with this model once the model is in use
+      const again = fits ? ui.again : null;
       // the choice lands once the card has left: the whole app re-renders for a new model, and
       // doing that under the closing card steals its frames
-      window.setTimeout(() => commit(r.model.id, pin), phone ? SHEET_LEAVE_MS : LEAVE_MS);
+      window.setTimeout(() => {
+        commit(r.model.id, pin);
+        // not if you went to another chat meanwhile: it would wait there and be asked much later
+        if (again && again.chat === openChat.current()) setAnswerAgain(again);
+      }, phone ? SHEET_LEAVE_MS : LEAVE_MS);
       setDraft(null);
-      const route = cat.routeFor(r, pin);
       const name = shortModelName(r.model.name, r.model.id);
       onClose();
-      if (!cat.fits(route)) {
+      if (!fits) {
         say(`${name} chosen. It needs ${fmt(cat.needFor(route))} sats to start, so add a few first.`);
         ui.setFace("pay");
         return;
       }
-      say(`${name} chosen${pin ? ` on ${route.host}` : ""}, about ${fmt(cat.cost(route.model))} sats a message`);
+      say(again ? `${name} chosen, answering again` : `${name} chosen${pin ? ` on ${route.host}` : ""}, about ${fmt(cat.cost(route.model))} sats a message`);
       refocusField();
     },
-    [commit, cat, only, say, onClose, draft, ui, phone]
+    [commit, cat, only, say, onClose, draft, ui, phone, openChat, setAnswerAgain]
   );
 
   const toggleStar = useCallback(
