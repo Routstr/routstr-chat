@@ -139,6 +139,7 @@ const PATHS = {
     </>
   ),
   download: <path d="M12 4.5v11M7 11l5 5 5-5M5 19.5h14" />,
+  expand: <path d="M14.5 4.5h5v5M19.5 4.5 13.5 10.5M9.5 19.5h-5v-5M4.5 19.5l6-6" />,
   moon: <path d="M19 14.2A7.5 7.5 0 0 1 9.8 5a7.5 7.5 0 1 0 9.2 9.2Z" />,
   menu: <path d="M4.5 8h15M4.5 16h15" />,
   eye: (

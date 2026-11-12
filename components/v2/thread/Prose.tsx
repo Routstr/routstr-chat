@@ -71,6 +71,12 @@ const COMPONENTS: Components = {
   ),
 };
 
+/* Whole blocks of an answer still arriving: a page in them waits for the answer. */
+const ANSWERING_COMPONENTS: Components = {
+  ...COMPONENTS,
+  pre: ({ children }) => <Code {...codeOf(children)} answering />,
+};
+
 /* The growing block: its code shows plain until the block is whole, so no
    frame of a streaming answer highlights or measures it. */
 const LIVE_COMPONENTS: Components = {
@@ -78,9 +84,9 @@ const LIVE_COMPONENTS: Components = {
   pre: ({ children }) => <Code {...codeOf(children)} live />,
 };
 
-const Block = memo(function Block({ md }: { md: string }) {
+const Block = memo(function Block({ md, answering }: { md: string; answering?: boolean }) {
   return (
-    <ReactMarkdown remarkPlugins={REMARK} rehypePlugins={REHYPE} components={COMPONENTS} urlTransform={keepPictures}>
+    <ReactMarkdown remarkPlugins={REMARK} rehypePlugins={REHYPE} components={answering ? ANSWERING_COMPONENTS : COMPONENTS} urlTransform={keepPictures}>
       {md}
     </ReactMarkdown>
   );
@@ -175,7 +181,7 @@ export default memo(function Prose({ content, streaming, words, idle = false }: 
     <div className="md" ref={root} data-streaming={streaming ? "" : undefined}>
       {blocks.map((b, i) => (
         <div className="blk" key={i}>
-          {words && i === lastIdx ? <LiveBlock md={b} idle={idle} /> : <Block md={b} />}
+          {words && i === lastIdx ? <LiveBlock md={b} idle={idle} /> : <Block md={b} answering={streaming} />}
         </div>
       ))}
     </div>

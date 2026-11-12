@@ -128,6 +128,16 @@
   transition: opacity var(--d-fast) var(--e-out), transform var(--d-fast) var(--e-out);
 }
 .rd-viewer[data-on] .rd-viewer-bar { opacity: 1; transform: none; transition: opacity var(--d-mid) 120ms var(--e-out), transform var(--d-move) 120ms var(--e-spring); }
+/* a page from an answer over the window: the same room, the page on its own
+   white, Save and Close under it */
+.rd-pageview-frame {
+  position: absolute; left: 32px; top: 32px; width: calc(100% - 64px); height: calc(100% - 32px - 46px - 48px);
+  border: 0; border-radius: var(--r-md); background: #fff; color-scheme: light; box-shadow: var(--lift-2), var(--cast);
+  opacity: 0; transform: scale(.98);
+  transition: opacity var(--d-fast) var(--e-out), transform var(--d-fast) var(--e-out);
+}
+.rd-viewer[data-on] .rd-pageview-frame { opacity: 1; transform: none; transition: opacity var(--d-mid) var(--e-out), transform var(--d-move) var(--e-spring); }
+.rd-pageview-t { align-self: center; max-width: 40vw; padding: 0 10px 0 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--f-ui); font-size: 13px; color: var(--ink-3); }
 .rd-vbtn {
   display: inline-flex; align-items: center; gap: 7px; min-height: 36px; padding: 0 14px 0 12px; border-radius: 99px;
   font-family: var(--f-ui); font-size: 13.5px; color: var(--ink-2); transition: background var(--d-fast), color var(--d-fast);

@@ -74,6 +74,12 @@
   color: var(--ink-3); font-variant-numeric: tabular-nums; user-select: none;
 }
 .rd-code[data-wrap="on"][data-nums=""] .rd-pre { padding-left: 4px; }
+/* preview: the page drawn on its own white, as a browser opens it, inside the
+   figure's hairline; as tall as the page, then it scrolls inside */
+.rd-page {
+  display: block; box-sizing: border-box; width: calc(100% - 2px); height: 320px; max-height: min(640px, 70vh); margin: 0 1px 1px;
+  border: 0; border-radius: 0 0 calc(var(--r-sm) - 1px) calc(var(--r-sm) - 1px); background: #fff; color-scheme: light;
+}
 .rd-code .token.comment, .rd-code .token.prolog { color: var(--code-c); font-style: italic; }
 .rd-code .token:is(.keyword, .important, .atrule, .selector, .tag, .boolean, .builtin) { color: var(--code-k); font-weight: var(--w-strong); }
 .rd-code .token:is(.function, .class-name, .property, .attr-name, .macro) { color: var(--code-f); }

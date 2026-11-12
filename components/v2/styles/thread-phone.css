@@ -72,6 +72,8 @@
   .rd-pre, .rd-gutter { font-size: 12px; } /* the line box stays --rd-code-lh */
   .rd-code-cap { min-height: 44px; padding: 0 0 0 var(--s4); }
   .rd-code-btn { min-height: 44px; padding: 0 12px; }
+  /* a page block also offers Preview: Wrap keeps only its glyph, so the caption stays one line */
+  .rd-code[data-page] .rd-code-wrap > span { display: none; }
   .rd-table { margin-inline: -20px; padding-inline: 20px; }
   /* words need room: a text column never squeezes under ~9em, so a wide
      table scrolls sideways (with its edge fade) instead of turning ragged */
@@ -103,6 +105,14 @@
   .rd-viewer[data-on] .rd-vbtn { opacity: 1; transition: opacity var(--d-mid) 120ms var(--e-out), background var(--d-fast); }
   .rd-vbtn > span { display: none; }
   .rd-viewer-img { border-radius: 0; box-shadow: none; }
+  /* a page: the app's bar across the top names it and holds Save and Close; the page fills the rest */
+  .rd-pageview .rd-viewer-bar {
+    display: flex; align-items: center; gap: 4px; inset: 0 0 auto; width: auto; margin: 0;
+    padding: calc(env(safe-area-inset-top) + 4px) 8px 4px 16px; border-radius: 0;
+  }
+  .rd-pageview .rd-pageview-t { flex: 1; min-width: 0; max-width: none; padding: 0; font-size: 14px; }
+  .rd-pageview .rd-vbtn { position: static; box-shadow: none; background: none; }
+  .rd-pageview-frame { left: 0; top: calc(env(safe-area-inset-top) + 52px); width: 100%; height: calc(100% - env(safe-area-inset-top) - 52px); border-radius: 0; box-shadow: none; }
   .rd-vbtn[data-close] { top: calc(env(safe-area-inset-top) + 10px); right: 10px; }
   .rd-vbtn[data-save] { bottom: calc(env(safe-area-inset-bottom) + 14px); right: 10px; }
 }
