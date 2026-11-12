@@ -12,6 +12,13 @@ describe("replyCap: the longest reply a request asks for", () => {
     expect(replyCap(undefined, () => 10)).toBeUndefined();
   });
 
+  // Red, 11-12: DeepSeek V4.1 Flash Ultra-fast lists a 1M context and no longest reply, and held
+  // 20,477 sats for an 8-sat message
+  it("is 64k tokens for a model that lists no longest reply, with the context for more", () => {
+    expect(replyCap({ context: 1_048_576 }, () => 1_000)).toBe(64_000);
+    expect(replyCap({ context: 32_768 }, () => 10)).toBeUndefined();
+  });
+
   // a provider refuses a prompt and a reply over the context: a long chat keeps the model's own limit
   it("is none when the prompt leaves less than 64k tokens of the context", () => {
     expect(replyCap({ context: 128_000, maxOut: 115_000 }, () => 70_000)).toBeUndefined();

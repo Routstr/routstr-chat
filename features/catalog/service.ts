@@ -1,11 +1,14 @@
-import type {
-  MintDiscovery,
-  ModelManager,
-  ProviderManager,
+import {
+  canonicalIdForModel,
+  type MintDiscovery,
+  type ModelManager,
+  type ProviderManager,
 } from "@routstr/sdk";
 import type { DiscoveryAdapter } from "@routstr/sdk/discovery";
 import type { Model } from "@/types/models";
 import type { Route, RouteChoice, WalletView } from "./ports";
+
+type Room = { context?: number; maxOut?: number; draws: boolean };
 
 export interface CatalogDeps {
   discoveryAdapter: DiscoveryAdapter;
@@ -222,30 +225,27 @@ export class CatalogService {
     return rates;
   }
 
-  /** The smallest context and longest reply any node lists for each model, so
-   *  a reply cap fits wherever a send ends up, and whether any lists it as
-   *  making pictures. A longest reply some node does not name is unknown. */
-  rooms(): Record<string, { context?: number; maxOut?: number; draws: boolean }> {
-    const rooms: Record<string, { context?: number; maxOut?: number; unnamed: boolean; draws: boolean }> = {};
+  /** The smallest context, and the smallest longest reply, any node names for
+   *  each model under any of its ids (a send may go to any of them), and
+   *  whether any lists it as making pictures. */
+  rooms(): Record<string, Room> {
+    const rooms: Record<string, Room> = {};
+    const byModel: Record<string, Room> = {};
+    const mappings = this.deps.providerManager.getModelIdMappings();
     const off = new Set(this.deps.discoveryAdapter.getDisabledProviders());
     for (const [base, models] of Object.entries(this.deps.discoveryAdapter.getCachedModels())) {
       if (off.has(base)) continue;
       for (const model of models as unknown as Model[]) {
-        const room = (rooms[model.id] ??= { unnamed: false, draws: false });
+        const id = canonicalIdForModel(model as unknown as Parameters<typeof canonicalIdForModel>[0], mappings);
+        const room = (rooms[model.id] = byModel[id] ??= { draws: false });
         if (model.architecture?.output_modalities?.includes("image")) room.draws = true;
         const context = model.top_provider?.context_length || model.context_length;
         const maxOut = model.top_provider?.max_completion_tokens;
         if (context) room.context = Math.min(room.context ?? context, context);
         if (maxOut) room.maxOut = Math.min(room.maxOut ?? maxOut, maxOut);
-        else room.unnamed = true;
       }
     }
-    return Object.fromEntries(
-      Object.entries(rooms).map(([id, room]) => [
-        id,
-        { context: room.context, maxOut: room.unnamed ? undefined : room.maxOut, draws: room.draws },
-      ])
-    );
+    return rooms;
   }
 
   /** Providers that serve this model, cheapest first, as routing ranks them. */

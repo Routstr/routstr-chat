@@ -21,11 +21,13 @@ export const promptTokensOf = (messages: unknown[]) =>
   new TextEncoder().encode(JSON.stringify(messages)).length;
 
 /** The longest reply to ask for: 64k tokens (16k for a picture model) when the
- *  model allows more and the prompt leaves that room in its context (a
- *  provider refuses a prompt and a reply over it); else none, and the model's
- *  own limit holds. The prompt is counted only when it matters. */
+ *  model's longest reply (its context, if none is listed) is more and the
+ *  prompt leaves that room in its context (a provider refuses a prompt and a
+ *  reply over it); else none, and the model's own limit holds. The prompt is
+ *  counted only when it matters. */
 export function replyCap(room: ReplyRoom | undefined, promptTokens: () => number): number | undefined {
   const cap = room?.draws ? PICTURE_CAP : CAP;
-  if (!room?.maxOut || room.maxOut <= cap) return undefined;
-  return !room.context || promptTokens() + cap <= room.context ? cap : undefined;
+  const longest = room?.maxOut ?? room?.context;
+  if (!longest || longest <= cap) return undefined;
+  return !room?.context || promptTokens() + cap <= room.context ? cap : undefined;
 }

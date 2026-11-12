@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CatalogService, PROVIDERS_OFF, type CatalogDeps } from "../service";
+import { MODEL_ID_MAPPINGS } from "@routstr/sdk";
 
 const PUBLIC = "https://public.example/";
 const NODE = "https://node.example/";
@@ -67,6 +68,7 @@ function setup(cache: Record<string, unknown[]> = {}) {
     providerManager: {
       getBestProviderForModel: vi.fn(() => PUBLIC),
       getProviderPriceRankingForModel: vi.fn(() => []),
+      getModelIdMappings: () => MODEL_ID_MAPPINGS,
     },
     mintDiscovery: { discoverMints: vi.fn(async () => ({})) },
     ready: Promise.resolve(),
@@ -354,8 +356,19 @@ describe("CatalogService.rooms", () => {
     cache["https://other.example/"] = [listed("glm", 202_752, 32_000), listed("open", 128_000, 100_000)];
 
     expect(catalog.rooms().glm).toEqual({ context: 202_752, maxOut: 32_000, draws: false });
-    // a node that names no longest reply leaves it unknown
-    expect(catalog.rooms().open?.maxOut).toBeUndefined();
+    // a node that names no longest reply leaves the one another node names
+    expect(catalog.rooms().open?.maxOut).toBe(100_000);
+  });
+
+  // the SDK routes "deepseek-v4-1-flash" to a node listing "deepseek-v4.1-flash" as well
+  it("counts every node listing the model under another of its ids", () => {
+    const { catalog, cache } = setup();
+    cache[PUBLIC] = [{ id: "deepseek-v4-1-flash", context_length: 1_048_576 } as never];
+    cache["https://other.example/"] = [
+      { id: "deepseek-v4.1-flash", context_length: 131_072, top_provider: { max_completion_tokens: 32_768 } } as never,
+    ];
+
+    expect(catalog.rooms()["deepseek-v4-1-flash"]).toEqual({ context: 131_072, maxOut: 32_768, draws: false });
   });
 
   it("says when any node lists the model as making pictures", () => {
