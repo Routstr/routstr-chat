@@ -42,14 +42,14 @@ export interface AccountChat extends Omit<AccountChatView, "files"> {
 
 export function createAccountChat(deps: AccountChatDeps): AccountChat {
   let live = true;
+  const heldListeners = new Set<() => void>();
   // sats in a mint swap between the wallet and a provider: the wallet and the
   // credit each see them on their own clock, so the balance waits for them to
   // land (the SDK files what it got right after, before the next task)
   let moving = 0;
-  const movingListeners = new Set<() => void>();
   const moved = (step: number) => {
     moving += step;
-    movingListeners.forEach((listener) => listener());
+    heldListeners.forEach((listener) => listener());
   };
   const swap = <T>(run: () => Promise<T>) => {
     moved(1);
@@ -77,7 +77,6 @@ export function createAccountChat(deps: AccountChatDeps): AccountChat {
   // main's old shared credit, read from disk at the start and after each
   // refund (a sweep writes it through its own copy)
   let oldHeld = 0;
-  const heldListeners = new Set<() => void>();
   const readOld = () =>
     deps.oldCredit.load().then(
       (old) => {
@@ -134,12 +133,10 @@ export function createAccountChat(deps: AccountChatDeps): AccountChat {
     held: {
       subscribe(listener) {
         heldListeners.add(listener);
-        movingListeners.add(listener);
         const unsubscribe = deps.keys.subscribeCredit(listener);
         const unfollow = deps.otherDevices.subscribe(listener);
         return () => {
           heldListeners.delete(listener);
-          movingListeners.delete(listener);
           unsubscribe();
           unfollow();
         };

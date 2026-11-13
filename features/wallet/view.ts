@@ -127,7 +127,7 @@ export function useWallet(again?: unknown): {
     balances: balances ?? {},
     total: Object.values(balances ?? {}).reduce((sum, n) => sum + n, 0),
     loading: arriving || (!!pubkey && !balances),
-    fresh: !!read && read.again === again,
+    fresh: !read || read.again === again,
   };
 }
 
