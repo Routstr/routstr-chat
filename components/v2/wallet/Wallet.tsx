@@ -285,7 +285,7 @@ function Home({ go, freeze, bloom }: { go: (v: View, o?: { reopen?: Reopen | nul
   const keyNote = active?.type === "nsec" && money.all > 0 && !keyNoteGone && !readKeyFlag(active.pubkey);
 
   // the card light blooms once when money lands
-  const lastTotal = useRef(money.total);
+  const lastTotal = useRef(money.all);
   const settled = useRef(false);
   useEffect(() => {
     if (money.loading) return;
@@ -294,10 +294,10 @@ function Home({ go, freeze, bloom }: { go: (v: View, o?: { reopen?: Reopen | nul
   }, [money.loading]);
   const [bloomK, setBloomK] = useState(0);
   useEffect(() => {
-    const d = money.total - lastTotal.current;
-    lastTotal.current = money.total;
+    const d = money.all - lastTotal.current;
+    lastTotal.current = money.all;
     if (d >= 1 && settled.current && freeze === null) setBloomK((k) => k + 1);
-  }, [money.total, freeze]);
+  }, [money.all, freeze]);
   useEffect(() => {
     const h = hero.current;
     if ((!bloom && !bloomK) || !h || reduced()) return;

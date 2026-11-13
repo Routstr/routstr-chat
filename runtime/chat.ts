@@ -42,7 +42,26 @@ export interface AccountChat extends Omit<AccountChatView, "files"> {
 
 export function createAccountChat(deps: AccountChatDeps): AccountChat {
   let live = true;
-  const payments = { ...deps, live: () => live };
+  // sats in a mint swap between the wallet and a provider: the wallet and the
+  // credit each see them on their own clock, so the balance waits for them to
+  // land (the SDK files what it got right after, before the next task)
+  let moving = 0;
+  const movingListeners = new Set<() => void>();
+  const moved = (step: number) => {
+    moving += step;
+    movingListeners.forEach((listener) => listener());
+  };
+  const swap = <T>(run: () => Promise<T>) => {
+    moved(1);
+    return run().finally(() => setTimeout(() => moved(-1)));
+  };
+  const purse: Purse = {
+    ...deps.purse,
+    send: (...args) => swap(() => deps.purse.send(...args)),
+    take: (token) => swap(() => deps.purse.take(token)),
+    redeem: (token) => swap(() => deps.purse.redeem(token)),
+  };
+  const payments = { ...deps, purse, live: () => live };
   // the same owned key the old screens read, in main's format
   const costs = new ReplyCosts(
     deps.storage,
@@ -115,10 +134,12 @@ export function createAccountChat(deps: AccountChatDeps): AccountChat {
     held: {
       subscribe(listener) {
         heldListeners.add(listener);
+        movingListeners.add(listener);
         const unsubscribe = deps.keys.subscribeCredit(listener);
         const unfollow = deps.otherDevices.subscribe(listener);
         return () => {
           heldListeners.delete(listener);
+          movingListeners.delete(listener);
           unsubscribe();
           unfollow();
         };
@@ -128,6 +149,7 @@ export function createAccountChat(deps: AccountChatDeps): AccountChat {
         heldSats(deps.keys.storage("direct")) +
         oldHeld +
         Math.round(keysSats(deps.otherDevices.keys())),
+      moving: () => moving > 0,
       keys: keysHold,
     },
     viewing: (conversationId) => auto.viewing(conversationId),
