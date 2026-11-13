@@ -257,6 +257,7 @@ describe("refundCredit", () => {
     await refundCredit(deps, true);
     expect(refunded).toEqual([SMALL, LARGE]);
     expect(wallet.received).toContain(`refund-${LARGE}`);
+    expect(deps.otherDevices.checked).toHaveBeenCalledWith("sk-lost-device", 0);
     expect(deps.otherDevices.drop).toHaveBeenCalledWith(["sk-lost-device"]);
   });
 
