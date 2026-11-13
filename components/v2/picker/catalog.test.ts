@@ -109,6 +109,11 @@ describe("answers: the models a chat can talk to", () => {
   it("still leaves out an arrow spelling that only makes pictures", () => {
     expect(answers(takes(["text"], ["text->image"]))).toBe(false);
   });
+
+  it("leaves out a model that answers in something other than words", () => {
+    expect(answers(takes(["text"], ["embeddings"]))).toBe(false);
+    expect(answers(takes(["text"], ["decisions"]))).toBe(false);
+  });
 });
 
 describe("makerOf: the maker a model is filed under", () => {

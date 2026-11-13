@@ -59,7 +59,7 @@ export const answers = (m: Model) => {
   const ins = m.architecture?.input_modalities;
   // providers spell modalities inconsistently: "text->text" and
   // "text->text+image" are still a model that answers in words
-  const out = !outs?.length || outs.some((o) => returned(o).split("+").some((x) => normalizeModality(x) === "text"));
+  const out = !outs?.length || outs.some((o) => returned(o).split("+").includes("text"));
   const inn = !ins?.length || ins.map(normalizeModality).some((i) => i === "text");
   return out && inn;
 };
