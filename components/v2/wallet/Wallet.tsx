@@ -469,6 +469,26 @@ function Home({ go, freeze, bloom }: { go: (v: View, o?: { reopen?: Reopen | nul
     return out;
   };
 
+  // what the providers hold, in the number's own face: part of the balance above,
+  // said where it is, one press from coming home
+  const prov = held > 0 && (
+    <p className="wl-prov">
+      <i aria-hidden="true" />
+      <span className="wl-prov-n">{fmt(held)}</span>
+      <span className="wl-prov-t">at providers</span>
+      {heldState === "busy" ? (
+        <span className="wl-prov-a" data-busy="" aria-disabled="true">
+          <span className="spin sm" role="status" aria-label="Returning" />
+          Returning
+        </span>
+      ) : (
+        <button type="button" className="wl-prov-a" aria-label={`Return ${fmt(held)} sats to the wallet`} onClick={() => void giveBack()}>
+          Return
+        </button>
+      )}
+    </p>
+  );
+
   return (
     <>
       {money.node ? (
@@ -480,6 +500,7 @@ function Home({ go, freeze, bloom }: { go: (v: View, o?: { reopen?: Reopen | nul
               <span>{host(money.node.url)}</span>
             </p>
             <p className="wl-sub">Replies are paid by your node. The sats on this device stay here until you use them.</p>
+            {prov}
           </div>
           <div className="wl-row" style={{ marginBottom: "var(--s3)" }}>
             <span className="wl-row-t">
@@ -518,25 +539,7 @@ function Home({ go, freeze, bloom }: { go: (v: View, o?: { reopen?: Reopen | nul
               </>
             ) : null}
           </p>
-          {/* what the providers hold, in the number's own face: part of the balance above,
-              said where it is, one press from coming home */}
-          {held > 0 && (
-            <p className="wl-prov">
-              <i aria-hidden="true" />
-              <span className="wl-prov-n">{fmt(held)}</span>
-              <span className="wl-prov-t">at providers</span>
-              {heldState === "busy" ? (
-                <span className="wl-prov-a" data-busy="" aria-disabled="true">
-                  <span className="spin sm" role="status" aria-label="Returning" />
-                  Returning
-                </span>
-              ) : (
-                <button type="button" className="wl-prov-a" aria-label={`Return ${fmt(held)} sats to the wallet`} onClick={() => void giveBack()}>
-                  Return
-                </button>
-              )}
-            </p>
-          )}
+          {prov}
         </div>
       )}
       <div className="wl-acts">
