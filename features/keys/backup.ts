@@ -165,10 +165,12 @@ export class KeyBackup {
       release();
     }
     // the relays no longer list a key that left: nothing is left to skip
-    const onRelays = new Set(listed.map((k) => hashOf(k.key)));
-    const caughtUp = [...this.removed].filter((hash) => !onRelays.has(hash));
-    caughtUp.forEach((hash) => this.removed.delete(hash));
-    if (caughtUp.length) this.saved.write([...this.removed]);
+    if (remote !== "none") {
+      const onRelays = new Set(listed.map((k) => hashOf(k.key)));
+      const caughtUp = [...this.removed].filter((hash) => !onRelays.has(hash));
+      caughtUp.forEach((hash) => this.removed.delete(hash));
+      if (caughtUp.length) this.saved.write([...this.removed]);
+    }
     this.published = keySet(listed);
     this.others = listed.filter((k) => k.device !== this.device);
     this.listeners.forEach((listener) => listener());

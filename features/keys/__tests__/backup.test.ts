@@ -110,6 +110,7 @@ describe("KeyBackup", () => {
       0,
       kept
     );
+    await reloaded.apply("none");
     await reloaded.apply([
       entry("this-device", "https://gone.test/", "sk-removed"),
     ]);
