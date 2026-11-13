@@ -39,7 +39,7 @@ export function useRailTip({
     if (kind === "fold") return [folded ? "Show sidebar" : "Collapse sidebar", K("B")];
     if (kind === "new") return ["New chat", K("O", true)];
     if (kind === "find") return ["Search chats", K("K")];
-    if (kind === "bal") return money.node ? ["Paying with your node", ""] : [`Wallet · ${sats(money.total)} sats`, ""];
+    if (kind === "bal") return money.node ? ["Paying with your node", ""] : [`Wallet · ${sats(money.all)} sats${money.held > 0 ? ` · ${sats(money.held)} at providers` : ""}`, ""];
     if (kind === "room") return [document.querySelector(".sb-sw")?.getAttribute("aria-label")?.split(".")[0] ?? "Room", ""];
     if (kind === "gear") return [document.querySelector(".sb-gear")?.getAttribute("aria-label")?.split(".")[0] ?? "Settings", ""];
     return null;

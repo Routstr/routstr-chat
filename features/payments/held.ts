@@ -13,11 +13,15 @@ export const keysSats = (keys: ApiKeyEntry[]): number =>
 /** Sats held at providers in this credit store: what its keys hold, X-Cashu
  *  tokens kept for a provider, and refunds a provider sent back that the
  *  wallet has not taken in yet. */
-export const heldSats = (storage: StorageAdapter): number =>
-  Math.round(
-    keysSats(storage.getAllApiKeys()) +
+export const heldSats = (storage: StorageAdapter): number => {
+  const keys = storage.getAllApiKeys();
+  // the SDK keeps a new key's token as an X-Cashu record too until it is stored
+  const keyTokens = new Set(keys.map((key) => key.key));
+  return Math.round(
+    keysSats(keys) +
       Object.values(storage.getXcashuTokens())
         .flat()
+        .filter((t) => !keyTokens.has(t.token))
         .reduce((sum, t) => sum + tokenSats(t.token), 0) +
       storage
         .getCachedReceiveTokens()
@@ -26,6 +30,7 @@ export const heldSats = (storage: StorageAdapter): number =>
           0
         )
   );
+};
 
 /** What this account's key at each provider holds, by the provider's address
  *  as keys are stored (with its closing slash). The API-key path spends it

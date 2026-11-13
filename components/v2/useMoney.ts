@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useCatalogService } from "@/features/catalog/view";
-import { pricedRequest, questionOf, useBusy, useKeyCredit } from "@/features/chat/view";
+import { pricedRequest, questionOf, useBusy, useHeldCredit, useKeyCredit, useMoneyMoving } from "@/features/chat/view";
 import { useThread } from "@/features/history/view";
 import { useNodePays, type RemoteNode } from "@/features/node/view";
 import { promptTokensOf, replyCap, topUpFor } from "@/features/payments/view";
@@ -15,10 +15,17 @@ import { normalizeModality } from "./picker/modality";
 import { useDraft, usePicture } from "./ui";
 
 export interface Money {
-  /** What you can spend: the wallet plus sats held in provider tokens. */
+  /** What this device can spend: its coins plus tokens in flight. */
   total: number;
-  /** The wallet alone. */
+  /** The wallet's coins alone. */
   wallet: number;
+  /** Sats held at providers: yours, one press from coming home. */
+  held: number;
+  /** Everything you have: this device's sats, tokens in flight, and what the
+   *  providers hold. The number the wallet shows large. It and `held` stay
+   *  where they were while sats are in a swap between the wallet and a
+   *  provider. */
+  all: number;
   /** The wallet's sats per mint. */
   balances: Record<string, number>;
   /** The wallet's coins may still be arriving. */
@@ -39,9 +46,14 @@ export function useMoney(): Money {
 }
 
 export function MoneyProvider({ children }: { children: React.ReactNode }) {
-  const wallet = useWallet();
+  // sats in a swap between the wallet and a provider: the figures shown wait
+  // for them to land, then for the coins to be read again
+  const moving = useMoneyMoving();
+  const wallet = useWallet(moving);
   const paying = useBusy();
   const node = useNodePays();
+  // credit a provider still holds is money too, and it is shown with the rest
+  const held = useHeldCredit();
   const [pending, setPending] = useState(0);
   const last = useRef(0);
 
@@ -58,9 +70,16 @@ export function MoneyProvider({ children }: { children: React.ReactNode }) {
     return () => window.clearInterval(id);
   }, [paying, wallet.total]);
 
+  const total = wallet.total + pending;
+  const now = { held, all: total + held };
+  const [shown, setShown] = useState(now);
+  const landed = wallet.loading || (!moving && wallet.fresh);
+  if (landed && (shown.held !== now.held || shown.all !== now.all)) setShown(now);
+  const { held: heldShown, all } = landed ? now : shown;
+
   const money = useMemo(
-    () => ({ total: wallet.total + pending, wallet: wallet.total, balances: wallet.balances, loading: wallet.loading, node }),
-    [wallet.total, wallet.balances, wallet.loading, pending, node]
+    () => ({ total, wallet: wallet.total, held: heldShown, all, balances: wallet.balances, loading: wallet.loading, node }),
+    [total, wallet.total, wallet.balances, wallet.loading, heldShown, all, node]
   );
   return React.createElement(MoneyContext.Provider, { value: money }, children);
 }

@@ -5,6 +5,7 @@ import {
   KEY_BACKUP_D,
   parseBackup,
   type OtherDevices,
+  type Removed,
 } from "@/features/keys/backup";
 import {
   EXPORTED_BACKUP_D,
@@ -20,6 +21,27 @@ import {
 // main's switch for keeping exported keys on the relays; on unless turned off
 const EXPORTED_SYNC = "api_keys_cloud_sync_enabled";
 
+const removedIn = (storage: Storage, name: string): Removed => ({
+  read: () => {
+    try {
+      const hashes: unknown = JSON.parse(storage.getItem(name) ?? "[]");
+      return Array.isArray(hashes)
+        ? hashes.filter((h) => typeof h === "string")
+        : [];
+    } catch {
+      return [];
+    }
+  },
+  write: (hashes) => {
+    try {
+      if (hashes.length) storage.setItem(name, JSON.stringify(hashes));
+      else storage.removeItem(name);
+    } catch {
+      // storage full: skipped for this session only
+    }
+  },
+});
+
 /** Runs an account's key backups on its relays, for the account's lifetime.
  *  Hands back how to stop them, and its other devices' keys for refunds. */
 export function startKeys(
@@ -30,7 +52,9 @@ export function startKeys(
   const backup = new KeyBackup(
     keysFor(owner),
     deviceId(window.localStorage),
-    relayBackupPorts(relays, account, KEY_BACKUP_D, parseBackup)
+    relayBackupPorts(relays, account, KEY_BACKUP_D, parseBackup),
+    undefined,
+    removedIn(window.localStorage, `${KEY_BACKUP_D}-removed:${owner}`)
   );
   const stops = [backup.start()];
   // made now even with sync off, so its IndexedDB copy is kept from the start

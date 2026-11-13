@@ -42,7 +42,7 @@ export function BalanceButton({
             ? "Open wallet. Balance loading."
             : zero
               ? "Open wallet. Balance 0 sats. Add funds to start chatting."
-              : `Open wallet. Balance ${sats(money.total)} sats.${waitN ? ` ${waitN === 1 ? "1 invoice" : `${waitN} invoices`} waiting for payment.` : ""}`
+              : `Open wallet. Balance ${sats(money.all)} sats.${money.held > 0 ? ` ${sats(money.held)} of it at providers.` : ""}${waitN ? ` ${waitN === 1 ? "1 invoice" : `${waitN} invoices`} waiting for payment.` : ""}`
       }
       onClick={onClick}
     >
@@ -76,6 +76,14 @@ export function BalanceButton({
           </>
         )}
       </span>
+      {/* what the providers hold: a second figure, not a caption, so the total
+          above is never read as all there is */}
+      {money.held > 0 && !money.node && !balWait && !zero && (
+        <span className="sb-bal-p" aria-hidden="true">
+          <i />
+          {sats(money.held)} at providers
+        </span>
+      )}
       <span className="sb-bal-mini" aria-hidden="true">
         <Icon name="wallet" size={16} />
         {money.node ? (

@@ -18,7 +18,7 @@ interface RefundDeps {
   purse: Purse;
   sdk: Sdk;
   oldCredit: OldCredit;
-  otherDevices: Pick<OtherDevices, "keys" | "drop">;
+  otherDevices: Pick<OtherDevices, "keys" | "drop" | "checked">;
   adopt: Adopt;
   live(): boolean;
 }
@@ -308,7 +308,10 @@ async function refundOthers(
           })
         );
     results.push({ baseUrl: key.baseUrl, success });
-    if (success) refunded.push(key.key);
+    if (success) {
+      refunded.push(key.key);
+      deps.otherDevices.checked(key.key, 0);
+    }
   }
   return { results, refunded };
 }
