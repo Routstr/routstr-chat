@@ -348,6 +348,7 @@ function Home({ go, freeze, bloom }: { go: (v: View, o?: { reopen?: Reopen | nul
     const t = window.setTimeout(() => setHeldState("idle"), 5000);
     return () => window.clearTimeout(t);
   }, [heldState]);
+  if (heldState === "part" && held <= 0) setHeldState("idle");
 
   // activity: one line per movement, by day; three spends in a row fold
   const [all, setAll] = useState(false);
