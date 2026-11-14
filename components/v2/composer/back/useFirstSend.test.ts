@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { firstNeed } from "./useFirstSend";
 
-const me = { node: false, pubkey: "a".repeat(64), loading: false, total: 0, held: 0 };
+const me = { node: false, pubkey: "a".repeat(64), keys: true, loading: false, total: 0, held: 0 };
 
 describe("what a first send needs", () => {
-  it("asks who is writing before anything else, unless a node pays", () => {
+  it("asks only for sats with no key yet, and which key with some on the device, unless a node pays", () => {
+    expect(firstNeed({ ...me, pubkey: null, keys: false })).toBe("try");
     expect(firstNeed({ ...me, pubkey: null })).toBe("who");
-    expect(firstNeed({ ...me, pubkey: null, node: true })).toBeNull();
+    expect(firstNeed({ ...me, pubkey: null, keys: false, node: true })).toBeNull();
   });
 
   it("offers the try only when there is nothing to pay with", () => {

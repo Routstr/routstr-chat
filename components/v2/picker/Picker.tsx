@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useCatalogModels, useCatalogService } from "@/features/catalog/view";
-import { useSession } from "@/features/session/view";
 import { getStorageItem, setStorageItem } from "@/utils/storageUtils";
 import { Icon } from "../icons";
 import { useUi } from "../ui";
@@ -22,7 +21,6 @@ import { useKeys } from "./useKeys";
 import { useDetail } from "./useDetail";
 import { useSortMenu } from "./useSortMenu";
 import { useFacts } from "./useFacts";
-import Gate from "./Gate";
 import Search from "./Search";
 import MakerRail from "./MakerRail";
 import Tools from "./Tools";
@@ -56,7 +54,6 @@ export default function Picker({
   const catalog = useCatalogService();
   const { loading: modelsLoading } = useCatalogModels();
   const providersOn = useCallback(() => catalog?.allProvidersOn(), [catalog]);
-  const isAuthenticated = useSession().pubkey !== null;
   const ui = useUi();
 
   const card = useRef<HTMLDivElement>(null);
@@ -112,11 +109,10 @@ export default function Picker({
   });
 
   /* ── open, place, close ─────────────────────────────────────────────── */
-  const signedOut = !isAuthenticated;
-  const { box, veilTop, veilOff } = usePlacement({ phone, signedOut, setLay, setView });
-  const { shown, entering, hints, setHints, leaveCard } = useOpenClose({ open, phone, signedOut, card, input, onGone, onClose, setMenu });
+  const { box, veilTop, veilOff } = usePlacement({ phone, setLay, setView });
+  const { shown, entering, hints, setHints, leaveCard } = useOpenClose({ open, phone, card, input, onGone, onClose, setMenu });
   const { onKey, onListMove, onListClick } = useKeys({
-    menu, setMenu, sortBtn, signedOut, onClose, input, card, view, lay, push, q, setQ, flat, activeIdx, toggleStar, railOrder, scope, pickScope, railScroll, setActive, choose, hints, setHints,
+    menu, setMenu, sortBtn, onClose, input, card, view, lay, push, q, setQ, flat, activeIdx, toggleStar, railOrder, scope, pickScope, railScroll, setActive, choose, hints, setHints,
   });
   const { dRow, dHost, onBack, onStar, onUse, onRoute } = useDetail({ detailKey, idxOf, flat, activeIdx, cat, draft, setDraft, only, push, toggleStar, choose, commit, say });
   const { menuH, menuMore, setMenuMore, menuKey, pickSort } = useSortMenu({ menu, setMenu, listEl, sortBtn, menuEl, card, sort: listSort, setSort: inDeals ? setDealSort : setSort, setDir: inDeals ? setDealDir : setDir });
@@ -158,15 +154,12 @@ export default function Picker({
     "data-loading": loading ? "" : undefined,
     "data-hints": hints ? "" : undefined,
     "data-view": view,
-    "data-signedout": signedOut ? "" : undefined,
     "data-sheet": phone ? "" : undefined,
   };
 
   const panelEl = typeof document !== "undefined" ? document.querySelector<HTMLElement>("[data-furniture='panel']") : null;
 
-  const body = signedOut ? (
-    <Gate cat={cat} onClose={onClose} ui={ui} fund={fund} />
-  ) : (
+  const body = (
     <>
       <Search phone={phone} hidden={hidden} input={input} total={total} activeIdx={activeIdx} q={q} setQ={setQ} setActiveKey={setActiveKey} again={!!ui.again} />
 

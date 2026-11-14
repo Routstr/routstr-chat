@@ -367,8 +367,8 @@ export default function Composer({ centred }: { centred: boolean }) {
 
   const go = useCallback(() => {
     if (isLoading || !hasContent) return;
-    // nobody to write as yet: that comes before models and money
-    if (first.need === "who") return first.hold();
+    // signed out: which key writes, or the first sats, come before models (one is picked once they land)
+    if (!isAuthenticated && first.need) return first.hold();
     if (busy) {
       // the disc says no, and the chip that is loading answers
       setRefused(Date.now());

@@ -8,9 +8,10 @@ import Light from "../../light/Light";
 import { short } from "../../settings/parts";
 import { useSwitchAccount } from "../../useSwitchAccount";
 
-/* Who's writing: a first send asks for an account before any sats, because
-   sats always belong to one. A new account is one tap, its light shown before
-   it exists; a key already on this device, or signing in, also answer it. */
+/* Who's writing: with keys on this device and none in use, a first send asks
+   which one writes before any sats, because sats always belong to one. A new
+   account is one tap, its light shown before it exists; signing in also
+   answers it. */
 export default function WhoIsWriting({ fresh, signIn }: { fresh: Account; signIn: () => void }) {
   const { manager, session } = useAccountManager();
   const accounts = useObservableState(manager.accounts$) ?? [];

@@ -1,5 +1,5 @@
-// First run: a first send asks who is writing, then for a first few sats, and once they land
-// the held message sends by itself.
+// First run: the models show with no key, a first send asks only for a first few sats (the
+// key is made as they come in), and once they land the held message sends by itself.
 import type { Page } from "@playwright/test";
 import { generateSecretKey, nip19 } from "nostr-tools";
 import { expect, test } from "./fixtures";
@@ -9,8 +9,6 @@ import { seedKitProvider } from "./seed";
 const composer = (page: Page) => page.getByRole("textbox", { name: "Message" });
 const sendButton = (page: Page) =>
   page.getByRole("main").getByRole("button", { name: "Send", exact: true });
-const who = (page: Page) =>
-  page.getByRole("heading", { name: "Who’s writing?" });
 const tryCard = (page: Page) =>
   page.getByRole("heading", { name: "Try 100 sats" });
 
@@ -19,7 +17,7 @@ async function firstSend(page: Page, text: string) {
   await sendButton(page).click();
 }
 
-test("a first send asks who's writing, then for 100 sats, then sends by itself", async ({
+test("a first send asks only for 100 sats, then sends by itself", async ({
   page,
   kit,
   appUrl,
@@ -29,12 +27,8 @@ test("a first send asks who's writing, then for 100 sats, then sends by itself",
   await seedKitProvider(page, kit.coreUrl, "kit-cheap");
 
   await firstSend(page, "[kit:usage=10,10] hello kit");
-  await expect(who(page)).toBeVisible();
-  await expect(composer(page)).toHaveValue("[kit:usage=10,10] hello kit");
-
-  await expect(page.getByRole("button", { name: "New account" })).toBeFocused();
-  await page.getByRole("button", { name: "New account" }).click();
   await expect(tryCard(page)).toBeVisible();
+  await expect(composer(page)).toHaveValue("[kit:usage=10,10] hello kit");
   await expect(page.locator('.pa-amt[data-n="100"]')).toHaveAttribute(
     "data-picked",
     ""
@@ -53,15 +47,21 @@ test("a first send asks who's writing, then for 100 sats, then sends by itself",
   await expect.poll(() => v2.balance(page), { timeout: 20_000 }).toBe(99);
 });
 
-test("signing in answers who's writing, and a key with no sats goes on to 100 sats", async ({
+test("with no key the picker lists the models, picking one asks for 100 sats, and signing in there with a key holding none comes back to them", async ({
   page,
+  kit,
   appUrl,
 }) => {
   await v2.open(page, appUrl);
-  await firstSend(page, "hello");
-  await expect(who(page)).toBeVisible();
+  await seedKitProvider(page, kit.coreUrl, "kit-cheap");
+  await composer(page).fill("hello");
+  await page.getByRole("main").getByRole("button", { name: /^Model: / }).click();
+  const picker = page.getByRole("dialog", { name: "Choose a model" });
+  await picker.getByRole("option", { name: /Kit Echo/ }).click();
+  await expect(picker).toHaveCount(0);
+  await expect(tryCard(page)).toBeVisible();
 
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await page.getByRole("button", { name: "Have a key? Sign in", exact: true }).click();
   await page.getByRole("button", { name: /^Secret key/ }).click();
   await page
     .getByLabel("Secret key")
@@ -74,15 +74,15 @@ test("signing in answers who's writing, and a key with no sats goes on to 100 sa
   await expect(composer(page)).toHaveValue("hello");
 });
 
-test("Esc on who's writing goes back to the draft, still unsent", async ({
+test("Esc on the sats card goes back to the draft, still unsent", async ({
   page,
   appUrl,
 }) => {
   await v2.open(page, appUrl);
   await firstSend(page, "hello");
-  await expect(who(page)).toBeVisible();
+  await expect(tryCard(page)).toBeVisible();
   await page.keyboard.press("Escape");
-  await expect(who(page)).toBeHidden();
+  await expect(tryCard(page)).toBeHidden();
   await expect(composer(page)).toHaveValue("hello");
   await expect(sendButton(page)).toBeVisible();
 });

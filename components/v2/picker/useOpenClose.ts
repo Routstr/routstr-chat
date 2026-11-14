@@ -7,7 +7,6 @@ const HINTS_KEY = "routstr.picker.opens";
 export function useOpenClose({
   open,
   phone,
-  signedOut,
   card,
   input,
   onGone,
@@ -16,7 +15,6 @@ export function useOpenClose({
 }: {
   open: boolean;
   phone: boolean;
-  signedOut: boolean;
   card: React.RefObject<HTMLDivElement | null>;
   input: React.RefObject<HTMLInputElement | null>;
   onGone: () => void;
@@ -65,9 +63,9 @@ export function useOpenClose({
   // on a desktop; a phone keeps its keyboard down until you tap the field
   useEffect(() => {
     if (!shown) return;
-    const target = signedOut ? card.current?.querySelector<HTMLElement>(".mp-gate .prime") : phone ? card.current : input.current;
+    const target = phone ? card.current : input.current;
     target?.focus({ preventScroll: true });
-  }, [shown, phone, signedOut]);
+  }, [shown, phone]);
 
   // the risen composer settles back once the card has left (the unmount below), never under the
   // fading card; a phone's sheet stays mounted, so it lets go on close

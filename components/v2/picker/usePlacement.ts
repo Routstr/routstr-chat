@@ -7,12 +7,10 @@ const layFor = (w: number, phone: boolean): Lay => (phone || w < 640 ? "one" : w
 
 export function usePlacement({
   phone,
-  signedOut,
   setLay,
   setView,
 }: {
   phone: boolean;
-  signedOut: boolean;
   setLay: React.Dispatch<React.SetStateAction<Lay>>;
   setView: (v: "list" | "detail") => void;
 }) {
@@ -42,7 +40,7 @@ export function usePlacement({
       panelEl.dataset.picking = "";
       isle = { ...isle, top: isle.top + rise, bottom: isle.bottom + rise };
     }
-    const w = signedOut ? Math.min(440, panel.width - 32) : Math.min(980, panel.width - 32);
+    const w = Math.min(980, panel.width - 32);
     const cx = isle.left + isle.width / 2;
     const left = Math.max(panel.left + 16, Math.min(cx - w / 2, panel.right - 16 - w));
     // 16px from the panel edge, like the sides, past the 10px gap to the composer
@@ -59,18 +57,17 @@ export function usePlacement({
     };
     if (below) style.top = isle.bottom + 10;
     else style.bottom = window.innerHeight - isle.top + 10;
-    if (!signedOut) style.height = h;
+    style.height = h;
     setBox(style);
     const top = below ? isle.bottom + 10 : isle.top - 10 - h;
-    // signed out, the small card stands in a fully quiet panel
-    setVeilTop(signedOut ? 0 : Math.max(0, top - panel.top - 96));
+    setVeilTop(Math.max(0, top - panel.top - 96));
     setVeilOff(centred);
     setLay((l) => {
       const next = layFor(w, false);
       if (l !== next && next !== "one") setView("list");
       return next;
     });
-  }, [phone, signedOut]);
+  }, [phone]);
 
   useLayoutEffect(() => {
     place();

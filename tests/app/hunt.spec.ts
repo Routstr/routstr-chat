@@ -201,7 +201,7 @@ test("two tabs on one account agree on the balance after one of them sends", asy
 // only the kit mint), so the held message can pay from it: with a model chosen, and with
 // nothing chosen, where the app's own pick is made for the sats about to land
 for (const chosen of [true, false])
-test(`first run${chosen ? "" : ", nothing chosen"}: who's writing, a new account, 100 sats by Lightning, then the held message sends`, async ({
+test(`first run${chosen ? "" : ", nothing chosen"}: 100 sats by Lightning, then the held message sends`, async ({
   page,
   kit,
   appUrl,
@@ -215,10 +215,6 @@ test(`first run${chosen ? "" : ", nothing chosen"}: who's writing, a new account
     .getByRole("main")
     .getByRole("button", { name: "Send", exact: true })
     .click();
-  await expect(
-    page.getByRole("heading", { name: "Who’s writing?" })
-  ).toBeVisible();
-  await page.getByRole("button", { name: "New account" }).click();
   await expect(
     page.getByRole("heading", { name: "Try 100 sats" })
   ).toBeVisible();

@@ -7,7 +7,6 @@ export function useKeys({
   menu,
   setMenu,
   sortBtn,
-  signedOut,
   onClose,
   input,
   card,
@@ -31,7 +30,6 @@ export function useKeys({
   menu: boolean;
   setMenu: (m: boolean) => void;
   sortBtn: React.RefObject<HTMLButtonElement | null>;
-  signedOut: boolean;
   onClose: () => void;
   input: React.RefObject<HTMLInputElement | null>;
   card: React.RefObject<HTMLDivElement | null>;
@@ -68,14 +66,6 @@ export function useKeys({
     }
     // an IME is composing: its keys are its own
     if (e.nativeEvent.isComposing) return;
-    if (signedOut) {
-      if (e.key !== "Escape") return;
-      e.preventDefault();
-      e.stopPropagation();
-      onClose();
-      giveBack();
-      return;
-    }
     const inList = t === input.current || t === card.current || !!t.closest?.(".mp-list");
     if (e.key === "Escape") {
       e.preventDefault();

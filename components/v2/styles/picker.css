@@ -52,7 +52,6 @@ html[data-room="night"] .mp, html[data-room="meridian"][data-face="dusk"] .mp { 
 }
 .mp-veil[data-open] { opacity: 1; transition: opacity var(--d-move) var(--e-out); }
 .panel .thread-in { transition: opacity var(--d-move) var(--e-out); }
-.mp[data-signedout] { height: auto; }
 
 /* a new chat: the composer rises while you choose, the greeting steps away */
 .panel[data-state="empty"] .dock { transition: transform var(--d-mid) var(--e-out); }
@@ -259,7 +258,7 @@ html[data-room="night"] .mp, html[data-room="meridian"][data-face="dusk"] .mp { 
 .dt-star[data-pop] .v2-ico { animation: mpPop var(--d-mid) var(--e-spring); }
 
 /* empty and loading */
-.mp-empty, .mp-gate { display: grid; justify-items: center; text-align: center; gap: 6px; padding: 44px 24px 24px; color: var(--ink-3); }
+.mp-empty { display: grid; justify-items: center; text-align: center; gap: 6px; padding: 44px 24px 24px; color: var(--ink-3); }
 .mp-empty > .v2-ico { color: var(--ink-3); margin-bottom: 6px; }
 .mp .e-t { font-family: var(--f-display); font-weight: var(--w-display); font-stretch: var(--display-stretch, 100%); letter-spacing: var(--display-track);
   font-size: calc(18.5px * var(--display-scale)); color: var(--ink); text-wrap: balance; }
@@ -503,16 +502,6 @@ button.dt-sum:hover .s-r .v2-ico { transform: translateY(2px); }
 @keyframes mpPulse { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
 @keyframes mpPop { 0% { transform: scale(.6); } 60% { transform: scale(1.18); } 100% { transform: none; } }
 
-/* ══ signed out ════════════════════════════════════════════════════════ */
-/* doubled so it wins over any layout the card's width would pick */
-.mp[data-signedout][data-signedout] { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; grid-template-areas: "list"; }
-.mp-gatewrap { grid-area: list; }
-.mp-gate .e-s { text-wrap: balance; }
-.mp-gate { padding: 30px 28px; }
-.gate-marks { display: flex; gap: 14px; margin-bottom: 16px; color: var(--ink-2); font-size: 18px; }
-.gate-marks span { display: grid; place-items: center; animation: mpUp var(--d-move) var(--e-spring) calc(var(--i) * 40ms) both; }
-.gate-marks .co-ico { width: 1em; height: 1em; }
-
 /* ══ two columns (card 640 to 799px, a 13 inch laptop with the rail open) ══ */
 .mp[data-lay="two"] {
   grid-template-columns: minmax(320px, 1fr) 300px;
@@ -571,8 +560,6 @@ button.dt-sum:hover .s-r .v2-ico { transform: translateY(2px); }
 /* the sheet shows the keyboard row while the search has focus */
 .mp[data-sheet]:has(.mp-search input:focus) .row[data-active] { background: var(--fill-1); }
 .mp[data-sheet] .mp-list { scroll-padding-bottom: var(--sh-pad, 0px); }
-/* signed out in the sheet: the gate sits in the middle of what shows */
-.mp[data-sheet][data-signedout] .mp-gatewrap { min-height: calc(62dvh - 44px); display: grid; align-content: center; }
 .mp[data-lay="one"] .row:active { background: var(--fill-2); }
 .mp[data-lay="one"] .row[data-current]::before { left: 3px; }
 .mp[data-lay="one"] .r-n { font-size: 15px; }
@@ -593,9 +580,9 @@ button.dt-sum:hover .s-r .v2-ico { transform: translateY(2px); }
 .mp[data-lay="one"] .rte[aria-checked="true"], .mp[data-lay="one"] .rte[aria-checked="true"]:hover { background: var(--fill-1); box-shadow: none; }
 .mp[data-lay="one"] .rte:hover { background: var(--fill-2); }
 /* nothing matches: no empty panel, only the quiet note */
-.mp[data-none]:not([data-lay="one"]):not([data-signedout]) .mp-detail { display: none; }
-.mp[data-none]:not([data-lay="one"]):not([data-signedout]) .mp-list { grid-column: list-start / detail-end; grid-row: list-start / foot-start; display: grid; }
-.mp[data-none]:not([data-lay="one"]):not([data-signedout]) .mp-foot { grid-column: foot-start / detail-end; }
+.mp[data-none]:not([data-lay="one"]) .mp-detail { display: none; }
+.mp[data-none]:not([data-lay="one"]) .mp-list { grid-column: list-start / detail-end; grid-row: list-start / foot-start; display: grid; }
+.mp[data-none]:not([data-lay="one"]) .mp-foot { grid-column: foot-start / detail-end; }
 .mp[data-none] .list-in { align-self: center; padding-bottom: 40px; }
 .mp[data-lay="one"][data-view="detail"] .mp-detail { transform: none; visibility: visible; transition: transform var(--d-move) var(--e-spring), visibility 0s; }
 .mp[data-lay="one"] > :not(.mp-detail):not(.sr) { transition: transform var(--d-mid) var(--e-out), opacity var(--d-mid) var(--e-out); }
