@@ -106,17 +106,29 @@ export default function Payments() {
         <div className="st-row st-balrow">
           <div className="st-txt">
             <div className="st-hero">
-              <span className="st-hero-v">{n0(money.total)}</span>
-              <span className="st-hero-u">{satUnit(money.total)}</span>
+              <span className="st-hero-v">{n0(money.all)}</span>
+              <span className="st-hero-u">{satUnit(money.all)}</span>
             </div>
             <p className="st-rn">
-              {money.node
-                ? "Your node pays for chats right now, so this stays untouched."
-                : per > 0 && money.total >= per
-                  ? <>On this device. About {plural(Math.floor(money.total / per), "reply", "replies")} with <span className="nobr">{name}</span>.</>
-                  : per > 0
-                    ? <>On this device. Not enough for a reply with <span className="nobr">{name}</span> yet.</>
-                    : "On this device."}
+              {money.node ? (
+                "Your node pays for chats right now, so this stays untouched."
+              ) : (
+                <>
+                  {/* the same figure the wallet shows large: where it is, then what it buys */}
+                  {money.held > 0 ? (
+                    <>
+                      {n0(money.total)} here and {n0(money.held)} at providers.{" "}
+                    </>
+                  ) : (
+                    "On this device. "
+                  )}
+                  {per > 0 && money.all >= per ? (
+                    <>About {plural(Math.floor(money.all / per), "reply", "replies")} with <span className="nobr">{name}</span>.</>
+                  ) : per > 0 ? (
+                    <>Not enough for a reply with <span className="nobr">{name}</span> yet.</>
+                  ) : null}
+                </>
+              )}
             </p>
           </div>
           <div className="st-ctl">

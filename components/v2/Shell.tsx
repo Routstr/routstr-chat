@@ -38,7 +38,7 @@ function Panel() {
   const isAuthenticated = useSession().pubkey !== null;
   // the same figure as the drawer's: a wait mark while it loads, then counted up
   const balWait = !money.node && money.loading && isAuthenticated;
-  const shownBal = useCountUp(money.total);
+  const shownBal = useCountUp(money.all);
 
   const loadingFromUrl =
     !!chatIdFromUrl &&
@@ -164,8 +164,8 @@ function Panel() {
               // (a node paying: the header keeps its two ends, in the drawer's own word)
               <button
                 className="head-bal only-m"
-                data-zero={!money.node && !balWait && money.total <= 0 ? "" : undefined}
-                aria-label={money.node ? "Wallet, your node pays" : balWait ? "Wallet, balance loading" : `Wallet, ${sats(money.total)} sats`}
+                data-zero={!money.node && !balWait && money.all <= 0 ? "" : undefined}
+                aria-label={money.node ? "Wallet, your node pays" : balWait ? "Wallet, balance loading" : `Wallet, ${sats(money.all)} sats${money.held > 0 ? `, ${sats(money.held)} of it at providers` : ""}`}
                 onClick={() => window.dispatchEvent(new Event("v2:wallet"))}
               >
                 <Icon name="wallet" />

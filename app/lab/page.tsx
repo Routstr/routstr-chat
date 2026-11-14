@@ -14,7 +14,7 @@ import Boot from "@/components/v2/Boot";
 import "@/components/v2/styles/index.css";
 
 /* Development only: the real v2 surfaces driven by a simulated chat, so every
-   state can be seen without spending sats. ?fresh=1 ?chat=c2 ?balance=0
+   state can be seen without spending sats. ?fresh=1 ?chat=c2 ?balance=0 ?held=0
    ?fail=1 ?nothink=1 ?still=1 ?signedout=1 ?loading=1, and ?boot=<ms> (the boot
    mark, then first light after that long; add ?firstlight=1 for the first visit). Renders nothing in a production build. */
 // the lab's open chat: ?chat=, the first chat by default, or none with ?fresh=1

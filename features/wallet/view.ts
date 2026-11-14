@@ -69,14 +69,14 @@ export function usePurseOf(): (owner: string) => Purse | null {
 }
 
 /** This account's spendable sats per mint, read again when its coins change
- *  here; null until the first read, and with no account. */
-export function useBalances(
-  owner: string | null
-): Record<string, number> | null {
+ *  here, and whenever `again` changes; null until the first read, and with
+ *  no account. The read says which `again` it was made after. */
+function useRead(owner: string | null, again: unknown) {
   const purseFor = useContext(PurseContext);
   const [read, setRead] = useState<{
     owner: string;
     balances: Record<string, number>;
+    again: unknown;
   } | null>(null);
   useEffect(() => {
     if (!owner || !purseFor) return;
@@ -84,7 +84,7 @@ export function useBalances(
     let live = true;
     const load = () =>
       void purse.balances().then((balances) => {
-        if (live) setRead({ owner, balances });
+        if (live) setRead({ owner, balances, again });
       });
     load();
     const stop = purse.subscribe(load);
@@ -92,21 +92,32 @@ export function useBalances(
       live = false;
       stop();
     };
-  }, [owner, purseFor]);
-  return read?.owner === owner ? read.balances : null;
+  }, [owner, purseFor, again]);
+  return read?.owner === owner ? read : null;
+}
+
+/** This account's spendable sats per mint, read again when its coins change
+ *  here; null until the first read, and with no account. */
+export function useBalances(
+  owner: string | null
+): Record<string, number> | null {
+  return useRead(owner, undefined)?.balances ?? null;
 }
 
 /** The signed-in account's money for the screens, in whole sats: per mint, in
  *  all, and whether its coins may still be arriving (its NIP-60 wallet is
  *  loading from relays). Each mount reads the coins itself: share one where
- *  the screens can. */
-export function useWallet(): {
+ *  the screens can. The coins are read again whenever `again` changes, and
+ *  `fresh` says that read has landed. */
+export function useWallet(again?: unknown): {
   balances: Record<string, number>;
   total: number;
   loading: boolean;
+  fresh: boolean;
 } {
   const { pubkey } = useSession();
-  const balances = useBalances(pubkey);
+  const read = useRead(pubkey, again);
+  const balances = read?.balances;
   const arriving = useSyncExternalStore(
     walletLoading.subscribe,
     () => walletLoading.of(pubkey),
@@ -116,6 +127,7 @@ export function useWallet(): {
     balances: balances ?? {},
     total: Object.values(balances ?? {}).reduce((sum, n) => sum + n, 0),
     loading: arriving || (!!pubkey && !balances),
+    fresh: !read || read.again === again,
   };
 }
 

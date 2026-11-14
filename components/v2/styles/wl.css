@@ -106,6 +106,21 @@ html[data-room="night"] .wl, html[data-room="meridian"][data-face="dusk"] .wl {
 .wl-sub { margin-top: 10px; font-family: var(--f-ui); font-size: 13px; line-height: 1.45; color: var(--ink-3); text-wrap: balance; }
 .wl-sub b { font-weight: 500; color: var(--ink-2); }
 .wl-sub .l1 { display: block; font-size: 14px; color: var(--ink-2); }
+/* what the providers hold: the same money as the number above, in its own face, said
+   where it is. Never a caption under a total that then reads as all there is */
+.wl-prov {
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: 7px;
+  margin-top: 12px;
+  font-family: var(--f-display); font-weight: 400; font-stretch: var(--display-stretch, 100%);
+  font-size: 19px; line-height: 1.2; letter-spacing: var(--display-track);
+  color: var(--ink-2); font-variant-numeric: lining-nums;
+}
+.wl-prov i { align-self: center; flex: none; width: 5px; height: 5px; border-radius: 9px; background: var(--tint); }
+.wl-prov-n { color: var(--ink); }
+.wl-prov-t { font-family: var(--f-ui); font-size: 13px; letter-spacing: 0; color: var(--ink-3); }
+.wl-prov-a { margin-left: auto; padding: 0; font-family: var(--f-ui); font-size: 13px; letter-spacing: 0; color: var(--tint); }
+.wl-prov-a:hover { text-decoration: underline; }
+.wl-prov-a[data-busy] { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-3); text-decoration: none; }
 
 /* the odometer: each digit is a column that rolls to its value; the window
    fades at its edges so a rolling digit dissolves instead of being cut */

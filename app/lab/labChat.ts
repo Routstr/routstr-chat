@@ -67,7 +67,7 @@ export function labChat(history: ChatHistory, params: URLSearchParams): AccountC
     chat,
     costs,
     refund: async () => [],
-    held: { subscribe: () => () => {}, get: () => 0, keys: () => NO_CREDIT },
+    held: { subscribe: () => () => {}, get: () => 0, moving: () => false, keys: () => NO_CREDIT },
     viewing: () => {},
     // files stay inline in the lab: nothing is kept or copied
     files: {

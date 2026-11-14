@@ -22,7 +22,12 @@ describe("heldSats", () => {
     expect(heldSats(storage)).toBe(195);
 
     // a key the provider has not reported on yet holds the token it was made from
-    storage.setApiKey("https://b.example/", tokenOf(7));
+    const made = tokenOf(7);
+    storage.setApiKey("https://b.example/", made);
+    expect(heldSats(storage)).toBe(202);
+
+    // the SDK's X-Cashu copy of that token while the key is being stored: counted once
+    storage.addXcashuToken("https://b.example/", made);
     expect(heldSats(storage)).toBe(202);
   });
 });

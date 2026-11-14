@@ -198,7 +198,7 @@ function Layer({ leaving }: { leaving: boolean }) {
   const values: Record<SettingsSection, string> = {
     look: room.room === "auto" ? "System" : ROOMS.find((r) => r.id === room.room)?.name ?? "",
     account: active ? short(nip19.npubEncode(active.pubkey), 9, 4) : "Not signed in",
-    wallet: money.node ? "Node pays" : `${n0(money.total)} ${satUnit(money.total)}`,
+    wallet: money.node ? "Node pays" : `${n0(money.all)} ${satUnit(money.all)}`,
     keys: active && keysN ? plural(keysN, "key") : "",
     // fractions of a sat are real spending: the same figure the Usage page shows
     history: usage.totals.requests ? `${sats(usage.totals.satsCost)} ${satUnit(usage.totals.satsCost)} this week` : "",

@@ -19,6 +19,9 @@ export interface AccountChatView {
   held: {
     subscribe(listener: () => void): () => void;
     get(): number;
+    /** Sats are in a mint swap between the wallet and a provider: until they
+     *  land, the wallet and `get` each count them on their own clock. */
+    moving(): boolean;
     /** What its key at each provider holds, by address with the closing
      *  slash, the same object until that changes; null when the next message
      *  spends no key (X-Cashu, or a node pays). */
@@ -90,6 +93,16 @@ export function useHeldCredit(): number {
     held?.subscribe ?? none,
     () => held?.get() ?? 0,
     () => 0
+  );
+}
+
+/** Sats are on their way between the wallet and a provider. */
+export function useMoneyMoving(): boolean {
+  const held = useAccountChat()?.held;
+  return useSyncExternalStore(
+    held?.subscribe ?? none,
+    () => held?.moving() ?? false,
+    () => false
   );
 }
 

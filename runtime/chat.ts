@@ -42,7 +42,26 @@ export interface AccountChat extends Omit<AccountChatView, "files"> {
 
 export function createAccountChat(deps: AccountChatDeps): AccountChat {
   let live = true;
-  const payments = { ...deps, live: () => live };
+  const heldListeners = new Set<() => void>();
+  // sats in a mint swap between the wallet and a provider: the wallet and the
+  // credit each see them on their own clock, so the balance waits for them to
+  // land (the SDK files what it got right after, before the next task)
+  let moving = 0;
+  const moved = (step: number) => {
+    moving += step;
+    heldListeners.forEach((listener) => listener());
+  };
+  const swap = <T>(run: () => Promise<T>) => {
+    moved(1);
+    return run().finally(() => setTimeout(() => moved(-1)));
+  };
+  const purse: Purse = {
+    ...deps.purse,
+    send: (...args) => swap(() => deps.purse.send(...args)),
+    take: (token) => swap(() => deps.purse.take(token)),
+    redeem: (token) => swap(() => deps.purse.redeem(token)),
+  };
+  const payments = { ...deps, purse, live: () => live };
   // the same owned key the old screens read, in main's format
   const costs = new ReplyCosts(
     deps.storage,
@@ -58,7 +77,6 @@ export function createAccountChat(deps: AccountChatDeps): AccountChat {
   // main's old shared credit, read from disk at the start and after each
   // refund (a sweep writes it through its own copy)
   let oldHeld = 0;
-  const heldListeners = new Set<() => void>();
   const readOld = () =>
     deps.oldCredit.load().then(
       (old) => {
@@ -128,6 +146,7 @@ export function createAccountChat(deps: AccountChatDeps): AccountChat {
         heldSats(deps.keys.storage("direct")) +
         oldHeld +
         Math.round(keysSats(deps.otherDevices.keys())),
+      moving: () => moving > 0,
       keys: keysHold,
     },
     viewing: (conversationId) => auto.viewing(conversationId),

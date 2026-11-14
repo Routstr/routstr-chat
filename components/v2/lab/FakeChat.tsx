@@ -175,6 +175,8 @@ export function FakeChatProvider({
   useLayoutEffect(() => lab.update(conversations), [lab, conversations]);
   const [account] = useState(() => chat(lab));
   const [balance, setBalance] = useState(() => Number(params.get("balance") ?? 2140));
+  // ?held=<sats>: credit sitting at providers, shown with the balance it is part of
+  const [held] = useState(() => Number(params.get("held") ?? 0));
   // ?late=<ms>: the balance arrives a moment after the page, as a wallet loading from its mint and relays does
   const [late, setLate] = useState(() => params.has("late"));
   useEffect(() => {
@@ -193,8 +195,8 @@ export function FakeChatProvider({
   // the lab's sats sit on the default mint
   const money = useMemo(() => {
     const sats = late ? 0 : balance;
-    return { total: sats, wallet: sats, balances: { [DEFAULT_MINT_URL]: sats }, loading: late, node: null };
-  }, [balance, late]);
+    return { total: sats, wallet: sats, held, all: sats + held, balances: { [DEFAULT_MINT_URL]: sats }, loading: late, node: null };
+  }, [balance, held, late]);
   return (
     <HistoryContext.Provider value={lab}>
       <AccountChatContext.Provider value={account}>
