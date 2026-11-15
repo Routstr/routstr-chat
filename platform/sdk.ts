@@ -53,9 +53,10 @@ export function createSdk({ extraProviders }: { extraProviders: string[] }) {
       discoveryAdapter.setManuallyEnabledProviders?.([...enabled, ...added]);
     }
   });
+  const discovery = { includeProviderUrls: extraProviders, filterLocalNetworkUrls: true };
   const request: Sdk["request"] = (options, callbacks) =>
     fetchAIResponse(
-      { ...options, discoveryAdapter, usageTrackingDriver, sdkStore: store },
+      { ...discovery, ...options, discoveryAdapter, usageTrackingDriver, sdkStore: store },
       {
         ...callbacks,
         onBalanceUpdate: () => {},
@@ -65,6 +66,7 @@ export function createSdk({ extraProviders }: { extraProviders: string[] }) {
     );
   const pictures: Sdk["pictures"] = async ({ body, signal, ...input }) => {
     const { client, baseUrl, mintUrl, selectedModel, pinnedProvider } = await resolveRequestContext({
+      ...discovery,
       ...input,
       mode: "apikeys",
       discoveryAdapter,
@@ -97,7 +99,7 @@ export function createSdk({ extraProviders }: { extraProviders: string[] }) {
       (entry) => entry.id === requestId
     )?.satsCost;
   const modelManager = new ModelManager(discoveryAdapter, {
-    includeProviderUrls: extraProviders,
+    ...discovery,
     logger: noopLogger,
   });
   const providerManager = new ProviderManager(
