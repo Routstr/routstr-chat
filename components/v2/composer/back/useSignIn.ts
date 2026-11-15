@@ -6,6 +6,7 @@ import {
   fromBunkerLink,
   readSecret,
   signerByCode,
+  unlockSecret,
   useAccountManager,
   type Account,
   type AccountMetadata,
@@ -24,8 +25,10 @@ export function useSignIn(say: (t: string) => void, from: "pay" | "write") {
   const ui = useUi();
   const { manager, session } = useAccountManager();
   const [way, setWay] = useState<Way>(null);
-  const [wayState, setWayState] = useState<"" | "busy" | "bad" | "late">("");
+  const [wayState, setWayState] = useState<"" | "busy" | "bad" | "late" | "wrong">("");
   const [keyText, setKeyText] = useState("");
+  // the password of a locked key (a backup file)
+  const [keyPass, setKeyPass] = useState("");
   const [bunkerText, setBunkerText] = useState("");
   const [scan, setScan] = useState<string | null>(null);
   const [done, setDone] = useState<null | "in" | "new">(null);
@@ -56,16 +59,26 @@ export function useSignIn(say: (t: string) => void, from: "pay" | "write") {
       setWayState("bad");
     }
   };
-  const withKey = () => {
-    if (!keyText) return;
+  const withKey = async () => {
+    if (!keyText || wayState === "busy") return;
     const secret = readSecret(keyText);
-    if (!("key" in secret)) return setWayState("bad");
+    let key = "key" in secret ? secret.key : null;
+    if ("locked" in secret) {
+      if (!keyPass) return;
+      setWayState("busy");
+      // opening it holds the page a moment: the spinner shows first
+      await new Promise((r) => window.setTimeout(r, 40));
+      key = unlockSecret(secret.locked, keyPass);
+      if (!key) return setWayState("wrong");
+    }
+    if (!key) return setWayState("bad");
     try {
-      const account = PrivateKeyAccount.fromKey<AccountMetadata>(secret.key);
+      const account = PrivateKeyAccount.fromKey<AccountMetadata>(key);
       adopt(account, "in", `Account ${count()}`);
       // a key pasted in is a key already kept somewhere else
       writeKeyFlag(account.pubkey, "saved");
       setKeyText("");
+      setKeyPass("");
     } catch {
       // 64 hex characters that are not a valid key
       setWayState("bad");
@@ -130,6 +143,8 @@ export function useSignIn(say: (t: string) => void, from: "pay" | "write") {
     setWayState,
     keyText,
     setKeyText,
+    keyPass,
+    setKeyPass,
     bunkerText,
     setBunkerText,
     scan,

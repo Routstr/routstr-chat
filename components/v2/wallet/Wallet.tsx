@@ -542,7 +542,14 @@ function Home({ go, freeze, bloom }: { go: (v: View, o?: { reopen?: Reopen | nul
               <span>Back up your key</span>
             </span>
             <span className="wl-row-r">
-              <button type="button" className="wl-link" onClick={() => ui.openSettings("account")}>
+              <button
+                type="button"
+                className="wl-link"
+                onClick={() => {
+                  ui.setDrawer(false);
+                  ui.setFace("keep");
+                }}
+              >
                 Back up
               </button>
               <button

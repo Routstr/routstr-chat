@@ -9,7 +9,7 @@ import type { Accounts, Session, SessionService } from "./service";
 
 export type { Account, AccountMetadata } from "./service";
 
-export { fromBunkerLink, readSecret, secretOf, signerByCode } from "./signIn";
+export { fromBunkerLink, lockedSecret, readSecret, secretOf, signerByCode, unlockSecret } from "./signIn";
 export { currentOwner } from "./owned";
 
 /** The session the composition root built, for the screens. */

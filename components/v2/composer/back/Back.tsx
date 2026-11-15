@@ -16,17 +16,19 @@ import PayLanded from "./PayLanded";
 import SignInWays from "./SignInWays";
 import SignInDone from "./SignInDone";
 import WhoIsWriting from "./WhoIsWriting";
+import KeepSafe, { Kept } from "./KeepSafe";
+import { useKeep } from "./useKeep";
 import MethodSwitch from "./MethodSwitch";
 
-/* The back of the composer: who is writing, add a few sats, or sign in. The
-   words stay on the band above; this card beneath is a tone deeper and shows
-   one thing at a time. */
+/* The back of the composer: who is writing, add a few sats, sign in, or keep
+   the key safe. The words stay on the band above; this card beneath is a tone
+   deeper and shows one thing at a time. */
 
 export default function Back({
   face,
   island,
 }: {
-  face: "pay" | "auth" | "who";
+  face: "pay" | "auth" | "who" | "keep";
   island: React.RefObject<HTMLDivElement | null>;
 }) {
   const ui = useUi();
@@ -43,11 +45,13 @@ export default function Back({
   // the new account offered on "Who's writing?": one key for as long as the card is up
   const [fresh] = useState(() => PrivateKeyAccount.generateNew<AccountMetadata>());
   const signIn = useSignIn(say, from === "who" ? "pay" : from);
+  const keep = useKeep(say);
   const { way, setWay, stopScan } = signIn;
-  const view = face === "who" ? "who" : face === "auth" ? (signIn.done ? "done" : "auth") : pay.view;
+  const view = face === "keep" ? (keep.kept ? "kept" : "keep") : face === "who" ? "who" : face === "auth" ? (signIn.done ? "done" : "auth") : pay.view;
 
   // back goes up one level: an open way, then out of sign in
   const back = useCallback(() => {
+    if (face === "keep" && keep.way) return keep.setWay(null);
     if (face === "auth" && way && way !== "ext") {
       stopScan();
       setWay(null);
@@ -56,7 +60,7 @@ export default function Back({
     if (face === "auth" && from !== "write") return ui.setFace(from);
     ui.setSendWhenFunded(false);
     ui.setFace("write");
-  }, [face, way, from, ui]);
+  }, [face, way, from, ui, keep.way, keep.setWay]);
 
   // Esc does the same, from anywhere on the card
   useEffect(() => {
@@ -81,6 +85,10 @@ export default function Back({
       <PayLanded key="landed" landed={pay.landed} />
     ) : view === "done" ? (
       <SignInDone key="done" done={signIn.done} />
+    ) : view === "keep" ? (
+      <KeepSafe key="keep" keep={keep} />
+    ) : view === "kept" && keep.kept ? (
+      <Kept key="kept" way={keep.kept} />
     ) : view === "who" ? (
       <WhoIsWriting key="who" fresh={fresh} signIn={() => ui.setFace("auth")} />
     ) : (

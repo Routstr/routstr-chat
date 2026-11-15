@@ -6,7 +6,7 @@ import {
   PrivateKeyAccount,
 } from "applesauce-accounts/accounts";
 import { NostrConnectSigner } from "applesauce-signers";
-import { readSecret, secretOf, signerByCode } from "../signIn";
+import { lockedSecret, readSecret, secretOf, signerByCode, unlockSecret } from "../signIn";
 
 const sk = generateSecretKey();
 const pk = getPublicKey(sk);
@@ -30,6 +30,17 @@ describe("readSecret", () => {
       problem: "invalid",
     });
     expect(readSecret(nip19.noteEncode(pk))).toEqual({ problem: "invalid" });
+  });
+});
+
+describe("a password-locked copy", () => {
+  it("is found in a backup file's text, and opens only with its password", () => {
+    const locked = lockedSecret(PrivateKeyAccount.fromKey(sk), "correct horse")!;
+    const read = readSecret(`Routstr backup\n\n${locked}\n`);
+    expect(read).toEqual({ locked });
+    expect(unlockSecret(locked, "correct horse")).toEqual(sk);
+    expect(unlockSecret(locked, "wrong")).toBeNull();
+    expect(lockedSecret(new ExtensionAccount(pk, {} as never), "x")).toBeNull();
   });
 });
 

@@ -26,6 +26,7 @@ import { settle, takeFlight } from "./landing";
 import { tokenMs } from "../motion";
 import Back from "./back/Back";
 import { useFirstSend } from "./back/useFirstSend";
+import { useAskToKeep } from "./back/useKeep";
 
 /** The model chip, so the picker can hang from it. */
 
@@ -229,7 +230,7 @@ export default function Composer({ centred }: { centred: boolean }) {
 
   const face = ui.face;
   // the back of the card stays drawn while it turns away
-  const [back, setBack] = useState<"pay" | "auth" | "who" | null>(null);
+  const [back, setBack] = useState<"pay" | "auth" | "who" | "keep" | null>(null);
   if (face !== "write" && back !== face) setBack(face);
   useEffect(() => {
     if (face !== "write") return;
@@ -340,6 +341,7 @@ export default function Composer({ centred }: { centred: boolean }) {
   const needsMoney = !money.node && (!isAuthenticated || lowBalanceWarningForModel);
 
   const first = useFirstSend(needsMoney);
+  const askToKeep = useAskToKeep(isLoading);
 
   // leave for the thread: from the centre the whole island travels (see
   // landing.ts); from the dock the words lift away and the card settles
@@ -408,10 +410,13 @@ export default function Composer({ centred }: { centred: boolean }) {
     const t = window.setTimeout(() => {
       ui.setFace("write");
       ui.setSendWhenFunded(false);
-      window.setTimeout(launch, 420);
+      window.setTimeout(() => {
+        askToKeep();
+        launch();
+      }, 420);
     }, 1500);
     return () => window.clearTimeout(t);
-  }, [ui, needsMoney, isAuthenticated, money.total, held, selectedModel, busy, launch]);
+  }, [ui, needsMoney, isAuthenticated, money.total, held, selectedModel, busy, launch, askToKeep]);
 
   const onKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && !isTouch()) {

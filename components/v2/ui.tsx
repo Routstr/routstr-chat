@@ -8,7 +8,7 @@ import { ModelPick, PickContext } from "./pick";
 
 /* What the furniture is doing right now. Nothing here is account data. */
 
-export type ComposerFace = "write" | "pay" | "auth" | "who";
+export type ComposerFace = "write" | "pay" | "auth" | "who" | "keep";
 export type RailSide = "chats" | "wallet";
 export type SettingsSection =
   | "look"

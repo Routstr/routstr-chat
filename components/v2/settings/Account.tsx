@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState, useSyncExternalStore } from "react";
+import React from "react";
 import { nip19 } from "nostr-tools";
 import { useObservableState } from "applesauce-react/hooks";
-import { secretOf, useAccountManager } from "@/features/session/view";
-import { writeKeyFlag } from "../wallet/bits";
+import { useAccountManager } from "@/features/session/view";
+import { useUi } from "../ui";
+import { readKeyFlag } from "../wallet/bits";
 import Light from "../light/Light";
 import { Btn, Grp, Head, Row, narrow, short, useCopied } from "./parts";
 import SignedOut from "./SignedOut";
@@ -16,12 +17,7 @@ export default function Account() {
   const accounts = useObservableState(manager.accounts$) || [];
   const active = useObservableState(manager.active$);
   const { done, copy } = useCopied();
-  const skipped = useSyncExternalStore(
-    () => () => {},
-    () => localStorage.getItem("nsec_storing_skipped") === "true",
-    () => false
-  );
-  const [copiedKey, setCopiedKey] = useState(false);
+  const ui = useUi();
 
   if (!active) return <SignedOut />;
 
@@ -38,13 +34,7 @@ export default function Account() {
     : active.type === "extension"
       ? "Signed by your browser extension"
       : "Signed by a remote signer";
-  const copyNsec = async () => {
-    const nsec = secretOf(active);
-    if (nsec && (await copy(nsec, "nsec"))) {
-      setCopiedKey(true);
-      writeKeyFlag(active.pubkey, "saved");
-    }
-  };
+  const saved = readKeyFlag(active.pubkey) === "saved";
   const others = accounts.filter((a) => a.id !== active.id);
   return (
     <>
@@ -75,22 +65,26 @@ export default function Account() {
         <Grp
           id="g-backup"
           k="Backup"
-          kv={copiedKey ? "Copied" : skipped ? "Not saved yet" : ""}
-          tone={copiedKey ? "ok" : skipped ? "warn" : undefined}
+          kv={saved ? "Saved" : "Not saved yet"}
+          tone={saved ? "ok" : "warn"}
         >
           <Row
             wrap
             title="Secret key"
             note={
-              copiedKey
-                ? "Copied. Keep it in a password manager, never in a chat. Anyone with it can read your chats and spend your sats."
-                : skipped
-                  ? "You skipped saving it when you signed up. Only this browser has it: if site data is cleared, the key goes, and so do the chats and sats it holds."
-                  : "Anyone with it can read your chats and spend your sats. Keep it somewhere safe."
+              saved
+                ? "Saved. On a new device, sign in with it to get your chats and sats back."
+                : "Only this browser has it: if site data is cleared, the key goes, and so do the chats and sats it holds."
             }
           >
-            <Btn icon="key" done={copiedKey} onClick={() => void copyNsec()}>
-              {copiedKey ? "Copied" : "Copy secret key"}
+            <Btn
+              icon="key"
+              onClick={() => {
+                ui.closeSettings();
+                ui.setFace("keep");
+              }}
+            >
+              {saved ? "Save again" : "Back up"}
             </Btn>
           </Row>
         </Grp>
