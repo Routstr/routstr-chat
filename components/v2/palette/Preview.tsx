@@ -172,6 +172,13 @@ function Pane({ it, toks, q, ctx }: { it: Item; toks: string[]; q: string; ctx: 
           {ctx.conversations.length > 0 && <Week ctx={ctx} />}
         </>
       );
+    case "gift":
+      return (
+        <>
+          <h3 className="pk-pv-t">Send a gift</h3>
+          <Line>Give a friend AI chats as a link. No sign-up, no card: they open it and start. You can take it back until they do.</Line>
+        </>
+      );
     case "room": {
       const cur = ROOMS.find((x) => x.id === ctx.roomNow) ?? ROOMS[1];
       const now = ROOMS.find((x) => x.id === ctx.roomResolved);

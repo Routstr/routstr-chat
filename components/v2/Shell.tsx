@@ -16,6 +16,7 @@ import { ChatModelProvider } from "./useChatModel";
 import Settings from "./settings/Settings";
 import Greeting, { Resume } from "./Greeting";
 import { useCountUp, useMoney } from "./useMoney";
+import { useBalanceHeld } from "./gift/hold";
 import { useSession } from "@/features/session/view";
 import { useConversations, useHistory, useHistoryLoaded, useThread } from "@/features/history/view";
 import { useOpenChat } from "./openChat";
@@ -38,7 +39,7 @@ function Panel() {
   const isAuthenticated = useSession().pubkey !== null;
   // the same figure as the drawer's: a wait mark while it loads, then counted up
   const balWait = !money.node && money.loading && isAuthenticated;
-  const shownBal = useCountUp(money.total);
+  const shownBal = useCountUp(money.total, 900, useBalanceHeld());
 
   const loadingFromUrl =
     !!chatIdFromUrl &&

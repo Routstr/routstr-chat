@@ -4,6 +4,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useWalletSend } from "@/features/wallet/hooks/useWalletSend";
 import { usePurse } from "@/features/wallet/view";
 import { useUnclaimedTokensStore, type UnclaimedToken } from "@/features/wallet/state/unclaimedTokensStore";
+import { madeAs, signed } from "../gift/records";
 import { Icon } from "../icons";
 import { tokenMs } from "../motion";
 import { satsOf, useActiveMint } from "./Wallet";
@@ -649,6 +650,9 @@ export function Tokens({ say, onEmptyBack }: { say: (t: string) => void; onEmpty
     const isOpen = open === t.id;
     const busy = s.reclaimingTokenId === t.id;
     const m = mint.all.find((x) => x.url === t.mintUrl);
+    // a gift made here: its message, and its short link to copy again
+    const gift = madeAs(t.token);
+    const note = gift ? signed(gift.memo).note : "";
     return (
       <div className="wl-fold" key={t.id} data-fold={t.id} data-gone={gone.has(t.id) ? "" : undefined}>
         <div>
@@ -663,11 +667,17 @@ export function Tokens({ say, onEmptyBack }: { say: (t: string) => void; onEmpty
               }}
             >
               <span className="wl-row-t">
-                <span>{fmt(sats)} sats</span>
+                <span>{gift ? `${fmt(sats)} sat gift` : `${fmt(sats)} sats`}</span>
               </span>
               <span className="wl-row-s">
-                Made {ago(t.createdAt)}
-                {m ? ` on ${m.name}` : ""}
+                {note ? (
+                  <>“{note}”</>
+                ) : (
+                  <>
+                    Made {ago(t.createdAt)}
+                    {m ? ` on ${m.name}` : ""}
+                  </>
+                )}
               </span>
               <span className="wl-row-r">
                 <Icon name="right" size={14} className="wl-chev" />
@@ -699,6 +709,12 @@ export function Tokens({ say, onEmptyBack }: { say: (t: string) => void; onEmpty
                   ) : (
                     <>
                       <Code value={t.token} printed copied={copied === t.id} label="Copy token" onCopy={() => void copy(t.token, t.id)} />
+                      {gift && (
+                        <button type="button" className="wl-go" onClick={() => void copy(gift.link, `gift ${t.id}`)}>
+                          <Icon name={copied === `gift ${t.id}` ? "check" : "link"} size={16} />
+                          {copied === `gift ${t.id}` ? "Link copied" : "Copy gift link"}
+                        </button>
+                      )}
                       <div className="wl-two">
                         <button type="button" className="wl-soft" onClick={() => void copy(t.token, t.id)}>
                           <Icon name="copy" size={16} />

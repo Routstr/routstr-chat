@@ -12,10 +12,10 @@ const composerButton = (page: Page, name: "Send" | "Stop") =>
 const railWallet = (page: Page) =>
   page.getByRole("button", { name: /^Open wallet\./ }).first();
 const REPLIES = ".rd-msg.rd-ai";
-// the wallet's panes are regions named after the place: Wallet, Add funds, Send
-const view = (page: Page, v: "home" | "add" | "send") =>
+// the wallet's panes are regions named after the place: Wallet, Add funds, Send, Send a gift
+const view = (page: Page, v: "home" | "add" | "send" | "gift") =>
   page.getByRole("region", {
-    name: { home: "Wallet", add: "Add funds", send: "Send" }[v],
+    name: { home: "Wallet", add: "Add funds", send: "Send", gift: "Send a gift" }[v],
     exact: true,
   });
 
@@ -193,6 +193,23 @@ export const v2 = {
     const token = await code.textContent();
     await backToChats(page);
     return token ?? "";
+  },
+
+  /** Wallet → Send a gift: a gift of `sats` with a message, and the short link Copy link puts on the clipboard. */
+  async giftLink(page: Page, sats: number, from = "Kit", message = "Ask it anything."): Promise<string> {
+    await openWallet(page);
+    await view(page, "home").getByRole("button", { name: "Send a gift" }).click();
+    const gift = view(page, "gift");
+    await until(async () => (await gift.getAttribute("data-pos")) === "here", "Send a gift to slide in");
+    await gift.getByLabel("Amount in sats").fill(String(sats));
+    await gift.getByPlaceholder("Your name").fill(from);
+    await gift.locator("textarea").fill(message);
+    await gift.getByRole("button", { name: "Make gift link" }).click();
+    await gift.getByRole("button", { name: "Copy link" }).click();
+    await shown(gift.getByRole("button", { name: "Link copied" }));
+    const link = await page.evaluate(() => navigator.clipboard.readText());
+    await backToChats(page);
+    return link;
   },
 
   async send(page: Page, text: string) {

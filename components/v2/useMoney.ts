@@ -158,8 +158,8 @@ const textOnly = (model: Model) => {
   return !!inputs && !inputs.some((m) => normalizeModality(m) === "image");
 };
 
-/** A number that counts to its new value once, and never while you read. */
-export function useCountUp(target: number, ms = 900) {
+/** A number that counts to its new value once, and never while you read. Held, it waits on the value it shows. */
+export function useCountUp(target: number, ms = 900, hold = false) {
   const [shown, setShown] = useState(target);
   const from = useRef(target);
   const raf = useRef(0);
@@ -167,7 +167,7 @@ export function useCountUp(target: number, ms = 900) {
     const start = performance.now();
     const a = from.current;
     const b = target;
-    if (a === b) return;
+    if (a === b || hold) return;
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (reduce || Math.abs(b - a) < 1) {
       from.current = b;
@@ -185,6 +185,6 @@ export function useCountUp(target: number, ms = 900) {
     cancelAnimationFrame(raf.current);
     raf.current = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf.current);
-  }, [target, ms]);
+  }, [target, ms, hold]);
   return shown;
 }

@@ -19,15 +19,17 @@ import { tokenMs } from "../motion";
 import { Note, Odometer, dayOf, fmt, host, left, mintLabel, numSize, pairChange, phoneNow, readKeyFlag, reduced, span, toMs, whenIn, writeKeyFlag } from "./bits";
 import Add, { type Reopen } from "./Add";
 import Send, { Tokens } from "./Send";
+import Gift from "./Gift";
+import { openedGifts, signed, type Opened } from "../gift/records";
 
 /* The back of the rail card: your money. The number first, what it buys, the
    two ways to move it, what is waiting, and what moved lately. Deeper views
    pan in from the right; Back and Escape step up one level. */
 
-export type View = "home" | "add" | "send" | "tokens";
-const ORDER: Record<View, number> = { home: 0, add: 1, send: 1, tokens: 2 };
-const VIEWS: View[] = ["home", "add", "send", "tokens"];
-const PLACE: Record<View, string> = { home: "Wallet", add: "Add funds", send: "Send", tokens: "Your tokens" };
+export type View = "home" | "add" | "send" | "gift" | "tokens";
+const ORDER: Record<View, number> = { home: 0, add: 1, send: 1, gift: 1, tokens: 2 };
+const VIEWS: View[] = ["home", "add", "send", "gift", "tokens"];
+const PLACE: Record<View, string> = { home: "Wallet", add: "Add funds", send: "Send", gift: "Send a gift", tokens: "Your tokens" };
 const HOUR = 3_600_000;
 
 /** What one ordinary reply costs with the chosen model. */
@@ -89,6 +91,13 @@ export default function Wallet() {
     [view, say]
   );
   const back = () => (up === "chats" ? ui.setSide("chats") : go(up));
+
+  // "Send a gift" from anywhere (the ⌘K list): the wallet opens on it
+  useEffect(() => {
+    const gift = () => go("gift");
+    window.addEventListener("v2:gift", gift);
+    return () => window.removeEventListener("v2:gift", gift);
+  }, [go]);
 
   // the card turned away: next time it opens at home
   useEffect(() => {
@@ -170,6 +179,8 @@ export default function Wallet() {
               <Add reopen={reopen} clearReopen={() => setReopen(null)} say={say} landing={landing} land={land} toPay={(inv) => go("send", { ln: inv })} />
             ) : v === "send" ? (
               <Send say={say} toTokens={() => go("tokens")} toAdd={() => go("add")} prefill={lnPrefill} clearPrefill={() => setLnPrefill(null)} />
+            ) : v === "gift" ? (
+              <Gift say={say} toTokens={() => go("tokens")} />
             ) : (
               <Tokens say={say} onEmptyBack={() => root.current?.querySelector<HTMLElement>(".wl-back")?.focus({ preventScroll: true })} />
             )}
@@ -408,11 +419,25 @@ function Home({ go, freeze, bloom }: { go: (v: View, o?: { reopen?: Reopen | nul
     if (!groups.length || groups[groups.length - 1].g !== g) groups.push({ g, items: [] });
     groups[groups.length - 1].items.push(h);
   }
+  // sats that came in a gift opened here say whom from (this device only: never published): each
+  // gift names the row of its size that came in nearest the moment it was opened
+  const giftAt = new Map<string, Opened>();
+  for (const g of openedGifts()) {
+    const near = items
+      .filter((h) => h.dir === "in" && h.amount === g.sats && Math.abs(g.at - h.t) < 10 * 60_000)
+      .sort((a, b) => Math.abs(g.at - a.t) - Math.abs(g.at - b.t))[0];
+    if (near) giftAt.set(near.id, g);
+  }
   const line = (h: (typeof items)[number], quiet?: boolean) => {
+    const gift = giftAt.get(h.id);
+    const from = gift ? signed(gift.memo).from : null;
     const row = (
       <div key={h.id} className={`wl-line${quiet ? " sub" : ""}${h.dir === "in" ? " in" : ""}`}>
-        <span className="wl-line-t">{quiet ? "" : h.dir === "in" ? "Received" : "Spent"}</span>
-        <span className="wl-line-w">{whenIn(h.t)}</span>
+        <span className="wl-line-t">{quiet ? "" : gift ? (from ? `Gift from ${from}` : "Gift") : h.dir === "in" ? "Received" : "Spent"}</span>
+        <span className="wl-line-w">
+          {gift && signed(gift.memo).note ? `“${signed(gift.memo).note}” · ` : ""}
+          {whenIn(h.t)}
+        </span>
         <span className={`wl-amt${h.dir === "in" ? " in" : ""}`}>
           {h.dir === "in" ? "+" : "−"}
           {fmt(h.amount)}
@@ -527,6 +552,9 @@ function Home({ go, freeze, bloom }: { go: (v: View, o?: { reopen?: Reopen | nul
         <button type="button" className="wl-act up" disabled={money.wallet <= 0} aria-describedby={money.wallet <= 0 ? "wlNoSend" : undefined} onClick={() => go("send")}>
           <Icon name="arrowUp" size={16} />
           <span>Send</span>
+        </button>
+        <button type="button" className="wl-act wl-act-gift" aria-label="Send a gift" title="Send a gift" disabled={money.wallet <= 0} aria-describedby={money.wallet <= 0 ? "wlNoSend" : undefined} onClick={() => go("gift")}>
+          <Icon name="gift" size={18} />
         </button>
         {money.wallet <= 0 && (
           <span className="sr" id="wlNoSend">

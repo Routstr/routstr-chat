@@ -34,6 +34,7 @@ import { useUnclaimedTokensStore } from "./state/unclaimedTokensStore";
 
 export { peek } from "./purse";
 export { giftFromSeed, giftSeed } from "./gift";
+export { dismissToken } from "./hooks/useBook";
 export { listedMints } from "./mintList";
 
 /** The signed-in account's mints (every one that holds a coin, and the ones

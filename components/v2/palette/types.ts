@@ -5,7 +5,7 @@ import type { ROOMS, RoomId } from "../room/RoomProvider";
 import type { Sec } from "./sections";
 
 export type Room = (typeof ROOMS)[number];
-export type ActId = "new" | "model" | "wallet" | "room" | "sync" | "rail" | "settings";
+export type ActId = "new" | "model" | "wallet" | "gift" | "room" | "sync" | "rail" | "settings";
 export type Found = { idx: number; at: number; len: number; body: string };
 type Kind = "chat" | "action" | "room" | "roomjump" | "setting" | "fallback";
 export interface Item {

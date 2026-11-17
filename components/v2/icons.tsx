@@ -5,6 +5,13 @@ import React from "react";
 
 const PATHS = {
   plus: <path d="M12 5.5v13M5.5 12h13" />,
+  gift: (
+    <>
+      <rect x="4" y="9" width="16" height="4.5" rx="1.3" />
+      <path d="M5.5 13.5v5a1.5 1.5 0 0 0 1.5 1.5h10a1.5 1.5 0 0 0 1.5-1.5v-5M12 9v11" />
+      <path d="M12 9c-1.4-3-5-3.8-5-1.7C7 8.8 10 9 12 9c2 0 5-.2 5-1.7 0-2.1-3.6-1.3-5 1.7Z" />
+    </>
+  ),
   rail: (
     <>
       <rect x="3.75" y="4.75" width="16.5" height="14.5" rx="3" />

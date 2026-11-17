@@ -6,6 +6,7 @@ import { useOpenChat } from "./openChat";
 import { useConversations } from "@/features/history/view";
 import { commitLine, peekLine } from "./palette/greet";
 import { lastActivity, timeAgo } from "./format";
+import GiftArrival, { useGiftLink } from "./GiftArrival";
 
 const phoneNow = () => window.matchMedia("(max-width: 760px)").matches;
 
@@ -21,18 +22,24 @@ export default function Greeting({ first, gone }: { first: boolean | null; gone:
     if (line) commitLine(line);
   }, [line]);
   const words = line ? line.split(" ") : [];
+  // a gift link waits in the room until it is opened
+  const gift = useGiftLink();
 
   return (
     <section className="stage" aria-label="New chat">
       <div className="stage-in">
-        <h1 className="greet">
-          {words.map((w, i) => (
-            <span className="w" key={i} style={{ "--i": i } as React.CSSProperties}>
-              {w}
-              {i < words.length - 1 ? " " : ""}
-            </span>
-          ))}
-        </h1>
+        {gift !== null ? (
+          <GiftArrival key={gift.id} gift={gift} />
+        ) : (
+          <h1 className="greet">
+            {words.map((w, i) => (
+              <span className="w" key={i} style={{ "--i": i } as React.CSSProperties}>
+                {w}
+                {i < words.length - 1 ? " " : ""}
+              </span>
+            ))}
+          </h1>
+        )}
       </div>
       {first && <Pool gone={gone} />}
     </section>

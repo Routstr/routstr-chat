@@ -62,6 +62,7 @@ export const actions = (onEmpty: boolean, modelWords: string, phone: boolean, is
   // every model and company the app knows is a word for the model menu
   { id: "model", icon: "think", label: "Choose a model", words: `model switch change llm ai ${modelWords}`, verb: "Open" },
   { id: "wallet", icon: "wallet", label: "Wallet", words: "balance sats money top up add fund pay send receive", verb: "Open" },
+  { id: "gift", icon: "gift", label: "Send a gift", words: "gift give friend present share link sats", verb: "Open" },
   { id: "room", icon: "moon", label: "Change room", words: "room theme look colour color appearance", verb: "Choose", push: true },
   { id: "sync", icon: "sync", label: "Sync chats now", words: "sync relays devices backup refresh", verb: "Sync" },
   ...(phone

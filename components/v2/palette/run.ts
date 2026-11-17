@@ -104,6 +104,11 @@ export function runItem(
       close({ keepRoom: true, handoff: true });
       window.dispatchEvent(new Event("v2:wallet"));
       return;
+    case "gift":
+      close({ keepRoom: true, handoff: true });
+      window.dispatchEvent(new Event("v2:wallet"));
+      window.dispatchEvent(new Event("v2:gift"));
+      return;
     case "rail":
       // the button that opened the palette may be folding away: the reply box takes the focus
       close({ keepRoom: true, composer: true });

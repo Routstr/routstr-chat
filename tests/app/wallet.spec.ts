@@ -4,6 +4,7 @@ import { generateSecretKey, nip19 } from "nostr-tools";
 import { expect, test } from "./fixtures";
 import { v2 } from "./drivers/v2";
 import { seedAccounts } from "./seed";
+import { seal } from "../kit/net";
 
 const newKey = () => nip19.nsecEncode(generateSecretKey());
 
@@ -492,4 +493,58 @@ test("stops asking about an unpaid invoice once its screen is gone", async ({
   });
   await page.waitForTimeout(12_000);
   expect(asked).toBe(0);
+});
+
+// a gift link holds only the gift's seed, its mint and its message, after the #: opened by hand
+// (never on load, so a link scanner takes nothing), a fresh browser asks the mint for the coins
+// the seed made and takes them in on a key it makes, and they pay for a reply. The seed travels
+// in no request, so neither the server the app is loaded from nor anyone else gets it. Opened
+// again in that browser, it says so rather than that someone else took it.
+test("a gift link opened by hand in a fresh browser brings its sats, which pay for a reply", async ({
+  page,
+  context,
+  browser,
+  kit,
+  appUrl,
+}) => {
+  await kit.upstream.reset();
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await v2.open(page, appUrl);
+  await v2.fund(page, appUrl, await kit.mintToken(300));
+  const link = await v2.giftLink(page, 100, "Mira", "For your exam week.");
+  expect(link.startsWith(`${appUrl}/gift#s=`)).toBe(true);
+  expect(link.length).toBeLessThan(200);
+  await expect.poll(() => v2.balance(page)).toBe(200);
+  const seed = new URLSearchParams(new URL(link).hash.slice(1)).get("s") ?? "";
+
+  const friend = await browser.newContext();
+  await seal(friend, kit.env, appUrl);
+  await friend.addInitScript(
+    ({ url, model }) => {
+      localStorage.setItem("base_urls_list", JSON.stringify([url]));
+      localStorage.setItem("lastUsedModel", JSON.stringify(`${model}@@${url}`));
+    },
+    { url: kit.coreUrl, model: "kit-cheap" }
+  );
+  const sent: string[] = [];
+  friend.on("request", (r) => sent.push(`${r.url()} ${r.postData() ?? ""}`));
+  const second = await friend.newPage();
+  await second.goto(link);
+  await v2.ready(second);
+  await expect(second.getByRole("heading", { name: "Mira sent you a gift." })).toBeVisible();
+  // the gift's scene covers the room: its button is the keyboard's way in (named for the light, or for no light)
+  const open = second.getByRole("button", { name: /^(Hold to open|Open the gift)$/ });
+  await expect(open).toBeVisible();
+  await open.press("Enter");
+  await expect.poll(() => v2.balance(second).catch(() => 0)).toBe(100);
+  expect(new URL(second.url()).hash).toBe("");
+
+  await v2.send(second, "[kit:usage=10,10] hello gift");
+  await v2.waitReplyText(second, "Echo: hello gift");
+  expect(sent.filter((s) => s.includes(seed))).toEqual([]);
+
+  const again = await friend.newPage();
+  await again.goto(link);
+  await expect(again.getByRole("heading", { name: "You opened this already." })).toBeVisible();
+  await friend.close();
 });

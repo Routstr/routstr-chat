@@ -1,0 +1,262 @@
+/* ══ a gift link (gift/GiftLight.tsx) ══════════════════════════════════════ */
+/* in the room: the words, in the greeting's place; the row gives the light room above them */
+.panel[data-state="empty"]:has(.gift) {
+  grid-template-rows:
+    auto minmax(0, min(66vh, calc(100dvh - 230px)))
+    auto minmax(0, 1fr);
+}
+.gift {
+  display: grid;
+  justify-items: center;
+  gap: var(--s2);
+  width: 100%;
+  text-align: center;
+}
+.gift .greet {
+  font-size: calc(46px * var(--display-scale));
+}
+.gift-note {
+  max-width: 36ch;
+  margin: 0;
+  font-family: var(--f-body);
+  font-style: italic;
+  font-size: 17.5px;
+  line-height: 1.5;
+  color: var(--ink-2);
+  text-wrap: balance;
+  animation: fadeUp var(--d-slow) var(--e-out) 200ms both;
+}
+.gift-why {
+  font-style: normal;
+}
+.gift-hint {
+  margin: 0;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: var(--r-xs);
+  background: none;
+  color: var(--ink-3);
+  font: 11px/1.4 var(--f-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  transition: color var(--d-fast);
+  animation: fadeUp var(--d-slow) var(--e-out) 300ms both;
+}
+button.gift-hint {
+  cursor: pointer;
+}
+button.gift-hint:disabled {
+  cursor: default;
+  color: var(--ink-2);
+}
+@media (hover: hover) {
+  button.gift-hint:not(:disabled):hover {
+    color: var(--ink-2);
+  }
+}
+/* the words come after the light has arrived */
+.gift[data-phase="here"] .greet .w {
+  animation-delay: calc(1250ms + var(--i, 0) * var(--d-quick) * 0.78);
+}
+.gift[data-phase="here"] .gift-note {
+  animation-delay: 1850ms;
+}
+.gift[data-phase="here"] .gift-hint {
+  animation-delay: 2300ms;
+}
+/* why it did not open comes at once */
+.gift[data-phase="here"] .gift-why {
+  animation-delay: 0ms;
+}
+
+/* while the light is up: the room dims under a vignette, darker toward the edges, centred on the
+   light (--gx, --gy); the light's canvas over it; the words drawn light, exactly over the room's.
+   Under the brand mark on a first visit (the boot layer is 70). */
+.gift-scene {
+  position: fixed;
+  inset: 0;
+  z-index: 65;
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.gift-scene-dim {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    110vmax 85vmax at var(--gx, 50%) var(--gy, 40%),
+    rgb(4 5 6 / 0.7),
+    rgb(4 5 6 / 0.8) 42%,
+    rgb(4 5 6 / 0.93)
+  );
+  animation: giftIn 1400ms var(--e-out) both;
+  transition: opacity 1600ms var(--e-in-out);
+}
+.gift-scene-light {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.gift-scene-light canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.gift-scene-words {
+  position: absolute;
+  pointer-events: none;
+  --ink: #ecefee;
+  --ink-2: #a9b2b0;
+  --ink-3: #8d9896;
+  color: var(--ink);
+  transition: opacity 1200ms var(--e-in-out);
+}
+.gift-scene[data-out] {
+  pointer-events: none;
+  cursor: default;
+}
+.gift-scene[data-out] :is(.gift-scene-dim, .gift-scene-words) {
+  opacity: 0;
+}
+.gift-scene[data-dead] {
+  display: none;
+}
+.gift-scene:not([data-phase="here"]) {
+  cursor: default;
+}
+@keyframes giftIn {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (max-width: 760px) {
+  .panel[data-state="empty"] .gift,
+  .gift-scene-words {
+    justify-items: start;
+    text-align: left;
+  }
+  .gift-scene-words .greet {
+    text-align: left;
+  }
+  .gift .greet {
+    font-size: calc(38px * var(--display-scale));
+  }
+  .gift-hint {
+    margin-left: -12px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gift-note,
+  .gift-hint {
+    animation-duration: 1ms;
+    animation-delay: 0ms !important;
+  }
+  .gift .greet .w {
+    animation-delay: 0ms !important;
+  }
+  .gift-scene-dim {
+    animation-duration: 1ms;
+    transition-duration: 1ms;
+  }
+  .gift-scene-words {
+    transition-duration: 1ms;
+  }
+}
+
+/* the sats land: the balance catches the gold for a moment as it counts them in */
+:root {
+  --gift-gold: #a86d12;
+}
+html:is([data-room="night"], [data-face="dusk"]) {
+  --gift-gold: #f2b25c;
+}
+.sb-bal .sb-num,
+.head-bal .n {
+  transition: color 900ms var(--e-out);
+}
+.sb-bal[data-glint] .sb-num,
+.head-bal[data-glint] .n {
+  color: var(--gift-gold);
+  transition-duration: 200ms;
+}
+
+/* ══ the wallet's Gift (wallet/Gift.tsx) ═══════════════════════════════════ */
+.wl-gift {
+  display: grid;
+  gap: var(--s3);
+}
+.wl-gift-lead {
+  margin: 0;
+  font-family: var(--f-ui);
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ink-2);
+  text-wrap: balance;
+}
+.wl-gift-f {
+  display: grid;
+  gap: 6px;
+}
+.wl-gift-f > span {
+  font-family: var(--f-ui);
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.wl-gift-f :is(input, textarea) {
+  display: block;
+  width: 100%;
+  padding: 10px var(--s3);
+  border-radius: var(--r-sm);
+  resize: none;
+  background: var(--fill-1);
+  color: var(--ink);
+  caret-color: var(--tint);
+  font: 14px/1.45 var(--f-ui);
+  transition:
+    background var(--d-fast) var(--e-out),
+    box-shadow var(--d-fast);
+}
+.wl-gift-f :is(input, textarea)::placeholder {
+  color: var(--ink-3);
+}
+.wl-gift-f :is(input, textarea):focus-visible {
+  outline: none;
+  background: var(--fill-2);
+  box-shadow: inset 0 0 0 1px var(--tint-soft);
+}
+.wl-gift-card {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  text-align: center;
+  font-family: var(--f-body);
+  font-style: italic;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--ink-2);
+  text-wrap: balance;
+}
+.wl-gift-card .by {
+  font-family: var(--f-ui);
+  font-style: normal;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.wl-go :is(.v2-ico),
+.wl-soft .v2-ico {
+  margin-right: 6px;
+}
+/* the wallet's ways to move money: Add, Send, and a gift, just its icon (in the gift's gold) */
+.wl .wl-acts {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 44px;
+}
+.wl .wl-act-gift .v2-ico {
+  color: var(--gift-gold);
+}
+.wl .wl-act-gift:disabled .v2-ico {
+  color: inherit;
+}
