@@ -23,7 +23,10 @@ export interface Purse {
     sats: number,
     handoff?: (token: string) => Promise<void>,
     /** the provider the handoff gives it to, for Reclaim to ask */
-    to?: string
+    to?: string,
+    /** a gift's own seed, whose coins its short link can rebuild (giftFromSeed); the change
+     *  stays this account's as ever */
+    seed?: Uint8Array
   ): Promise<string>;
   /** What a token of `sats` at the mint takes on top of `sats` in the mint's
    *  fees (its swap, and claiming the token, which the token carries), null
@@ -141,12 +144,12 @@ export function createPurse(
   const purse: Purse = {
     balances: async () => balancesOf(await coins.coins(owner)),
     activeMint: () => coins.activeMint(owner),
-    send: async (mintUrl, sats, handoff, to) => {
+    send: async (mintUrl, sats, handoff, to, seed) => {
       const token = await executor.send(
         mintUrl,
         sats,
         () => coins.coins(owner, mintUrl),
-        { handoff, track: !handoff, to }
+        { handoff, track: !handoff, to, seed }
       );
       note({ direction: "out", sats });
       return token;

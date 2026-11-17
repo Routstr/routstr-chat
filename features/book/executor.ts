@@ -2,6 +2,8 @@ import {
   getEncodedTokenV4,
   getTokenMetadata,
   HttpResponseError,
+  OutputData,
+  type OutputDataFactory,
   MeltQuoteState,
   Mint,
   MintOperationError,
@@ -60,6 +62,15 @@ export interface SendOptions {
   handoff?: (token: string) => Promise<void>;
   /** the provider the handoff gives the token to, kept on its record */
   to?: string;
+  /** A gift's own seed: the coins the token holds are made from it (NUT-13), so a link that
+   *  holds only the seed can ask the mint for them again (NUT-09). The change stays random. */
+  seed?: Uint8Array;
+}
+
+/** Outputs made from a seed at counters 0, 1, 2…, as a gift's coins are (NUT-13). */
+function fromSeed(seed: Uint8Array): OutputDataFactory {
+  let counter = 0;
+  return (amount, keys) => OutputData.createSingleDeterministicData(amount, seed, counter++, keys.id);
 }
 
 // a request that failed may still be on its way to the mint: it gets this long
@@ -458,10 +469,17 @@ export class WalletExecutor {
     const commit = this.deps.commitFor(mintUrl);
     const amount = wallet.unit === "msat" ? sats * 1000 : sats;
     // a token is always swapped fresh, never coins the wallet already held
-    const preview = await wallet.prepareSwapToSend(amount, proofs, {
-      keysetId: wallet.keysetId,
-      includeFees: options.includeFees ?? true,
-    });
+    const preview = await wallet.prepareSwapToSend(
+      amount,
+      proofs,
+      {
+        keysetId: wallet.keysetId,
+        includeFees: options.includeFees ?? true,
+      },
+      options.seed
+        ? { send: { type: "factory", factory: fromSeed(options.seed) } }
+        : undefined
+    );
     const { id, keep, send } = await this.swap(
       wallet,
       mintUrl,
