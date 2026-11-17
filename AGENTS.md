@@ -79,5 +79,7 @@ Ecash proofs are bearer money: whoever has a proof's secret has the sats.
 
 ## Before a commit
 
-tsc and lint clean, `pnpm test unit` in both keyset modes, and the in-app specs for what you
-changed. Check UI changes in a browser at phone and desktop widths.
+tsc and lint clean, the unit tests for what you changed (`pnpm test unit` in both keyset modes
+for money code), and the in-app specs for what you changed. Check UI changes in a browser at
+phone and desktop widths. The verify skill (`.claude/skills/verify`) picks these from the diff
+and shows the change in the app.

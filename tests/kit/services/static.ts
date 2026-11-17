@@ -26,7 +26,8 @@ export interface StaticServer {
   close(): Promise<void>;
 }
 
-export async function serveStatic(root: string, base = ""): Promise<StaticServer> {
+export async function serveStatic(dir: string, base = ""): Promise<StaticServer> {
+  const root = path.resolve(dir);
   const resolve = (urlPath: string) => {
     const clean = path.normalize(decodeURIComponent(urlPath.split("?")[0]));
     for (const candidate of [
