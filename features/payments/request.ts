@@ -195,7 +195,7 @@ export function createPay(deps: PayDeps): Pay {
           modelId: model.id,
           body: {
             prompt: promptOf(messages),
-            n,
+            ...(n > 1 && { n }),
             ...(resolution && { resolution }),
             ...(quality && { quality }),
             ...(references.length > 0 && { input_references: references }),

@@ -338,15 +338,16 @@ describe("createPay", () => {
     };
     await pay({ messages: [question], model: picture }, callbacks(), new AbortController().signal);
     await pay({ messages: [{ role: "user", content: "a cat" }], model: picture }, callbacks(), new AbortController().signal);
+    await pay({ messages: [{ role: "user", content: "two cats" }], model: { id: "p", picture: { n: 2 } } }, callbacks(), new AbortController().signal);
 
     expect(sdk.pictures.mock.calls.map(([{ body }]) => body)).toEqual([
       {
         prompt: "the same cat, in snow",
-        n: 1,
         resolution: "1K",
         input_references: [{ type: "image_url", image_url: { url: "data:image/png;base64,CAT" } }],
       },
-      { prompt: "a cat", n: 1, resolution: "1K" },
+      { prompt: "a cat", resolution: "1K" },
+      { prompt: "two cats", n: 2 },
     ]);
   });
 

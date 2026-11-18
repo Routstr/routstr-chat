@@ -62,11 +62,11 @@ export const paints = (m: Model) => {
   return !!m.image_pricing && !!outs?.length && outs.every((o) => normalizeModality(o) === "image") && !!ins?.some((i) => normalizeModality(i) === "text") && !/edit/i.test(m.id);
 };
 
-/** Most pictures one request may ask this model for: the node refuses a count
- *  no endpoint of the model takes. */
+/** Most pictures one request may ask this model for: the count its endpoints
+ *  list, and one where it lists none (Venice's images route takes only one). */
 export const mostPictures = (m: Model) => {
   const limits = Object.values(m.image_pricing?.endpoints ?? {}).map((e) => e.parameters?.n?.max ?? 1);
-  return limits.length ? Math.min(4, Math.max(...limits)) : 4;
+  return limits.length ? Math.min(4, Math.max(...limits)) : 1;
 };
 
 /** Most pictures of yours a picture model may work from in one request, as
