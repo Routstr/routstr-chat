@@ -78,8 +78,12 @@ export const mostReferences = (m: Model) =>
  *  (an images route that takes no size refuses or ignores one). */
 export const pictureSizes = (m: Model) => [...new Set(Object.values(m.image_pricing?.endpoints ?? {}).flatMap((e) => e.parameters?.resolution?.values ?? []))];
 
+/** The quality a picture starts at: Medium where the model lists it, as its
+ *  own default is often the dearest step; else that default. */
+export const startQuality = (ip: NonNullable<Model["image_pricing"]>) => (ip.qualities.includes("medium") ? "medium" : ip.default_quality ?? ip.qualities[0]) ?? undefined;
+
 /** What a picture model is asked for, kept to the counts, sizes and qualities
- *  it lists, 1K or its first size and its own quality where none is chosen;
+ *  it lists, 1K or its first size and its start quality where none is chosen;
  *  undefined for any other model. */
 export const pictureOf = (m: Model, choice: PictureChoice): PictureChoice | undefined => {
   const ip = m.image_pricing;
@@ -88,7 +92,7 @@ export const pictureOf = (m: Model, choice: PictureChoice): PictureChoice | unde
   return {
     n: Math.min(choice.n, mostPictures(m)),
     resolution: sizes.length > 1 ? (choice.resolution && sizes.includes(choice.resolution) ? choice.resolution : sizes.includes("1K") ? "1K" : sizes[0]) : undefined,
-    quality: (choice.quality && ip.qualities.includes(choice.quality) ? choice.quality : ip.default_quality ?? ip.qualities[0]) ?? undefined,
+    quality: choice.quality && ip.qualities.includes(choice.quality) ? choice.quality : startQuality(ip),
   };
 };
 

@@ -178,10 +178,10 @@ describe("mostReferences: the pictures of yours a picture model works from", () 
 });
 
 describe("pictureOf: a picture request names only what the model's endpoints take", () => {
-  const painter = (endpoints?: Record<string, object>) =>
+  const painter = (endpoints?: Record<string, object>, qualities: string[] = [], default_quality: string | null = null) =>
     model("p", "P", {
       architecture: { input_modalities: ["text"], output_modalities: ["image"] },
-      image_pricing: { max_usd: 0.1, tiers: [], resolutions: ["1K", "2K", "4K"], qualities: [], default_resolution: "1K", default_quality: null, endpoints },
+      image_pricing: { max_usd: 0.1, tiers: [], resolutions: ["1K", "2K", "4K"], qualities, default_resolution: "1K", default_quality, endpoints },
     } as unknown as Partial<Model>);
 
   it("asks no size and one picture where the endpoints name neither", () => {
@@ -194,6 +194,12 @@ describe("pictureOf: a picture request names only what the model's endpoints tak
     expect(pictureOf(sized, { n: 2, resolution: "4K" })).toMatchObject({ n: 2, resolution: "4K" });
     expect(pictureOf(sized, { n: 1, resolution: "8K" })?.resolution).toBe("1K");
     expect(pictureOf(painter({ a: { parameters: { resolution: { values: ["2K", "4K"] } } } }), { n: 1 })?.resolution).toBe("2K");
+  });
+
+  it("starts at Medium where the model lists it, else at its own default", () => {
+    expect(pictureOf(painter(undefined, ["low", "medium", "high", "auto"], "auto"), { n: 1 })?.quality).toBe("medium");
+    expect(pictureOf(painter(undefined, ["low", "medium", "high", "auto"], "auto"), { n: 1, quality: "high" })?.quality).toBe("high");
+    expect(pictureOf(painter(undefined, ["standard", "hd"], "hd"), { n: 1 })?.quality).toBe("hd");
   });
 });
 
