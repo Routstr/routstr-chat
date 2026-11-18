@@ -62,11 +62,11 @@ export const paints = (m: Model) => {
   return !!m.image_pricing && !!outs?.length && outs.every((o) => normalizeModality(o) === "image") && !!ins?.some((i) => normalizeModality(i) === "text") && !/edit/i.test(m.id);
 };
 
-/** Most pictures one request may ask this model for: the node refuses a count
- *  no endpoint of the model takes. */
+/** Most pictures one request may ask this model for: the count its endpoints
+ *  list, and one where it lists none (Venice's images route takes only one). */
 export const mostPictures = (m: Model) => {
   const limits = Object.values(m.image_pricing?.endpoints ?? {}).map((e) => e.parameters?.n?.max ?? 1);
-  return limits.length ? Math.min(4, Math.max(...limits)) : 4;
+  return limits.length ? Math.min(4, Math.max(...limits)) : 1;
 };
 
 /** Most pictures of yours a picture model may work from in one request, as
@@ -74,15 +74,25 @@ export const mostPictures = (m: Model) => {
 export const mostReferences = (m: Model) =>
   paints(m) && sees(m) ? Math.max(0, ...Object.values(m.image_pricing?.endpoints ?? {}).map((e) => e.parameters?.input_references?.max ?? 0)) : 0;
 
+/** The sizes this model's endpoints say they take; none where they name none
+ *  (an images route that takes no size refuses or ignores one). */
+export const pictureSizes = (m: Model) => [...new Set(Object.values(m.image_pricing?.endpoints ?? {}).flatMap((e) => e.parameters?.resolution?.values ?? []))];
+
+/** The quality a picture starts at: Medium where the model lists it, as its
+ *  own default is often the dearest step; else that default. */
+export const startQuality = (ip: NonNullable<Model["image_pricing"]>) => (ip.qualities.includes("medium") ? "medium" : ip.default_quality ?? ip.qualities[0]) ?? undefined;
+
 /** What a picture model is asked for, kept to the counts, sizes and qualities
- *  it lists, its own defaults where none is chosen; undefined for any other model. */
+ *  it lists, 1K or its first size and its start quality where none is chosen;
+ *  undefined for any other model. */
 export const pictureOf = (m: Model, choice: PictureChoice): PictureChoice | undefined => {
   const ip = m.image_pricing;
   if (!ip || !paints(m)) return undefined;
+  const sizes = pictureSizes(m);
   return {
     n: Math.min(choice.n, mostPictures(m)),
-    resolution: (choice.resolution && ip.resolutions.includes(choice.resolution) ? choice.resolution : ip.default_resolution ?? ip.resolutions[0]) ?? undefined,
-    quality: (choice.quality && ip.qualities.includes(choice.quality) ? choice.quality : ip.default_quality ?? ip.qualities[0]) ?? undefined,
+    resolution: sizes.length > 1 ? (choice.resolution && sizes.includes(choice.resolution) ? choice.resolution : sizes.includes("1K") ? "1K" : sizes[0]) : undefined,
+    quality: choice.quality && ip.qualities.includes(choice.quality) ? choice.quality : startQuality(ip),
   };
 };
 

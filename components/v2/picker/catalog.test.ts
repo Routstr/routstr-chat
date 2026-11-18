@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Model } from "@/types/models";
-import { answers, baseKey, fmt, handles, hostOf, makerOf, measureFor, mostReferences, priceScale, searchRank, sortRows, type Row } from "./catalog";
+import { answers, baseKey, fmt, handles, hostOf, makerOf, measureFor, mostPictures, mostReferences, pictureOf, priceScale, searchRank, sortRows, type Row } from "./catalog";
 import { offList, pct, smartsOf } from "./deals";
 import list from "./openrouter.json";
 
@@ -174,6 +174,32 @@ describe("mostReferences: the pictures of yours a picture model works from", () 
     expect(mostReferences(painter(["text"], [4]))).toBe(0);
     expect(mostReferences(painter(["text", "image"], [undefined]))).toBe(0);
     expect(mostReferences(painter(["text", "image"], []))).toBe(0);
+  });
+});
+
+describe("pictureOf: a picture request names only what the model's endpoints take", () => {
+  const painter = (endpoints?: Record<string, object>, qualities: string[] = [], default_quality: string | null = null) =>
+    model("p", "P", {
+      architecture: { input_modalities: ["text"], output_modalities: ["image"] },
+      image_pricing: { max_usd: 0.1, tiers: [], resolutions: ["1K", "2K", "4K"], qualities, default_resolution: "1K", default_quality, endpoints },
+    } as unknown as Partial<Model>);
+
+  it("asks no size and one picture where the endpoints name neither", () => {
+    expect(pictureOf(painter(), { n: 3, resolution: "2K" })).toEqual({ n: 1, resolution: undefined, quality: undefined });
+    expect(mostPictures(painter())).toBe(1);
+  });
+
+  it("asks a size the endpoints name, 1K or their first size by default", () => {
+    const sized = painter({ a: { parameters: { resolution: { values: ["768", "1K", "2K"] }, n: { max: 4 } } }, b: { parameters: { resolution: { values: ["1K", "4K"] } } } });
+    expect(pictureOf(sized, { n: 2, resolution: "4K" })).toMatchObject({ n: 2, resolution: "4K" });
+    expect(pictureOf(sized, { n: 1, resolution: "8K" })?.resolution).toBe("1K");
+    expect(pictureOf(painter({ a: { parameters: { resolution: { values: ["2K", "4K"] } } } }), { n: 1 })?.resolution).toBe("2K");
+  });
+
+  it("starts at Medium where the model lists it, else at its own default", () => {
+    expect(pictureOf(painter(undefined, ["low", "medium", "high", "auto"], "auto"), { n: 1 })?.quality).toBe("medium");
+    expect(pictureOf(painter(undefined, ["low", "medium", "high", "auto"], "auto"), { n: 1, quality: "high" })?.quality).toBe("high");
+    expect(pictureOf(painter(undefined, ["standard", "hd"], "hd"), { n: 1 })?.quality).toBe("hd");
   });
 });
 

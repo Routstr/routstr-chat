@@ -56,7 +56,7 @@ export interface Model {
     /** USD for each picture of yours a request carries, past the first `input_images_included`. */
     input_image_usd?: number;
     input_images_included?: number;
-    endpoints?: Readonly<Record<string, { parameters?: { n?: { max?: number }; input_references?: { max?: number } } }>>;
+    endpoints?: Readonly<Record<string, { parameters?: { n?: { max?: number }; input_references?: { max?: number }; resolution?: { values?: readonly string[] } } }>>;
   };
 }
 

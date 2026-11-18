@@ -1,6 +1,6 @@
 import type { Model } from "@/types/models";
 import type { PictureChoice } from "@/features/chat/view";
-import { paints } from "./picker/catalog";
+import { paints, startQuality } from "./picker/catalog";
 
 /* One estimate everywhere a price is shown before sending: the words so far
    (the conversation plus the draft) and a reply of ordinary length, or one
@@ -29,7 +29,7 @@ export const pictureSats = (model: Model, choice: Partial<PictureChoice> = {}) =
     return Math.ceil(perUsd * (MEGAPIXELS[resolution ?? "1K"] ?? 1) * ip.megapixel_usd);
   }
   const wanted = resolution ?? ip.default_resolution ?? null;
-  for (const quality of [choice.quality?.toLowerCase() ?? ip.default_quality ?? null, null]) {
+  for (const quality of [choice.quality?.toLowerCase() ?? startQuality(ip) ?? null, null]) {
     const step = ip.tiers.find((t) => (t.resolution ?? null) === wanted && (t.quality ?? null) === quality);
     if (step) return Math.ceil(perUsd * step.usd);
   }
