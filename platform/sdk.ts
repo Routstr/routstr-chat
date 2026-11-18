@@ -89,7 +89,7 @@ export function createSdk({ extraProviders }: { extraProviders: string[] }) {
     const spent = await response.finalize?.();
     if (!response.ok) throw new Error(parseCoreError(text, response.status).message || `The provider answered ${response.status}.`);
     const { data } = JSON.parse(text) as { data?: { b64_json?: string; url?: string }[] };
-    const urls = (data ?? []).flatMap((d) => (d.b64_json ? [`data:${pictureType(d.b64_json)};base64,${d.b64_json}`] : d.url ? [d.url] : []));
+    const urls = await Promise.all((data ?? []).flatMap((d) => (d.b64_json ? [`data:${pictureType(d.b64_json)};base64,${d.b64_json}`] : d.url ? [d.url] : [])).map(raster));
     const cost = response.headers.get("x-routstr-cost-msats");
     return { urls, sats: cost !== null ? Number(cost) / 1000 : spent || undefined };
   };
@@ -167,4 +167,21 @@ export function createSdk({ extraProviders }: { extraProviders: string[] }) {
 const IMAGES = "v1/images/generations";
 
 const pictureType = (b64: string) =>
-  b64.startsWith("/9j/") ? "image/jpeg" : b64.startsWith("UklGR") ? "image/webp" : "image/png";
+  b64.startsWith("/9j/") ? "image/jpeg" : b64.startsWith("UklGR") ? "image/webp" : b64.startsWith("PHN2Zy") ? "image/svg+xml" : "image/png";
+
+/** A vector picture drawn into a PNG, as the app keeps and shows raster pictures only. */
+async function raster(url: string): Promise<string> {
+  if (!url.startsWith("data:image/svg+xml")) return url;
+  try {
+    const img = new Image();
+    img.src = url;
+    await img.decode();
+    const canvas = document.createElement("canvas");
+    canvas.width = img.naturalWidth || 1024;
+    canvas.height = img.naturalHeight || 1024;
+    canvas.getContext("2d")?.drawImage(img, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL("image/png");
+  } catch {
+    return url;
+  }
+}
