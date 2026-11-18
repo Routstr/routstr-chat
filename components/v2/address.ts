@@ -1,4 +1,5 @@
 import { withBase } from "@/lib/base";
+import { DEFAULT_MINT_URL } from "@/lib/utils";
 
 /** Puts this query in the address bar without a navigation. Next follows the
  *  browser's own history calls (useSearchParams updates); its router would ask
@@ -15,11 +16,12 @@ export type GiftRef = { id: string; seed: Uint8Array; mint: string; memo?: strin
 const b64 = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 const unb64 = (s: string) => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
 
-/** A gift as a short link: its seed, its mint (https:// left off) and its message, packed so the
- *  link does not read it out before it is opened; all after the /gift page's #, which the
- *  browser never sends to a server. */
+/** A gift as a short link: its seed, its mint (left out when it is the default mint, https://
+ *  left off otherwise) and its message, packed so the link does not read it out before it is
+ *  opened; all after the /gift page's #, which the browser never sends to a server. */
 export function giftLink(g: { seed: Uint8Array; mint: string; memo?: string }): string {
-  const p = new URLSearchParams({ s: b64(g.seed), m: g.mint.replace(/^https:\/\//, "") });
+  const p = new URLSearchParams({ s: b64(g.seed) });
+  if (g.mint !== DEFAULT_MINT_URL) p.set("m", g.mint.replace(/^https:\/\//, ""));
   if (g.memo) p.set("n", b64(new TextEncoder().encode(g.memo)));
   // a mint's / and : read as they are: both are plain in a #
   return `${window.location.origin}${withBase("/gift")}#${String(p).replace(/%2F/gi, "/").replace(/%3A/gi, ":")}`;
@@ -37,14 +39,15 @@ function unpacked(n: string | null): string | undefined {
   }
 }
 
-/** The gift the address holds, if any. */
+/** The gift the address holds, if any: at the default mint when the link names none. */
 export function giftIn(): GiftRef | null {
   const p = new URLSearchParams(window.location.hash.slice(1));
   const s = p.get("s");
   const m = p.get("m");
-  if (!s || !m) return null;
+  if (!s) return null;
   try {
-    return { seed: unb64(s), mint: /^https?:\/\//.test(m) ? m : `https://${m}`, id: s, memo: unpacked(p.get("n")) };
+    const mint = !m ? DEFAULT_MINT_URL : /^https?:\/\//.test(m) ? m : `https://${m}`;
+    return { seed: unb64(s), mint, id: s, memo: unpacked(p.get("n")) };
   } catch {
     return null;
   }
