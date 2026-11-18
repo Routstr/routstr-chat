@@ -31,7 +31,7 @@ function useStart() {
       try {
         // the reply cap fits the smallest room any node lists, wherever the send ends up
         const room = catalog?.rooms()[model.id];
-        await turn(account.chat, { ...chatModelOf(model, chosen, catalog?.routes(model.id) ?? [], priced ?? model), room, picture: pictureOf(model, picture) });
+        await turn(account.chat, { ...chatModelOf(model, chosen, catalog?.routes(model.id) ?? [], priced ?? model), room, picture: pictureOf(priced ?? model, picture) });
         return true;
       } catch (error) {
         toast.error(error instanceof Error ? error.message : String(error));

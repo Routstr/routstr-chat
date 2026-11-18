@@ -665,7 +665,7 @@ export default function Composer({ centred }: { centred: boolean }) {
               </button>
               {routeTip && <span className="tip tip-chip">{routeTip}</span>}
             </span>
-            {drawing && <PictureOptions model={selectedModel} />}
+            {drawing && <PictureOptions model={priced ?? selectedModel} />}
             <span className="voice-wrap tipped" data-price={priceShown && !problem ? "" : undefined}>
               <Voice id={voiceId} settling={estimate.settling && !problem} tone={problem ? "say" : undefined}>
                 {voice}
