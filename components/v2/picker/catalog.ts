@@ -45,12 +45,24 @@ export const draws = (m: Model) => (m.architecture?.output_modalities ?? []).som
 export const isPrivate = (m: Model) => m.id.startsWith("tinfoil");
 export const nameSaysPrivate = (m: Model) => /private/i.test(m.name);
 
+/** What follows the arrow in a provider's modality string, which in
+ *  OpenRouter's form is what comes back ("text+image->text" is "text"). Read
+ *  only for text: core's tinfoil writes "text->text+image" for a model that
+ *  reads pictures, not one that makes them. */
+const returned = (v: unknown) => {
+  const s = String(v ?? "").toLowerCase();
+  const arrow = s.indexOf("->");
+  return arrow < 0 ? s : s.slice(arrow + 2);
+};
+
 /** Models the chat can talk to: text in, text out (pictures too or not). A
  *  model that only makes pictures is served by the images API, never a chat. */
 export const answers = (m: Model) => {
   const outs = m.architecture?.output_modalities;
   const ins = m.architecture?.input_modalities;
-  const out = !outs?.length || outs.some((o) => String(o ?? "").toLowerCase() === "text");
+  // providers spell modalities inconsistently: "text->text" and
+  // "text->text+image" are still a model that answers in words
+  const out = !outs?.length || outs.some((o) => returned(o).split("+").includes("text"));
   const inn = !ins?.length || ins.map(normalizeModality).some((i) => i === "text");
   return out && inn;
 };
