@@ -178,10 +178,10 @@ describe("mostReferences: the pictures of yours a picture model works from", () 
 });
 
 describe("pictureOf: a picture request names only what the model's endpoints take", () => {
-  const painter = (endpoints?: Record<string, object>, qualities: string[] = [], default_quality: string | null = null) =>
+  const painter = (endpoints?: Record<string, object>, qualities: string[] = [], default_quality: string | null = null, unit = "token") =>
     model("p", "P", {
       architecture: { input_modalities: ["text"], output_modalities: ["image"] },
-      image_pricing: { max_usd: 0.1, tiers: [], resolutions: ["1K", "2K", "4K"], qualities, default_resolution: "1K", default_quality, endpoints },
+      image_pricing: { unit, max_usd: 0.1, tiers: [], resolutions: ["1K", "2K", "4K"], qualities, default_resolution: "1K", default_quality, endpoints },
     } as unknown as Partial<Model>);
 
   it("asks no size and one picture where the endpoints name neither", () => {
@@ -200,6 +200,12 @@ describe("pictureOf: a picture request names only what the model's endpoints tak
     expect(pictureOf(painter(undefined, ["low", "medium", "high", "auto"], "auto"), { n: 1 })?.quality).toBe("medium");
     expect(pictureOf(painter(undefined, ["low", "medium", "high", "auto"], "auto"), { n: 1, quality: "high" })?.quality).toBe("high");
     expect(pictureOf(painter(undefined, ["standard", "hd"], "hd"), { n: 1 })?.quality).toBe("hd");
+  });
+
+  it("asks for the model's own step where Venice's route would ignore another", () => {
+    const venice = painter(undefined, ["low", "medium", "high"], "high", "image");
+    expect(pictureOf(venice, { n: 1 })?.quality).toBe("high");
+    expect(pictureOf(venice, { n: 1, quality: "low" })?.quality).toBe("high");
   });
 });
 

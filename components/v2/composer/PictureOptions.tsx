@@ -4,7 +4,7 @@ import React, { useEffect, useId, useRef, useState } from "react";
 import type { Model } from "@/types/models";
 import { sats } from "../format";
 import { Icon } from "../icons";
-import { mostPictures, pictureOf, pictureSizes } from "../picker/catalog";
+import { mostPictures, pictureOf, pictureQualities, pictureSizes } from "../picker/catalog";
 import { pictureSats } from "../price";
 import { usePicture } from "../ui";
 
@@ -134,6 +134,7 @@ export function PictureOptions({ model }: { model: Model }) {
   if (!ip || !shown) return null;
   const { resolution, quality, n } = shown;
   const sizes = pictureSizes(model);
+  const qualities = pictureQualities(ip);
   const most = mostPictures(model);
   const one = pictureSats(model, shown);
   return (
@@ -146,11 +147,11 @@ export function PictureOptions({ model }: { model: Model }) {
           onPick={(r) => setPicture({ ...picture, resolution: r })}
         />
       )}
-      {ip.qualities.length > 1 && (
+      {qualities.length > 1 && (
         <Choice
           label="Picture quality"
           value={quality ?? ""}
-          options={ip.qualities.map((q) => ({ value: q, name: word(q), sats: pictureSats(model, { ...shown, quality: q }) * n }))}
+          options={qualities.map((q) => ({ value: q, name: word(q), sats: pictureSats(model, { ...shown, quality: q }) * n }))}
           onPick={(q) => setPicture({ ...picture, quality: q })}
         />
       )}

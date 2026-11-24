@@ -78,9 +78,18 @@ export const mostReferences = (m: Model) =>
  *  (an images route that takes no size refuses or ignores one). */
 export const pictureSizes = (m: Model) => [...new Set(Object.values(m.image_pricing?.endpoints ?? {}).flatMap((e) => e.parameters?.resolution?.values ?? []))];
 
-/** The quality a picture starts at: Medium where the model lists it, as its
- *  own default is often the dearest step; else that default. */
-export const startQuality = (ip: NonNullable<Model["image_pricing"]>) => (ip.qualities.includes("medium") ? "medium" : ip.default_quality ?? ip.qualities[0]) ?? undefined;
+/** The quality steps a picture can be asked for: only where the node bills
+ *  the picture made, by its tokens. A per-step price bills the step named,
+ *  and the only such prices that list steps are Venice's, whose images route
+ *  ignores quality and makes the model's default. */
+export const pictureQualities = (ip: NonNullable<Model["image_pricing"]>) => (ip.unit === "token" ? ip.qualities : []);
+
+/** The quality a picture starts at: Medium where it can be asked for, as the
+ *  model's own default is often the dearest step; else that default. */
+export const startQuality = (ip: NonNullable<Model["image_pricing"]>) => {
+  const steps = pictureQualities(ip);
+  return (steps.includes("medium") ? "medium" : ip.default_quality ?? steps[0]) ?? undefined;
+};
 
 /** What a picture model is asked for, kept to the counts, sizes and qualities
  *  it lists, 1K or its first size and its start quality where none is chosen;
@@ -92,7 +101,7 @@ export const pictureOf = (m: Model, choice: PictureChoice): PictureChoice | unde
   return {
     n: Math.min(choice.n, mostPictures(m)),
     resolution: sizes.length > 1 ? (choice.resolution && sizes.includes(choice.resolution) ? choice.resolution : sizes.includes("1K") ? "1K" : sizes[0]) : undefined,
-    quality: choice.quality && ip.qualities.includes(choice.quality) ? choice.quality : startQuality(ip),
+    quality: choice.quality && pictureQualities(ip).includes(choice.quality) ? choice.quality : startQuality(ip),
   };
 };
 
