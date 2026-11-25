@@ -3,13 +3,8 @@
 import React, { useState } from "react";
 import { useObservableState } from "applesauce-react/hooks";
 import { useAccountManager } from "@/features/session/view";
-import { useSyncSetting } from "@/features/history/view";
-import {
-  loadAutoDeleteConversations,
-  loadKeepAliveEnabled,
-  saveAutoDeleteConversations,
-  saveKeepAliveEnabled,
-} from "@/utils/storageUtils";
+import { useForgetSetting, useSyncSetting } from "@/features/history/view";
+import { loadKeepAliveEnabled, saveKeepAliveEnabled } from "@/utils/storageUtils";
 import { Btn, Fold, Grp, Head, Row, Sw } from "./parts";
 import Relays from "./Relays";
 import Files from "./Files";
@@ -18,7 +13,7 @@ export default function Sync() {
   const [chatSyncEnabled, setChatSyncEnabled] = useSyncSetting();
   const { manager } = useAccountManager();
   const active = useObservableState(manager.active$);
-  const [forget, setForget] = useState(loadAutoDeleteConversations);
+  const [forget, setForget] = useForgetSetting();
   const [awake, setAwake] = useState(loadKeepAliveEnabled);
   // the reload note shows only while the switch differs from what the app loaded with
   const [awakeLoaded] = useState(loadKeepAliveEnabled);
@@ -49,14 +44,7 @@ export default function Sync() {
           title="Forget chats after 7 days"
           note="Each time the app opens, chats with no new message for 7 days are deleted here and everywhere they are stored. Pinned chats are kept."
         >
-          <Sw
-            on={forget}
-            label="Forget chats after 7 days"
-            onChange={(v) => {
-              setForget(v);
-              saveAutoDeleteConversations(v);
-            }}
-          />
+          <Sw on={forget} label="Forget chats after 7 days" disabled={!active} onChange={setForget} />
         </Row>
         <Row
           id="r-awake"

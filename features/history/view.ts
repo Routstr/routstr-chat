@@ -52,6 +52,13 @@ export const useThread = (
     undefined
   );
 
+/** "Forget chats after 7 days" for the key in use (off, and cannot be set, with none signed in). */
+export function useForgetSetting(): [boolean, (on: boolean) => void] {
+  const history = useHistory();
+  const on = useHistoryValue((h) => h.forgetting(), false);
+  return [on, (next) => history?.setForgetting(next)];
+}
+
 /** The account's history keys, for encrypted files on Blossom. */
 export const useHistoryKeys = (): PnsKeys | undefined =>
   useHistoryValue((history) => history.writingKeys(), undefined);

@@ -23,6 +23,7 @@ function device(
     log?: ReturnType<typeof memoryLog>;
     storage?: ReturnType<typeof memoryStorage>;
     signer?: HistorySigner;
+    mains?: boolean;
   } = {}
 ) {
   const net = opts.net ?? network();
@@ -36,6 +37,7 @@ function device(
     log,
     relays,
     storage,
+    mains: opts.mains,
   });
   return { net, who, log, storage, history };
 }
@@ -843,6 +845,7 @@ describe("HistoryService: main's data", () => {
     expect(log.rows.has(message.id)).toBe(false);
   });
 
+  // main had one switch for the device: it was the key main had signed in
   it("forgets chats older than 7 days when the setting is on", async () => {
     const net = network();
     const who = person();
@@ -869,6 +872,7 @@ describe("HistoryService: main's data", () => {
       net,
       who,
       storage: memoryStorage({ [FORGET_KEY]: "true" }),
+      mains: true,
     });
     history.start();
 

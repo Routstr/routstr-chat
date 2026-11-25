@@ -43,8 +43,10 @@ export interface HistoryDeps {
   signer: HistorySigner;
   log: EventLog;
   relays: Pick<AccountRelays, "ready" | "fetch" | "live" | "publish">;
-  /** Device settings ("Sync chats", "Forget chats after 7 days") and main's old chats. */
+  /** Device settings ("Sync chats"), each key's "Forget chats after 7 days", and main's old chats. */
   storage: KeyValueStorage;
+  /** The key main (the old app) had signed in: main's one "Forget chats after 7 days" was its. */
+  mains?: boolean;
 }
 
 /**
@@ -243,6 +245,17 @@ export class HistoryService {
     await this.deps.log.put(deletions);
     this.apply(deletions);
     deletions.forEach((deletion) => this.publish(deletion));
+  }
+
+  /** "Forget chats after 7 days", this key's own: another key on this device keeps its chats. */
+  forgetting(): boolean {
+    const mains = !!this.deps.mains && flag(this.deps.storage, FORGET_KEY, false);
+    return flag(this.deps.storage, `${FORGET_KEY}:${this.owner}`, mains);
+  }
+
+  setForgetting(on: boolean): void {
+    this.deps.storage.setItem(`${FORGET_KEY}:${this.owner}`, JSON.stringify(on));
+    this.notify();
   }
 
   /** Usage's "Delete all chats": gone from this device only. Relays keep
@@ -480,7 +493,7 @@ export class HistoryService {
 
   // main's "Forget chats after 7 days": run once, after the first sync
   private async forgetOld(): Promise<void> {
-    if (!flag(this.deps.storage, FORGET_KEY, false)) return;
+    if (!this.forgetting()) return;
     const cutoff = nowSeconds() - FORGET_AFTER_S;
     for (const conversation of this.store.getConversations()) {
       const last = conversation.messages.at(-1)?._createdAt ?? 0;

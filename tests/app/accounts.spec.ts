@@ -2,7 +2,9 @@
 // a switch that brings each key's own money, Add account, Settings, and the warning before a
 // key with sats is removed.
 import type { Page } from "@playwright/test";
-import { generateSecretKey, nip19 } from "nostr-tools";
+import { finalizeEvent, generateSecretKey, getPublicKey, nip19, nip44 } from "nostr-tools";
+import { ROOT_ID, encodeMessage } from "../../features/history/codec";
+import { createKeyring, type HistorySigner } from "../../features/history/keyring";
 import { expect, test } from "./fixtures";
 import { v2 } from "./drivers/v2";
 import { seedAccounts, seedKitProvider } from "./seed";
@@ -152,4 +154,53 @@ test("a switch picked during a reply waits for it, and the reply's change lands 
   await expect
     .poll(() => v2.balance(page).catch(() => -1), { timeout: 30_000 })
     .toBeGreaterThanOrEqual(299);
+});
+
+/** A chat a key wrote 9 days ago on another device: its history keyring and one question, as its
+ *  relays hold them. */
+async function oldChat(secret: Uint8Array, words: string) {
+  const pubkey = getPublicKey(secret);
+  const key = (peer: string) => nip44.v2.utils.getConversationKey(secret, peer);
+  const signer: HistorySigner = {
+    nip44: {
+      encrypt: async (peer, text) => nip44.v2.encrypt(text, key(peer)),
+      decrypt: async (peer, text) => nip44.v2.decrypt(text, key(peer)),
+    },
+    signEvent: async (template) => finalizeEvent(template, secret),
+  };
+  const at = Math.floor(Date.now() / 1000) - 9 * 86400;
+  const ring = await createKeyring(pubkey, signer, at - 60);
+  return [ring.event, encodeMessage(words, { role: "user", content: words, _prevId: ROOT_ID }, pubkey, at, ring.keys)];
+}
+
+// "Forget chats after 7 days" is the key's own: on in one key, it forgets that key's old chats,
+// never another key's on this device, here or on that key's relays
+test("forget chats after 7 days, turned on in one key, never forgets another key's chats", async ({ page, context, kit, appUrl }) => {
+  const [mine, theirs] = [generateSecretKey(), generateSecretKey()];
+  const [myChat, theirChat] = [await oldChat(mine, "my old chat"), await oldChat(theirs, "their old chat")];
+  await kit.relay.seed([...myChat, ...theirChat]);
+  await seedAccounts(context, [nip19.nsecEncode(mine), nip19.nsecEncode(theirs)]);
+  // a deletion on the relays of the chat's question
+  const deleted = async (chat: { id: string }[]) =>
+    (await kit.relay.events()).some((e) => e.kind === 5 && e.tags.some(([t, id]) => t === "e" && id === chat[1].id));
+  const chats = page.getByRole("navigation", { name: "Chats" });
+
+  await v2.open(page, appUrl);
+  await expect(chats).toContainText("my old chat", { timeout: 30_000 });
+  await chip(page).click();
+  await menu(page).getByRole("menuitem", { name: "Settings" }).click();
+  await page.locator("#nav-sync").click();
+  await page.getByRole("switch", { name: "Forget chats after 7 days" }).click();
+  await page.keyboard.press("Escape");
+  await page.reload();
+  await v2.ready(page);
+  await expect.poll(() => deleted(myChat), { timeout: 30_000 }).toBe(true);
+  await expect(chats).not.toContainText("my old chat");
+
+  await pick(page, 1);
+  await v2.loaded(page);
+  await expect(chats).toContainText("their old chat", { timeout: 30_000 });
+  await page.waitForTimeout(5000);
+  await expect(chats).toContainText("their old chat");
+  expect(await deleted(theirChat)).toBe(false);
 });

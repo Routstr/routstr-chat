@@ -456,7 +456,6 @@ export const STORAGE_KEYS = {
   MINTS_FROM_ALL_PROVIDERS: "mints_from_all_providers",
   INFO_FROM_ALL_PROVIDERS: "info_from_all_providers",
   LAST_MODELS_UPDATE: "lastModelsUpdate",
-  AUTO_DELETE_CONVERSATIONS: "auto_delete_conversations",
   KEEP_ALIVE_ENABLED: "keep_alive_enabled",
   REMOTE_NODE: "remote_node",
 } as const;
@@ -480,22 +479,6 @@ export const loadRemoteNode = (): RemoteNode | null =>
 export const saveRemoteNode = (node: RemoteNode | null): void => {
   setStorageItem(STORAGE_KEYS.REMOTE_NODE, node);
   window.dispatchEvent(new Event(REMOTE_NODE_CHANGED));
-};
-
-/**
- * Load auto-delete conversations preference from localStorage
- * @returns True if auto-delete is enabled, defaults to false
- */
-export const loadAutoDeleteConversations = (): boolean => {
-  return getStorageItem<boolean>(STORAGE_KEYS.AUTO_DELETE_CONVERSATIONS, false);
-};
-
-/**
- * Save auto-delete conversations preference to localStorage
- * @param enabled Whether auto-delete is enabled
- */
-export const saveAutoDeleteConversations = (enabled: boolean): void => {
-  setStorageItem(STORAGE_KEYS.AUTO_DELETE_CONVERSATIONS, enabled);
 };
 
 /**

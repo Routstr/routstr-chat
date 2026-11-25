@@ -3,6 +3,7 @@ import { HistoryService } from "@/features/history/service";
 import type { Account } from "@/features/session/service";
 import { openEventLog } from "@/platform/nostr/eventLog";
 import { newRelayPool, poolPort } from "@/platform/nostr/pool";
+import { isMains } from "./book";
 
 /* Nostr for this tab: one relay pool, one event log, and the active
    account's history. */
@@ -49,6 +50,7 @@ export function bindHistory(account: Account | undefined): void {
           log,
           relays: relays.of(account.pubkey),
           storage,
+          mains: isMains(account.pubkey),
         }),
       }
     : null;
