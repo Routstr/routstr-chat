@@ -116,7 +116,7 @@ async function listMore(context: BrowserContext, coreUrl: string, n: number) {
   });
 }
 
-test("the picker opens again on the tab you picked, at the model in use, and has Favorites once a model is starred", async ({
+test("the picker opens again on the tab and filters you picked, at the model in use, and has Favorites once a model is starred", async ({
   page,
   context,
   kit,
@@ -132,12 +132,15 @@ test("the picker opens again on the tab you picked, at the model in use, and has
   await chip.click();
   const openai = picker.getByRole("button", { name: /^OpenAI, / });
   await openai.click();
+  const fits = picker.getByRole("button", { name: "Fits balance" });
+  await fits.click();
   await picker.getByRole("option", { name: /Kit Many 7\b/ }).click();
   // gone, not only out of sight
   await expect(page.locator(".mp")).toHaveCount(0);
 
   await chip.click();
   await expect(openai).toHaveAttribute("aria-pressed", "true");
+  await expect(fits).toHaveAttribute("aria-pressed", "true");
   const row = picker.getByRole("option", { name: /Kit Many 7\b/ });
   await expect(row).toHaveAttribute("data-current", "");
   await expect(row).toHaveAttribute("data-active", "");

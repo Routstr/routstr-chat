@@ -60,7 +60,8 @@ export function useListGlide({
     if (activeKey !== null && idxOf.has(activeKey)) return;
     const cur = flat.findIndex(isCurrent);
     scrollNext.current = activeKey === null && "top";
-    setActiveKey(flat[filtering || cur < 0 ? 0 : cur].key);
+    // as the list opens, on the model in use even under the filters it opens with
+    setActiveKey(flat[cur >= 0 && (activeKey === null || !filtering) ? cur : 0].key);
   }, [flat]);
 
   const [detailKey, setDetailKey] = useState<string | null>(null);

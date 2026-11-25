@@ -29,6 +29,8 @@ import List from "./List";
 
 const ROWS_STEP = 60;
 const SCOPE = "modelSelectorScope";
+const FILTERS = "modelSelectorFilters";
+const ONLY = "modelSelectorOnly";
 const readSort = (): SortKey => {
   const v = getStorageItem<string>("modelSelectorSort", "latest");
   return SORTS.some((s) => s.key === v) ? (v as SortKey) : "latest";
@@ -87,8 +89,11 @@ export default function Picker({
   const offered = (k: SortKey) => cat.sorts.some((s) => s.key === k);
   const listSort = inDeals ? (offered(dealSort) ? dealSort : "deal") : offered(sort) ? sort : "latest";
   const listDir = inDeals ? dealDir : dir;
-  const [only, setOnly] = useState<string | null>(null);
-  const [f, setF] = useState<Filters>(NO_FILTERS);
+  // the filters you set, kept for the next open like the tab and the sort
+  const [onlyPick, setOnly] = useState<string | null>(() => getStorageItem<string | null>(ONLY, null));
+  // a provider that serves none of these now shows every provider, until it is back
+  const only = onlyPick && (modelsLoading || cat.hosts.some((h) => h.base === onlyPick)) ? onlyPick : null;
+  const [f, setF] = useState<Filters>(() => ({ ...NO_FILTERS, ...getStorageItem<Partial<Filters>>(FILTERS, {}) }));
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [view, setView] = useState<"list" | "detail">("list");
   const [draft, setDraft] = useState<{ id: string; host: string | null } | null>(null);
@@ -98,7 +103,9 @@ export default function Picker({
   useEffect(() => {
     setStorageItem("modelSelectorSort", sort);
     setStorageItem("modelSelectorSortDirection", dir < 0 ? "asc" : "desc");
-  }, [sort, dir]);
+    setStorageItem(FILTERS, f);
+    setStorageItem(ONLY, onlyPick);
+  }, [sort, dir, f, onlyPick]);
 
   const say = useCallback((t: string) => {
     const s = status.current;
