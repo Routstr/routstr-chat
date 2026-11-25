@@ -5,6 +5,9 @@ import { nip98 } from "nostr-tools";
 import { NodeError, type NodeLink, type NodeSigner } from "@/features/node/ports";
 
 const CLIENT_ID = "routstr-chat";
+// a node that takes the connection and never answers must not hold the form; the signer's own
+// wait (a phone signer asking you) comes before it
+const ANSWER_MS = 20_000;
 
 async function signedFetch(
   signer: NodeSigner,
@@ -26,17 +29,27 @@ async function signedFetch(
       ...(body ? { "Content-Type": "application/json" } : {}),
     },
     ...(body ? { body: JSON.stringify(body) } : {}),
+    signal: AbortSignal.timeout(ANSWER_MS),
   });
 }
 
 /** Throws NodeError, whose message is meant to be shown to the user. */
-async function connect(url: string, signer: NodeSigner): Promise<string> {
+const connect = (url: string, signer: NodeSigner): Promise<string> =>
+  ask(url, signer).catch((error) => {
+    throw (error as Error)?.name === "TimeoutError"
+      ? new NodeError("That node did not answer. Check that it is running, then try again.")
+      : error;
+  });
+
+async function ask(url: string, signer: NodeSigner): Promise<string> {
   // a Routstr provider answers /v1/info but has no /clients (in a browser the call fails outright,
   // as its 404 carries no CORS headers): it is not a node to pay through
-  const provider = () => fetch(`${url}v1/info`).then((r) => r.ok).catch(() => false);
+  const provider = () => fetch(`${url}v1/info`, { signal: AbortSignal.timeout(ANSWER_MS) }).then((r) => r.ok).catch(() => false);
   const notNode =
     "That address is a Routstr provider, not a routstrd node. Providers are found on their own: pick one of its models in the model picker.";
-  const listed = await signedFetch(signer, `${url}clients`, "GET").catch(async () => {
+  const listed = await signedFetch(signer, `${url}clients`, "GET").catch(async (error) => {
+    // one that never answered is said so by connect
+    if ((error as Error)?.name === "TimeoutError") throw error;
     throw new NodeError(
       (await provider())
         ? notNode
