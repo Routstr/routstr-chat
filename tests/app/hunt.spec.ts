@@ -296,6 +296,39 @@ test("a copied tab keeps a held message's words but never sends it a second time
   await expect(composer(copy)).toHaveValue(`${TINY} held once`);
 });
 
+// a message held for sats belongs to the chat it was written in: another chat opened before the
+// sats land is never sent it, and nothing is paid for it
+test("a held message is never sent into another chat opened before the sats land", async ({
+  page,
+  context,
+  kit,
+  appUrl,
+}) => {
+  await seedAccounts(context, [newKey()]);
+  await funded(page, kit, appUrl, 100);
+  await v2.send(page, `${TINY} the first chat`);
+  await v2.waitReplyText(page, "Echo: the first chat");
+  await v2.waitIdle(page);
+  // the wallet emptied, so the next message waits for sats
+  await v2.returnCredit(page);
+  await v2.makeToken(page, await v2.balance(page));
+
+  const rail = page.getByRole("complementary", { name: "Chats and wallet" });
+  await rail.getByRole("button", { name: /^New chat/ }).click();
+  const composer = page.getByRole("textbox", { name: "Message" });
+  await composer.fill(`${TINY} held in a new chat`);
+  await page.getByRole("main").getByRole("button", { name: "Send", exact: true }).click();
+  await expect(page.locator(".pa-view").first()).toBeVisible();
+
+  await page.getByRole("navigation", { name: "Chats" }).locator(".sb-row", { hasText: "the first chat" }).locator(".sb-go").click();
+  const asked = (await kit.upstream.requests()).length;
+  await v2.receive(page, await kit.mintToken(100));
+  await page.waitForTimeout(5_000);
+  expect((await kit.upstream.requests()).length).toBe(asked);
+  await expect(page.locator("article.rd-me")).toHaveCount(1);
+  await expect(composer).toHaveValue(`${TINY} held in a new chat`);
+});
+
 // a draft's words come back after a reload of the tab (Settings promises it for Reload now),
 // for the account that wrote them only
 test("a draft comes back after a reload, and stays with its account", async ({

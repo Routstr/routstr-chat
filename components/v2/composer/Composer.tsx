@@ -393,6 +393,15 @@ export default function Composer({ centred }: { centred: boolean }) {
     return () => window.clearTimeout(t);
   }, [refused]);
 
+  // a held message waits in the chat it was written in: another chat opened lets it go, so it is
+  // never sent there; its words stay in the box
+  const heldIn = useRef(activeConversationId);
+  useEffect(() => {
+    if (heldIn.current === activeConversationId) return;
+    heldIn.current = activeConversationId;
+    if (ui.sendWhenFunded) ui.setSendWhenFunded(false);
+  }, [activeConversationId, ui]);
+
   // money arrived for a held message: turn back, then send it by itself
   useEffect(() => {
     // credit a provider still holds counts as money too
