@@ -51,10 +51,10 @@ export function useSections({
   // the Favorites view is live: a new star joins it at once, and one taken
   // off stays listed (with an empty star) until the next open
   const liveFavs = useMemo(() => rowsOf(favKeys), [rowsOf, favKeys]);
-  const favScope = useMemo(() => {
-    const had = new Set(groupKeys);
-    return [...favRows, ...liveFavs.filter((r) => !had.has(r.key))];
-  }, [favRows, liveFavs, groupKeys]);
+  const [starred, setStarred] = useState(() => configured);
+  const added = favKeys.filter((k) => !starred.includes(k));
+  if (added.length) setStarred([...starred, ...added]);
+  const favScope = useMemo(() => rowsOf(starred), [rowsOf, starred]);
 
   const makerLabel = useCallback((id: string) => getCompanyMeta(id).label, []);
   const routeOf = useCallback((r: Row) => cat.routeFor(r, null, only), [cat, only]);
@@ -116,5 +116,5 @@ export function useSections({
     (r: Row) => (r.pin ? favKeys.includes(r.key) : favIds.has(r.model.id)),
     [favKeys, favIds]
   );
-  return { favKeys, favIds, liveFavs, makerLabel, routeOf, searching, filtering, sections, flat, idxOf, isCurrent, isFavRow };
+  return { favKeys, favIds, liveFavs, favScope, makerLabel, routeOf, searching, filtering, sections, flat, idxOf, isCurrent, isFavRow };
 }

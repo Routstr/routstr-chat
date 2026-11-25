@@ -9,6 +9,7 @@ export function useMakerRail({
   lay,
   cat,
   liveFavs,
+  favScope,
   makerLabel,
   scope,
   setScope,
@@ -19,6 +20,8 @@ export function useMakerRail({
   lay: Lay;
   cat: Catalog;
   liveFavs: Row[];
+  /** What the Favorites tab lists: your favorites as the picker opened, and any starred since. */
+  favScope: Row[];
   makerLabel: (id: string) => string;
   scope: Scope;
   setScope: (s: Scope) => void;
@@ -36,20 +39,20 @@ export function useMakerRail({
     const deals = cat.deals;
     return {
       scopes: [
-        { id: "favorites", label: "Favorites", short: "Favorites", icon: "star" as IconName, n: liveFavs.length },
+        ...(favScope.length ? [{ id: "favorites", label: "Favorites", short: "Favorites", icon: "star" as IconName, n: liveFavs.length }] : []),
         ...(picks ? [{ id: "picks", label: "Routstr picks", short: "Picks", icon: "spark" as IconName, n: picks }] : []),
         ...(deals ? [{ id: "deals", label: "Deals", short: "Deals", icon: "tag" as IconName, n: deals }] : []),
         { id: "all", label: "All models", short: "All", icon: "grid" as IconName, n: cat.models.length },
       ],
       makers: makers.map((id) => ({ id, label: makerLabel(id), n: counts.get(id) ?? 0 })),
     };
-  }, [cat.models, cat.picks, cat.deals, liveFavs.length, makerLabel]);
+  }, [cat.models, cat.picks, cat.deals, favScope.length, liveFavs.length, makerLabel]);
   const railOrder = useMemo(() => [...railItems.scopes.map((s) => s.id), ...railItems.makers.map((m) => m.id)], [railItems]);
 
   const placeRailGlide = useCallback((instant: boolean) => {
     const g = railGlideRef.current;
     const b = railScrollRef.current?.querySelector<HTMLElement>(".rail-b[aria-pressed='true']");
-    if (!g || !b) return;
+    if (!g || !b) return null;
     if (instant) g.style.transition = "none";
     g.style.width = `${b.offsetWidth}px`;
     g.style.height = `${b.offsetHeight}px`;
@@ -58,10 +61,32 @@ export function useMakerRail({
       void g.offsetWidth;
       g.style.transition = "";
     }
+    return b;
   }, []);
+  // a tab in view, the rail alone scrolled: on a strip, a maker comes with its left neighbour whole
+  // beside it
+  const reveal = useCallback(
+    (el: HTMLElement, smooth: boolean) => {
+      const s = railScrollRef.current;
+      if (!s) return;
+      const behavior = smooth && !window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "smooth" : "auto";
+      if (!strip) {
+        if (el.offsetTop < s.scrollTop) s.scrollTo({ top: el.offsetTop, behavior });
+        else if (el.offsetTop + el.offsetHeight > s.scrollTop + s.clientHeight) s.scrollTo({ top: el.offsetTop + el.offsetHeight - s.clientHeight, behavior });
+        return;
+      }
+      const prev = el.previousElementSibling as HTMLElement | null;
+      const want = el.hasAttribute("data-scope") || !prev ? 0 : Math.max(0, prev.offsetLeft - 10);
+      if (el.offsetLeft < s.scrollLeft || el.offsetLeft + el.offsetWidth > s.scrollLeft + s.clientWidth) s.scrollTo({ left: want, behavior });
+    },
+    [strip]
+  );
+  // the tab kept from the last open is in view as the picker opens
   const railFirst = useRef(true);
   useLayoutEffect(() => {
-    placeRailGlide(railFirst.current);
+    const b = placeRailGlide(railFirst.current);
+    if (!b) return;
+    if (railFirst.current) reveal(b, false);
     railFirst.current = false;
   }, [scope, lay, railItems, placeRailGlide]);
 
@@ -80,17 +105,7 @@ export function useMakerRail({
   const pickScope = (id: Scope, el?: HTMLElement | null) => {
     setScope(id);
     setActiveKey(null);
-    const s = railScrollRef.current;
-    if (el && s) {
-      if (strip) {
-        // the chosen maker comes into view with its left neighbour whole beside it
-        const prev = el.previousElementSibling as HTMLElement | null;
-        const want = railItems.scopes.some((x) => x.id === id) || !prev ? 0 : Math.max(0, prev.offsetLeft - 10);
-        const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-        if (el.offsetLeft < s.scrollLeft || el.offsetLeft + el.offsetWidth > s.scrollLeft + s.clientWidth)
-          s.scrollTo({ left: want, behavior: reduce ? "auto" : "smooth" });
-      } else el.scrollIntoView({ block: "nearest" });
-    }
+    if (el) reveal(el, true);
   };
   const railKey = (e: React.KeyboardEvent) => {
     const keys = strip ? ["ArrowLeft", "ArrowRight"] : ["ArrowUp", "ArrowDown"];

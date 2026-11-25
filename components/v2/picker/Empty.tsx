@@ -37,14 +37,6 @@ export default function Empty({
         </div>
       </div>
     );
-  if (scope === "favorites" && !query && !anyFilter)
-    return (
-      <div className="mp-empty">
-        <Icon name="star" size={22} />
-        <p className="e-t">No favorites yet</p>
-        <p className="e-s">Starred models show here.</p>
-      </div>
-    );
   if (f.fits && !query)
     return (
       <div className="mp-empty">

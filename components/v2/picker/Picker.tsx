@@ -28,6 +28,7 @@ import SortMenu from "./SortMenu";
 import List from "./List";
 
 const ROWS_STEP = 60;
+const SCOPE = "modelSelectorScope";
 const readSort = (): SortKey => {
   const v = getStorageItem<string>("modelSelectorSort", "latest");
   return SORTS.some((s) => s.key === v) ? (v as SortKey) : "latest";
@@ -68,14 +69,17 @@ export default function Picker({
   const status = useRef<HTMLParagraphElement>(null);
 
   const [q, setQ] = useState("");
-  const [scope, setScope] = useState<Scope>("all");
+  // the tab you picked last, kept for the next open
+  const [scope, setScope] = useState<Scope>(() => getStorageItem<string>(SCOPE, "all"));
+  const chooseScope = useCallback((s: Scope) => {
+    setScope(s);
+    setStorageItem(SCOPE, s);
+  }, []);
   const [sort, setSort] = useState<SortKey>(readSort);
   const [dir, setDir] = useState<1 | -1>(() => (getStorageItem<string>("modelSelectorSortDirection", "desc") === "asc" ? -1 : 1));
   // Deals keep an order of their own, biggest deal first, and leave the sort of every other list alone
   const [dealSort, setDealSort] = useState<SortKey>("deal");
   const [dealDir, setDealDir] = useState<1 | -1>(1);
-  // the last deal gone from under the Deals list: All takes its place
-  if (scope === "deals" && !cat.deals) setScope("all");
   const inDeals = scope === "deals";
   // a saved order this catalogue cannot offer (by deal with no deals about) reads as the usual one
   const offered = (k: SortKey) => cat.sorts.some((s) => s.key === k);
@@ -101,9 +105,12 @@ export default function Picker({
     requestAnimationFrame(() => (s.textContent = t));
   }, []);
 
-  const { favKeys, favIds, liveFavs, makerLabel, routeOf, searching, filtering, sections, flat, idxOf, isCurrent, isFavRow } = useSections({ configured: pick.configured, cat, q, f, only, sort: listSort, dir: listDir, scope });
-  const { activeIdx, detailKey, setActive } = useListGlide({ flat, idxOf, filtering, isCurrent, activeKey, setActiveKey, q, scope, f, only, sort: listSort, dir: listDir, cat, makerLabel, say, listEl, glide, lay });
-  const { strip, railItems, railOrder, edges, stripEdges, pickScope, railKey } = useMakerRail({ lay, cat, liveFavs, makerLabel, scope, setScope, setActiveKey, railScroll, railGlide });
+  const { favKeys, favIds, liveFavs, favScope, makerLabel, routeOf, searching, filtering, sections, flat, idxOf, isCurrent, isFavRow } = useSections({ configured: pick.configured, cat, q, f, only, sort: listSort, dir: listDir, scope });
+  const [cap, setCap] = useState(ROWS_STEP);
+  const { activeIdx, detailKey, setActive } = useListGlide({ flat, idxOf, filtering, isCurrent, activeKey, setActiveKey, q, scope, f, only, sort: listSort, dir: listDir, cat, makerLabel, say, listEl, glide, lay, rows: cap });
+  const { strip, railItems, railOrder, edges, stripEdges, pickScope, railKey } = useMakerRail({ lay, cat, liveFavs, favScope, makerLabel, scope, setScope: chooseScope, setActiveKey, railScroll, railGlide });
+  // a tab this list no longer has (its last deal gone, no favorites, a maker nobody serves now): All
+  if ((cat.models.length || !modelsLoading) && !railOrder.includes(scope)) setScope("all");
   const { commit, choose, toggleStar, fund, clearAll, allOn, push } = useChoose({
     pick, allOn: providersOn, cat, ui, phone, only, draft, setDraft, say, onClose, favKeys, favIds, isFavRow, setQ, setF, setOnly, input, card, setView, onDetail, onList,
   });
@@ -135,7 +142,6 @@ export default function Picker({
 
   // a long list lands in steps: a screenful with the card, the rest in the frames after
   // (never while it closes: the leaving card keeps its frames)
-  const [cap, setCap] = useState(ROWS_STEP);
   useEffect(() => {
     if (!open || cap >= total) return;
     const t = setTimeout(() => setCap((c) => c + ROWS_STEP), 0);

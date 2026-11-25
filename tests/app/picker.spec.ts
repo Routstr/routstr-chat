@@ -1,6 +1,7 @@
 // The rail's card hands focus back when it turns from the wallet to the chats, but only while
 // focus is still on it: a model picker opened during the turn keeps focus and stays open.
 import { generateSecretKey, nip19 } from "nostr-tools";
+import type { BrowserContext } from "@playwright/test";
 import { expect, test } from "./fixtures";
 import { v2 } from "./drivers/v2";
 import { seedAccounts, seedKitProvider } from "./seed";
@@ -101,4 +102,68 @@ test("Deals: a model a node sells far below its list price is listed there with 
   await expect(picker.getByRole("option", { name: /Kit Echo/ })).toContainText("90% below list");
   await expect(picker.getByRole("option", { name: /Kit Echo/ })).not.toContainText(iq);
   await expect(picker.getByRole("option", { name: /Kit Cheap/ })).not.toContainText("below list");
+});
+
+// the node also lists `n` OpenAI models, each a day older than the last (listed only: nothing is sent to them)
+async function listMore(context: BrowserContext, coreUrl: string, n: number) {
+  await context.route(/\/v1\/models(\?|$)/, async (route) => {
+    const url = route.request().url();
+    const res = await route.fetch({ url: url.startsWith(PROVIDER_ALIAS) ? coreUrl + url.slice(PROVIDER_ALIAS.length) : url });
+    const body = (await res.json()) as { data: { id: string; name: string; created: number }[] };
+    const like = body.data.find((m) => m.id === "kit-cheap")!;
+    for (let i = 1; i <= n; i++) body.data.push({ ...like, id: `openai/kit-many-${i}`, name: `Kit Many ${i}`, created: like.created - i * 86400 });
+    await route.fulfill({ response: res, json: body });
+  });
+}
+
+test("the picker opens again on the tab you picked, at the model in use, and has Favorites once a model is starred", async ({
+  page,
+  context,
+  kit,
+  appUrl,
+}) => {
+  await listMore(context, kit.coreUrl, 20);
+  await v2.open(page, appUrl);
+  await seedKitProvider(page, kit.coreUrl, "kit-cheap");
+  await v2.fund(page, appUrl, await kit.mintToken(300));
+
+  const chip = page.getByRole("main").getByRole("button", { name: /^(Model: .*|Choose a model)$/ });
+  const picker = page.getByRole("dialog", { name: "Choose a model" });
+  await chip.click();
+  const openai = picker.getByRole("button", { name: /^OpenAI, / });
+  await openai.click();
+  await picker.getByRole("option", { name: /Kit Many 7\b/ }).click();
+  // gone, not only out of sight
+  await expect(page.locator(".mp")).toHaveCount(0);
+
+  await chip.click();
+  await expect(openai).toHaveAttribute("aria-pressed", "true");
+  const row = picker.getByRole("option", { name: /Kit Many 7\b/ });
+  await expect(row).toHaveAttribute("data-current", "");
+  await expect(row).toHaveAttribute("data-active", "");
+  // nothing starred yet: no Favorites tab, until a star
+  await expect(picker.getByRole("button", { name: /^Favorites, / })).toHaveCount(0);
+  await row.locator(".r-star").click();
+  await expect(picker.getByRole("button", { name: "Favorites, 1" })).toBeVisible();
+});
+
+test("a list that changes while you look at it stays where you scrolled it", async ({ page, context, kit, appUrl }) => {
+  await listMore(context, kit.coreUrl, 150);
+  await seedAccounts(context, [nip19.nsecEncode(generateSecretKey())]);
+  await v2.open(page, appUrl);
+  await seedKitProvider(page, kit.coreUrl, "kit-cheap");
+
+  await page.getByRole("main").getByRole("button", { name: /^(Model: .*|Choose a model)$/ }).click();
+  const picker = page.getByRole("dialog", { name: "Choose a model" });
+  await expect(picker.getByRole("option")).toHaveCount(153);
+  const list = picker.locator(".mp-list");
+  await list.evaluate((l) => (l.scrollTop = 2000));
+  await page.waitForTimeout(300);
+
+  // another tab turns a provider off: the model list here is asked for again, and comes back the same
+  const other = await context.newPage();
+  await v2.open(other, appUrl);
+  await other.evaluate(() => localStorage.setItem("providers_off", JSON.stringify(["https://nobody.example/"])));
+  await page.waitForTimeout(2000);
+  expect(await list.evaluate((l) => l.scrollTop)).toBe(2000);
 });

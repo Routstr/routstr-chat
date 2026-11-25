@@ -26,6 +26,7 @@ export function useListGlide({
   listEl: listElRef,
   glide: glideRef,
   lay,
+  rows,
 }: {
   flat: Row[];
   idxOf: Map<string, number>;
@@ -45,13 +46,20 @@ export function useListGlide({
   listEl: React.RefObject<HTMLDivElement | null>;
   glide: React.RefObject<HTMLDivElement | null>;
   lay: Lay;
+  /** How many rows are drawn so far: a long list lands in steps. */
+  rows: number;
 }) {
   // what the list is showing, kept alive when the list changes under it
   const activeIdx = activeKey !== null && idxOf.has(activeKey) ? idxOf.get(activeKey)! : -1;
+  // the list scrolls to the active row only when that row is moved to (by the keys: into sight), or
+  // landed on (the model in use as the list opens: to the top); a list that changes under you
+  // stays where you put it
+  const scrollNext = useRef<false | "near" | "top">(false);
   useEffect(() => {
     if (!flat.length) return setActiveKey(null);
     if (activeKey !== null && idxOf.has(activeKey)) return;
     const cur = flat.findIndex(isCurrent);
+    scrollNext.current = activeKey === null && "top";
     setActiveKey(flat[filtering || cur < 0 ? 0 : cur].key);
   }, [flat]);
 
@@ -62,14 +70,16 @@ export function useListGlide({
     return () => cancelAnimationFrame(raf);
   }, [activeKey]);
 
-  // the filter changed: back to the top, and say how many
+  // the filter changed: back to the top, and say how many (the tab the picker settles on as it
+  // opens is no change)
   const filterSig = JSON.stringify([q, scope, f, only, sort, dir]);
-  const lastSig = useRef(filterSig);
+  const lastSig = useRef<string | null>(null);
   const lastQ = useRef(q);
   const sayT = useRef(0);
   useEffect(() => {
-    if (lastSig.current === filterSig) return;
+    const was = lastSig.current;
     lastSig.current = filterSig;
+    if (was === null || was === filterSig) return;
     if (listElRef.current) listElRef.current.scrollTop = 0;
     setActiveKey(flat[0]?.key ?? null);
     const host = only ? cat.hosts.find((h) => h.base === only)?.host ?? only : "";
@@ -82,17 +92,15 @@ export function useListGlide({
   useEffect(() => () => window.clearTimeout(sayT.current), []);
 
   /* ── the tile under the active row ──────────────────────────────────── */
-  const settleTries = useRef(0);
-  const placeGlideRef = useRef<(scrollTo: boolean, instant?: boolean) => void>(() => {});
   const placeGlide = useCallback(
-    (scrollTo: boolean, instant = false) => {
+    (scrollTo: false | "near" | "top", instant = false) => {
       const g = glideRef.current;
       const list = listElRef.current;
       const el = list?.querySelector<HTMLElement>(`[data-i="${activeIdx}"]`);
-      if (!g || !list) return;
+      if (!g || !list) return false;
       if (!el) {
         g.style.opacity = "0";
-        return;
+        return false;
       }
       const inner = el.offsetParent as HTMLElement | null;
       const y = el.offsetTop + (inner && inner !== list ? inner.offsetTop : 0);
@@ -105,34 +113,17 @@ export function useListGlide({
         g.style.transition = "";
       }
       if (scrollTo) {
-        // a sheet still rising has not reached its height yet: measure once it rests
-        const sheet = list.closest<HTMLElement>(".sheet");
-        const moving = sheet?.getAnimations().filter((a) => a.playState === "running");
-        if (moving?.length) {
-          Promise.all(moving.map((a) => a.finished.catch(() => undefined))).then(() => placeGlideRef.current(true, true));
-          return;
-        }
-        // a sheet moved by script (no animation to wait on) that has not risen yet: look again next frame
-        const vh = window.visualViewport?.height ?? window.innerHeight;
-        if (sheet && list.getBoundingClientRect().top >= vh - 1 && (settleTries.current += 1) < 60) {
-          requestAnimationFrame(() => placeGlideRef.current(true, true));
-          return;
-        }
-        settleTries.current = 0;
-        // what you can see of the list: its box, or less where a sheet runs past the screen
-        const lr = list.getBoundingClientRect();
-        const seen = Math.min(list.clientHeight, (window.visualViewport?.height ?? window.innerHeight) - lr.top);
+        // what you can see of the list: its box, less what its sheet keeps below the screen once it
+        // rests (its scroll padding), so a sheet still rising already lands on the row
+        const seen = list.clientHeight - (parseFloat(getComputedStyle(list).scrollPaddingBottom) || 0);
         const bot = y + el.offsetHeight;
-        if (y < list.scrollTop + 10) list.scrollTop = y - 28;
+        if (y < list.scrollTop + 10 || (scrollTo === "top" && bot > list.scrollTop + seen - FADE)) list.scrollTop = y - 28;
         else if (bot > list.scrollTop + seen - FADE) list.scrollTop = bot - seen + FADE;
       }
+      return true;
     },
     [activeIdx]
   );
-  useLayoutEffect(() => {
-    placeGlideRef.current = placeGlide;
-  }, [placeGlide]);
-  const scrollNext = useRef(true);
   const glideInstant = useRef(true);
   const glideSig = useRef(filterSig);
   useLayoutEffect(() => {
@@ -140,20 +131,22 @@ export function useListGlide({
     glideSig.current = filterSig;
     glideInstant.current = true;
   }, [filterSig]);
+  // a row not drawn yet is landed on once its step of the list is
   useLayoutEffect(() => {
-    placeGlide(scrollNext.current, glideInstant.current);
-    scrollNext.current = true;
+    if (!placeGlide(scrollNext.current, glideInstant.current)) return;
+    scrollNext.current = false;
     glideInstant.current = false;
-  }, [placeGlide, flat, lay]);
+  }, [placeGlide, flat, lay, rows]);
 
   const setActive = useCallback(
     (i: number, o: { scroll?: boolean } = {}) => {
       if (!flat.length) return;
       const j = Math.max(0, Math.min(flat.length - 1, i));
-      scrollNext.current = o.scroll !== false;
+      if (flat[j].key === activeKey) return;
+      scrollNext.current = o.scroll !== false && "near";
       setActiveKey(flat[j].key);
     },
-    [flat]
+    [flat, activeKey]
   );
   return { activeIdx, detailKey, setActive };
 }
