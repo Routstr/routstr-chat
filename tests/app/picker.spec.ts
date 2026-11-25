@@ -188,3 +188,26 @@ test("an empty list no provider answered says so, and Try again asks again", asy
   await empty.getByRole("button", { name: "Try again" }).click();
   await expect(page.getByRole("option", { name: /Kit Cheap/ })).toBeVisible();
 });
+
+// a search looks through every model, so while it lasts no tab is pressed; pressing one shows that tab
+test("while you search no tab is pressed, and pressing one ends the search on that tab", async ({ page, context, kit, appUrl }) => {
+  await listMore(context, kit.coreUrl, 3);
+  await seedAccounts(context, [nip19.nsecEncode(generateSecretKey())]);
+  await v2.open(page, appUrl);
+  await seedKitProvider(page, kit.coreUrl, "kit-cheap");
+  await page.getByRole("main").getByRole("button", { name: /^(Model: .*|Choose a model)$/ }).click();
+  const picker = page.getByRole("dialog", { name: "Choose a model" });
+  const openai = picker.getByRole("button", { name: /^OpenAI, / });
+  await openai.click();
+  const search = picker.getByPlaceholder("Search models or makers");
+  await search.fill("kit cheap");
+  await expect(picker.getByRole("option", { name: /Kit Cheap/ })).toBeVisible();
+  await expect(openai).toHaveAttribute("aria-pressed", "false");
+  // the keys still reach the tabs: Tab lands on the one picked last
+  await expect(openai).toHaveAttribute("tabindex", "0");
+
+  await openai.click();
+  await expect(search).toHaveValue("");
+  await expect(openai).toHaveAttribute("aria-pressed", "true");
+  await expect(picker.getByRole("option")).toHaveCount(3);
+});

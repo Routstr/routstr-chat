@@ -12,6 +12,7 @@ export function useMakerRail({
   favScope,
   makerLabel,
   scope,
+  searching,
   setScope,
   setActiveKey,
   railScroll: railScrollRef,
@@ -24,6 +25,8 @@ export function useMakerRail({
   favScope: Row[];
   makerLabel: (id: string) => string;
   scope: Scope;
+  /** A search looks through every model: no tab is the one shown. */
+  searching: boolean;
   setScope: (s: Scope) => void;
   setActiveKey: (k: string | null) => void;
   railScroll: React.RefObject<HTMLDivElement | null>;
@@ -52,7 +55,9 @@ export function useMakerRail({
   const placeRailGlide = useCallback((instant: boolean) => {
     const g = railGlideRef.current;
     const b = railScrollRef.current?.querySelector<HTMLElement>(".rail-b[aria-pressed='true']");
-    if (!g || !b) return null;
+    if (!g) return null;
+    g.style.opacity = b ? "" : "0";
+    if (!b) return null;
     if (instant) g.style.transition = "none";
     g.style.width = `${b.offsetWidth}px`;
     g.style.height = `${b.offsetHeight}px`;
@@ -88,7 +93,7 @@ export function useMakerRail({
     if (!b) return;
     if (railFirst.current) reveal(b, false);
     railFirst.current = false;
-  }, [scope, lay, railItems, placeRailGlide]);
+  }, [scope, searching, lay, railItems, placeRailGlide]);
 
   const [edges, setEdges] = useState({ left: false, right: false });
   const stripEdges = useCallback(() => {

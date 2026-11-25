@@ -74,7 +74,6 @@ html[data-room="night"] .mp, html[data-room="meridian"][data-face="dusk"] .mp { 
   background: var(--fill-2); pointer-events: none;
   transition: transform var(--d-move) var(--e-spring), width var(--d-move) var(--e-spring), opacity var(--d-fast) var(--e-out);
 }
-.mp[data-q] .rail-glide { opacity: .35; }
 .mp[data-loading] .rail-glide { opacity: 0; }
 .rail-b {
   position: relative; z-index: 1; display: flex; align-items: center; gap: 10px;
@@ -535,7 +534,6 @@ button.dt-sum:hover .s-r .v2-ico { transform: translateY(2px); }
 .mp[data-strip] .w-short { display: inline; }
 .mp[data-strip] .rail-sep { display: block; width: 1px; height: 22px; margin: 9px 6px; flex: none; background: var(--hair); }
 .mp[data-strip] .rail-ghost { width: 72px; height: 22px; margin: 9px 4px; }
-.mp[data-strip][data-q] .rail-b[aria-pressed="true"] { background: var(--fill-1); }
 
 /* ══ one column: the phone model, also for very narrow cards ═══════════ */
 .mp[data-lay="one"] {

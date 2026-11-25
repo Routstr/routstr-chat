@@ -17,6 +17,7 @@ export default function MakerRail({
   loading,
   railItems,
   scope,
+  searching,
   pickScope,
 }: {
   hidden: boolean;
@@ -29,6 +30,8 @@ export default function MakerRail({
   loading: boolean;
   railItems: ReturnType<typeof useMakerRail>["railItems"];
   scope: Scope;
+  /** A search looks through every model: no tab is pressed. */
+  searching: boolean;
   pickScope: (id: Scope, el?: HTMLElement | null) => void;
 }) {
   return (
@@ -49,12 +52,12 @@ export default function MakerRail({
           ) : (
             <>
               {railItems.scopes.map((s) => (
-                <RailButton key={s.id} id={s.id} on={scope === s.id} label={s.label} short={s.short} n={s.n} scope glyph={<Icon name={s.icon} size={17} />} onPick={pickScope} />
+                <RailButton key={s.id} id={s.id} at={scope === s.id} on={!searching && scope === s.id} label={s.label} short={s.short} n={s.n} scope glyph={<Icon name={s.icon} size={17} />} onPick={pickScope} />
               ))}
               <p className="rail-cap" aria-hidden="true">Makers</p>
               <span className="rail-sep" aria-hidden="true" />
               {railItems.makers.map((m) => (
-                <RailButton key={m.id} id={m.id} on={scope === m.id} label={m.label} n={m.n} glyph={renderCompanyIcon(m.id, "co-ico")} onPick={pickScope} />
+                <RailButton key={m.id} id={m.id} at={scope === m.id} on={!searching && scope === m.id} label={m.label} n={m.n} glyph={renderCompanyIcon(m.id, "co-ico")} onPick={pickScope} />
               ))}
             </>
           )}
@@ -66,6 +69,7 @@ export default function MakerRail({
 
 const RailButton = memo(function RailButton({
   id,
+  at,
   on,
   label,
   short,
@@ -75,6 +79,8 @@ const RailButton = memo(function RailButton({
   onPick,
 }: {
   id: string;
+  /** the tab picked last: Tab lands here, also while a search shows none pressed */
+  at: boolean;
   on: boolean;
   label: string;
   short?: string;
@@ -89,7 +95,7 @@ const RailButton = memo(function RailButton({
       type="button"
       data-co={id}
       data-scope={scope ? "" : undefined}
-      tabIndex={on ? 0 : -1}
+      tabIndex={at ? 0 : -1}
       aria-pressed={on}
       aria-label={`${label}, ${n}`}
       onClick={(e) => onPick(id, e.currentTarget)}

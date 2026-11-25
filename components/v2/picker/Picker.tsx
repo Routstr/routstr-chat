@@ -71,9 +71,11 @@ export default function Picker({
   const [q, setQ] = useState("");
   // the tab you picked last, kept for the next open
   const [scope, setScope] = useState<Scope>(() => getStorageItem<string>(SCOPE, "all"));
+  // a tab picked while searching shows that tab: the search goes
   const chooseScope = useCallback((s: Scope) => {
     setScope(s);
     setStorageItem(SCOPE, s);
+    setQ("");
   }, []);
   const [sort, setSort] = useState<SortKey>(readSort);
   const [dir, setDir] = useState<1 | -1>(() => (getStorageItem<string>("modelSelectorSortDirection", "desc") === "asc" ? -1 : 1));
@@ -108,7 +110,7 @@ export default function Picker({
   const { favKeys, favIds, liveFavs, favScope, makerLabel, routeOf, searching, filtering, sections, flat, idxOf, isCurrent, isFavRow } = useSections({ configured: pick.configured, cat, q, f, only, sort: listSort, dir: listDir, scope });
   const [cap, setCap] = useState(ROWS_STEP);
   const { activeIdx, detailKey, setActive } = useListGlide({ flat, idxOf, filtering, isCurrent, activeKey, setActiveKey, q, scope, f, only, sort: listSort, dir: listDir, cat, makerLabel, say, listEl, glide, lay, rows: cap });
-  const { strip, railItems, railOrder, edges, stripEdges, pickScope, railKey } = useMakerRail({ lay, cat, liveFavs, favScope, makerLabel, scope, setScope: chooseScope, setActiveKey, railScroll, railGlide });
+  const { strip, railItems, railOrder, edges, stripEdges, pickScope, railKey } = useMakerRail({ lay, cat, liveFavs, favScope, makerLabel, scope, searching, setScope: chooseScope, setActiveKey, railScroll, railGlide });
   // a tab this list no longer has (its last deal gone, no favorites, a maker nobody serves now): All
   if ((cat.models.length || !modelsLoading) && !railOrder.includes(scope)) setScope("all");
   const { commit, choose, toggleStar, fund, clearAll, allOn, push } = useChoose({
@@ -169,7 +171,7 @@ export default function Picker({
     <>
       <Search phone={phone} hidden={hidden} input={input} total={total} activeIdx={activeIdx} q={q} setQ={setQ} setActiveKey={setActiveKey} again={!!ui.again} />
 
-      <MakerRail hidden={hidden} railScroll={railScroll} railGlide={railGlide} strip={strip} edges={edges} stripEdges={stripEdges} railKey={railKey} loading={loading} railItems={railItems} scope={scope} pickScope={pickScope} />
+      <MakerRail hidden={hidden} railScroll={railScroll} railGlide={railGlide} strip={strip} edges={edges} stripEdges={stripEdges} railKey={railKey} loading={loading} railItems={railItems} scope={scope} searching={searching} pickScope={pickScope} />
 
       <Tools tools={tools} f={f} setF={setF} inert={hidden} />
 
