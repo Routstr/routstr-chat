@@ -82,11 +82,14 @@ export function useChoose({
       // opened to ask an answer again: it is asked with this model once the model is in use
       const again = fits ? ui.again : null;
       // the choice lands once the card has left: the whole app re-renders for a new model, and
-      // doing that under the closing card steals its frames
+      // doing that under the closing card steals its frames. Your message gets the keys back only
+      // then, so an Enter in between never sends it on the model you left
+      (document.activeElement as HTMLElement | null)?.blur();
       window.setTimeout(() => {
         commit(r.model.id, pin);
         // not if you went to another chat meanwhile: it would wait there and be asked much later
         if (again && again.chat === openChat.current()) setAnswerAgain(again);
+        if (fits) refocusField();
       }, phone ? SHEET_LEAVE_MS : LEAVE_MS);
       setDraft(null);
       const name = shortModelName(r.model.name, r.model.id);
@@ -97,7 +100,6 @@ export function useChoose({
         return;
       }
       say(again ? `${name} chosen, answering again` : `${name} chosen${pin ? ` on ${route.host}` : ""}, about ${fmt(cat.cost(route.model))} sats a message`);
-      refocusField();
     },
     [commit, cat, only, say, onClose, draft, ui, phone, openChat, setAnswerAgain]
   );

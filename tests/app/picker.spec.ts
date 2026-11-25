@@ -211,3 +211,20 @@ test("while you search no tab is pressed, and pressing one ends the search on th
   await expect(openai).toHaveAttribute("aria-pressed", "true");
   await expect(picker.getByRole("option")).toHaveCount(3);
 });
+
+// a model picked with the message already written, then Enter as soon as the message has the keys
+// again: it goes to the model picked, never the one before it (the choice lands as the card leaves)
+test("Enter right after picking a model sends to the model picked", async ({ page, kit, appUrl }) => {
+  await v2.open(page, appUrl);
+  await seedKitProvider(page, kit.coreUrl, "kit-cheap");
+  await v2.fund(page, appUrl, await kit.mintToken(300));
+  const chip = page.getByRole("main").getByRole("button", { name: /^Model: / });
+  await expect(chip).toHaveAccessibleName(/^Model: Kit Cheap\./);
+  await page.getByRole("textbox", { name: "Message" }).fill("[kit:usage=10,10] to the one picked");
+  await chip.click();
+  await page.getByRole("dialog", { name: "Choose a model" }).getByRole("option", { name: /Kit Echo/ }).click();
+  await page.waitForFunction(() => document.activeElement?.matches(".island textarea"), null, { polling: "raf" });
+  await page.keyboard.press("Enter");
+  await v2.waitReplyText(page, "Echo: to the one picked");
+  expect((await kit.upstream.requests()).at(-1)?.model).toBe("kit-echo");
+});
