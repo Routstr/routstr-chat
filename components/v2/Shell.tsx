@@ -138,7 +138,15 @@ function Panel() {
       <div className="catch" aria-hidden="true" />
       <header className="panel-head">
         <div className="lead">
-          <button className="ghost only-m" onClick={() => ui.setDrawer(true)} aria-label="Open chats">
+          {/* the chats, even when the drawer was last shut on the wallet */}
+          <button
+            className="ghost only-m"
+            onClick={() => {
+              ui.setSide("chats");
+              ui.setDrawer(true);
+            }}
+            aria-label="Open chats"
+          >
             <Icon name="menu" />
           </button>
         </div>

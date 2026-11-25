@@ -809,3 +809,21 @@ test("Settings names the way replies are really paid", async ({
   await page.locator("#nav-wallet").click();
   await expect(page.locator("#g-paying")).not.toContainText("Per request");
 });
+
+// on a phone, the drawer shut while it showed the wallet: "Open chats" opens it on the chats
+test("on a phone, Open chats opens the chats, though the drawer was last shut on the wallet", async ({ page, appUrl }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await v2.open(page, appUrl);
+  const drawer = page.locator(".room");
+  const card = page.locator(".flip");
+  const openChats = page.getByRole("button", { name: "Open chats" });
+  await openChats.click();
+  await page.getByRole("button", { name: /^Open wallet\./ }).first().click();
+  await expect(card).toHaveAttribute("data-side", "wallet");
+  await page.locator(".drawer-veil").click();
+  await expect(drawer).not.toHaveAttribute("data-drawer", "open");
+
+  await openChats.click();
+  await expect(drawer).toHaveAttribute("data-drawer", "open");
+  await expect(card).toHaveAttribute("data-side", "chats");
+});
