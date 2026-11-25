@@ -170,6 +170,13 @@ export default function GiftLight({
     // the balance counts its new sats up as they pour in, not before
     holdBalance(true);
     let glint = 0;
+    const die = () => {
+      lose();
+      holdBalance(false);
+      room.release();
+    };
+    // its script did not load, or broke: as a light that died, the gift opens without it
+    w.onerror = die;
     w.onmessage = (e: MessageEvent<FromLight>) => {
       if (e.data.t === "opened") openedNow.current();
       // the ₿ goes home: the vignette lifts round it
@@ -188,11 +195,7 @@ export default function GiftLight({
         holdBalance(false);
         room.release();
         setScene("gone");
-      } else if (e.data.t === "dead") {
-        lose();
-        holdBalance(false);
-        room.release();
-      }
+      } else if (e.data.t === "dead") die();
     };
     // the room holds still under the light
     room.exhale();

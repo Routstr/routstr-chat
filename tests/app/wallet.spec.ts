@@ -550,6 +550,31 @@ test("a gift link opened by hand in a fresh browser brings its sats, which pay f
   await friend.close();
 });
 
+// the gift's light cannot start (its worker did not load): the gift opens without it
+test("a gift opens when its light cannot load", async ({ page, context, browser, kit, appUrl }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await v2.open(page, appUrl);
+  await v2.fund(page, appUrl, await kit.mintToken(300));
+  const link = await v2.giftLink(page, 100, "Mira", "For your exam week.");
+
+  const friend = await browser.newContext();
+  await seal(friend, kit.env, appUrl);
+  await friend.route(/\/_next\/static\/chunks\/.*\.js$/, async (route) => {
+    const res = await route.fetch();
+    // the light's worker is the one script that can say its light is dead
+    if ((await res.text()).includes('t:"dead"')) return route.abort();
+    await route.fulfill({ response: res });
+  });
+  const second = await friend.newPage();
+  await second.goto(link);
+  await v2.ready(second);
+  const open = second.getByRole("button", { name: /^(Hold to open|Open the gift)$/ });
+  await expect(open).toBeVisible();
+  await open.press("Enter");
+  await expect.poll(() => v2.balance(second).catch(() => 0)).toBe(100);
+  await friend.close();
+});
+
 // one tab's token waits for the wallet while another tab makes one, then its mint refuses it: it
 // says it was not made, and never shows the other tab's token as its own
 test("a token that cannot be made never shows the one another tab made meanwhile", async ({
