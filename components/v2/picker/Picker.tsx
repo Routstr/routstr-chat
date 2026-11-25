@@ -116,7 +116,7 @@ export default function Picker({
   if (activeIdx + ROWS_STEP / 2 > cap) setCap(activeIdx + ROWS_STEP);
   const { strip, railItems, railOrder, edges, stripEdges, pickScope, railKey } = useMakerRail({ lay, cat, liveFavs, favScope, makerLabel, scope, searching, setScope: chooseScope, setActiveKey, railScroll, railGlide });
   // a tab this list no longer has (its last deal gone, no favorites, a maker nobody serves now): All
-  if ((cat.models.length || !modelsLoading) && !railOrder.includes(scope)) setScope("all");
+  if (!modelsLoading && !railOrder.includes(scope)) setScope("all");
   const { commit, choose, toggleStar, fund, clearAll, allOn, push } = useChoose({
     pick, allOn: providersOn, cat, ui, phone, only, draft, setDraft, say, onClose, favKeys, favIds, isFavRow, setQ, setF, setOnly, input, card, setView, onDetail, onList,
   });
@@ -136,7 +136,8 @@ export default function Picker({
   const favN = scope === "favorites" && !searching ? flat.filter(isFavRow).length : total;
   const noun = nounFor(favN, searching, scope, makerLabel);
   const onlyHost = only ? cat.hosts.find((h) => h.base === only)?.host ?? only : null;
-  const loading = modelsLoading && cat.models.length === 0;
+  // nothing to show here yet, while a provider may still bring it
+  const loading = modelsLoading && !total;
   const bal = (
     <>
       <Icon name="wallet" size={14} />

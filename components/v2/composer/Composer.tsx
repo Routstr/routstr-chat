@@ -279,7 +279,8 @@ export default function Composer({ centred }: { centred: boolean }) {
   useEffect(() => () => window.clearTimeout(turnT.current), []);
   // a picture is made from words; your pictures only go with them
   const hasContent = inputMessage.trim().length > 0 || (!drawing && uploadedAttachments.length > 0);
-  const loading = isLoadingModels || (isWalletLoading && isAuthenticated);
+  // models only hold a send back while none is there to send with
+  const loading = (isLoadingModels && !selectedModel) || (isWalletLoading && isAuthenticated);
   // a PDF still in the draft and being read would go without its text
   const readingNow = uploadedAttachments.some((a) => reading.has(a.id));
   const busy = loading || readingNow;

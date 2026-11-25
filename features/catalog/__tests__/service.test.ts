@@ -247,6 +247,26 @@ describe("CatalogService", () => {
     catalog.dispose();
   });
 
+  it("with no list saved, shows the first providers to answer and still loads until the pass ends", async () => {
+    const { catalog, modelManager } = setup();
+    let done!: () => void;
+    modelManager.fetchModels.mockImplementationOnce(async (_bases, _force, progress) => {
+      progress?.([model("a")]);
+      await new Promise<void>((resolve) => (done = resolve));
+      return [model("a"), model("c")];
+    });
+
+    catalog.start();
+    await vi.waitFor(() => expect(done).toBeDefined());
+    expect(catalog.getSnapshot()).toMatchObject({ models: [model("a")], loading: true });
+
+    done();
+    await vi.waitFor(() =>
+      expect(catalog.getSnapshot()).toMatchObject({ models: [model("a"), model("c")], loading: false })
+    );
+    catalog.dispose();
+  });
+
   it("keeps the list it has when a pass fails", async () => {
     const { catalog, modelManager } = setup();
     await catalog.refresh();

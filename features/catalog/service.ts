@@ -33,7 +33,8 @@ export const PROVIDERS_OFF = "providers_off";
 
 export interface CatalogSnapshot {
   models: Model[];
-  /** No model list has been shown yet. */
+  /** No full list yet: none was saved from the last visit and the first pass has not ended
+   *  (the providers that answered show meanwhile). A model or a tab missing now may still come. */
   loading: boolean;
   /** Providers that are off: by you, or by Routstr's reviews. Never ranked,
    *  never paid. */
@@ -365,7 +366,7 @@ export class CatalogService {
       const first = !this.snapshot.models.length;
       const show = (models: unknown[]) => {
         if (first && models.length)
-          this.set({ models: models as Model[], loading: false });
+          this.set({ models: models as Model[], loading: true });
       };
       let models = await modelManager.fetchModels(bases, stale, show);
       // Models were lost while their timestamps survived, so every pass would

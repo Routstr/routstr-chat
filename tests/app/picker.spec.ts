@@ -1,6 +1,6 @@
 // The rail's card hands focus back when it turns from the wallet to the chats, but only while
 // focus is still on it: a model picker opened during the turn keeps focus and stays open.
-import { generateSecretKey, nip19 } from "nostr-tools";
+import { finalizeEvent, generateSecretKey, nip19 } from "nostr-tools";
 import type { BrowserContext } from "@playwright/test";
 import { expect, test } from "./fixtures";
 import { v2 } from "./drivers/v2";
@@ -209,6 +209,55 @@ test("an empty list no provider answered says so, and Try again asks again", asy
   down = false;
   await empty.getByRole("button", { name: "Try again" }).click();
   await expect(page.getByRole("option", { name: /Kit Cheap/ })).toBeVisible();
+});
+
+test("with no model list saved yet, a chosen model a slower provider serves is waited for, never asked for again", async ({ page, context, kit, appUrl }) => {
+  // a second provider, announced and turned on by hand, that lists only Mistral Kit Slow and answers last
+  const slow = "https://slow.example/";
+  const key = generateSecretKey();
+  const announce = finalizeEvent({ kind: 38421, created_at: Math.floor(Date.now() / 1000), tags: [["d", slow], ["u", slow]], content: "" }, key);
+  await kit.relay.seed([announce]);
+  let answer!: () => void;
+  const late = new Promise<void>((resolve) => (answer = resolve));
+  await context.route(/^https:\/\/slow\.example\//, async (route) => {
+    if (!route.request().url().endsWith("/v1/models")) return route.fulfill({ status: 404 });
+    await late;
+    const res = await route.fetch({ url: `${kit.coreUrl}v1/models` });
+    const body = (await res.json()) as { data: { id: string; name: string }[] };
+    body.data = [{ ...body.data.find((m) => m.id === "kit-cheap")!, id: "kit-slow", name: "Mistral Kit Slow" }];
+    await route.fulfill({ response: res, json: body });
+  });
+  await seedAccounts(context, [nip19.nsecEncode(generateSecretKey())]);
+  await context.addInitScript((slow) => {
+    if (localStorage.getItem("lastUsedModel")) return; // only on the first load
+    localStorage.setItem("lastUsedModel", JSON.stringify("kit-slow"));
+    const open = indexedDB.open("routstr-chat-discovery", 3);
+    open.onupgradeneeded = () => {
+      open.result.createObjectStore("sdk_storage").put(JSON.stringify([slow]), "manually_enabled_providers");
+      // the rest of the schema the SDK makes for this database
+      const usage = open.result.createObjectStore("usage_tracking", { keyPath: "id" });
+      for (const i of ["timestamp", "modelId", "baseUrl", "sessionId", "client", "provider"]) usage.createIndex(i, i, { unique: false });
+    };
+    open.onsuccess = () => open.result.close();
+  }, slow);
+
+  try {
+    const kitList = page.waitForResponse((r) => r.url().endsWith("/v1/models") && !r.url().startsWith(slow));
+    await v2.open(page, appUrl);
+    await kitList;
+    const chip = page.getByRole("main").locator("button.model");
+    await expect(chip).toHaveAccessibleName("Finding models");
+    await page.getByRole("textbox", { name: "Message" }).fill("hi");
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(500);
+    await expect(page.getByRole("dialog", { name: "Choose a model" })).toHaveCount(0);
+
+    answer();
+    await expect(chip).toHaveAccessibleName(/^Model: .*Kit Slow\. Change model$/);
+  } finally {
+    // the relay outlives this test: the provider goes with it
+    await kit.relay.seed([finalizeEvent({ kind: 5, created_at: Math.floor(Date.now() / 1000), tags: [["e", announce.id]], content: "" }, key)]);
+  }
 });
 
 // a search looks through every model, so while it lasts no tab is pressed; pressing one shows that tab
