@@ -18,6 +18,7 @@ export default function List({
   loading,
   sections,
   cap,
+  more,
   facts,
   isFavRow,
   isCurrent,
@@ -41,6 +42,8 @@ export default function List({
   loading: boolean;
   sections: Section[];
   cap: number;
+  /** draws the next step of a long list */
+  more: () => void;
   facts: ReturnType<typeof useFacts>;
   isFavRow: (r: Row) => boolean;
   isCurrent: (r: Row) => boolean;
@@ -63,7 +66,12 @@ export default function List({
         onPointerDown={(e) => {
           if (e.pointerType !== "touch" && (e.target as Element).closest(".r-star, .r-more")) e.preventDefault();
         }}
-        className="mp-list scroll" id="mp-list" role={total ? "listbox" : undefined} aria-label={total ? "Models" : undefined} tabIndex={-1} ref={listEl} onScroll={(e) => e.currentTarget.toggleAttribute("data-scrolled", e.currentTarget.scrollTop > 0)} onPointerMove={onListMove} onClick={onListClick} inert={hidden}>
+        className="mp-list scroll" id="mp-list" role={total ? "listbox" : undefined} aria-label={total ? "Models" : undefined} tabIndex={-1} ref={listEl} onScroll={(e) => {
+          const l = e.currentTarget;
+          l.toggleAttribute("data-scrolled", l.scrollTop > 0);
+          // a few screens before the drawn rows end, so a fling never meets the end
+          if (l.scrollHeight - l.scrollTop < 3 * l.clientHeight) more();
+        }} onPointerMove={onListMove} onClick={onListClick} inert={hidden}>
       <div className="glide" ref={glide} aria-hidden="true" />
       <div className="list-in">
         {loading ? (

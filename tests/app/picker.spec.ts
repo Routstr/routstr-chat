@@ -155,7 +155,7 @@ test("a list that changes while you look at it stays where you scrolled it", asy
 
   await page.getByRole("main").getByRole("button", { name: /^(Model: .*|Choose a model)$/ }).click();
   const picker = page.getByRole("dialog", { name: "Choose a model" });
-  await expect(picker.getByRole("option")).toHaveCount(153);
+  await expect(picker.getByRole("option", { name: /Kit Many 1\b/ })).toBeVisible();
   const list = picker.locator(".mp-list");
   await list.evaluate((l) => (l.scrollTop = 2000));
   await page.waitForTimeout(300);
@@ -166,6 +166,28 @@ test("a list that changes while you look at it stays where you scrolled it", asy
   await other.evaluate(() => localStorage.setItem("providers_off", JSON.stringify(["https://nobody.example/"])));
   await page.waitForTimeout(2000);
   expect(await list.evaluate((l) => l.scrollTop)).toBe(2000);
+});
+
+// hundreds of models: the list draws the rows near the screen and the rest as it is scrolled, never all
+// of them at once (tens of thousands of elements, enough to bring a phone down)
+test("a long list draws the rows near the screen, and the rest as you scroll to them", async ({ page, context, kit, appUrl }) => {
+  await listMore(context, kit.coreUrl, 700);
+  await seedAccounts(context, [nip19.nsecEncode(generateSecretKey())]);
+  await v2.open(page, appUrl);
+  await seedKitProvider(page, kit.coreUrl, "kit-cheap");
+
+  await page.getByRole("main").getByRole("button", { name: /^(Model: .*|Choose a model)$/ }).click();
+  const picker = page.getByRole("dialog", { name: "Choose a model" });
+  const rows = picker.getByRole("option");
+  await expect(rows.first()).toBeVisible();
+  await page.waitForTimeout(1000);
+  expect(await rows.count()).toBeLessThan(200);
+
+  const list = picker.locator(".mp-list");
+  await expect(async () => {
+    await list.evaluate((l) => (l.scrollTop = l.scrollHeight));
+    await expect(rows).toHaveCount(703, { timeout: 100 });
+  }).toPass();
 });
 
 // no provider answers (every one is down, or the connection is): the picker says so, not that they

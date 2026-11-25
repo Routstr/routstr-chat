@@ -108,8 +108,12 @@ export default function Picker({
   }, []);
 
   const { favKeys, favIds, liveFavs, favScope, makerLabel, routeOf, searching, filtering, sections, flat, idxOf, isCurrent, isFavRow } = useSections({ configured: pick.configured, cat, q, f, only, sort: listSort, dir: listDir, scope });
+  // a long list is drawn a step at a time, as it nears its end: never every row it has (hundreds of
+  // models are tens of thousands of elements, too heavy for a phone)
   const [cap, setCap] = useState(ROWS_STEP);
   const { activeIdx, detailKey, setActive } = useListGlide({ flat, idxOf, filtering, isCurrent, activeKey, setActiveKey, q, scope, f, only, sort: listSort, dir: listDir, cat, makerLabel, say, listEl, glide, lay, rows: cap });
+  // the active row is always drawn, a step past it: the model in use as the list opens, a row the keys reach
+  if (activeIdx + ROWS_STEP / 2 > cap) setCap(activeIdx + ROWS_STEP);
   const { strip, railItems, railOrder, edges, stripEdges, pickScope, railKey } = useMakerRail({ lay, cat, liveFavs, favScope, makerLabel, scope, searching, setScope: chooseScope, setActiveKey, railScroll, railGlide });
   // a tab this list no longer has (its last deal gone, no favorites, a maker nobody serves now): All
   if ((cat.models.length || !modelsLoading) && !railOrder.includes(scope)) setScope("all");
@@ -141,14 +145,7 @@ export default function Picker({
   );
 
   const facts = useFacts(flat, cat, routeOf, only, listSort);
-
-  // a long list lands in steps: a screenful with the card, the rest in the frames after
-  // (never while it closes: the leaving card keeps its frames)
-  useEffect(() => {
-    if (!open || cap >= total) return;
-    const t = setTimeout(() => setCap((c) => c + ROWS_STEP), 0);
-    return () => clearTimeout(t);
-  }, [open, cap, total]);
+  const more = useCallback(() => setCap((c) => (c < total ? c + ROWS_STEP : c)), [total]);
 
   const hidden = lay === "one" && view === "detail";
   const cardAttrs = {
@@ -189,7 +186,7 @@ export default function Picker({
       </div>
 
       <List
-        listEl={listEl} glide={glide} hidden={hidden} total={total} loading={loading} sections={sections} cap={cap} facts={facts}
+        listEl={listEl} glide={glide} hidden={hidden} total={total} loading={loading} sections={sections} cap={cap} more={more} facts={facts}
         isFavRow={isFavRow} isCurrent={isCurrent} activeIdx={activeIdx} phone={phone} q={q} scope={scope} f={f} only={only}
         cat={cat} clearAll={clearAll} fund={fund} allOn={allOn} onListMove={onListMove} onListClick={onListClick}
       />
