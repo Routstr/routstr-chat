@@ -167,3 +167,24 @@ test("a list that changes while you look at it stays where you scrolled it", asy
   await page.waitForTimeout(2000);
   expect(await list.evaluate((l) => l.scrollTop)).toBe(2000);
 });
+
+// no provider answers (every one is down, or the connection is): the picker says so, not that they
+// were turned off, and Try again asks them again
+test("an empty list no provider answered says so, and Try again asks again", async ({ page, context, kit, appUrl }) => {
+  let down = true;
+  await context.route(/\/v1\/models(\?|$)/, async (route) => {
+    if (down) return route.fulfill({ status: 503, body: "busy" });
+    const url = route.request().url();
+    await route.fulfill({ response: await route.fetch({ url: url.startsWith(PROVIDER_ALIAS) ? kit.coreUrl + url.slice(PROVIDER_ALIAS.length) : url }) });
+  });
+  await v2.open(page, appUrl);
+  await seedKitProvider(page, kit.coreUrl, "kit-cheap");
+  const chip = page.getByRole("main").getByRole("button", { name: /^(Model: .*|Choose a model)$/ });
+  await expect(chip).toHaveAccessibleName("Choose a model");
+  await chip.click();
+  const empty = page.locator(".mp-empty");
+  await expect(empty).toContainText("No provider answered");
+  down = false;
+  await empty.getByRole("button", { name: "Try again" }).click();
+  await expect(page.getByRole("option", { name: /Kit Cheap/ })).toBeVisible();
+});

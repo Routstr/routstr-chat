@@ -50,8 +50,9 @@ const REFRESH_EVERY_MS = 30 * 60 * 1000;
  * pass that a newer one replaced while it waited never runs.
  */
 // the SDK keys its caches by base URL, written with or without the closing slash
+const bareOf = (baseUrl: string) => baseUrl.replace(/\/+$/, "");
 function byBase<T>(all: Record<string, T>, baseUrl: string): T | undefined {
-  const bare = baseUrl.replace(/\/+$/, "");
+  const bare = bareOf(baseUrl);
   return all[baseUrl] ?? all[bare] ?? all[`${bare}/`];
 }
 
@@ -173,6 +174,13 @@ export class CatalogService {
   /** The providers the last discovery found. */
   providers(): string[] {
     return this.deps.discoveryAdapter.getBaseUrlsList();
+  }
+
+  /** Every provider the last discovery found is off: by you, or by a review. */
+  allOff(): boolean {
+    const off = new Set(this.snapshot.off.map(bareOf));
+    const found = this.providers();
+    return found.length > 0 && found.every((url) => off.has(bareOf(url)));
   }
 
   /** The mints a provider takes, as the last discovery found them. */

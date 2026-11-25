@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+import { useCatalogService } from "@/features/catalog/view";
 import { Icon } from "../icons";
 import type { Filters } from "./helpers";
 import type { Scope } from "./catalog";
@@ -23,9 +25,33 @@ export default function Empty({
   onFund: () => void;
   onUseAll: () => void;
 }) {
+  const catalog = useCatalogService();
+  const [asking, setAsking] = useState(false);
   const query = q.trim();
   const anyFilter = f.fits || f.web || f.priv || f.images || !!only;
-  // no search and no filter, yet nothing: every provider is off (by hand, or by a review check that failed)
+  // no search and no filter, yet nothing: no provider answered, or every one is off (by hand, or
+  // by a review check that failed)
+  if (!query && !anyFilter && scope === "all" && !catalog?.allOff())
+    return (
+      <div className="mp-empty">
+        <Icon name="servers" size={22} />
+        <p className="e-t">No provider answered</p>
+        <p className="e-s">Check your connection, then try again.</p>
+        <div className="e-row">
+          <button
+            className="soft sm"
+            type="button"
+            disabled={asking}
+            onClick={() => {
+              setAsking(true);
+              void catalog?.refresh().finally(() => setAsking(false));
+            }}
+          >
+            {asking ? "Asking" : "Try again"}
+          </button>
+        </div>
+      </div>
+    );
   if (!query && !anyFilter && scope === "all")
     return (
       <div className="mp-empty">
