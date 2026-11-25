@@ -352,8 +352,11 @@ export class CatalogService {
       // a switch in or out of node mode left these lists pruned but fresh
       const cached = discoveryAdapter.getCachedModels();
       const stale = !bases.some((base) => cached[base]?.length);
+      // A list already shown (the last visit's) stays until the pass is done: shown as each
+      // provider answers, it would shrink to the first one's models and grow back
+      const first = !this.snapshot.models.length;
       const show = (models: unknown[]) => {
-        if (models.length)
+        if (first && models.length)
           this.set({ models: models as Model[], loading: false });
       };
       let models = await modelManager.fetchModels(bases, stale, show);
