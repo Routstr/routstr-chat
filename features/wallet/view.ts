@@ -167,6 +167,7 @@ export function useCoinCount(): number {
  *  waiting for their mint. The wallet writes it; screens only read it, or
  *  clear the records. */
 export function useActivity() {
+  const { pubkey } = useSession();
   const entries = useTransactionHistoryStore((s) => s.history);
   const pending = useTransactionHistoryStore((s) => s.pendingTransactions);
   // received tokens whose mint could not be reached yet: not in the balance,
@@ -187,8 +188,11 @@ export function useActivity() {
     // and the old chat engine's own payment records
     saveTransactionHistory([]);
   }, [clearHistory]);
-  return { entries, pending, waiting, clear };
+  // no key, no wallet: what an older app left on this device is no one's to see until a key
+  // signs in here and takes it
+  return pubkey ? { entries, pending, waiting, clear } : { entries: NOTHING, pending: NOTHING, waiting: NOTHING, clear };
 }
+const NOTHING: never[] = [];
 
 /** Asks the provider a token was handed to what it holds for it (keys'
  *  adopt): the key's sats, 0 when the provider says it was spent elsewhere;

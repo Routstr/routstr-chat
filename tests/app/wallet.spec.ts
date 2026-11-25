@@ -678,3 +678,22 @@ test("auto-refill from a connected wallet pays once, though the app is open in t
   expect(wallet.paid.length).toBe(1);
   wallet.close();
 });
+
+// the older app kept one history per device: signed out it is no one's to see, and the first key
+// that signs in here takes it
+test("signed out, the wallet shows no history an older app left on the device, and the first key takes it", async ({ page, context, kit, appUrl }) => {
+  const old = { id: "old", direction: "in", amount: "3", timestamp: Date.parse("2026-07-02T16:26:00Z") };
+  await context.addInitScript((v) => {
+    if (localStorage.getItem("accounts") === null && localStorage.getItem("cashu-history") === null)
+      localStorage.setItem("cashu-history", v);
+  }, JSON.stringify({ state: { history: [old], pendingTransactions: [] }, version: 0 }));
+  await v2.open(page, appUrl);
+  await page.getByRole("button", { name: /^Open wallet\./ }).first().click();
+  const wallet = page.getByRole("region", { name: "Wallet" }).first();
+  await expect(wallet).toContainText("Add sats to start chatting");
+  await expect(wallet).not.toContainText("Jul 2");
+
+  await v2.fund(page, appUrl, await kit.mintToken(10));
+  await page.getByRole("button", { name: /^Open wallet\./ }).first().click();
+  await expect(wallet).toContainText("Jul 2");
+});
