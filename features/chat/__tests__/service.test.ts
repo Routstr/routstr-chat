@@ -20,6 +20,11 @@ let costs: { record: ReturnType<typeof vi.fn>; set: ReturnType<typeof vi.fn> };
 
 afterEach(() => vi.unstubAllGlobals());
 
+const tabStorage = () => {
+  const map = new Map<string, string>();
+  return { getItem: (k: string) => map.get(k) ?? null, setItem: (k: string, v: string) => void map.set(k, v), removeItem: (k: string) => void map.delete(k) };
+};
+
 beforeEach(() => {
   history = new FakeHistory();
   provider = manualPay();
@@ -30,6 +35,7 @@ beforeEach(() => {
     attachments,
     pay: provider.pay,
     costs,
+    tab: tabStorage(),
   });
 });
 
@@ -91,6 +97,22 @@ describe("ChatService: saving before paying", () => {
     expect(provider.pay).not.toHaveBeenCalled();
     expect(turn.run.getSnapshot().phase).toBe("stopped");
     expect(await turn.reply).toBeUndefined();
+  });
+});
+
+describe("ChatService: a page that goes away mid-turn", () => {
+  it("is known on the tab's next load, and only there, until a turn runs there again", async () => {
+    const tab = tabStorage();
+    const deps = { history, attachments, pay: provider.pay, costs, tab };
+    const left = new ChatService(deps);
+    await left.send("c", "hello", model);
+    expect(left.cutOff("c")).toBe(false);
+
+    chat = new ChatService(deps);
+    expect(chat.cutOff("c")).toBe(true);
+    expect(new ChatService({ ...deps, tab: tabStorage() }).cutOff("c")).toBe(false);
+    await exchange("hello", "hi");
+    expect(chat.cutOff("c")).toBe(false);
   });
 });
 
@@ -358,6 +380,7 @@ describe("ChatService: what a reply keeps", () => {
       }),
       pay: provider.pay,
       costs,
+      tab: tabStorage(),
     });
     const sourced = [
       {
@@ -414,6 +437,7 @@ describe("ChatService: files", () => {
       attachments: createAttachments(files),
       pay: provider.pay,
       costs,
+      tab: tabStorage(),
     });
     const question = [
       { type: "text" as const, text: "draw it again" },

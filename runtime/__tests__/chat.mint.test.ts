@@ -49,6 +49,7 @@ async function account(owner = "alice", sats = 300) {
     createAccountChat({
       owner,
       storage: memoryStorage(),
+      tab: memoryStorage(),
       history,
       attachments: passThroughAttachments(),
       keys: credit.keys,
@@ -264,6 +265,7 @@ describe("chat with real money", () => {
     const chat = createAccountChat({
       owner: "alice",
       storage: memoryStorage(),
+      tab: memoryStorage(),
       history: new FakeHistory(),
       attachments: passThroughAttachments(),
       keys: credit.keys,

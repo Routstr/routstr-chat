@@ -19,7 +19,16 @@ interface ChatDeps {
   attachments: Attachments;
   pay: Pay;
   costs: Pick<ReplyCosts, "record" | "set">;
+  /** This tab's own storage (sessionStorage): the turns it has open outlive its page, so a
+   *  reload knows which one the page left (a reload, a phone closing the tab). */
+  tab: Pick<Storage, "getItem" | "setItem" | "removeItem">;
+  /** Web Locks: each open turn is held while its page lives, so a copy of this tab (which copies
+   *  its storage) tells a turn still running in the tab it copied from one a page left. */
+  locks?: Pick<LockManager, "request">;
 }
+
+const ASKING = "chat_asking:";
+const askingLock = (turn: string) => `routstr-chat-asking:${turn}`;
 
 export interface Turn {
   run: RequestRun;
@@ -49,6 +58,10 @@ export class ChatService {
   private runs = new Map<string, RequestRun>();
   /** Conversations with a turn between its first step and its saved answer. */
   private claims = new Map<string, AbortController>();
+  /** Lets go of the lock each open turn holds. */
+  private holding = new Map<string, () => void>();
+  /** A turn this tab's storage names, checked once: its page is known gone. */
+  private left = new Map<string, boolean>();
   private open = new Set<Promise<unknown>>();
   private listeners = new Set<() => void>();
   private disposed = false;
@@ -89,6 +102,32 @@ export class ChatService {
 
   /** A turn of this account has not finished paying yet. */
   busy = (): boolean => this.open.size > 0;
+
+  /** This tab's page went away with a turn of this conversation open, and no turn has run
+   *  there since. */
+  cutOff = (conversationId: string): boolean => {
+    if (this.claims.has(conversationId)) return false;
+    let turn: string | null;
+    try {
+      turn = this.deps.tab.getItem(ASKING + conversationId);
+    } catch {
+      return false;
+    }
+    if (turn === null) return false;
+    const locks = this.deps.locks;
+    if (!locks) return true;
+    const id = turn;
+    if (!this.left.has(id)) {
+      this.left.set(id, false);
+      // its lock free: the page that asked went away; held: it still answers, in another tab
+      void locks.request(askingLock(id), { ifAvailable: true }, (lock) => {
+        if (!lock) return;
+        this.left.set(id, true);
+        this.notify();
+      });
+    }
+    return this.left.get(id)!;
+  };
 
   send(
     conversationId: string,
@@ -275,13 +314,31 @@ export class ChatService {
     }
     const claim = new AbortController();
     this.claims.set(conversationId, claim);
+    this.mark(conversationId, true);
     this.notify();
     return claim;
   }
 
   private release(conversationId: string): void {
     this.claims.delete(conversationId);
+    this.mark(conversationId, false);
     this.notify();
+  }
+
+  private mark(conversationId: string, open: boolean): void {
+    this.holding.get(conversationId)?.();
+    this.holding.delete(conversationId);
+    try {
+      if (!open) return this.deps.tab.removeItem(ASKING + conversationId);
+      const turn = crypto.randomUUID();
+      this.deps.tab.setItem(ASKING + conversationId, turn);
+      let letGo = () => {};
+      const held = new Promise<void>((done) => (letGo = done));
+      void this.deps.locks?.request(askingLock(turn), () => held);
+      this.holding.set(conversationId, letGo);
+    } catch {
+      // storage blocked: a page that goes away mid-turn is not known on the next load
+    }
   }
 
   private notify(): void {

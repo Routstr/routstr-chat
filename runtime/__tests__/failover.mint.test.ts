@@ -42,6 +42,7 @@ it("pays out both keys of a reply that failed over", async () => {
   const chat = createAccountChat({
     owner: "alice",
     storage: memoryStorage(),
+    tab: memoryStorage(),
     history: new FakeHistory(),
     attachments: passThroughAttachments(),
     keys: credit.keys,

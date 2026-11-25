@@ -21,6 +21,9 @@ interface AccountChatDeps {
   owner: string;
   /** Where reply costs are kept (localStorage). */
   storage: Pick<Storage, "getItem" | "setItem">;
+  /** This tab's own storage (sessionStorage). */
+  tab: Pick<Storage, "getItem" | "setItem" | "removeItem">;
+  locks?: Pick<LockManager, "request">;
   history: ChatHistory;
   attachments: Attachments;
   keys: Keys & { subscribeCredit(listener: () => void): () => void };
@@ -54,6 +57,8 @@ export function createAccountChat(deps: AccountChatDeps): AccountChat {
     attachments: deps.attachments,
     pay: createPay(payments),
     costs,
+    tab: deps.tab,
+    locks: deps.locks,
   });
   // main's old shared credit, read from disk at the start and after each
   // refund (a sweep writes it through its own copy)

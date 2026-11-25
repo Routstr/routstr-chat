@@ -67,6 +67,8 @@ function build(
     ...createAccountChat({
       owner,
       storage: window.localStorage,
+      tab: window.sessionStorage,
+      locks: navigator.locks,
       history,
       attachments: createAttachments(files),
       keys: keysFor(owner),

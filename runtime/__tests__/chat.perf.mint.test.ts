@@ -37,6 +37,7 @@ describe("pipeline cost", () => {
     const account = createAccountChat({
       owner: "alice",
       storage: memoryStorage(),
+      tab: memoryStorage(),
       history: new FakeHistory(),
       attachments: passThroughAttachments(),
       keys: credit.keys,

@@ -30,6 +30,49 @@ test("pays for a reply through routstr-core and keeps the change", async ({
   expect(await kit.redeem(await v2.makeToken(page, 299))).toBe(299);
 });
 
+// the page reloads (or the phone closes the tab) while a reply streams: the question is kept,
+// and it can be asked again
+test("a question whose reply was cut off by a reload can be asked again", async ({ page, kit, appUrl }) => {
+  await v2.open(page, appUrl);
+  await seedKitProvider(page, kit.coreUrl, "kit-cheap");
+  await v2.fund(page, appUrl, await kit.mintToken(300));
+  const words = Array.from({ length: 40 }, (_, i) => `w${i}`).join(" ");
+  await v2.send(page, `[kit:chunk=250] [kit:usage=10,10] ${words}`);
+  await expect(page.locator(".rd-msg.rd-ai").last()).toContainText("Echo: w0 w1");
+  await page.reload();
+  await v2.ready(page);
+  await expect(page.getByText("No answer was kept.")).toBeVisible();
+  await page.getByRole("button", { name: "Try again" }).click();
+  await v2.waitReplyText(page, "Echo: w0 w1");
+  await v2.waitIdle(page);
+  await expect(page.getByText("No answer was kept.")).toHaveCount(0);
+});
+
+// a copy of the tab while a reply streams (the browser copies the tab's sessionStorage): the copy
+// never says that reply was lost, so it offers no Try again that would pay for it twice
+test("a copied tab never says a reply still coming in the first tab was lost", async ({ page, context, kit, appUrl }) => {
+  await v2.open(page, appUrl);
+  await seedKitProvider(page, kit.coreUrl, "kit-cheap");
+  await v2.fund(page, appUrl, await kit.mintToken(300));
+  const words = Array.from({ length: 160 }, (_, i) => `w${i}`).join(" ");
+  await v2.send(page, `[kit:chunk=150] [kit:usage=10,10] ${words}`);
+  await expect(page.locator(".rd-msg.rd-ai").last()).toContainText("Echo: w0 w1");
+
+  const tab = await page.evaluate(() => JSON.stringify(Object.entries(sessionStorage)));
+  const copy = await context.newPage();
+  await copy.addInitScript((t) => {
+    if (!sessionStorage.length) for (const [k, v] of JSON.parse(t) as [string, string][]) sessionStorage.setItem(k, v);
+  }, tab);
+  await copy.goto(page.url());
+  await v2.ready(copy);
+  await expect(copy.locator("article.rd-me")).toHaveCount(1);
+  await copy.waitForTimeout(3000);
+  // looked at once, while the first tab still answers (the answer, once in, ends the question)
+  expect(await copy.locator(".rd-msg", { hasText: "No answer was kept" }).count()).toBe(0);
+  await expect(page.locator(".rd-msg.rd-ai").last()).not.toContainText("w159");
+  await v2.waitReplyText(page, "w159");
+});
+
 test("an html answer runs in a box of its own: it cannot reach the app's storage or page, and a game in it can hold the mouse", async ({
   page,
   kit,

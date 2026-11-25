@@ -36,6 +36,7 @@ it("leaves out a provider that failed a reply for a model, in the picker too", a
   const chat = createAccountChat({
     owner: "alice",
     storage: memoryStorage(),
+    tab: memoryStorage(),
     history: new FakeHistory(),
     attachments: passThroughAttachments(),
     keys: credit.keys,

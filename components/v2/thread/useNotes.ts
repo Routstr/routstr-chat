@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { useAccountChat, useRun, type RunSnapshot } from "@/features/chat/view";
 import type { Message } from "@/types/chat";
+import { UNANSWERED } from "./Trouble";
 
 type Run = { parentId?: string; getSnapshot(): RunSnapshot };
 const NONE: Run[] = [];
+const LOST = [UNANSWERED];
 
 /** What a request left to say once it ended: why it failed, that you stopped
  *  it, or that its answer could not be saved. None when it answered. */
@@ -28,7 +30,8 @@ export function notesOf(runs: RunSnapshot[]): Message[] {
 
 /** The notes after a chat's last message. Failed tries of one question pile
  *  up, so a repeat reads as "no reply after three tries"; an answer, or a new
- *  question, starts over. */
+ *  question, starts over. A question last with none, left by this tab's page
+ *  going away mid-turn, says no answer was kept. */
 export function useNotes(conversationId: string | null, questionId: string | undefined, lastId: string | undefined): Message[] {
   const chat = useAccountChat()?.chat;
   const snapshot = useRun(conversationId);
@@ -42,5 +45,6 @@ export function useNotes(conversationId: string | null, questionId: string | und
   const ours = run?.parentId !== undefined && (run.parentId === questionId || run.parentId === lastId);
   if (run && ended && ours && !runs.includes(run)) runs = [...runs, run].slice(-10);
   if (seen.key !== key || seen.runs !== runs) setSeen({ key, runs });
-  return notesOf(runs.map((r) => r.getSnapshot()));
+  const notes = notesOf(runs.map((r) => r.getSnapshot()));
+  return notes.length || !conversationId || questionId !== lastId || !chat?.cutOff(conversationId) ? notes : LOST;
 }

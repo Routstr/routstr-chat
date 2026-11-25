@@ -13,9 +13,9 @@ import { LAB_MODELS, PICKS, labRoutes } from "@/components/v2/lab/catalog";
 const LAB_SYNC = { on: false, servers: DEFAULT_FILE_SERVERS };
 const NO_CREDIT = {};
 
-const memory = (): Pick<Storage, "getItem" | "setItem"> => {
+const memory = (): Pick<Storage, "getItem" | "setItem" | "removeItem"> => {
   const map = new Map<string, string>();
-  return { getItem: (k) => map.get(k) ?? null, setItem: (k, v) => void map.set(k, v) };
+  return { getItem: (k) => map.get(k) ?? null, setItem: (k, v) => void map.set(k, v), removeItem: (k) => void map.delete(k) };
 };
 
 export function labChat(history: ChatHistory, params: URLSearchParams): AccountChatView {
@@ -62,6 +62,7 @@ export function labChat(history: ChatHistory, params: URLSearchParams): AccountC
     attachments: { forRequest: async (sent) => sent as never, forSave: async (message) => message },
     pay,
     costs,
+    tab: memory(),
   });
   return {
     chat,

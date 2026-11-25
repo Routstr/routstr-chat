@@ -15,14 +15,18 @@ import { textOf } from "./content";
    The caret that carried the wait becomes the seam; the raw text only shows
    behind "Details". No warn colour on the words: a red retry reads as alarm. */
 
-type Kind = "stopped" | "noanswer" | "busy" | "funds" | "declined" | "unknown";
+type Kind = "stopped" | "lost" | "noanswer" | "busy" | "funds" | "declined" | "unknown";
 
 export const DECLINED = /denied due to content filtering/i;
 export const isStopped = (m: Message) => m.role === "system" && /^Generation stopped/i.test(textOf(m.content).trim());
+/** A question with no answer and nothing said about it: the page asking it closed first (a
+ *  reload, a crash), and what its request said went with that page. */
+export const UNANSWERED: Message = { role: "system", content: "No answer was kept for this question." };
 
 export const kindOf = (raw: string): Kind => {
   const t = raw.trim();
   if (/^Generation stopped/i.test(t)) return "stopped";
+  if (t === UNANSWERED.content) return "lost";
   // a dropped connection reads as the SDK's refund step failing ("returned -1"): no answer came back
   if (/did not respond|timed? ?out|no response|returned -1|network error/i.test(t)) return "noanswer";
   if (DECLINED.test(t) || /content filtering/i.test(t)) return "declined";
@@ -126,7 +130,15 @@ export default function Trouble({
     </button>
   );
   let second: React.ReactNode = null;
-  if (kind === "noanswer" || many) {
+  if (kind === "lost") {
+    head = "No answer was kept.";
+    sub = "The page closed before the reply to this was saved.";
+    second = canAct && (
+      <button type="button" className="la-act" onClick={switchModel}>
+        Switch model
+      </button>
+    );
+  } else if (kind === "noanswer" || many) {
     head = "The provider did not answer.";
     sub = many ? `No reply after ${spell(msgs.length)} tries. Another model may answer sooner.` : "Any sats it held come back to your wallet on their own.";
     second = canAct && (

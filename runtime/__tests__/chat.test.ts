@@ -39,6 +39,7 @@ async function setup(spending: () => Spending = () => ({ mode: "apikeys" })) {
   const account = createAccountChat({
     owner: "alice",
     storage: memoryStorage(),
+    tab: memoryStorage(),
     history,
     attachments: passThroughAttachments(),
     keys: credit.keys,
@@ -212,6 +213,7 @@ describe("held", () => {
     const account = createAccountChat({
       owner: "alice",
       storage: memoryStorage(),
+      tab: memoryStorage(),
       history: new FakeHistory(),
       attachments: passThroughAttachments(),
       keys: credit.keys,
@@ -261,6 +263,7 @@ describe("held", () => {
     const account = createAccountChat({
       owner: "alice",
       storage: memoryStorage(),
+      tab: memoryStorage(),
       history: new FakeHistory(),
       attachments: passThroughAttachments(),
       keys: credit.keys,

@@ -93,6 +93,7 @@ async function account(others: ApiKeyEntry[] = [], adopt: Adopt = noAdopt) {
   const chat = createAccountChat({
     owner: "alice",
     storage: memoryStorage(),
+    tab: memoryStorage(),
     history: new FakeHistory(),
     attachments: passThroughAttachments(),
     keys: credit.keys,
