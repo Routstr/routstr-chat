@@ -250,3 +250,19 @@ test("Enter right after picking a model sends to the model picked", async ({ pag
   await v2.waitReplyText(page, "Echo: to the one picked");
   expect((await kit.upstream.requests()).at(-1)?.model).toBe("kit-echo");
 });
+
+// sats at a mint the provider does not take cannot pay it: Add funds says how many more a message
+// needs, never "0 more" because the wallet holds plenty elsewhere
+test("a model your sats cannot pay says how many more it needs, though the wallet holds plenty", async ({ page, context, kit, appUrl }) => {
+  await seedAccounts(context, [nip19.nsecEncode(generateSecretKey())]);
+  await v2.open(page, appUrl);
+  await seedKitProvider(page, kit.coreUrl, "kit-cheap");
+  await v2.receive(page, await kit.mintToken(100, { otherMint: true }));
+  await page.keyboard.press("Escape");
+
+  await page.getByRole("main").getByRole("button", { name: /^(Model: .*|Choose a model)$/ }).click();
+  const picker = page.getByRole("dialog", { name: "Choose a model" });
+  const add = picker.getByRole("button", { name: /^Add funds/ });
+  await expect(add).toBeVisible();
+  await expect(add).toContainText(/needs [1-9][\d,]* more/);
+});

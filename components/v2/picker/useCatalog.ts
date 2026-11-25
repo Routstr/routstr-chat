@@ -95,6 +95,8 @@ export function useCatalog() {
   /** What the wallet must hold for a message by this route. */
   const needFor = useCallback((r: Route) => payable.takes(r.model, goes(r)), [payable, goes]);
   const fits = useCallback((r: Route) => payable.covers(r.model, goes(r)), [payable, goes]);
+  /** What to add for a message by this route: only sats at a mint its provider takes count. */
+  const shortFor = useCallback((r: Route) => Math.max(0, Math.ceil(needFor(r) - payable.spendable(goes(r)))), [needFor, payable, goes]);
 
   const scale = useMemo(
     () => priceScale(models.map((m) => cost(routesOf(m.id)[0]?.model ?? m))),
@@ -123,8 +125,8 @@ export function useCatalog() {
 
   // one object per real change, so memoised rows and details can hold still
   return useMemo(
-    () => ({ models, routesOf, routeFor, cost, needFor, fits, scale, picks, deals, sorts, web, current, balance, node: money.node, hosts }),
-    [models, routesOf, routeFor, cost, needFor, fits, scale, picks, deals, sorts, web, current, balance, money.node, hosts]
+    () => ({ models, routesOf, routeFor, cost, needFor, fits, shortFor, scale, picks, deals, sorts, web, current, balance, node: money.node, hosts }),
+    [models, routesOf, routeFor, cost, needFor, fits, shortFor, scale, picks, deals, sorts, web, current, balance, money.node, hosts]
   );
 }
 

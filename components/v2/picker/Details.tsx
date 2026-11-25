@@ -239,7 +239,7 @@ function Details(props: DetailsProps) {
   const ok = cat.fits(rt);
   // what the wallet must hold for a message here, all of it held by the provider until used
   const need = cat.needFor(rt);
-  const short = Math.max(0, Math.ceil(need - cat.balance));
+  const short = cat.shortFor(rt);
   const base = routes[0] ? cat.cost(routes[0].model) : p;
   const x = p > 0 ? cat.scale.at(p) : null;
   const kicker = `${getCompanyMeta(co).label}${isPrivate(m) && !nameSaysPrivate(m) ? " · private" : ""}`;
