@@ -102,13 +102,13 @@ export default function Send({
   const make = async () => {
     const from = purse();
     if (!from || !mint.active || !(n > 0 && n <= most) || making) return;
-    const before = new Set(tokens.map((t) => t.id));
     flip.current = field.current?.getBoundingClientRect() ?? null;
     setMaking(true);
     s.setError("");
+    let token = "";
     try {
       // no handoff: the token stays listed until it is taken back or let go
-      await from.send(mint.active.url, n);
+      token = await from.send(mint.active.url, n);
       s.setSendAmount("");
     } catch (e) {
       console.error("Could not make the token:", e);
@@ -116,7 +116,8 @@ export default function Send({
     } finally {
       setMaking(false);
     }
-    const fresh = useUnclaimedTokensStore.getState().unclaimedTokens.find((t) => !before.has(t.id));
+    // the one this send made: never one another tab made meanwhile
+    const fresh = token && useUnclaimedTokensStore.getState().unclaimedTokens.find((t) => t.token === token);
     if (!fresh) return;
     setNote(null);
     setDir("flip");

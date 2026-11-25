@@ -548,3 +548,48 @@ test("a gift link opened by hand in a fresh browser brings its sats, which pay f
   await expect(again.getByRole("heading", { name: "You opened this already." })).toBeVisible();
   await friend.close();
 });
+
+// one tab's token waits for the wallet while another tab makes one, then its mint refuses it: it
+// says it was not made, and never shows the other tab's token as its own
+test("a token that cannot be made never shows the one another tab made meanwhile", async ({
+  page,
+  context,
+  kit,
+  appUrl,
+}) => {
+  await seedAccounts(context, [newKey()]);
+  await v2.open(page, appUrl);
+  await v2.receive(page, await kit.mintToken(25));
+  await v2.useMint(page, kit.env.mintUrl);
+  const other = await context.newPage();
+  await v2.open(other, appUrl);
+  await expect.poll(() => v2.balance(other)).toBe(25);
+  const swap = `${kit.env.mintUrl.replace(/\/$/, "")}/v1/swap`;
+
+  // the other tab's swap is held at the mint, and with it the wallet
+  let letGo = () => {};
+  const held = new Promise<void>((go) => (letGo = go));
+  let swapping = () => {};
+  const atMint = new Promise<void>((go) => (swapping = go));
+  await other.route(swap, async (route) => {
+    swapping();
+    await held;
+    await route.continue();
+  });
+  const theirs = v2.makeToken(other, 5);
+  await atMint;
+
+  // this tab asks for 5 meanwhile: it waits for the wallet, then its mint refuses the swap
+  await page.route(swap, (route) => route.fulfill({ status: 400, json: { detail: "Refused", code: 11000 } }));
+  await page.getByRole("button", { name: /^Open wallet\./ }).first().click();
+  await page.getByRole("region", { name: "Wallet", exact: true }).getByRole("button", { name: "Send", exact: true }).click();
+  const send = page.getByRole("region", { name: "Send", exact: true });
+  await send.getByRole("tab", { name: "Cashu token" }).click();
+  await send.getByLabel("Amount in sats").fill("5");
+  await send.getByRole("button", { name: "Create token" }).click();
+  letGo();
+  await theirs;
+
+  await expect(send.getByText("The token could not be made. Nothing left your wallet.")).toBeVisible({ timeout: 30_000 });
+  await expect(send.locator(".wl-lnstr code")).toHaveCount(0);
+});
