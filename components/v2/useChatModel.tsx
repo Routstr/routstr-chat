@@ -3,7 +3,7 @@ import { useCatalogModels, useCatalogService } from "@/features/catalog/view";
 import { useKeyCredit } from "@/features/chat/view";
 import { AcceptedMintsContext, usePurse } from "@/features/wallet/view";
 import type { Model } from "@/types/models";
-import { defaultModel, pickedModel, useModelPick, type Choice } from "./pick";
+import { defaultModel, pickedModel, useModelPick, type Choice, type PickState } from "./pick";
 import { answers as canChat, mostReferences, paints } from "./picker/catalog";
 import { normalizeModality } from "./picker/modality";
 import { payable, useMoney, usePayableFor, type Payable } from "./useMoney";
@@ -21,11 +21,17 @@ interface Asked {
 
 /** With nothing chosen: what the app picks for what can pay, a key's credit
  *  counted where each model's message would go. */
-const autoPick = (models: Model[], catalog: Catalog, chosen: Choice | null, pay: Payable, routed: Routed) =>
+const autoPick = (models: Model[], catalog: Catalog, pay: Payable, routed: Routed) =>
   defaultModel(models.filter(canChat), catalog?.picks() ?? [], pay.need, (m) =>
     // a model is ranked only when a key's credit decides it
-    pay.covers(m, () => (catalog ? goesTo(m, chosen, catalog.routes(m.id), routed[m.id]) : undefined))
+    pay.covers(m, () => (catalog ? goesTo(m, null, catalog.routes(m.id), routed[m.id]) : undefined))
   );
+
+/** The model in use: your pick (or a link's) as the list has it now, else, with nothing chosen,
+ *  the app's. A choice the list lost is never swapped for a model you did not choose: Send asks
+ *  you to choose again. */
+const inUse = (models: Model[], pick: Pick<PickState, "chosen" | "link">, auto: () => Model | null) =>
+  pickedModel(models, pick) ?? (pick.chosen ? null : auto());
 
 
 function useModelOf() {
@@ -51,7 +57,7 @@ function useModelOf() {
     [fresh, answers]
   );
   const model = useMemo(
-    () => pickedModel(models, pick) ?? autoPick(models, catalog, pick.chosen, pay, routed),
+    () => inUse(models, pick, () => autoPick(models, catalog, pay, routed)),
     [models, pick, catalog, pay, routed]
   );
   // The SDK's rule takes an await, so it is asked here for the models where its
@@ -113,8 +119,9 @@ export function ChatModelProvider({ children }: { children: React.ReactNode }) {
       const { value, spendable, credit, node, need } = now.current;
       if (!catalog) return [];
       // with nothing chosen, the model the app will pick once these sats are in
-      const model =
-        pickedModel(value.models, value) ?? autoPick(value.models, catalog, value.chosen, payable((where) => spendable(where) + sats, credit, !!node, need), value.routed);
+      const model = inUse(value.models, value, () =>
+        autoPick(value.models, catalog, payable((where) => spendable(where) + sats, credit, !!node, need), value.routed)
+      );
       if (!model) return [];
       const base = goesTo(model, value.chosen, catalog.routes(model.id), value.routed[model.id]);
       return base ? catalog.mintsOf(base) : [];

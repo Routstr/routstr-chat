@@ -16,7 +16,7 @@ function useStart() {
   const account = useAccountChat();
   const catalog = useCatalogService();
   const { model, chosen, priced } = useChatModel();
-  const { setFace } = useUi();
+  const { setFace, setPicker } = useUi();
   const [picture] = usePicture();
   return useCallback(
     async (turn: (chat: Chat, model: ChatModel) => Promise<unknown>): Promise<boolean> => {
@@ -24,8 +24,9 @@ function useStart() {
         setFace("auth");
         return false;
       }
+      // none chosen, or the one chosen gone from the list: choose one, as Send asks
       if (!model) {
-        toast.error("No model can answer yet. Try again in a moment.");
+        setPicker(true);
         return false;
       }
       try {
@@ -38,7 +39,7 @@ function useStart() {
         return false;
       }
     },
-    [account, model, chosen, priced, catalog, setFace, picture]
+    [account, model, chosen, priced, catalog, setFace, setPicker, picture]
   );
 }
 

@@ -5,6 +5,7 @@ import { generateSecretKey, getPublicKey, nip19 } from "nostr-tools";
 import { expect, test } from "./fixtures";
 import { v2 } from "./drivers/v2";
 import { seedAccounts, seedKitProvider } from "./seed";
+import { PROVIDER_ALIAS } from "../kit/net";
 import type { KitClient } from "../kit/client";
 import { ProviderManager } from "@routstr/sdk";
 import { topUpFor } from "../../features/payments/view";
@@ -455,6 +456,8 @@ test("credit a provider holds pays for messages to it, and only to it", async ({
   await v2.receive(page, await kit.mintToken(300));
   await v2.waitReplyText(page, "Echo: held message");
   await v2.waitIdle(page);
+  // the first paid reply on a key only this browser holds asks to keep it safe
+  await page.getByRole("button", { name: "Later", exact: true }).click();
 
   // the wallet keeps less than any first deposit: short alone, but enough with the core's credit
   const keep = 1;
@@ -560,6 +563,36 @@ test("with nothing chosen, credit a provider holds counts toward the model the a
   await page.reload();
   await v2.ready(page);
   await expect(chip).toHaveAccessibleName(/^Model: Kit Echo\./);
+});
+
+// the model you chose leaves the list (its provider stopped serving it, or did not answer a
+// refresh): Send asks you to choose again rather than paying a model you never chose
+test("a chosen model that leaves the list is not swapped for another", async ({ page, context, kit, appUrl }) => {
+  let gone = false;
+  await context.route(/\/v1\/models(\?|$)/, async (route) => {
+    const url = route.request().url();
+    const res = await route.fetch({ url: url.startsWith(PROVIDER_ALIAS) ? kit.coreUrl + url.slice(PROVIDER_ALIAS.length) : url });
+    const body = (await res.json()) as { data: { id: string }[] };
+    if (gone) body.data = body.data.filter((m) => m.id !== "kit-cheap");
+    await route.fulfill({ response: res, json: body });
+  });
+  await page.clock.install();
+  await v2.open(page, appUrl);
+  await seedKitProvider(page, kit.coreUrl, "kit-cheap");
+  await v2.fund(page, appUrl, await kit.mintToken(300));
+  const chip = page.getByRole("main").getByRole("button", { name: /^(Model: .*|Choose a model)$/ });
+  await expect(chip).toHaveAccessibleName(/^Model: Kit Cheap\./);
+
+  // the list is refreshed every half hour
+  gone = true;
+  await page.clock.fastForward("31:00");
+  await expect(chip).toHaveAccessibleName("Choose a model");
+  const before = (await kit.upstream.requests()).length;
+  await page.getByRole("textbox", { name: "Message" }).fill(`${TINY} hello`);
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("dialog", { name: "Choose a model" })).toBeVisible();
+  expect((await kit.upstream.requests()).length).toBe(before);
+  expect(await page.evaluate(() => localStorage.getItem("lastUsedModel"))).toContain("kit-cheap@@");
 });
 
 // a token whose mint does not answer is kept in the wallet and said to be waiting, never called
