@@ -1,6 +1,7 @@
 // The wallet and accounts the way a person uses them, checked against the mint's answers.
 import { getEncodedTokenV4, Mint, Wallet } from "@cashu/cashu-ts";
-import { generateSecretKey, nip19 } from "nostr-tools";
+import { finalizeEvent, generateSecretKey, getPublicKey, nip04, nip19 } from "nostr-tools";
+import WebSocket from "ws";
 import { expect, test } from "./fixtures";
 import { v2 } from "./drivers/v2";
 import { seedAccounts } from "./seed";
@@ -592,4 +593,63 @@ test("a token that cannot be made never shows the one another tab made meanwhile
 
   await expect(send.getByText("The token could not be made. Nothing left your wallet.")).toBeVisible({ timeout: 30_000 });
   await expect(send.locator(".wl-lnstr code")).toHaveCount(0);
+});
+
+/** A Lightning wallet connected by Nostr Wallet Connect, on the kit relay: it pays each invoice it is
+ *  asked to (the kit mints' are paid at once) after `ms`, as Lightning takes a moment, and keeps them */
+async function nwcWallet(relayUrl: string, ms: number) {
+  const key = generateSecretKey();
+  const pubkey = getPublicKey(key);
+  const paid: string[] = [];
+  const ws = new WebSocket(relayUrl);
+  await new Promise((open) => ws.once("open", open));
+  const publish = (kind: number, content: string, tags: string[][]) =>
+    ws.send(JSON.stringify(["EVENT", finalizeEvent({ kind, content, tags, created_at: Math.floor(Date.now() / 1000) }, key)]));
+  publish(13194, "pay_invoice get_info get_balance", [["encryption", "nip04"]]);
+  ws.send(JSON.stringify(["REQ", "asks", { kinds: [23194], "#p": [pubkey] }]));
+  ws.on("message", (data) => {
+    const [type, , ask] = JSON.parse(String(data));
+    if (type !== "EVENT") return;
+    const { method, params } = JSON.parse(nip04.decrypt(key, ask.pubkey, ask.content));
+    const answer = (result: object) =>
+      publish(23195, nip04.encrypt(key, ask.pubkey, JSON.stringify({ result_type: method, result })), [["p", ask.pubkey], ["e", ask.id]]);
+    if (method === "pay_invoice") {
+      paid.push(params.invoice);
+      setTimeout(() => answer({ preimage: "00".repeat(32) }), ms);
+    } else if (method === "get_balance") answer({ balance: 1_000_000 });
+    else answer({ alias: "kit", pubkey, network: "regtest", block_height: 1, block_hash: "00", methods: ["pay_invoice", "get_info", "get_balance"] });
+  });
+  const secret = Buffer.from(generateSecretKey()).toString("hex");
+  return { url: `nostr+walletconnect://${pubkey}?relay=wss://nwc.kit.example&secret=${secret}`, paid, close: () => ws.close() };
+}
+
+// auto-refill from a connected wallet, with the app open in two tabs: one tab pays, never both
+test("auto-refill from a connected wallet pays once, though the app is open in two tabs", async ({
+  page,
+  context,
+  kit,
+  appUrl,
+}) => {
+  const wallet = await nwcWallet(kit.env.relayUrl, 4000);
+  await seedAccounts(context, [newKey()]);
+  await v2.open(page, appUrl);
+  await v2.receive(page, await kit.mintToken(50));
+  await v2.useMint(page, kit.env.mintUrl);
+  // the wallet connected, and 100 more whenever there are fewer than 100
+  await page.evaluate((nwcUrl) => {
+    localStorage.setItem("bc:config", JSON.stringify({ connectorName: "Kit wallet", connectorType: "nwc.generic", nwcUrl }));
+    localStorage.setItem("auto_refill_nwc_settings", JSON.stringify({ enabled: true, threshold: 100, amount: 100 }));
+  }, wallet.url);
+  await page.reload();
+  await v2.ready(page);
+  await expect.poll(() => wallet.paid.length, { timeout: 20_000 }).toBe(1);
+
+  // a second tab opens while that payment is on its way
+  const other = await context.newPage();
+  await v2.open(other, appUrl);
+  await expect.poll(() => v2.balance(other), { timeout: 20_000 }).toBe(150);
+  await expect.poll(() => v2.balance(page)).toBe(150);
+  await other.waitForTimeout(5000);
+  expect(wallet.paid.length).toBe(1);
+  wallet.close();
 });

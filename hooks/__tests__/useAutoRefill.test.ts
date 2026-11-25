@@ -34,6 +34,10 @@ vi.mock("sonner", () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.f
 import { AcceptedMintsContext, PurseContext } from "@/features/wallet/view";
 import { useAutoRefill } from "../useAutoRefill";
 
+// one tab here: the refill lock is always free (Node before 24 has no Web Locks)
+if (!navigator.locks)
+  Object.defineProperty(navigator, "locks", { value: { request: (_name: string, _o: object, run: (lock: object) => unknown) => run({}) } });
+
 /** one render of the app part that mounts auto-refill */
 function App({ balance }: { balance: number }) {
   useAutoRefill({ balance, isWalletLoaded: true });

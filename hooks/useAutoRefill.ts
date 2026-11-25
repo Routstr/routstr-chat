@@ -16,6 +16,9 @@ const AUTO_REFILL_COOLDOWN_MS = 5 * 60 * 1000;
 // Minimum interval between balance checks (5 seconds for testing, can increase later)
 const BALANCE_CHECK_INTERVAL_MS = 5 * 1000;
 
+// one refill at a time on this device, whichever tab starts it
+const REFILL_LOCK = "routstr-chat-auto-refill";
+
 interface UseAutoRefillProps {
   balance: number;
   isWalletLoaded: boolean;
@@ -37,8 +40,6 @@ export function useAutoRefill({
   const purse = usePurse();
   const depositTo = useDepositMint();
 
-  // Track processing states
-  const isProcessingNWCRef = useRef(false);
   const lastCheckTimeRef = useRef(0);
 
   /**
@@ -57,14 +58,11 @@ export function useAutoRefill({
    */
   const executeNWCRefill = useCallback(
     async (settings: AutoRefillNWCSettings) => {
-      if (isProcessingNWCRef.current) return;
       // the account active now gets the refill, even if another is by the time it lands
       const from = purse();
       if (!from) return;
 
       try {
-        isProcessingNWCRef.current = true;
-
         // Double-check NWC connection
         const connected = await isNWCConnected();
         if (!connected) {
@@ -99,8 +97,6 @@ export function useAutoRefill({
         }
       } catch (error) {
         console.error("[useAutoRefill] Auto-refill error:", error);
-      } finally {
-        isProcessingNWCRef.current = false;
       }
     },
     [purse, depositTo]
@@ -125,18 +121,14 @@ export function useAutoRefill({
       }
       lastCheckTimeRef.current = now;
 
-      // Load current settings
-      const nwcSettings = loadAutoRefillNWCSettings();
-
-      // Check NWC auto-refill
-      if (nwcSettings.enabled && !isProcessingNWCRef.current) {
-        if (!isInCooldown(nwcSettings.lastRefillAt)) {
-          // Check if balance is below threshold
-          if (balance < nwcSettings.threshold) {
-            await executeNWCRefill(nwcSettings);
-          }
+      // a tab that finds a refill going on, here or in another tab, leaves it be; the settings are
+      // read under the lock, so a refill that just landed elsewhere has started its cooldown
+      await navigator.locks?.request(REFILL_LOCK, { ifAvailable: true }, async (lock) => {
+        const nwcSettings = loadAutoRefillNWCSettings();
+        if (lock && nwcSettings.enabled && !isInCooldown(nwcSettings.lastRefillAt) && balance < nwcSettings.threshold) {
+          await executeNWCRefill(nwcSettings);
         }
-      }
+      });
     };
 
     // Run check when balance changes (only when wallet is loaded)
