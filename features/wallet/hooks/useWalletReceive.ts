@@ -56,6 +56,9 @@ export function useWalletReceive(navigateToTab: (tab: "overview" | "invoice") =>
   const [nip60QuoteId, setNip60QuoteId] = useState("");
   const [nip60ExpiresAt, setNip60ExpiresAt] = useState<number | undefined>(undefined);
   const nip60QuoteIdRef = useRef<string>("");
+  // only the invoice asked for last is shown: one asked before it, or before a reset, and made
+  // after is dropped unseen (nobody can pay it)
+  const asked = useRef(0);
   // a screen that closes stops asking about its invoice: the background
   // checker and recovery still claim it whenever it is paid
   useEffect(
@@ -68,6 +71,7 @@ export function useWalletReceive(navigateToTab: (tab: "overview" | "invoice") =>
   const [nip60PendingTxId, setNip60PendingTxId] = useState<string | null>(null);
 
   const reset = useCallback(() => {
+    asked.current++;
     setReceiveTab("lightning");
     setMintAmount("");
     setTokenToImport("");
@@ -108,6 +112,8 @@ export function useWalletReceive(navigateToTab: (tab: "overview" | "invoice") =>
             claimError: undefined,
           });
           transactionHistoryStore.removePendingTransaction(pendingTxId);
+          // its sats are in; only while it is the invoice on screen does the screen say so
+          if (nip60QuoteIdRef.current !== quoteId) return;
           setNip60PendingTxId(null);
           setSuccessMessage(`Received ${formatBalance(amount, "sat")}s!`);
           setNip60Invoice("");
@@ -144,12 +150,21 @@ export function useWalletReceive(navigateToTab: (tab: "overview" | "invoice") =>
         setError("No active mint selected. Please select a mint in your wallet settings.");
         return;
       }
+      const ask = ++asked.current;
+      // the invoice on screen until now is not the one asked for any more: paid late, its sats
+      // still land, but never as this one's
+      setNip60Invoice("");
+      setNip60QuoteId("");
+      nip60QuoteIdRef.current = "";
+      nip60InvoiceIdRef.current = "";
+      setNip60PendingTxId(null);
       try {
         setIsNip60Processing(true);
         setError("");
         const purse = current();
         if (!purse) throw new Error("User not logged in");
         const invoiceData = await purse.deposit(cashuStore.activeMintUrl, amount);
+        if (ask !== asked.current) return;
         setNip60Invoice(invoiceData.request);
         setNip60QuoteId(invoiceData.quoteId);
         setNip60ExpiresAt(invoiceData.expiresAt);
@@ -163,6 +178,7 @@ export function useWalletReceive(navigateToTab: (tab: "overview" | "invoice") =>
           state: MintQuoteState.UNPAID,
           expiresAt: invoiceData.expiresAt,
         });
+        if (ask !== asked.current) return;
         nip60InvoiceIdRef.current = storedInvoice.id;
         const pendingTransaction = createPendingTransaction({
           direction: "in",
@@ -181,12 +197,13 @@ export function useWalletReceive(navigateToTab: (tab: "overview" | "invoice") =>
           storedInvoice.id
         );
       } catch (err) {
+        if (ask !== asked.current) return;
         setError(
           "Failed to create Lightning invoice: " +
             (err instanceof Error ? err.message : String(err))
         );
       } finally {
-        setIsNip60Processing(false);
+        if (ask === asked.current) setIsNip60Processing(false);
       }
     },
     [cashuStore.activeMintUrl, current, transactionHistoryStore, addInvoice, checkNip60PaymentStatus]

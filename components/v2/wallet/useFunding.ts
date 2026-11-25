@@ -95,9 +95,9 @@ export function useFunding() {
   useEffect(() => {
     if (!queued || made.current === queued || !cashuStore.activeMintUrl) return;
     made.current = queued;
-    void receive.createNip60Invoice(queued.sats).then(() =>
-      setStatus((s) => (s === "creating" ? "waiting" : s))
-    );
+    void receive.createNip60Invoice(queued.sats).then(() => {
+      if (made.current === queued) setStatus((s) => (s === "creating" ? "waiting" : s));
+    });
   }, [queued, cashuStore.activeMintUrl]);
 
   const reset = useCallback(() => {

@@ -329,6 +329,62 @@ test("a held message is never sent into another chat opened before the sats land
   await expect(composer).toHaveValue(`${TINY} held in a new chat`);
 });
 
+// on a phone the pay card lets you change the amount while the mint still makes the invoice: the
+// invoice asked first and made last never takes the newer one's place, and its sats landing never
+// say the newer amount was received (nor send the held message on it); refused last, its error
+// never stands over the newer one
+for (const late of ["made", "refused"] as const)
+test(`an invoice asked before a newer one never shows, or counts as received, in its place (${late} last)`, async ({
+  page,
+  context,
+  kit,
+  appUrl,
+}) => {
+  await seedAccounts(context, [newKey()]);
+  await funded(page, kit, appUrl, 1);
+  await page.setViewportSize({ width: 390, height: 844 });
+  const quotes = `${kit.env.mintUrl.replace(/\/$/, "")}/v1/mint/quote/bolt11`;
+  // the mint answers for the first invoice only when let go; the kit pays every invoice at once,
+  // so the newer one is told unpaid, as a real one is until someone pays it
+  let letGo = () => {};
+  const held = new Promise<void>((go) => (letGo = go));
+  const made: string[] = [];
+  await page.route(quotes, async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    made.push(body.quote);
+    if (made.length === 1) await held;
+    if (made.length > 1 && made[0] === body.quote && late === "refused")
+      return route.fulfill({ status: 400, json: { detail: "Refused", code: 20000 } });
+    await route.fulfill({ response, json: body });
+  });
+  await page.route(`${quotes}/*`, async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    await route.fulfill({ response, json: body.quote === made[1] ? { ...body, state: "UNPAID" } : body });
+  });
+
+  await page.getByRole("textbox", { name: "Message" }).fill(`${TINY} paid for once`);
+  await page.getByRole("main").getByRole("button", { name: "Send", exact: true }).click();
+  await page.getByRole("radio", { name: "Lightning" }).click();
+  const amounts = page.locator(".pa-amt[data-n]:not([aria-disabled])");
+  const [first, second] = [await amounts.nth(0).getAttribute("data-n"), await amounts.nth(1).getAttribute("data-n")];
+  await amounts.nth(0).click();
+  // still being made: another amount instead
+  await page.getByRole("button", { name: "Change amount" }).click();
+  await page.locator(`.pa-amt[data-n="${second}"]`).click();
+  await expect.poll(() => made.length).toBe(2);
+  const asked = (await kit.upstream.requests()).length;
+
+  letGo();
+  await page.waitForTimeout(6_000);
+  await expect(page.locator(".pa-amount-n")).toHaveText(Number(second).toLocaleString("en-US"));
+  await expect(page.locator(".pa-inv[data-paid]")).toHaveCount(0);
+  await expect(page.locator(".pa-inv[data-error]")).toHaveCount(0);
+  expect((await kit.upstream.requests()).length).toBe(asked);
+  expect(first).not.toBe(second);
+});
+
 // a draft's words come back after a reload of the tab (Settings promises it for Reload now),
 // for the account that wrote them only
 test("a draft comes back after a reload, and stays with its account", async ({
