@@ -30,19 +30,22 @@
 .island[data-place="centre"]:focus-within .sh-deep, .island[data-drag] .sh-deep { opacity: 1; }
 .island[data-place="centre"] .sh-rest { opacity: 0; }
 
-/* the card itself: two sides, so the pay face can turn it over */
+/* the card itself: two sides, so every face but write can turn it over */
 .island .turn {
   position: absolute; inset: 0; z-index: 0; border-radius: inherit;
   perspective: 1400px; transform-style: preserve-3d;
   transition: transform var(--d-move) var(--e-turn);
 }
-.island[data-face="pay"] .turn, .island[data-face="auth"] .turn { transform: rotateX(-180deg); transition-duration: var(--d-slow); }
+.island:not([data-face="write"]) .turn { transform: rotateX(-180deg); transition-duration: var(--d-slow); }
 .island .side {
   position: absolute; inset: 0; border-radius: inherit;
   backface-visibility: hidden; -webkit-backface-visibility: hidden;
   background: linear-gradient(to bottom, rgb(var(--surface-hero)), color-mix(in srgb, rgb(var(--surface-hero)) 90%, var(--surface)));
   box-shadow: var(--glow), var(--lip-under);
+  transition: opacity 0s calc(var(--d-move) * .38);
 }
+.island:not([data-face="write"]) .side { transition-delay: calc(var(--d-slow) * .38); }
+.island[data-face="write"] .side.back, .island:not([data-face="write"]) .side.front { opacity: 0; }
 .island .side.back { transform: rotateX(180deg); }
 /* a send shrinks the card: the old top edge slides down into it (landing.ts) */
 .island .capw { position: absolute; left: 0; right: 0; bottom: 0; z-index: 0; overflow: hidden; pointer-events: none;

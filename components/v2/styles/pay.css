@@ -642,9 +642,7 @@ html:is([data-room="night"], [data-room="meridian"][data-face="dusk"]) .pa-wi { 
   .panel[data-state="empty"]:has(.island:not([data-face="write"])) { grid-template-rows: auto minmax(0, 33vh) auto minmax(0, 1fr); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .island .turn { transition: none !important; }
-  .island .side.back { backface-visibility: visible; }
-  .island:not([data-face="write"]) .side.front { opacity: 0; }
+  .island :is(.turn, .side) { transition: none !important; }
   .island .pa-card { transform: none !important; }
   .pa-seal { animation-name: fade; }
   .pa-seal::after, .pa-qr[data-s="done"]::after { animation: none; }
