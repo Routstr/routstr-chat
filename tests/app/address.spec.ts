@@ -16,3 +16,9 @@ test("the address follows the app without loading the page again", async ({ page
   expect(new URL(page.url()).pathname).toBe(new URL(`${appUrl}/`).pathname);
   expect(loads).toHaveLength(1);
 });
+
+test("a ?cashu= link with a token it cannot read says so plainly and leaves the address", async ({ page, appUrl }) => {
+  await page.goto(`${appUrl}/?cashu=cashuBnot_a_token`);
+  await expect(page.getByText("That does not look like a Cashu token.")).toBeVisible({ timeout: 30_000 });
+  await expect.poll(() => new URL(page.url()).searchParams.has("cashu")).toBe(false);
+});

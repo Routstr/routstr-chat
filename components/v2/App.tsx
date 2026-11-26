@@ -78,9 +78,15 @@ function Behaviour() {
     if (isAuthenticated && isWalletLoading) return;
     redeemed.current = cashuParam;
     const token = cashuParam.trim();
+    try {
+      peek(token);
+    } catch {
+      toast.error("That does not look like a Cashu token.");
+      replaceQuery((p) => p.delete("cashu"));
+      return;
+    }
     (async () => {
       try {
-        peek(token);
         ensureAccount();
         const into = purse();
         if (!into) throw new Error("There is no account to receive into.");
