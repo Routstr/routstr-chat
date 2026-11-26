@@ -1,6 +1,6 @@
 import type { StorageAdapter, WalletAdapter } from "@routstr/sdk/wallet";
 import type { Pay } from "@/features/chat/ports";
-import { withNodeModeError } from "./nodeErrors";
+import { nodeModeWords, withNodeModeError } from "./nodeErrors";
 import { lockedAfter } from "./lateWrites";
 import { promptTokensOf, replyCap } from "./replyCap";
 import type { Keys, Purse, RedeemFailure, Sdk, Spending } from "./ports";
@@ -236,6 +236,12 @@ export function createPay(deps: PayDeps): Pay {
             }
           : callbacks
       );
+    } catch (error) {
+      if (node && error instanceof Error) {
+        const words = nodeModeWords(error.message);
+        if (words !== error.message) throw new Error(words, { cause: error });
+      }
+      throw error;
     } finally {
       settled = true;
       await Promise.allSettled(sends);

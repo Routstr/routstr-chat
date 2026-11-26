@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { NODE_SAYS } from "@/features/payments/view";
 import { kindOf } from "./Trouble";
 
 describe("kindOf: what a failed reply is said to be", () => {
@@ -9,5 +10,9 @@ describe("kindOf: what a failed reply is said to be", () => {
 
   it("still reads a short wallet as not enough sats", () => {
     expect(kindOf("Insufficient balance: need 40 sats, have 10 sats available.")).toBe("funds");
+  });
+
+  it("reads node mode's own words as the node's", () => {
+    for (const words of Object.values(NODE_SAYS)) expect(kindOf(words)).toBe("node");
   });
 });

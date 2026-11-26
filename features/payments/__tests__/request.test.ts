@@ -733,4 +733,13 @@ describe("createPay in node mode", () => {
       content: expect.stringContaining("The node is out of credit"),
     });
   });
+
+  it("words a picture's failure as the node's too", async () => {
+    const { pay, sdk } = await setup({ mode: "apikeys", node: NODE });
+    sdk.pictures.mockRejectedValueOnce(new Error("Insufficient balance: need 163 sats"));
+
+    await expect(
+      pay({ ...request, model: { id: "p", picture: { n: 1 } } }, callbacks(), new AbortController().signal)
+    ).rejects.toThrow("The node is out of credit");
+  });
 });

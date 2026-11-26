@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { useOpenChat } from "../openChat";
 import { useAsking } from "@/features/chat/view";
 import { useThread } from "@/features/history/view";
+import { NODE_SAYS } from "@/features/payments/view";
 import type { Message } from "@/types/chat";
 import { useTurnActions } from "../useActions";
 import { useMoney } from "../useMoney";
@@ -15,7 +16,7 @@ import { textOf } from "./content";
    The caret that carried the wait becomes the seam; the raw text only shows
    behind "Details". No warn colour on the words: a red retry reads as alarm. */
 
-type Kind = "stopped" | "lost" | "noanswer" | "busy" | "funds" | "declined" | "unknown";
+type Kind = "stopped" | "lost" | "noanswer" | "busy" | "funds" | "declined" | "node" | "unknown";
 
 export const DECLINED = /denied due to content filtering/i;
 export const isStopped = (m: Message) => m.role === "system" && /^Generation stopped/i.test(textOf(m.content).trim());
@@ -27,6 +28,7 @@ export const kindOf = (raw: string): Kind => {
   const t = raw.trim();
   if (/^Generation stopped/i.test(t)) return "stopped";
   if (t === UNANSWERED.content) return "lost";
+  if (Object.values<string>(NODE_SAYS).includes(t)) return "node";
   // a dropped connection reads as the SDK's refund step failing ("returned -1"): no answer came back
   if (/did not respond|timed? ?out|no response|returned -1|network error/i.test(t)) return "noanswer";
   if (DECLINED.test(t) || /content filtering/i.test(t)) return "declined";
@@ -138,6 +140,24 @@ export default function Trouble({
         Switch model
       </button>
     );
+  } else if (kind === "node") {
+    const cut = raw.indexOf(". ") + 1 || raw.length;
+    head = raw.slice(0, cut);
+    sub = raw.slice(cut).trim();
+    // asked again, a model the node does not offer fails the same way
+    if (raw === NODE_SAYS.model) {
+      prime = canAct && (
+        <button type="button" className="la-act la-prime" onClick={switchModel}>
+          Switch model
+        </button>
+      );
+    } else {
+      second = canAct && (
+        <button type="button" className="la-act" onClick={() => ui.openSettings("node")}>
+          Remote node
+        </button>
+      );
+    }
   } else if (kind === "noanswer" || many) {
     head = "The provider did not answer.";
     sub = many ? `No reply after ${spell(msgs.length)} tries. Another model may answer sooner.` : "Any sats it held come back to your wallet on their own.";
