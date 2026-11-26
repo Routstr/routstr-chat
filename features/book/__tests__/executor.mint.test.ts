@@ -390,6 +390,20 @@ describe(`the book against a real mint (${PAY_STATE})`, () => {
   );
 
   it.skipIf(!SETTLED)(
+    "takes a token off its list once the same account takes it back in",
+    async () => {
+      const wallet = walletStore(await funded(64));
+      const executor = executorFor(wallet);
+      const token = await executor.send(MINT, 21, wallet.get(), { track: true });
+
+      await executor.take(token);
+
+      expect(journal.list("alice")).toEqual([]);
+      expect(sum(wallet.get())).toBe(64);
+    }
+  );
+
+  it.skipIf(!SETTLED)(
     "gets the coins back when a token send's swap answer is lost",
     async () => {
       const wallet = walletStore(await funded(64));

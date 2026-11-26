@@ -692,6 +692,7 @@ export class WalletExecutor {
     try {
       const proofs = await this.receiveLocked(record.token, {}, record.secrets);
       journal.remove(record.id);
+      this.takenBack(record.secrets);
       return { proofs, unit, pending: false };
     } catch (error) {
       // only the mint saying the proofs are unusable ends it: any other
@@ -704,6 +705,24 @@ export class WalletExecutor {
       console.error("The token could not be received yet; it waits:", error);
       forgetWallets(record.mintUrl);
       return { proofs: [], unit, pending: true };
+    }
+  }
+
+  /** Takes off the list the tokens this account made whose proofs it just
+   *  took back in: nobody can claim them now. One that does not read stays. */
+  private takenBack(secrets: string[]): void {
+    const { journal, owner } = this.deps;
+    const taken = new Set(secrets);
+    const back = (token: string) => {
+      try {
+        const { incompleteProofs } = getTokenMetadata(token);
+        return incompleteProofs.length > 0 && incompleteProofs.every((p) => taken.has(p.secret));
+      } catch {
+        return false;
+      }
+    };
+    for (const r of journal.list(owner)) {
+      if (r.kind === "token" && back(r.token)) journal.remove(r.id);
     }
   }
 
