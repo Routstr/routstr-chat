@@ -3,11 +3,12 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import qrcode from "qrcode-generator";
 import { Icon } from "../icons";
+import { whole } from "../format";
 import { tokenMs } from "../motion";
 
 /* The small shared pieces of the wallet (the back of the rail card). */
 
-export const fmt = (n: number) => Math.max(0, Math.floor(n)).toLocaleString("en-US");
+export const fmt = (n: number) => whole.format(Math.max(0, Math.floor(n)));
 export const reduced = () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 export const phoneNow = () => typeof window !== "undefined" && window.matchMedia("(max-width: 760px)").matches;
 export const host = (u?: string | null) => {
@@ -70,8 +71,10 @@ export function pairChange<E extends { id: string; direction: string; amount: st
   }
   return { sorted, changeOf, taken };
 }
-const hm = (t: number) => new Date(t).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-const md = (t: number) => new Date(t).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+const HM = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" });
+const MD = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
+const hm = (t: number) => HM.format(t);
+const md = (t: number) => MD.format(t);
 const midnight = () => new Date(new Date().setHours(0, 0, 0, 0)).getTime();
 export function dayOf(t: number) {
   const s = midnight();

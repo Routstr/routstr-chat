@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useObservableState } from "applesauce-react/hooks";
 import { useAccountChat, useHeldCredit } from "@/features/chat/view";
 import { useAccountManager } from "@/features/session/view";
@@ -55,7 +55,7 @@ export function useActiveMint() {
   return { all, active, bal: active?.bal ?? 0, coverBy, set: cashu.setActiveMintUrlByUser };
 }
 
-export default function Wallet() {
+export default memo(function Wallet() {
   const ui = useUi();
   const [view, setView] = useState<View>("home");
   const [from, setFrom] = useState<"home" | "send">("home");
@@ -190,7 +190,7 @@ export default function Wallet() {
       <MintFoot />
     </div>
   );
-}
+});
 
 /* ── what waits: invoices not paid yet ───────────────────────────────────── */
 export function usePendingInvoices() {
