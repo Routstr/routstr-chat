@@ -109,3 +109,31 @@ test("an answer's picture shows, and is still there after a reload", async ({ pa
   await v2.ready(page);
   await expect(page.locator("article.rd-ai").last().locator("img")).toBeVisible({ timeout: 30_000 });
 });
+
+// Safari's private windows refuse a File in IndexedDB, and with Blossom off this device is the
+// only place a paid picture can be kept
+test("an answer's picture is kept in a private Safari window too", async ({ page, context, kit, appUrl }) => {
+  await context.addInitScript(() => {
+    const put = IDBObjectStore.prototype.put;
+    IDBObjectStore.prototype.put = function (...args: Parameters<typeof put>) {
+      if (Object.values(args[0] ?? {}).some((v) => v instanceof Blob)) {
+        throw new DOMException("Error preparing Blob/File data to be stored in object store", "UnknownError");
+      }
+      return put.apply(this, args);
+    };
+    localStorage.setItem("blossomSyncEnabled", "false");
+  });
+  await seedAccounts(context, [nip19.nsecEncode(generateSecretKey())]);
+  await v2.open(page, appUrl);
+  await seedKitProvider(page, kit.coreUrl, "kit-cheap");
+  await v2.fund(page, appUrl, await kit.mintToken(100));
+
+  await v2.send(page, "[kit:usage=10,10][kit:image] draw a red dot");
+  await v2.waitIdle(page);
+  await expect(page.locator("article.rd-ai").last().locator("img")).toBeVisible();
+  await expect.poll(() => filesKept(page)).toBe(1);
+
+  await page.reload();
+  await v2.ready(page);
+  await expect(page.locator("article.rd-ai").last().locator("img")).toBeVisible({ timeout: 30_000 });
+});

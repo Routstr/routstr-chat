@@ -17,8 +17,12 @@ import { decryptBlob, encryptBlob } from "@/utils/blobEncryption";
 interface FilesDb extends DBSchema {
   files: {
     key: string;
-    // the account that kept it (main's records have none)
-    value: { id: string; file: File; timestamp: number; owner?: string };
+    // the account that kept it (main's records have none). Its bytes where the
+    // browser keeps no File: Safari's private windows (main cannot open those)
+    value: { id: string; timestamp: number; owner?: string } & (
+      | { file: File }
+      | { bytes: Uint8Array<ArrayBuffer>; type: string }
+    );
     indexes: { "by-date": number };
   };
 }
@@ -118,8 +122,9 @@ export function createFileStore(deps: {
     try {
       const record = await (await database()).get("files", id ?? storageId);
       if (record) {
-        const bytes = new Uint8Array(await record.file.arrayBuffer());
-        return toDataUrl(bytes, record.file.type);
+        return "file" in record
+          ? toDataUrl(new Uint8Array(await record.file.arrayBuffer()), record.file.type)
+          : toDataUrl(record.bytes, record.type);
       }
     } catch (error) {
       console.warn("Could not read a file kept on this device", error);
@@ -179,14 +184,17 @@ export function createFileStore(deps: {
 
   async function keepHere(bytes: Uint8Array<ArrayBuffer>, type: string) {
     try {
-      const id = crypto.randomUUID();
+      const record = { id: crypto.randomUUID(), timestamp: Date.now(), owner: deps.owner };
       const file = new File([bytes], `file.${type.split("/")[1] ?? "bin"}`, {
         type,
       });
-      await (
-        await database()
-      ).put("files", { id, file, timestamp: Date.now(), owner: deps.owner });
-      return id;
+      const db = await database();
+      await db.put("files", { ...record, file }).catch((error: unknown) => {
+        // Safari's private windows refuse a File here, and only that
+        if (!/^(UnknownError|DataCloneError)$/.test((error as Error)?.name)) throw error;
+        return db.put("files", { ...record, bytes, type });
+      });
+      return record.id;
     } catch (error) {
       console.warn("Could not keep a file on this device", error);
     }
