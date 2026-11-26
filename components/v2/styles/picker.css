@@ -23,13 +23,14 @@
   box-shadow: var(--lift-2), var(--cast), var(--glow);
   font-family: var(--f-ui); color: var(--ink);
   transform-origin: var(--ox, 50%) var(--oy, 100%); will-change: transform, opacity;
-  opacity: 0; transform: translateY(10px) scale(.965); visibility: hidden; pointer-events: none;
-  transition: opacity var(--d-fast) var(--e-out), transform var(--d-fast) var(--e-out), visibility 0s linear var(--d-fast);
+  opacity: 0; transform: translateY(10px) scale(.965);
+  transition: opacity var(--d-fast) var(--e-out), transform var(--d-fast) var(--e-out);
 }
 .mp[data-open] {
-  opacity: 1; transform: none; visibility: visible; pointer-events: auto;
-  transition: opacity var(--d-mid) var(--e-out), transform var(--d-move) var(--e-spring), visibility 0s;
+  opacity: 1; transform: none;
+  transition: opacity var(--d-mid) var(--e-out), transform var(--d-move) var(--e-spring);
 }
+.mp:not([data-open])::after { content: ""; position: absolute; inset: 0; z-index: 9; }
 .mp[data-lay="mid"] { grid-template-columns: 140px minmax(340px, 1fr) minmax(300px, 38%); }
 .mp:focus { outline: none; box-shadow: var(--lift-2), var(--cast), var(--glow); }
 .mp ::selection { background: var(--sel); color: var(--sel-ink); }
@@ -220,7 +221,8 @@ html[data-room="night"] .mp, html[data-room="meridian"][data-face="dusk"] .mp { 
 .mp .sec-t { font-family: var(--f-mono); font-size: 10px; font-weight: 400; letter-spacing: .11em; text-transform: uppercase; color: var(--ink-3); padding: 10px 16px 6px; }
 .mp .row {
   position: relative; display: grid; grid-template-columns: 24px minmax(0, 1fr) auto 30px; align-items: center; gap: 12px;
-  min-height: 54px; padding: 6px 6px 6px 16px; border-radius: var(--r-sm); cursor: pointer; user-select: none;
+  height: 54px; padding: 6px 6px 6px 16px; border-radius: var(--r-sm); cursor: pointer; user-select: none;
+  content-visibility: auto;
 }
 .mp[data-entering] .row { animation: mpUp var(--d-mid) var(--e-out) calc(var(--n) * 14ms) both; }
 .mp[data-entering] .mp-detail > * { animation: mpFade var(--d-mid) var(--e-out) 60ms both; }
@@ -348,7 +350,7 @@ html[data-room="night"] .mp, html[data-room="meridian"][data-face="dusk"] .mp { 
 .pl { position: relative; padding-top: 22px; }
 .pl-track { position: relative; height: 16px; }
 .pl-track::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: var(--hair); }
-.pl-track i { position: absolute; top: 4px; width: 1.5px; height: 8px; margin-left: -.75px; border-radius: 1px; background: var(--ink-3); opacity: .32; }
+.pl-track i { position: absolute; top: 4px; width: 1.5px; height: 8px; margin-left: -.75px; border-radius: 1px; background: var(--ink-3); opacity: calc(1 - pow(.68, var(--n))); }
 .pl-mark {
   position: absolute; left: 0; right: 0; top: 0; height: 40px; pointer-events: none;
   transform: translateX(calc(var(--x) * 100%));
@@ -606,7 +608,7 @@ button.dt-sum:hover .s-r .v2-ico { transform: translateY(2px); }
 .mp[data-sheet] {
   position: relative; inset: auto; z-index: auto; flex: 1; min-height: 0;
   border-radius: 0; background: none; box-shadow: none;
-  opacity: 1; transform: none; visibility: visible; pointer-events: auto; transition: none;
+  opacity: 1; transform: none; transition: none;
 }
 .mp[data-sheet][data-lay="one"] .mp-detail { border-radius: 0; }
 .mp[data-sheet] .mp-list { padding-bottom: calc(20px + var(--sh-pad, 0px) + env(safe-area-inset-bottom)); }

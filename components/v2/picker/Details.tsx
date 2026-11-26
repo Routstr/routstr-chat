@@ -338,8 +338,8 @@ function Details(props: DetailsProps) {
         <section className="dt-cost" aria-label="Price">
           <div className="pl" aria-hidden="true">
             <div className="pl-track">
-              {cat.scale.ticks.map((t, i) => (
-                <i key={i} style={{ left: `${(t * 100).toFixed(2)}%` }} />
+              {cat.scale.ticks.map(([left, n]) => (
+                <i key={left} style={{ left: `${left}%`, "--n": n } as React.CSSProperties} />
               ))}
             </div>
             {x !== null && (

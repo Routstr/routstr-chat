@@ -7,7 +7,7 @@ import { getStorageItem, setStorageItem } from "@/utils/storageUtils";
 import { Icon } from "../icons";
 import { useUi } from "../ui";
 import { useModelPick } from "../pick";
-import Details, { type Lay } from "./Details";
+import Details from "./Details";
 import type { Catalog } from "./useCatalog";
 import { SORTS, type Scope, type SortKey } from "./catalog";
 import { NO_FILTERS, nounFor, type Filters } from "./helpers";
@@ -15,7 +15,7 @@ import { useSections } from "./useSections";
 import { useListGlide } from "./useListGlide";
 import { useMakerRail } from "./useMakerRail";
 import { useChoose } from "./useChoose";
-import { usePlacement } from "./usePlacement";
+import { usePlacement, type Spot } from "./usePlacement";
 import { useOpenClose } from "./useOpenClose";
 import { useKeys } from "./useKeys";
 import { useDetail } from "./useDetail";
@@ -38,6 +38,7 @@ const readSort = (): SortKey => {
 
 export default function Picker({
   cat,
+  at,
   open,
   phone,
   onClose,
@@ -46,6 +47,8 @@ export default function Picker({
   onList,
 }: {
   cat: Catalog;
+  /** where the card stands as it opens (none in a sheet) */
+  at: Spot | null;
   open: boolean;
   phone: boolean;
   onClose: () => void;
@@ -98,7 +101,7 @@ export default function Picker({
   const [view, setView] = useState<"list" | "detail">("list");
   const [draft, setDraft] = useState<{ id: string; host: string | null } | null>(null);
   const [menu, setMenu] = useState(false);
-  const [lay, setLay] = useState<Lay>(phone ? "one" : "wide");
+  const { box, veilTop, veilOff, lay } = usePlacement({ at, phone, setView });
 
   useEffect(() => {
     setStorageItem("modelSelectorSort", sort);
@@ -129,7 +132,6 @@ export default function Picker({
   });
 
   /* ── open, place, close ─────────────────────────────────────────────── */
-  const { box, veilTop, veilOff } = usePlacement({ phone, setLay, setView });
   const { shown, entering, hints, setHints, leaveCard } = useOpenClose({ open, phone, card, input, onGone, onClose, setMenu });
   const { onKey, onListMove, onListClick } = useKeys({
     menu, setMenu, sortBtn, onClose, input, card, view, lay, push, q, setQ, flat, activeIdx, toggleStar, railOrder, scope, pickScope, railScroll, setActive, choose, hints, setHints,

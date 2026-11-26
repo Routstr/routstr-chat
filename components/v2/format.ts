@@ -39,13 +39,16 @@ export function groupByDay(conversations: Conversation[]) {
   return order.filter((l) => groups.has(l)).map((label) => ({ label, items: groups.get(label)! }));
 }
 
+/** Whole numbers the en-US way ("12,345"): one formatter, as toLocaleString makes a new one on every call. */
+export const whole = new Intl.NumberFormat("en-US");
+
 export const sats = (n: number) => {
   if (!Number.isFinite(n)) return "0";
   const v = Math.max(0, n);
   // under a sat: up to two places, no trailing zero ("0.4", "0.04"), never "0.00" for a real amount
   if (v > 0 && v < 1) return v < 0.01 ? "<0.01" : String(parseFloat(v.toFixed(2)));
   if (v < 10 && v % 1 !== 0) return v.toFixed(1);
-  return Math.floor(v).toLocaleString("en-US");
+  return whole.format(Math.floor(v));
 };
 
 /** The unit after a figure: "1 sat", "0.4 sats", "12 sats". */

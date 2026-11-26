@@ -2,7 +2,7 @@ import type { PictureChoice } from "@/features/chat/view";
 import type { Model } from "@/types/models";
 import { normalizeModality } from "@/components/v2/picker/modality";
 import { getModelCompanyId } from "@/components/v2/picker/modelCompanies";
-import { shortModelName } from "../format";
+import { shortModelName, whole } from "../format";
 import { smartsOf } from "./deals";
 
 /* The picker's words and orderings, kept free of React so they can be tested.
@@ -133,12 +133,12 @@ export const parseKey = (key: string) => {
 
 /** A price for this message: "0.65", "7.5", "13", "1,240". */
 // replies settle in whole sats, so prices show whole sats
-export const fmt = (n: number) => Math.round(n).toLocaleString("en-US");
+export const fmt = (n: number) => whole.format(Math.round(n));
 
 /** sats per token, shown per 1M tokens: "270", "0.40", "12.5". */
 export const per1M = (perToken: number) => {
   const v = perToken * 1e6;
-  return v >= 100 ? Math.round(v).toLocaleString("en-US") : v.toFixed(v < 10 ? 2 : 1);
+  return v >= 100 ? fmt(v) : v.toFixed(v < 10 ? 2 : 1);
 };
 
 export const ctxK = (n: number) => (n >= 1e6 ? `${+(n / 1e6).toFixed(1)}M` : `${Math.round(n / 1000)}k`);
@@ -267,14 +267,17 @@ export const measureFor = (key: SortKey, cost: (r: Row) => number, routes: (id: 
 
 export function priceScale(costs: number[]) {
   const ok = costs.filter((c) => c > 0 && Number.isFinite(c));
-  if (!ok.length) return { at: () => 0.5, ticks: [] as number[] };
+  if (!ok.length) return { at: () => 0.5, ticks: [] as [string, number][] };
   const lo = Math.log10(Math.min(...ok));
   const hi = Math.log10(Math.max(...ok));
   const at = (c: number) => (hi === lo ? 0.5 : Math.max(0, Math.min(1, (Math.log10(c) - lo) / (hi - lo))));
-  return {
-    at,
-    ticks: ok.map(at),
-  };
+  // one hair per spot on the line (a percent, to the hundredth), with how many models it stands for
+  const ticks = new Map<string, number>();
+  for (const c of ok) {
+    const left = (at(c) * 100).toFixed(2);
+    ticks.set(left, (ticks.get(left) ?? 0) + 1);
+  }
+  return { at, ticks: [...ticks] };
 }
 
 export const makerOf = (m: Model) => getModelCompanyId(m);

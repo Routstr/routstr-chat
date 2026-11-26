@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { useUi } from "../ui";
+import { useCallback, useEffect, useLayoutEffect, useState } from "react";
+import { useChipRef, useUi } from "../ui";
 import Sheet from "../Sheet";
 import { useCatalog } from "./useCatalog";
 import Picker from "./Picker";
+import { NOWHERE, spotFor, type Spot } from "./usePlacement";
 
 /* The model picker. One card over the room, standing on the composer: named
    makers, the list, and details that follow the pointer and the arrow keys.
@@ -26,27 +27,31 @@ const usePhone = () => {
 export default function ModelPicker() {
   const ui = useUi();
   const phone = usePhone();
+  const chipRef = useChipRef();
   // kept warm here, not in the card: ranking every model's providers is the slow part, and the
   // card mounts on each open
   const cat = useCatalog();
-  const [mounted, setMounted] = useState(false);
+  // where the card stands while it is up
+  const [at, setAt] = useState<Spot | null>(null);
+  useLayoutEffect(() => {
+    if (ui.picker && !phone) setAt(spotFor(chipRef.current) ?? NOWHERE);
+  }, [ui.picker, phone]);
   // details pushed in on a phone take the sheet to its full height
   const [tall, setTall] = useState(false);
   const [was, setWas] = useState(false);
   if (ui.picker !== was) {
     setWas(ui.picker);
-    if (ui.picker) setMounted(true);
-    else setTall(false);
+    if (!ui.picker) setTall(false);
   }
   const close = useCallback(() => ui.setPicker(false), [ui]);
 
   if (phone) {
     return (
       <Sheet open={ui.picker} onClose={close} label="Choose a model" className="mp-sheet" detent={tall ? "full" : undefined}>
-        <Picker cat={cat} open={ui.picker} phone onClose={close} onGone={() => {}} onDetail={() => setTall(true)} onList={() => setTall(false)} />
+        <Picker cat={cat} at={null} open={ui.picker} phone onClose={close} onGone={() => {}} onDetail={() => setTall(true)} onList={() => setTall(false)} />
       </Sheet>
     );
   }
-  if (!mounted) return null;
-  return <Picker cat={cat} open={ui.picker} phone={false} onClose={close} onGone={() => setMounted(false)} />;
+  if (!at) return null;
+  return <Picker cat={cat} at={at} open={ui.picker} phone={false} onClose={close} onGone={() => setAt(null)} />;
 }
